@@ -1,0 +1,90 @@
+[
+ {
+  "n": 250,
+  "p": 10,
+  "degree": 1,
+  "earth_s": 0.003,
+  "earth_terms": 12,
+  "earth_fwd_terms": 19,
+  "pymars_s": 2.2825226252898574,
+  "pymars_terms": 10,
+  "pymars_fwd_terms": 14
+ },
+ {
+  "n": 500,
+  "p": 10,
+  "degree": 1,
+  "earth_s": 0.003,
+  "earth_terms": 13,
+  "earth_fwd_terms": 17,
+  "pymars_s": 9.442092041485012,
+  "pymars_terms": 10,
+  "pymars_fwd_terms": 19
+ },
+ {
+  "n": 1000,
+  "p": 10,
+  "degree": 1,
+  "earth_s": 0.006,
+  "earth_terms": 16,
+  "earth_fwd_terms": 17,
+  "pymars_s": 27.024841208942235,
+  "pymars_terms": 13,
+  "pymars_fwd_terms": 21
+ },
+ {
+  "n": 2000,
+  "p": 10,
+  "degree": 1,
+  "earth_s": 0.009,
+  "earth_terms": 13,
+  "earth_fwd_terms": 14,
+  "pymars_s": 108.13625079207122,
+  "pymars_terms": 14,
+  "pymars_fwd_terms": 20
+ },
+ {
+  "n": 250,
+  "p": 10,
+  "degree": 2,
+  "earth_s": 0.006,
+  "earth_terms": 18,
+  "earth_fwd_terms": 20,
+  "pymars_s": 21.047081916593015,
+  "pymars_terms": 18,
+  "pymars_fwd_terms": 21
+ },
+ {
+  "n": 500,
+  "p": 10,
+  "degree": 2,
+  "earth_s": 0.012,
+  "earth_terms": 18,
+  "earth_fwd_terms": 19,
+  "pymars_s": 47.21904787514359,
+  "pymars_terms": 17,
+  "pymars_fwd_terms": 21
+ },
+ {
+  "n": 1000,
+  "p": 10,
+  "degree": 2,
+  "earth_s": 0.023,
+  "earth_terms": 17,
+  "earth_fwd_terms": 18,
+  "pymars_s": 130.50841562543064,
+  "pymars_terms": 15,
+  "pymars_fwd_terms": 21
+ },
+ {
+  "n": 2000,
+  "p": 10,
+  "degree": 2,
+  "earth_s": 0.046,
+  "earth_terms": 15,
+  "earth_fwd_terms": 18,
+  "pymars_s": 502.1146209575236,
+  "pymars_terms": 17,
+  "pymars_fwd_terms": 21
+ }
+]
