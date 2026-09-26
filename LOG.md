@@ -76,6 +76,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:34 10:34: weekly 92 % (about 5.5 per hour with 4 agents), 5-hour 19 %, load 10.7. No new starts; T08 waits for the reset. At about 97 %, tell t06-reference and t09-linalg to checkpoint and stop.
 - 10:46 T05 round 2 (wf_7ce0e408-2a3): both REQUEST_CHANGES on two narrow points (nnet's default reltol leaves the multinomial references off the minimum; seed 102 made the one-response pruning case unable to separate the K = 1 and K >= 2 rules). All other round-1 points confirmed fixed. Sent to t05-fixtures.
 - 10:53 T09 author done: PR #45 (_linalg.py, head 4958fd0; gate B passed; coverage 100 %; 35 of 35 mutants caught; lm_fit agrees with R to 1.4e-9 at kappa 2.3e6; the fixture test waits for #42; spec questions on #44). Its dual review waits for the weekly reset. Weekly 94 % at 10:54: the remaining budget goes to the T05 fixes and a narrow round 3, and to t06-reference until about 97 %.
+- 11:07 Load rule: the 15-minute load reached 12.4 (6 legacy workers, the T06 tests, and the user's Positron at 95 % CPU). Restarted the legacy run with 4 workers through a copy of the driver with N_JOBS=4 in .git/pymars-executor/jobs/ (the committed script is unchanged): SIGTERM to run.py ended it cleanly (no leftover workers, lock released); the new driver (PID 8200) skipped the five finished blocks and resumed the 1,000-case block at 505 of 1,600.
 
 ## Core-hour ledger
 
