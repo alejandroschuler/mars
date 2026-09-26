@@ -1,0 +1,60 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+-- item 1: n = 1,2,3,4,5,8,12; p = 2; default and minspan=1,endspan=1 --
+n=1   default                          ERROR: the x matrix must have at least two rows
+n=1   minspan=1 endspan=1              ERROR: the x matrix must have at least two rows
+n=2   default                          dirs=[(Intercept)] sel=1 rss=0.03249 gcv=0.06497 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=2   minspan=1 endspan=1              dirs=[(Intercept)] sel=1 rss=0.03249 gcv=0.06497 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=3   default                          dirs=[(Intercept)] sel=1 rss=0.2004 gcv=0.1503 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=3   minspan=1 endspan=1              dirs=[(Intercept)] sel=1 rss=0.2004 gcv=0.1503 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=4   default                          dirs=[(Intercept)] sel=1 rss=0.213 gcv=0.09465 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=4   minspan=1 endspan=1              dirs=[(Intercept)] sel=1 rss=0.213 gcv=0.09465 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=5   default                          dirs=[(Intercept)] sel=1 rss=0.469 gcv=0.1465 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=5   minspan=1 endspan=1              dirs=[(Intercept)] sel=1 rss=0.469 gcv=0.1465 rsq=0 grsq=0 termcond=2 | GRSq -Inf at 1 term
+n=8   default                          dirs=[(Intercept); h(x1-0.403961); h(0.403961-x1)] sel=1,2,3 rss=0.04483 gcv=0.03985 rsq=0.9032 grsq=0.4727 termcond=2 | GRSq -Inf at 3 terms
+n=8   minspan=1 endspan=1              dirs=[(Intercept); h(x1-0.514377); h(0.514377-x1)] sel=1,3 rss=0.1003 gcv=0.0321 rsq=0.7833 grsq=0.5753 termcond=2 | GRSq -Inf at 3 terms
+n=12  default                          dirs=[(Intercept); h(x1-0.347161); h(0.347161-x1); h(x2-0.560476); h(0.560476-x2)] sel=1,2,3 rss=0.1176 gcv=0.02881 rsq=0.9329 grsq=0.8343 termcond=4 | RSq changed by less than 0.001 at 5 terms (DeltaRSq 0)
+n=12  minspan=1 endspan=1              dirs=[(Intercept); h(x1-0.977236); h(0.977236-x1); h(x2-0.694826); h(0.694826-x2); h(x2-0.743241)] sel=1,3 rss=0.1132 gcv=0.01678 rsq=0.9354 grsq=0.9035 termcond=2 | GRSq -Inf at 7 terms, 6 terms used
+
+-- item 2: constant y, with and without noise-free x structure; y all-but-one equal --
+y constant, x random                   dirs=[(Intercept)] sel=1 rss=0 gcv=0 rsq=NaN grsq=NaN termcond=4 | RSq changed by less than 0.001 at 1 term (DeltaRSq 0) WARN: Cannot scale y (values are all equal to 3)
+         Use Scale.y=FALSE to silence this warning
+y constant, x noise-free structure     dirs=[(Intercept)] sel=1 rss=0 gcv=0 rsq=NaN grsq=NaN termcond=4 | RSq changed by less than 0.001 at 1 term (DeltaRSq 0) WARN: Cannot scale y (values are all equal to 3)
+         Use Scale.y=FALSE to silence this warning
+y all-but-one equal                    dirs=[(Intercept); h(x2-0.483075); h(0.483075-x2); h(x1-0.589578); h(0.589578-x1); h(x1-0.533772); h(x2-0.325728)] sel=1 rss=34.2 gcv=1.895 rsq=0 grsq=0 termcond=4 | RSq changed by less than 0.001 at 9 terms, 7 terms used (DeltaRSq 0)
+
+-- item 3: constant column, duplicated column, near-duplicate column --
+constant col next to useful            dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x1-0.615259); h(x1-0.805686); h(x1-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
+duplicated column (x2==x1)             dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x1-0.615259); h(x1-0.805686); h(x1-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
+near-duplicate column (x2=x1+1e-9*noise) dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x2-0.615259); h(x1-0.805686); h(x2-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
+reference: x1 alone, no x2 at all      dirs=[(Intercept); h(x1-0.89513); h(0.89513-x1); h(x1-0.653493); h(x1-0.75843); h(x1-0.466109); h(x1-0.869715)] sel=1,2,3,4 rss=0.4397 gcv=0.009391 rsq=0.9196 grsq=0.9004 termcond=4 | RSq changed by less than 0.001 at 11 terms, 7 terms used (DeltaRSq 0)
+  exact duplicate: x2 never appears in any term (TRUE) | near-duplicate: x1 appears TRUE, x2 appears TRUE (both, not a clean single-column tie-break) | near-dup fit matches dropping x2 outright: FALSE
+
+-- item 4: n < p (n=20,p=50), p=1, and p=200,n=300 --
+n=20,p=50        nk=101  forward_terms(dirs)=9    selected=6    termcond=2
+p=1              nk=21   forward_terms(dirs)=4    selected=3    termcond=4
+n=300,p=200      nk=201  forward_terms(dirs)=21   selected=17   termcond=4
+
+-- item 5: one x value at 1e6 among values in [0,1] --
+outlier x=1e6, n=60                    dirs=[(Intercept); xo] sel=1,2 rss=0.6415 gcv=0.01185 rsq=1 grsq=1 termcond=5 | Reached maximum RSq 0.9990 at 3 terms, 2 terms used (RSq 1.0000)
+
+-- item 6: NaN in x, Inf in x, NaN in y, Inf in y --
+NaN in x                               ERROR: NA in xn
+       xn[5] is NaN
+Inf in x                               ERROR: x[5] is not finite
+NaN in y                               ERROR: NA in y
+       y[5] is NaN
+Inf in y                               ERROR: y[1] is NaN
+  mean/sd of a y with one Inf: mean=Inf sd=NaN (both non-finite, so scaling turns every element to NaN)
+
+CHECK bb22.1 TRUE n=1 is an error ("at least two rows"); n in {2,3,4,5} fits only the intercept (no forward step, termcond 2) under default AND minspan=1,endspan=1 alike; n in {8,12} adds forward terms
+CHECK bb22.2a TRUE a constant y fits (rss=gcv=0, termcond 4, an RSq-change stop) rather than erroring, whether or not x has a noise-free deterministic structure, and WARNS instead of erroring
+CHECK bb22.2b TRUE y with all but one value equal: the forward pass records candidate hinges, but pruning selects the intercept alone (1 selected term)
+CHECK bb22.3a TRUE a constant column next to a useful one is never used (no dirs row names it)
+CHECK bb22.3b TRUE an exactly duplicated column resolves to the LOWER column index only (x2 never appears in any term)
+CHECK bb22.3c FALSE HYPOTHESIS a near-duplicate (not exact) column is resolved the same way, to one column only (it is not: the unpruned terms use x1 (TRUE) and use x2 (TRUE), both present)
+CHECK bb22.3d TRUE instead, a near-duplicate is treated as a genuinely different (not tied) column at every knot search, so different terms of the same fit can use either near-duplicate column, and the fit does not match dropping the near-duplicate column outright (rss 0.4767 vs 0.4397)
+CHECK bb22.4 TRUE n < p (n=20,p=50) and p=200,n=300 fit without error, and the default nk follows min(200,max(20,2p))+1 in both; p=1 also fits normally
+CHECK bb22.5 TRUE a single extreme outlier value (1e6 among [0,1]) does not cause an error; the row is kept and fit like any other point
+CHECK bb22.6a TRUE NaN or Inf anywhere in x or y is always a fitting error (never silently dropped or coerced); for x, and for a plain NaN in y, the message names the true offending row (5)
+CHECK bb22.6b FALSE HYPOTHESIS an Inf in y also names row 5, the row that actually holds the Inf, the way Inf in x and NaN in y do
+CHECK bb22.6c TRUE instead, an Inf anywhere in y makes mean(y) and sd(y) non-finite (shown above), so scaling turns EVERY element to NaN and the error always names row 1, regardless of where the Inf actually was

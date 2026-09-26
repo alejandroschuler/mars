@@ -1,0 +1,33 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+== Part 1: chosen candidate has the largest reduction of the summed RSS ==
+  5 forward steps in dirs (widths: 2,2,2,1,2), 5 steps logged at trace=9
+step  logged_min_RSS  rebuilt_lm.fit_RSS  match
+ step logged_min   rebuilt match
+    1    130.520 130.51980  TRUE
+    2     56.883  56.88299  TRUE
+    3     22.116  22.11566  TRUE
+    4     21.523  21.52274  TRUE
+    5     21.276  21.27584  TRUE
+
+== Part 2: combined fit vs each single-response fit ==
+combined:  8 forward terms, 5 selected: (Intercept), h(0.965115-x3), h(x1-0.398681), h(0.615867-x2), h(x3-0.470651)
+y1 alone:  9 forward terms, 2 selected: (Intercept), h(x1-0.398681)
+y2 alone:  15 forward terms, 9 selected: (Intercept), h(0.615867-x2), h(x3-0.470651), h(0.470651-x3), h(0.556221-x1), h(x1-0.716077), h(x1-0.774176), h(x1-0.0504254), h(x1-0.51053)
+y3 alone:  3 forward terms, 3 selected: (Intercept), h(x3-0.369102), h(0.369102-x3)
+combined dirs differs from every single-response dirs: TRUE ; gcv.per.subset (the pruning path) differs too: TRUE
+
+== Part 3: 1-column matrix y vs vector y ==
+dirs/cuts/coefficients/rss/gcv/selected.terms all identical: TRUE
+
+== Part 4: thresh = 0.05, several responses ==
+termination message: GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg / RSq changed by less than 0.05 at 7 terms (DeltaRSq 0.0015)  | termcond: 4 
+Terms  printed_RSq  1-sum(rss)/sum(tss)  abs_diff
+ Terms printed_RSq predicted abs_diff
+     2      0.6718  0.671792 8.11e-06
+     4      0.8570  0.856957 4.29e-05
+     6      0.9444  0.944377 2.31e-05
+
+CHECK bb20.1 TRUE at every forward step (5 steps), the smallest RSS logged at trace=9 across all scanned candidates equals sum over responses of the lm.fit RSS of the term actually added
+CHECK bb20.2 TRUE dirs for cbind(y1,y2,y3) differs from every single-response dirs, and so does the pruning path (gcv.per.subset)
+CHECK bb20.3 TRUE a 1-column matrix y gives a fit identical to the vector y in dirs, cuts, coefficients, rss and gcv
+CHECK bb20.4 TRUE with thresh=0.05 several responses stop by the RSq-change rule (termcond 4) and the per-step printed RSq equals 1 - sum(rss)/sum(tss) summed over responses (max abs diff 4.3e-05 over 3 rows)
