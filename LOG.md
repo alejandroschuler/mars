@@ -61,6 +61,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 02:40 #37 round 2: spec APPROVE, adversarial REQUEST_CHANGES (STOP-5 near-tie band relative to the RSS before the step; the hidden-term trigger is refuted, so text only, OQ-6 reopened, T07 labels rank-fix fits as quirk). Sent text fixes to t01-spec; a narrow round 3 by both roles follows.
 - 03:01 03:01 wake: weekly 82 %, 5-hour 55 %. Load 10.9 (15-min 10.7, limit 11): no new agents; if it stays above 11, restart the legacy run with fewer workers. Legacy run: pilot reps 100:300 running, 3,056 result files. PR #42 (T05) ready, report pending.
 - 03:09 #37 round-2 text fixes at 88c4d10 (STOP-7 bands; floor noise measured: T07 labels a STOP-5 floor difference 'tie' within 1e-13 TSS; hidden term without a trigger, OQ-6 open, rank-fix fits labeled quirk; K >= 2 floor departure; zeroed statistics). Narrow round-3 dual review started (run wf_a09ca5c1-77d), at most one R process per reviewer because of the load.
+- 03:32 03:32 wake: weekly 84 %, 5-hour 65 %. Load 15-min 11.19 (above 11): no new agents; review of #42 (T05 part 1, component fixtures, 3f1a0e7) waits until the load drops. Legacy run: pilot done; 200-case regression block D1,D2,D3,D6,D8 started 10:03Z; 5,298 result files.
 
 ## Core-hour ledger
 
