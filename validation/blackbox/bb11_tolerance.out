@@ -150,4 +150,4 @@ CHECK bb11.3 TRUE while iNewCol <= 15, every rejected ratio is below 0.01 and ev
 CHECK bb11.4 TRUE once iNewCol >= 16, every rejected ratio is below 1e-5 and every accepted one at least 1e-5
 CHECK bb11.5 TRUE iNewCol is K for a single-hinge search and K + 1 for a pair search, K the term number searched (2, 4, 6, ...)
 CHECK bb11.6 TRUE the tolerance is 0.01 in the first 7 forward steps and 1e-5 from the 8th, for pairs and single hinges alike (steps_done <= 6 vs >= 7)
-CHECK bb11.7 TRUE for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = existing columns plus b*x (94 searches, 1968 rejected knots)
+CHECK bb11.7 TRUE for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = the existing columns, plus b*x in a pair search (94 searches, 1968 rejected knots)

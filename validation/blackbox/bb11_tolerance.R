@@ -174,5 +174,5 @@ cat(sprintf("CHECK bb11.5 %s iNewCol is K for a single-hinge search and K + 1 fo
   all((tab$iNewCol - 2 * (tab$steps_done + 1)) %in% c(0, 1))))
 cat(sprintf("CHECK bb11.6 %s the tolerance is 0.01 in the first 7 forward steps and 1e-5 from the 8th, for pairs and single hinges alike (steps_done <= 6 vs >= 7)\n",
   by_steps))
-cat(sprintf("CHECK bb11.7 %s for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = existing columns plus b*x (%d searches, %d rejected knots)\n",
+cat(sprintf("CHECK bb11.7 %s for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = the existing columns, plus b*x in a pair search (%d searches, %d rejected knots)\n",
   okD, nrow(tabD), sum(tabD$rejected)))

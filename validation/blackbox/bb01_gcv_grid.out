@@ -56,3 +56,9 @@ earth(penalty = -0.5): ERROR: penalty -0.5 is less than 0 and the only legal val
 earth(penalty = -2): ERROR: penalty -2 is less than 0 and the only legal value less than 0 is -1 (meaning terms and knots are free)
 earth(penalty = -10): ERROR: penalty -10 is less than 0 and the only legal value less than 0 is -1 (meaning terms and knots are free)
 CHECK bb01.5 TRUE earth() fits with penalty = -1 and stops with an error for the negative penalties -0.5, -2 and -10
+earth(penalty = 999.99): fits
+earth(penalty = 1000): fits
+earth(penalty = 1000.0000001): ERROR: penalty 1000 is greater than 1000
+earth(penalty = 1001): ERROR: penalty 1001 is greater than 1000
+earth(penalty = 5000): ERROR: penalty 5000 is greater than 1000
+CHECK bb01.6 TRUE earth() fits with penalty 999.99 and 1000 and stops with an error above 1000 (1000.0000001, 1001, 5000)

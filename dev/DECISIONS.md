@@ -24,3 +24,8 @@ The table "Decisions" in VALIDATION_PLAN.md has the full text.
 - The project venv uses Python 3.12, the version of the full gate B run. `dev/tools/new_worktree.sh` and gate B pass `--python 3.12` to uv.
 - CI pins uv 0.11.11, the release that made `uv.lock`, and pins each action to a commit SHA. Update the uv pin when `uv.lock` is made with a newer uv.
 - CODE_OF_CONDUCT.md named the removed SUPPORT.md as its enforcement contact. The contact is now the maintainer of this fork, through the owner's GitHub profile or a private report to the repository owner, with no email address.
+
+## Spec (T01)
+
+- With `pmethod="none"` and `nprune`, pymars keeps the first `nprune` forward terms, as earth does, and reports `rss_`, `gcv_`, `rsq_` and `grsq_` of that model. earth reports the statistics of the backward subset of that size instead, which do not describe the model it returns (spec PRUNE-7, PRUNE-8).
+- earth chooses between a pair of hinges and a single hinge by comparing an absolute residual sum of squares with 0.01, so its fit depends on the units of the covariates. pymars scales that threshold by the variances of the term's covariates. Its fit then does not depend on the units, and it matches earth's rule on covariates with variance 1; the harness gives both programs the same covariates, each divided by its standard deviation (spec LA-7).

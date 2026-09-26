@@ -15,6 +15,35 @@ trace 3, three    response: Using EvalSubsetsUsingXtx (rather than leaps) becaus
 trace 3, factor2  response: (no routine named)
 trace 3, factor3  response: Using EvalSubsetsUsingXtx (rather than leaps) because this is a multiple response model
 part C: 16 forward terms; pmethod none with nprune 5 selects 1 2 3 4 5; the backward subset of size 5 is 1 2 3 5 7
+         first_k coef_first_k rss_is_Tk rss_is_model      rss rss_model
+one            1            1         1            0  5.46607   23.9005
+weighted       1            1         1            0  9.26977   30.1944
+two            1            1         1            0 13.62646   34.3646
+ design     order removed removed_term
+      1 a,b,z1,z2       a            5
+      1 b,a,z1,z2       a            5
+      1 z1,z2,a,b       a            5
+      2 a,b,z1,z2      z2            5
+      2 b,a,z1,z2      z2            5
+      2 z1,z2,a,b      z2            5
+      3 a,b,z1,z2       b            5
+      3 b,a,z1,z2       b            5
+      3 z1,z2,a,b       b            5
+      4 a,b,z1,z2       a            5
+      4 b,a,z1,z2       a            5
+      4 z1,z2,a,b       a            5
+      5 a,b,z1,z2       b            4
+      5 b,a,z1,z2       b            4
+      5 z1,z2,a,b       b            4
+      6 a,b,z1,z2       a            4
+      6 b,a,z1,z2       a            4
+      6 z1,z2,a,b       a            4
+      7 a,b,z1,z2       b            5
+      7 b,a,z1,z2       b            5
+      7 z1,z2,a,b       b            5
+      8 a,b,z1,z2       a            5
+      8 b,a,z1,z2       a            5
+      8 z1,z2,a,b       a            5
 CHECK bb15.1 TRUE with 2 or 3 responses, prune.terms is plain backward elimination on the summed RSS (weighted with weights) in all 36 fits
 CHECK bb15.2 TRUE with 2 or 3 responses the rows of prune.terms are nested in all fits
 CHECK bb15.3 FALSE HYPOTHESIS the prefix rule (PRUNE-3 for one response) also holds with 2 or 3 responses (it holds in 0 of the 11 fits where the two rules differ)
@@ -22,3 +51,6 @@ CHECK bb15.4 TRUE with one response the prefix rule holds and plain backward eli
 CHECK bb15.5 TRUE rss.per.subset is the summed (weighted) RSS of each row in all fits
 CHECK bb15.6 TRUE at trace 3 earth names EvalSubsetsUsingXtx for 2 and 3 responses and a 3-level factor, and no routine (leaps) for one response or a 2-level factor
 CHECK bb15.7 TRUE with pmethod none and nprune = k (3, 5, 8), earth selects the first k forward terms
+CHECK bb15.8 TRUE with pmethod none and nprune = k < M_f earth returns the coefficients of the first k terms but reports rss = rss.per.subset[k], the RSS of the backward subset T[k], not of its returned model (one response, weights, two responses)
+CHECK bb15.9 TRUE with two responses, in each tie design the three column orders give the same removed data column (8 designs, 7 with a tied column removed first)
+CHECK bb15.10 TRUE with two responses the removed tied column is a in some designs and b in others, at term 4 in some and 5 in others, so no rule by column or term number decides: rounding does

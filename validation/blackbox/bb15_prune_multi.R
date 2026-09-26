@@ -18,6 +18,8 @@ wrss <- function(B, Y, S, w) {  # RSS summed over the columns of Y, weighted
   if (is.null(w)) sum(lm.fit(B, Y)$residuals^2) else sum(w * lm.wfit(B, Y, w)$residuals^2)
 }
 backward <- function(B, Y, w) {  # plain sequential backward elimination
+  # which.min breaks an exact tie by the lowest index, not by the spec's rule;
+  # no exact tie occurs in parts A1 to A3 (part D looks at ties).
   K <- ncol(B); cur <- seq_len(K); sets <- vector("list", K); sets[[K]] <- cur
   for (s in K:2) {
     cand <- cur[cur != 1L]; r <- vapply(cand, function(j) wrss(B, Y, setdiff(cur, j), w), 0)
@@ -111,7 +113,47 @@ selC <- sapply(c(3, 5, 8), function(k) {
 f3 <- quiet(earth(x, yf, pmethod = "none", nprune = 5)); fb <- quiet(earth(x, yf))
 cat(sprintf("part C: %d forward terms; pmethod none with nprune 5 selects %s; the backward subset of size 5 is %s\n",
   nrow(f3$dirs), paste(sort(f3$selected.terms), collapse = " "), paste(sort(fb$prune.terms[5, 1:5]), collapse = " ")))
+# The statistics that earth reports in that case, for one response, weights and two responses
+statC <- function(Y, w = NULL, k = 6) {
+  set.seed(12); n <- 150; X <- matrix(runif(n * 4), n, 4)
+  Yv <- if (is.function(Y)) Y(X, n) else Y
+  f <- quiet(earth(X, Yv, weights = w, degree = 2, pmethod = "none", nprune = k))
+  Ym <- as.matrix(Yv); ww <- if (is.null(w)) rep(1, n) else w
+  bx <- basis(f, X)[, sort(f$selected.terms), drop = FALSE]
+  cf_ok <- isTRUE(all.equal(unname(as.matrix(f$coefficients)), unname(as.matrix(if (is.null(w)) lm.fit(bx, Ym)$coefficients else lm.wfit(bx, Ym, w)$coefficients)), tolerance = 1e-10))
+  rss_model <- sum(ww * as.matrix(f$residuals)^2)
+  c(first_k = identical(sort(as.integer(f$selected.terms)), seq_len(k)), coef_first_k = cf_ok,
+    rss_is_Tk = isTRUE(all.equal(f$rss, f$rss.per.subset[k], tolerance = 1e-12)), rss_is_model = isTRUE(all.equal(f$rss, rss_model, tolerance = 1e-8)),
+    rss = f$rss, rss_model = rss_model)
+}
+gy <- function(X, n) 4 * pmax(X[, 1] - 0.3, 0) * X[, 2] + sin(5 * X[, 3]) + 0.2 * rnorm(n)
+set.seed(1); wC <- runif(150, 0.5, 2)
+sc <- rbind(one = statC(gy), weighted = statC(gy, wC), two = statC(function(X, n) cbind(gy(X, n), cos(3 * X[, 4]) + 0.2 * rnorm(n))))
+print(sc, digits = 6)
+quirkC <- all(sc[, "first_k"] == 1) && all(sc[, "coef_first_k"] == 1) && all(sc[, "rss_is_Tk"] == 1) && !any(sc[, "rss_is_model"] == 1)
 
+# Part D: exact ties with two responses. Rows come in pairs that swap two
+# columns, so removing either column gives the same summed RSS in exact
+# arithmetic. Which one does earth remove first, in three column orders?
+tieD <- NULL
+for (i in 1:8) {
+  set.seed(4000 + i); m <- 40; a <- runif(m); b <- runif(m); z1 <- runif(m); z2 <- runif(m); e1 <- rnorm(m); e2 <- rnorm(m)
+  Xd <- rbind(cbind(a, b, z1, z2), cbind(b, a, z1, z2))
+  Yd <- rbind(cbind(3 * z1 + 0.1 * (a + b) + e1, 2 * z2 + e2), cbind(3 * z1 + 0.1 * (b + a) + e1, 2 * z2 + e2))  # a and b are the two weakest, and tied
+  for (ord in list(1:4, c(2, 1, 3, 4), c(3, 4, 1, 2))) {
+    Xo <- Xd[, ord, drop = FALSE]; colnames(Xo) <- c("a", "b", "z1", "z2")[ord]
+    f <- quiet(earth(Xo, Yd, linpreds = TRUE, degree = 1, thresh = 0, nk = 9))
+    if (is.character(f) || nrow(f$dirs) != 5) next
+    ct <- colnames(Xo)[apply(f$dirs[-1, , drop = FALSE], 1, function(r) which(r == 2))]
+    es <- pt_sets(f)
+    first_removed <- setdiff(es[[5]], es[[4]])
+    tieD <- rbind(tieD, data.frame(design = i, order = paste(colnames(Xo), collapse = ","), removed = ct[first_removed - 1],
+      removed_term = first_removed))
+  }
+}
+print(tieD, row.names = FALSE)
+tied_rows <- tieD[tieD$removed %in% c("a", "b"), ]
+by_col <- tapply(tied_rows$removed, tied_rows$design, function(v) length(unique(v)))
 cat(sprintf("CHECK bb15.1 %s with 2 or 3 responses, prune.terms is plain backward elimination on the summed RSS (weighted with weights) in all %d fits\n",
   all(multi$backward), nrow(multi)))
 cat(sprintf("CHECK bb15.2 %s with 2 or 3 responses the rows of prune.terms are nested in all fits\n", all(multi$nested)))
@@ -122,3 +164,9 @@ cat(sprintf("CHECK bb15.4 %s with one response the prefix rule holds and plain b
 cat(sprintf("CHECK bb15.5 %s rss.per.subset is the summed (weighted) RSS of each row in all fits\n", all(tally$rss_ok)))
 cat(sprintf("CHECK bb15.6 %s at trace 3 earth names EvalSubsetsUsingXtx for 2 and 3 responses and a 3-level factor, and no routine (leaps) for one response or a 2-level factor\n", xtx_multi))
 cat(sprintf("CHECK bb15.7 %s with pmethod none and nprune = k (3, 5, 8), earth selects the first k forward terms\n", all(selC)))
+cat(sprintf("CHECK bb15.8 %s with pmethod none and nprune = k < M_f earth returns the coefficients of the first k terms but reports rss = rss.per.subset[k], the RSS of the backward subset T[k], not of its returned model (one response, weights, two responses)\n", quirkC))
+same_in_orders <- all(tapply(tieD$removed, tieD$design, function(v) length(unique(v)) == 1))
+cat(sprintf("CHECK bb15.9 %s with two responses, in each tie design the three column orders give the same removed data column (%d designs, %d with a tied column removed first)\n",
+  same_in_orders, length(unique(tieD$design)), length(unique(tied_rows$design))))
+cat(sprintf("CHECK bb15.10 %s with two responses the removed tied column is a in some designs and b in others, at term 4 in some and 5 in others, so no rule by column or term number decides: rounding does\n",
+  length(unique(tied_rows$removed)) > 1 && length(unique(tied_rows$removed_term)) > 1))

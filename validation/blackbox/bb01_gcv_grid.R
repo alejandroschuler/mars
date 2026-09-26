@@ -127,3 +127,8 @@ pen_msg <- sapply(c(-1, -0.5, -2, -10), function(pen) {
   cat(sprintf("earth(penalty = %g): %s\n", pen, r)); r })
 cat(sprintf("CHECK bb01.5 %s earth() fits with penalty = -1 and stops with an error for the negative penalties -0.5, -2 and -10\n",
   if (pen_msg[1] == "fits" && all(grepl("^ERROR", pen_msg[-1]))) "TRUE" else "FALSE"))
+pen_hi <- sapply(c(999.99, 1000, 1000.0000001, 1001, 5000), function(pen) {
+  r <- tryCatch({ earth(xe, ye, penalty = pen); "fits" }, error = function(e) paste("ERROR:", conditionMessage(e)))
+  cat(sprintf("earth(penalty = %.12g): %s\n", pen, r)); r })
+cat(sprintf("CHECK bb01.6 %s earth() fits with penalty 999.99 and 1000 and stops with an error above 1000 (1000.0000001, 1001, 5000)\n",
+  if (all(pen_hi[1:2] == "fits") && all(grepl("^ERROR", pen_hi[3:5]))) "TRUE" else "FALSE"))

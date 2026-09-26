@@ -55,3 +55,14 @@ cat(sprintf("CHECK bb10.4 %s GRSq of -Inf gives code 2 and GRSq below -10 gives 
   !any(tab[c("grsq0", "grsq0_big")] %in% c(2, 3))))
 cat(sprintf("CHECK bb10.5 %s no new term that raises RSq gives code 6\n", all(tab[c("norsq", "grsq_small")] == 6)))
 cat(sprintf("CHECK bb10.6 %s with thresh = 0 the rule RSq >= 1 - thresh still acts (an exact fit gives code 5)\n", isTRUE(tab["c"] == 5)))
+
+# A constant y at several n: earth's termination code, rss, gcv, rsq and grsq
+cy <- lapply(c(3, 12, 100), function(n) {
+  set.seed(n); xc <- matrix(runif(2 * n), n, 2)
+  out <- capture.output(f <- quiet(withCallingHandlers(earth(xc, rep(0.1, n)), warning = function(w) invokeRestart("muffleWarning"))))
+  cat(sprintf("constant y = 0.1, n = %3d: termcond %d, terms %d, rss %g, gcv %g, rsq %s, grsq %s\n", n, f$termcond, nrow(f$dirs), f$rss, f$gcv, f$rsq, f$grsq))
+  c(code = f$termcond, rss = f$rss, gcv = f$gcv, rsq_nan = is.nan(f$rsq), grsq_nan = is.nan(f$grsq))
+})
+cy <- do.call(rbind, cy)
+cat(sprintf("CHECK bb10.7 %s for a constant y earth gives the intercept alone, rss 0 and gcv 0, rsq and grsq NaN, and termination code 2 at n = 3 and 4 at n = 12 and 100\n",
+  all(cy[, "rss"] == 0) && all(cy[, "gcv"] == 0) && all(cy[, "rsq_nan"] == 1) && all(cy[, "grsq_nan"] == 1) && all(cy[, "code"] == c(2, 4, 4))))

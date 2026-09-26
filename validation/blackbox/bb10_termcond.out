@@ -26,3 +26,7 @@ CHECK bb10.3 TRUE RSq of at least 1 - thresh gives code 5
 CHECK bb10.4 TRUE GRSq of -Inf gives code 2 and GRSq below -10 gives code 3, and neither rule acts when thresh = 0
 CHECK bb10.5 TRUE no new term that raises RSq gives code 6
 CHECK bb10.6 TRUE with thresh = 0 the rule RSq >= 1 - thresh still acts (an exact fit gives code 5)
+constant y = 0.1, n =   3: termcond 2, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
+constant y = 0.1, n =  12: termcond 4, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
+constant y = 0.1, n = 100: termcond 4, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
+CHECK bb10.7 TRUE for a constant y earth gives the intercept alone, rss 0 and gcv 0, rsq and grsq NaN, and termination code 2 at n = 3 and 4 at n = 12 and 100
