@@ -69,6 +69,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 04:34 T05 round 1 (#42, #43): both REQUEST_CHANGES, substantive (unconverged multinomial references on separable labels; predict fixture without earth's terms; several-response pruning case that cannot separate the rules; S16 scales differ in the last bits; weights never exercise spans or knots; S12 raw only; S15 draws too small; S18 separable and on raw X; no GLM warnings or convergence; no test sets). Sent to t05-fixtures; the re-review waits for the weekly reset. Weekly 86 %.
 - 05:35 05:34 wake: weekly 89 %, 5-hour 95 % (reset 06:00). Only the T05 fixes (open PRs) continue; at about 93 % weekly, ask t05-fixtures to checkpoint and stop. Legacy run: 8,304 result files, load 9.6.
 - 06:05 06:05 wake: 5-hour reset (0 %), weekly 89 %. Legacy run: the 200-case regression block done; binary block D3-bin, D4-bin started 12:55Z; 10,394 result files. t05-fixtures running (t05-fixtures branch at 131b015). A peer desktop session 'Investigate matplotlib >=3.9 pin scope' exists (idle); not started by this executor.
+- 06:30 T05 round-1 fixes done: #42 a8bf2e8, #43 359fe5c (gate B, --check and CI passed; per-finding replies posted). Entering the pause for the weekly limit (89 %); the re-review waits for the reset.
 
 ## Core-hour ledger
 
