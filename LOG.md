@@ -83,6 +83,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:34 #43 re-approved as a pure rebase (rebase-check-43: range-diff all '=', trees identical, gate B and CI passed) and merged as d6cac73; T05 (#7) closed. Weekly 96 % at 11:55: paused until the reset; the reviews of #45 and #46 to #49 wait.
 - 16:37 Legacy full run finished: ALL BLOCKS DONE at 23:13Z (16:13 PDT); 49,441 result files in <main>/.worktrees/runner-legacy/validation/runs/legacy_full; no run.py process or run.lock left. About 76 core-hours (ledger row added). Next: T04 step 6 (collect, summarize, mark #41 ready).
 - 16:38 Started t04-collect (sonnet) for T04 step 6 (collect, summarize, mark #41 ready). Weekly 96 %.
+- 16:57 T04 step 6 (t04-collect): #41 ready at eba26af (gate B, CI 12 of 12; Closes #6). 0 failures of 49,440 fits; EarthClassifier equals GLMEarth exactly on 40 shared repetitions. Ratio table at 200 cases, low noise: P-cur/E-def 0.79 (D1) to 1.58 (D2); at 1,000 cases 0.76 (D5) to 1.38 (D3); binary excess log loss ratio of the 1.0.4 classifier to E-def 0.52 (D3-bin) and 0.365 (D4-bin). Gap: E-def was never run on D7 (the driver's cheap blocks ran E-def only on the legacy cells), so E-pym/E-def on D7 is missing; add E-def on D7 with the new-code run (T21), or a short earth-only run. The single review of #41 waits for the reset.
 
 ## Core-hour ledger
 
