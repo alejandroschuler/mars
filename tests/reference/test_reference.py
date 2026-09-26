@@ -171,6 +171,33 @@ def scans(draw, weights=False):
     return (x, active, L, E, w) if weights else (x, active, L, E)
 
 
+def knot_scan_literal(x, active, w, L, E, N, tau):
+    """KNOT-6 one visit at a time, with the counter of KNOT-3, for comparison
+    with the vectorized ref.knot_scan."""
+    if not active.any():
+        return []
+    order = ref.case_order(x, active)
+    xs, act, W = x[order], active[order], np.cumsum(w[order])
+
+    def holder(u):  # the smallest q with u <= W_q + tau_N, else case n
+        return next((q for q in range(len(x)) if u <= W[q] + tau), len(x) - 1)
+
+    v = x[active].max()
+    D = N - 2 * E - 1
+    counter = E + math.ceil((D - L * math.floor(D / L)) / 2)
+    knots, k = [], 0
+    while N - k >= E + 2 - tau:
+        u = N - k
+        t = xs[holder(u - 1)]
+        if t < v and act[holder(u)]:
+            counter -= 1
+            if counter == 0:
+                knots.append(float(t))
+                counter = L
+        k += 1
+    return knots
+
+
 class TestKnots:
     def test_intercept_distinct_values_every_third(self):
         x = np.arange(20.0)[::-1]
@@ -209,6 +236,22 @@ class TestKnots:
         N = float(w.sum())
         weighted = ref.knot_scan(x, active, w.astype(float), L, E, N, ref.weight_tol(N))
         assert weighted == ref.knot_scan_unit(*expanded(x, active, w), L, E)
+
+    @given(
+        scans(),
+        st.lists(st.floats(0.05, 3.0), min_size=30, max_size=30),
+    )
+    def test_the_cumulative_scan_follows_knot_6_one_visit_at_a_time(
+        self, case, weights
+    ):
+        x, active, L, E = case
+        w = np.array(weights[: len(x)])
+        N0 = ref.weight_sum(w)
+        tau = ref.weight_tol(N0)
+        N = ref.snap(N0, tau)
+        assert ref.knot_scan(x, active, w, L, E, N, tau) == knot_scan_literal(
+            x, active, w, L, E, N, tau
+        )
 
     @given(scans(), st.randoms(use_true_random=False))
     def test_the_knots_do_not_depend_on_the_row_order(self, case, rnd):
