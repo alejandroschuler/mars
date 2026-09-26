@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from validation.sims import seeds
 
@@ -23,6 +24,29 @@ def test_stable_hash_is_deterministic_within_a_process():
     assert seeds.stable_hash("D4", 200, "lo", 3) == seeds.stable_hash(
         "D4", 200, "lo", 3
     )
+
+
+def test_stable_hash_golden_value():
+    """A fixed, hand-checked value: this pins the algorithm itself (SHA-256,
+    the "\\x1f" separator, the first 8 bytes, big-endian), which behavior-only
+    tests cannot. A review independently verified this same value; changing
+    to SHA-512, a different prefix or separator, or little-endian all give a
+    different number here.
+    """
+    assert seeds.stable_hash("cell", "D4_n00200_lo", 0) == 670379565567451272
+
+
+def test_train_test_rngs_golden_first_draws():
+    """Pins the first training and test draws for one cell and repetition, so
+    a change that swaps which spawned stream feeds training versus test (the
+    two are otherwise easy to transpose without any shape-level test noticing)
+    changes this test's numbers.
+    """
+    train, test = seeds.train_test_rngs("D4_n00200_lo", 0)
+    train_first = train.uniform(size=3)
+    test_first = test.uniform(size=3)
+    assert train_first == pytest.approx([0.84189938, 0.48931035, 0.16460028], abs=1e-8)
+    assert test_first == pytest.approx([0.11146963, 0.1335095, 0.26959808], abs=1e-8)
 
 
 def test_stable_hash_distinguishes_its_arguments():

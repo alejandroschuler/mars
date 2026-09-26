@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -129,8 +130,21 @@ class Dgp:
         return self.sample_x(rng, n)
 
 
+def _sample_iid(p: int, rng: np.random.Generator, n: int) -> np.ndarray:
+    return sample_independent_uniform(rng, n, p)
+
+
+def _sample_copula(p: int, rng: np.random.Generator, n: int) -> np.ndarray:
+    return sample_copula_uniform(rng, n, p)
+
+
 def _iid(p: int) -> Callable[[np.random.Generator, int], np.ndarray]:
-    return lambda rng, n: sample_independent_uniform(rng, n, p)
+    # functools.partial over a module-level function, not a lambda or a
+    # closure: a Dgp must pickle with the standard `pickle` (joblib's default
+    # loky backend tolerates a lambda through cloudpickle, but not every
+    # backend does, and pickle is what the cache and the job scheduler can
+    # both rely on without guessing which backend is in use).
+    return partial(_sample_iid, p)
 
 
 REGISTRY: dict[str, Dgp] = {
@@ -150,7 +164,7 @@ REGISTRY: dict[str, Dgp] = {
         N_COVARIATES,
         f_d8,
         (0, 1, 2, 3, 4),
-        lambda rng, n: sample_copula_uniform(rng, n, N_COVARIATES),
+        partial(_sample_copula, N_COVARIATES),
         NOISE_LEVELS,
     ),
     "D3-bin": Dgp(

@@ -6,8 +6,8 @@ builtin ``hash`` (randomized per process by ``PYTHONHASHSEED``, so it is not
 stable across runs or processes), and ``numpy.random.default_rng``. The test
 set comes from a second stream of the same seed. No seed depends on the
 position in a loop, so the pilot repetitions are the first repetitions of the
-full run: rerunning cell ``"D4_n0200_lo"`` repetition 7 anywhere, at any time,
-gives the same training and test data.
+full run: rerunning cell ``"D4_n00200_lo"`` repetition 7 anywhere, at any
+time, gives the same training and test data.
 """
 
 from __future__ import annotations

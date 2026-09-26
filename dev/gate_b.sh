@@ -7,6 +7,8 @@
 #   project venv;
 # - the tests of dev/tools/merge_pr.sh (dev/tools/test_merge_pr.sh);
 # - uv build, then the wheel installed into a fresh venv and a smoke check.
+# testpaths also covers validation/sims/tests; "external" tests (need R and
+# earth, or .venv-legacy) are left to gate C and a direct pytest invocation.
 # Every selection above holds tests, so pytest exit code 5 (no tests) fails.
 # The log is <git-common-dir>/pymars-executor/gates/<head-sha>.gateB.log, and
 # its last line is "GATE B PASS <sha>" or "GATE B FAIL <sha>". The gate refuses
@@ -44,10 +46,12 @@ step "ruff check" uv run --frozen --python 3.12 ruff check
 step "ruff format" uv run --frozen --python 3.12 ruff format --check
 step "uv.lock" uv lock --check
 step "full suite, Python 3.12" env HYPOTHESIS_PROFILE=ci \
-  uv run --frozen --python 3.12 pytest -n 2 --cov --cov-report=term-missing -q
+  uv run --frozen --python 3.12 --group validation \
+  pytest -n 2 -m "not external" --cov --cov-report=term-missing -q
 for v in 3.13 3.14; do
   step "fast tests, Python $v" env UV_PROJECT_ENVIRONMENT=".venv-$v" \
-    uv run --frozen --python "$v" pytest -n 2 -m "not slow" -q
+    uv run --frozen --python "$v" --group validation \
+    pytest -n 2 -m "not slow and not external" -q
 done
 step "merge_pr.sh tests" bash dev/tools/test_merge_pr.sh
 

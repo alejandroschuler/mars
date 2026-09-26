@@ -27,7 +27,7 @@ uv sync --frozen --group dev
 
 ## Tests
 
-Tests live in `tests/` and use pytest and hypothesis. Mark a long test with `@pytest.mark.slow`; gate A skips it. `HYPOTHESIS_PROFILE` sets the number of examples: `dev` (50, the default), `ci` (200) or `thorough` (2,000). The fixture `load_fixture` reads `validation/fixtures/<name>.json`. Warnings are errors, except the deprecations that other packages raise.
+Tests live in `tests/` and `validation/sims/tests/` (both on `testpaths`) and use pytest and hypothesis. Mark a long test with `@pytest.mark.slow`; gate A skips it. Mark a test that needs R and earth, or the `.venv-legacy` venv, with `@pytest.mark.external`; gate A, gate B and CI all skip it (`-m "not external"` or `-m "not slow and not external"`), because those dependencies are not guaranteed to be on the runner. Gate C and a direct `pytest` invocation run it, and it must not skip itself when the dependency actually is missing: it should fail, not pass silently. `HYPOTHESIS_PROFILE` sets the number of examples: `dev` (50, the default), `ci` (200) or `thorough` (2,000). The fixture `load_fixture` reads `validation/fixtures/<name>.json`. Warnings are errors, except the deprecations that other packages raise.
 
 ## Conventions
 

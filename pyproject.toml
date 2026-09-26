@@ -80,9 +80,12 @@ known-first-party = ["pymars"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests"]
+testpaths = ["tests", "validation/sims/tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
-markers = ["slow: a long test; gate A and the fast CI jobs skip it"]
+markers = [
+    "slow: a long test; gate A and the fast CI jobs skip it",
+    "external: needs R and earth, or the .venv-legacy venv; gate A, gate B and CI skip it, gate C and a direct pytest invocation run it",
+]
 xfail_strict = true
 # Warnings are errors, except deprecations that other packages raise.
 filterwarnings = [

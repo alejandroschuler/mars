@@ -68,7 +68,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ matrix.python }}
           cache-suffix: ${{ github.job }}
-      - run: uv run --frozen pytest -m "not slow"
+      - run: uv run --frozen --group validation pytest -m "not slow and not external"
 
   slow:
     name: slow tests (ubuntu-latest, Python 3.12)
@@ -115,8 +115,10 @@ jobs:
           uv pip freeze | tee "$RUNNER_TEMP/lowest.txt"
           uv pip install --no-deps .
       - name: Install the test tools without changing those versions
-        run: uv pip install --constraint "$RUNNER_TEMP/lowest.txt" pytest hypothesis pandas
-      - run: .venv/bin/pytest -m "not slow"
+        run: |
+          uv pip install --constraint "$RUNNER_TEMP/lowest.txt" \
+            pytest hypothesis pandas joblib matplotlib
+      - run: .venv/bin/pytest -m "not slow and not external"
 
   wheel:
     name: wheel build and smoke check

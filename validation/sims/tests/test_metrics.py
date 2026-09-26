@@ -28,6 +28,33 @@ def test_excess_risk_hand_case():
     assert metrics.excess_risk(f_hat, f_true) == pytest.approx(5.0 / 3.0)
 
 
+def test_probability_clip_is_1e_minus_6():
+    assert metrics.PROBABILITY_CLIP == 1e-6
+
+
+def test_excess_risk_rejects_a_column_vector_prediction():
+    """A review's repro: an (n, 1) prediction against an (n,) truth used to
+    broadcast to (n, n) and return a silently wrong number (0.26 instead of
+    0.01 for this f), instead of raising. A DataFrame's to_numpy() routinely
+    returns this shape.
+    """
+    f = np.linspace(0.0, 1.0, 5)
+    with pytest.raises(ValueError, match="1-D"):
+        metrics.excess_risk((f + 0.1).reshape(-1, 1), f)
+    assert metrics.excess_risk(f + 0.1, f) == pytest.approx(0.01)
+
+
+def test_excess_risk_rejects_mismatched_shapes():
+    with pytest.raises(ValueError, match="1-D"):
+        metrics.excess_risk(np.zeros(5), np.zeros(4))
+
+
+def test_excess_risk_rejects_non_finite_input():
+    f = np.array([0.0, 1.0, np.nan])
+    with pytest.raises(ValueError, match="finite"):
+        metrics.excess_risk(f, f)
+
+
 def test_log_ratio_hand_case_and_antisymmetry():
     assert metrics.log_ratio(2.0, 1.0) == pytest.approx(math.log(2.0))
     assert metrics.log_ratio(1.0, 2.0) == pytest.approx(-metrics.log_ratio(2.0, 1.0))
@@ -49,6 +76,37 @@ def test_excess_log_loss_is_zero_when_perfectly_calibrated():
     loss, n_clipped = metrics.excess_log_loss(mu, mu)
     assert loss == pytest.approx(0.0, abs=1e-10)
     assert n_clipped == 0
+
+
+def test_excess_log_loss_rejects_a_column_vector_prediction():
+    mu = np.linspace(0.2, 0.8, 5)
+    with pytest.raises(ValueError, match="1-D"):
+        metrics.excess_log_loss((mu + 0.05).reshape(-1, 1), mu)
+    loss, _ = metrics.excess_log_loss(mu + 0.05, mu)
+    assert loss == pytest.approx(0.0064, abs=2e-4)
+
+
+def test_excess_brier_score_rejects_a_column_vector_prediction():
+    mu = np.linspace(0.2, 0.8, 5)
+    with pytest.raises(ValueError, match="1-D"):
+        metrics.excess_brier_score((mu + 0.05).reshape(-1, 1), mu)
+    assert metrics.excess_brier_score(mu + 0.05, mu) == pytest.approx(0.0025)
+
+
+def test_excess_log_loss_handles_mu_true_exactly_0_or_1_without_nan():
+    """xlogy(0, 0) = 0 by convention, so a true mu of exactly 0 or 1 (never
+    produced by this study's DGPs, but not excluded by the formula either)
+    contributes 0 to that term instead of NaN from 0 * log(0).
+    """
+    mu_true = np.array([0.0, 1.0, 0.5])
+    mu_hat = np.array([0.3, 0.7, 0.5])
+    loss, n_clipped = metrics.excess_log_loss(mu_hat, mu_true)
+    assert np.isfinite(loss)
+    assert n_clipped == 0
+    # Hand check of the mu_true=0 term alone: KL(Bernoulli(0)||Bernoulli(0.3))
+    # = (1-0)*log((1-0)/(1-0.3)) = log(1/0.7).
+    loss_first_only, _ = metrics.excess_log_loss(mu_hat[:1], mu_true[:1])
+    assert loss_first_only == pytest.approx(math.log(1 / 0.7))
 
 
 def test_excess_log_loss_hand_case():
@@ -103,6 +161,36 @@ def test_calibration_slope_nan_when_one_class_only():
     y = np.zeros(10)
     slope, _ = metrics.calibration_slope(mu, y)
     assert math.isnan(slope)
+
+
+def test_calibration_slope_nan_when_predictions_are_constant():
+    """A review's repro: with y ~ Bernoulli(0.4) and n = 10,000, a constant
+    mu_hat (as from an intercept-only classifier) gave a slope of about 0.19
+    at mu_hat = 0.3 and about -0.15 at mu_hat = 0.9: an arbitrary number from
+    the optimizer's path, since logit(mu_hat) has no spread to regress on.
+    """
+    rng = np.random.default_rng(0)
+    y = rng.binomial(1, 0.4, size=10_000)
+    for constant in (0.3, 0.9):
+        mu_hat = np.full(10_000, constant)
+        slope, n_clipped = metrics.calibration_slope(mu_hat, y)
+        assert math.isnan(slope)
+        assert n_clipped == 0
+
+
+def test_calibration_slope_hand_case_with_a_nonzero_intercept():
+    """logit(mu_hat) = x is centered at 0 in the well-calibrated tests above;
+    this shifts the true relationship (and so the fitted intercept) away from
+    0, which the slope alone does not exercise.
+    """
+    rng = np.random.default_rng(0)
+    n = 20_000
+    x = rng.uniform(-3, 3, size=n)
+    mu = expit(2.0 + x)  # intercept 2, slope 1
+    y = rng.binomial(1, mu)
+    slope, n_clipped = metrics.calibration_slope(expit(x), y)
+    assert n_clipped == 0
+    assert slope == pytest.approx(1.0, abs=0.15)
 
 
 @pytest.mark.parametrize(

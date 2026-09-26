@@ -26,20 +26,28 @@ def test_linear_r2_share_is_near_zero_when_f_is_independent_of_x():
 @pytest.mark.parametrize("level", ["lo", "hi"])
 def test_sigma_formula_gives_the_target_population_r2_on_a_large_draw(name, level):
     """VALIDATION_PLAN.md / the brief: "the sigma formula gives the target
-    population R^2 on a large draw."
+    population R^2 on a large draw." This calls diagnostics.compute_diagnostics
+    and dgps.generate themselves, not a copy of the sigma formula: a review
+    found that a test which recomputed sigma from sd(f) and R^2 independently
+    still passed after sd_f*sqrt(r2/(1-r2)) was substituted into
+    diagnostics.py, or after dgps.generate was changed to always read
+    sigma_lo regardless of the requested level.
     """
+    diag = diagnostics.compute_diagnostics(n_draw=200_000)
     dgp = dgps.REGISTRY[name]
-    rng = np.random.default_rng(12345)
-    n = 200_000
-    X = dgp.sample_covariates(rng, n)
-    f_values = dgp.f(X)
-    var_f = f_values.var(ddof=0)
-    sd_f = np.sqrt(var_f)
-    target_r2 = dgps.R_SQUARED[level]
-    sigma = sd_f * np.sqrt((1 - target_r2) / target_r2)
-    y = f_values + sigma * rng.standard_normal(n)
+    rng = np.random.default_rng(2024)
+    _x, y, truth = dgps.generate(dgp, rng, 300_000, level, diag)
+    var_f = truth.var(ddof=0)
     empirical_r2 = var_f / y.var(ddof=0)
-    assert empirical_r2 == pytest.approx(target_r2, abs=0.02)
+    target_r2 = dgps.R_SQUARED[level]
+    # n=300,000 keeps the Monte Carlo SE of this R^2 well under 0.01; 0.03 is
+    # a loose multiple of that, not a re-derivation of the target itself.
+    assert empirical_r2 == pytest.approx(target_r2, abs=0.03)
+
+
+def test_d6_sigma_is_exactly_one():
+    diag = diagnostics.compute_diagnostics(n_draw=1000)
+    assert diag["D6"]["sigma"] == 1.0
 
 
 def test_compute_diagnostics_small_draw_has_every_registry_key_and_is_finite():
@@ -82,3 +90,31 @@ def test_committed_diagnostics_matches_the_plans_stated_values():
     assert committed["D3-bin"]["lambda"] == pytest.approx(1.60, abs=0.05)
     assert committed["D4-bin"]["lambda"] == pytest.approx(0.28, abs=0.05)
     assert committed["D8"]["empirical_corr_mean"] == pytest.approx(0.58, abs=0.02)
+
+
+@pytest.mark.parametrize(
+    "name", ["D1", "D3", "D4", "D5", "D7", "D8", "D3-bin", "D4-bin"]
+)
+def test_compute_diagnostics_agrees_with_the_committed_diagnostics_json(name):
+    """diagnostics.py must be what produced diagnostics.json, not merely
+    consistent with it: FAKE_DIAGNOSTICS-style tests in test_dgps.py never
+    call compute_diagnostics, and test_committed_diagnostics_matches_the_plans
+    _stated_values above reads only the committed file, so a review found
+    neither one would catch diagnostics.py drifting from diagnostics.json (for
+    example, dropping the centering by mean_f before computing lambda).
+    ``diagnostic_rng`` is a fixed seed, so a smaller n_draw here is a prefix
+    of the committed 10**6-case draw, not an independent resample; the
+    tolerances below are generous multiples of the resulting Monte Carlo
+    noise, not exact equality.
+    """
+    committed = dgps.load_diagnostics()[name]
+    recomputed = diagnostics.compute_diagnostics(n_draw=200_000)[name]
+    for key in ("var_f", "sd_f"):
+        if key in committed:
+            assert recomputed[key] == pytest.approx(committed[key], rel=0.03), key
+    for key in committed:
+        if key.startswith("sigma_"):
+            assert recomputed[key] == pytest.approx(committed[key], rel=0.03), key
+    if "lambda" in committed:
+        assert recomputed["lambda"] == pytest.approx(committed["lambda"], abs=0.05)
+        assert recomputed["mean_f"] == pytest.approx(committed["mean_f"], rel=0.05)

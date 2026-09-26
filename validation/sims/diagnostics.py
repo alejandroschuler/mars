@@ -29,13 +29,24 @@ def _linear_r2_share(X: np.ndarray, f_values: np.ndarray) -> float:
     """Share of Var f that the best linear approximation of f (in mean
     squared error, over this draw) explains: 1 minus the residual variance of
     the OLS fit of f_values on X (with an intercept), over Var f.
+
+    Solved through the normal equations on the centered p x p covariance of
+    X, not by stacking an (n, p + 1) design matrix and calling
+    ``np.linalg.lstsq`` (whose SVD needs several times that matrix's memory):
+    at D7's n = 10**6, p = 50 the difference was the gate's 1.5 GB per-worker
+    budget (1.67 GB) against a few hundred MB.
     """
-    design = np.column_stack([np.ones(len(X)), X])
-    coef, *_ = np.linalg.lstsq(design, f_values, rcond=None)
-    resid = f_values - design @ coef
+    n = len(X)
     var_f = f_values.var(ddof=0)
     if var_f == 0.0:
         return float("nan")
+    x_mean = X.mean(axis=0)
+    f_mean = f_values.mean()
+    cov_xx = (X.T @ X) / n - np.outer(x_mean, x_mean)
+    cov_xf = (X.T @ f_values) / n - x_mean * f_mean
+    coef = np.linalg.solve(cov_xx, cov_xf)
+    intercept = f_mean - x_mean @ coef
+    resid = f_values - (intercept + X @ coef)
     return float(1.0 - resid.var(ddof=0) / var_f)
 
 
