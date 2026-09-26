@@ -42,4 +42,6 @@ Notes for the trace parser (T02):
 | bb18 | exact ties between candidates in the forward pass | FWD-5, EDGE-4 |
 | bb19 | the stopping rules and their order | STOP-1 to STOP-6 |
 | bb20 | several responses in the forward pass | RESP-1, RESP-2, STOP-6, FWD-4 |
+| bb21 | earth's GLM refit: binomial, weights, separation, a 3-level factor, label types | GLM-1, GLM-2, GLM-4 |
 | bb22 | small and degenerate inputs, constant and duplicated covariates, non-finite values | EDGE-1 to EDGE-5, ERR-1 |
+| bb23 | the removal of linearly dependent terms at the end of the forward pass | FWD-11 |

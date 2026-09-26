@@ -332,7 +332,7 @@ For b·x and b·(x − m)₊ the fitted values and the RSS are the same; they di
 
 **FWD-10** Where an implementation scales Y inside the pass ([LA-6](#linear-algebra-contract)), it may, with one response, subtract the weighted mean and divide by any positive constant; with several responses it may subtract each response's weighted mean and divide all responses by one common constant. It must not scale the responses by different constants, because the summed RSS weighs each response by its own units. [bb17.1, bb17.2 (earth scales one response to unit standard deviation), bb17.3a, bb17.4b (with several responses earth does not scale by default, and multiplying one response by 1000 changes its terms)] earth's `Scale.y = TRUE`, which scales each response to unit variance, is not offered.
 
-**FWD-11** When the pass stops, it checks the terms in forward order with the rule of [LA-4](#linear-algebra-contract) on the √w-scaled columns: a term whose column is dependent on the columns of the earlier kept terms is dropped. The pruning pass receives the kept terms, in forward order ([PRUNE-2](#pruning-pass)). The forward record keeps every term that the pass added, and lists the dropped ones ([CORE-3](#core-api)). earth also removes linearly dependent terms at the end of its forward pass [bb23.1; Notes §13.14], but its trace gives only their number [bb23.5], so which of two dependent terms it keeps is not known (OQ-6); pymars keeps the earlier one.
+**FWD-11** When the pass stops, it checks the terms in forward order with the rule of [LA-4](#linear-algebra-contract) on the √w-scaled columns: a term whose column is dependent on the columns of the earlier kept terms is dropped. The pruning pass receives the kept terms, in forward order ([PRUNE-2](#pruning-pass)). The forward record keeps every term that the pass added, and lists the dropped ones ([CORE-3](#core-api)). earth also removes linearly dependent terms at the end of its forward pass, and its kept basis has full column rank [bb23.1, bb23.2; Notes §13.14], but its trace gives only their number [bb23.5], so which of two dependent terms it keeps is not known (OQ-6); pymars keeps the earlier one.
 
 ## Stopping rules
 
@@ -414,7 +414,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 ## Degenerate inputs
 
-**EDGE-1** A fit is degenerate when N ≤ 1, or when TSS = 0 (every response constant over the cases with positive weight). The forward pass does not run: the model is the intercept alone, with coefficient the weighted mean of each response, `gcv` = +∞, `rsq` = `grsq` = 0, termination `DEGENERATE` (0), M_f = 1 and the trivial pruning record ([CORE-3](#core-api), [GCV-7](#gcv-and-fit-statistics)). A single case gives such a fit, not an error. [plan: Behavior target, "Degenerate inputs"; pymars departure: earth stops with an error for n = 1 and returns gcv = 0 with code 4 for a constant y, bb22.1, bb22.2a]
+**EDGE-1** A fit is degenerate when N ≤ 1, or when every response is constant over the n cases with positive weight (Conventions: all its values are equal; [GCV-7](#gcv-and-fit-statistics)). The forward pass does not run: the model is the intercept alone, with coefficient the weighted mean of each response, `gcv` = +∞, `rsq` = `grsq` = 0, termination `DEGENERATE` (0), M_f = 1 and the trivial pruning record ([CORE-3](#core-api), [GCV-7](#gcv-and-fit-statistics)). A single case gives such a fit, not an error. [plan: Behavior target, "Degenerate inputs"; pymars departure: earth stops with an error for n = 1, and for a constant y it returns gcv 0, rsq and grsq NaN, and code 2 or 4, bb22.1, bb22.2a, bb10.7]
 
 **EDGE-2** Otherwise there is no special case for small n: the rules above decide. In earth, 2 to 5 cases give the intercept alone, because every candidate has GRSq = −∞ ([STOP-3](#stopping-rules)); 8 and 12 cases add terms. [bb22.1]
 
@@ -511,7 +511,7 @@ Quirks that pymars copies, so that its fits match earth's:
 - the pruning pass uses one algorithm for one response and another for several ([PRUNE-3](#pruning-pass));
 - a step may not reduce the RSS by more than 10 times the previous step's reduction ([FWD-4](#forward-pass));
 - `fast_k` = 1 or 2 acts as 3 ([FAST-3](#fast-mars));
-- the queue addresses parents by slot, so the newest terms can wait several steps before they are searched as parents ([FAST-4](#fast-mars)).
+- the queue addresses parents by slot, so the newest terms can wait several steps before they are searched as parents ([FAST-4](#fast-mars));
 - terms at the maximum degree stay in the queue and take rows of its window, so a degree-1 fit can end before it reaches `max_terms` ([FAST-6](#fast-mars)).
 
 Quirks that pymars does not copy: earth's knots can depend on the row order when equal x values have different activity ([KNOT-2](#candidate-knots)); earth's choice between a pair and a single hinge depends on the units of x ([LA-7](#linear-algebra-contract)); with `pmethod="none"` and `nprune`, earth's statistics belong to another model than its coefficients ([PRUNE-7](#pruning-pass)).
