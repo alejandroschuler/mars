@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-25 21:37 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-25 21:43 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,11 +15,17 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-P0 done, including both parts of the recovery drill. P1 started 18:45 PDT: T01 (#3), T02 (#4), T03 (#5).
+P0 done (recovery drill passed). P1 in progress since 18:45 PDT 2026-09-25.
 
 Board: T00 #2 (closed), T01 #3, T02 #4, T03 #5, T04 #6, T05 #7, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 #15, T14 #16, T15 #17, T16 #18, T17 #19, T18 #20, T19 #21, T20 #22, T21 #23, T22 #24, T23 #25, T24 #26; later: missing values #27, negative minspan #28, newvar.penalty #29, linpreds #30, allowed #31, pmethod and nfold #32, evimp #33. `board/numbers.json` has the map.
 
-main: 31e6c13 (bootstrap, PR #1). `<main>` and `<S>` are at main. CI runs on the fork (registered by the first push); CI on main passed.
+main: dbe5794 (PR #35, T03 part 1) on top of 31e6c13 (PR #1, bootstrap). CI runs on the fork.
+
+Open pull requests (21:45):
+- #34 T01 spec part 1, head d556e28; round 3 dual review running (workflow run wf_95bda7f4-7a6). Merge needs APPROVE from roles `spec` and `adversarial` on the head: `bash <main>/dev/tools/merge_pr.sh --session <id> 34 spec adversarial`. Before merging it, retarget #37 to main (`gh pr edit 37 --repo alejandroschuler/mars --base main`).
+- #37 T01 spec part 2, head 0c4121d, stacked on #34; ready; its dual review starts after #34 merges (review `git diff d556e28..HEAD`). Rebase onto main after #34 merges.
+- #36 T02 part 1, head fd71f83; #38 T02 part 2, head 3173b3e (base already main); re-review by rev-t02-harness (role `single`) running. Merge #36 first, then rebase #38 onto main, quick re-approval by range-diff, merge #38.
+- #40 T03 part 2, head d5d4c54; re-review by rev-pr35-sims1 (role `single`) running. After it merges, start T04 (brief `briefs/T04-legacy-runs.md`).
 
 ## Done in P0
 
@@ -33,17 +39,21 @@ main: 31e6c13 (bootstrap, PR #1). `<main>` and `<S>` are at main. CI runs on the
 
 ## Next actions
 
-2. When T03 is ready: one reviewer (`single`, opus); merge; then T04 (legacy pilot, then the legacy full run as detached jobs from a runner worktree in `<main>/.worktrees/`), as early as possible: the detached jobs keep running during a usage pause.
-3. When T01 part 1 is ready: two reviewers (`spec`, `adversarial`); merge; then T08, T09, T10.
-4. When T02 is ready: one reviewer; merge; then T05 (fixtures) and T18 (legacy description).
-5. Pacing: weekly 49 % at 18:38 with the reset on 2026-09-27 16:59 PDT; bootstrap cost about 4 weekly points. Keep at most 3 authors; use sonnet for mechanical tasks; opus for the spec, the reference, the core modules and high-risk reviews.
+1. Merge #40 when approved; start T04 (sonnet author, runner worktree in `<main>/.worktrees/runner-legacy`, full legacy run at the caps with 6 workers; pilot analysis later).
+2. Merge #34 when both roles approve (retarget #37 to main first); then the dual review of #37.
+3. Merge #36 and #38 when approved; then T05 (fixtures; its brief is not written yet) and T18 (legacy description; brief not written yet).
+4. After spec part 1 merges: T08 (_terms, _gcv, _knots), T09 (_linalg), T10 (_pruning) with briefs that cite the spec rule IDs (TERM, GCV, LIMIT, SPAN, KNOT, LA, PRUNE, CORE, W). T06 (the reference) needs the whole spec and T05.
+5. Pacing: weekly 69 % at 21:38 (reset 2026-09-27 17:00 PDT). At 85 %: authors checkpoint and stop. At 90 %: only finish open pull requests. The detached legacy jobs need no Claude usage.
+6. Follow-ups: merge_pr.sh should refuse while another open PR uses the head branch as its base (GitHub closed #39 when #35's branch was deleted). T16 must exclude shift tests where a shifted covariate is a linear factor in a term of degree 2 or more. The plan's edge-case row that calls earth scale invariant is wrong (bb14.4).
 
 ## Running agents
 
-- `t01-spec` (opus): T01 spec writer, issue #3, branches `t01-spec-part1` then `t01-spec-part2`, worktrees in `<S>/.worktrees/`. Started 18:45.
-- `t02-harness` (sonnet): T02 earth harness, issue #4, branch `t02-harness` (or `t02-harness-r` and `t02-harness-compare`). Started 18:45.
-- `t03-sims` (sonnet): T03 simulation harness, issue #5, branch `t03-sims`. Started 18:45.
-- `drill-helper` (haiku): drill passed; done.
+- `t01-spec` (opus): done with spec v1 parts 1 and 2; waiting for review findings (SendMessage to it).
+- `t02-harness` (sonnet): waiting for the re-review of #36 and #38.
+- `t03-sims` (sonnet): waiting for the re-review of #40.
+- `rev-t02-harness` (opus): re-reviewing #36 and #38.
+- `rev-pr35-sims1` (opus): re-reviewing #40 (it also reviewed #35).
+- Workflow run wf_95bda7f4-7a6: round 3 of #34 (spec + adversarial). The reusable script is `tools/dual_review.js` in this journal (args: pr, title, head, brief, roles, focus).
 
 ## Running jobs
 
