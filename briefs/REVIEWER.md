@@ -23,6 +23,7 @@ You review one pull request in `alejandroschuler/mars` that you did not write. R
 - Scope: matches the brief; touches only the files the brief names; at most about 800 changed lines that are not generated.
 - Spec: each rule cites a spec section, and the spec cites its source.
 - Tests: they fail without the change and cover the edge cases; no new skip or expected failure without an issue; tolerances from the plan's tolerance table.
+- Tests really run: gate B and CI collect the new tests (validation tests are in `testpaths`; tests that need R or the legacy venv carry the marker `external` and run in gate C). Try a few one-token mutations of the code under test (a sign, a constant, a comparison, an index); a surviving mutation of a formula or a rule is a blocking finding.
 - Numerics: float64; inputs never changed in place; no absolute epsilons; fixed tie rules; the complexity stated; memory O(n·(p + nk)).
 - scikit-learn: no work in `__init__`; parameters never changed; `validate_data` used; no private scikit-learn API; tags set.
 - The clean room, the docs, no stray files, and a gate B log for the current head.
