@@ -87,6 +87,18 @@ def _run(request: dict[str, Any], *, rscript: str = "Rscript") -> dict[str, Any]
         return _desanitize(json.loads(out_path.read_text(encoding="utf-8")))
 
 
+def versions(*, rscript: str = "Rscript") -> dict[str, str]:
+    """The R and earth versions this process's ``Rscript`` would fit with.
+
+    Every ``blackbox.R`` call's result already carries ``r_version`` and
+    ``earth_version`` (so a component fixture has them without a
+    ``driver.run_earth`` result to copy them from, the way ``fit_earth.R``'s
+    callers do); this call needs no other request field.
+    """
+    result = _run({"call": "versions"}, rscript=rscript)
+    return {"r_version": result["r_version"], "earth_version": result["earth_version"]}
+
+
 def get_gcv(
     rss_per_subset: np.ndarray, nterms: np.ndarray, penalty: float, ncases: float
 ) -> np.ndarray:

@@ -65,6 +65,13 @@ class TestGetGcv:
         assert more >= fewer
 
 
+class TestVersions:
+    def test_reports_r_and_earth_versions(self):
+        result = bb.versions()
+        assert result["r_version"].startswith("R version")
+        assert result["earth_version"]
+
+
 class TestFitBxDirs:
     def test_returns_a_real_forward_basis(self, hinge_data):
         x, y = hinge_data

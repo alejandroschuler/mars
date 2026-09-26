@@ -15,6 +15,9 @@ suppressMessages({
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
+r_version <- R.version.string
+earth_version <- as.character(utils::packageVersion("earth"))
+
 write_result <- function(x, path) {
   # See fit_earth.R's write_result: na = "string" keeps Inf/-Inf/NaN/NA
   # distinguishable from each other and from JSON null; blackbox.py's
@@ -36,6 +39,12 @@ to_matrix <- function(rows) {
 }
 
 calls <- list(
+  # No request fields; every call's result already carries r_version and
+  # earth_version (below), so this just reads them off with nothing else in
+  # the way, for a fixture's versions block (component fixtures have no
+  # fit_earth.R result to take them from otherwise).
+  versions = function(req) list(),
+
   # A grid of (rss.per.subset, ntermsVec) pairs at one penalty and case count;
   # get.gcv takes the whole vectors at once and returns one GCV per entry.
   get_gcv = function(req) {
@@ -160,4 +169,7 @@ fn <- calls[[req$call]]
 if (is.null(fn)) {
   stop(paste("unknown call:", req$call))
 }
-write_result(fn(req), argv[2])
+result <- fn(req)
+result$r_version <- r_version
+result$earth_version <- earth_version
+write_result(result, argv[2])
