@@ -198,7 +198,13 @@ class TestVersions:
         assert info["numpy"]
         assert info["scikit_learn"]
         assert isinstance(info["blas"], list)
-        assert info["numpy_blas"]["name"]
+        # Always a dict with these two keys, but not always populated: numpy
+        # before 2.0 (the "lowest direct dependencies" CI job) cannot report
+        # its own BLAS build metadata, so both are None there instead of a
+        # name/version string; test_numpy_blas_reads_the_dicts_mode_build_
+        # dependencies_entry pins the populated case without depending on
+        # this machine's own numpy build.
+        assert set(info["numpy_blas"]) == {"name", "version"}
         assert "r_version" not in info
         assert "r_blas" not in info
 
@@ -221,6 +227,31 @@ class TestVersions:
         info = versions({"r_version": "x", "earth_version": "y"})
         assert info["r_blas"]["la_library"]
         assert info["r_blas"]["blas"]
+
+    def test_numpy_blas_reads_the_dicts_mode_build_dependencies_entry(
+        self, monkeypatch
+    ):
+        def fake_show_config(mode=None):
+            assert mode == "dicts"
+            return {
+                "Build Dependencies": {"blas": {"name": "fake_blas", "version": "9.9"}}
+            }
+
+        monkeypatch.setattr(np, "show_config", fake_show_config)
+        assert versions()["numpy_blas"] == {"name": "fake_blas", "version": "9.9"}
+
+    def test_numpy_blas_degrades_to_none_on_a_pre_2_0_numpy(self, monkeypatch):
+        """numpy < 2.0's show_config() takes no arguments (and prints instead
+        of returning a dict), so the "mode" keyword raises TypeError; this
+        must not crash versions(), just leave numpy_blas empty (regression:
+        the "lowest direct dependencies" CI job installs numpy 1.23.5, the
+        floor in dev/DECISIONS.md, and hit exactly this)."""
+
+        def old_show_config():
+            return None
+
+        monkeypatch.setattr(np, "show_config", old_show_config)
+        assert versions()["numpy_blas"] == {"name": None, "version": None}
 
 
 @pytest.mark.external

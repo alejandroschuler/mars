@@ -276,6 +276,24 @@ def _r_blas(rscript: str = "Rscript") -> dict[str, str] | None:
     return {"la_library": la_library, "blas": blas}
 
 
+def _numpy_blas() -> dict[str, Any]:
+    """numpy's own BLAS build metadata (the "Build Dependencies" -> "blas"
+    entry of ``numpy.show_config(mode="dicts")``).
+
+    The ``mode`` keyword and the dict return value only exist from numpy 2.0;
+    on an older numpy (the floor is 1.23.5: dev/DECISIONS.md) ``show_config``
+    takes no arguments, prints to stdout and returns ``None``, so this gives
+    back ``{}`` instead of raising.
+    """
+    try:
+        config = np.show_config(mode="dicts")
+    except TypeError:
+        return {}
+    if not isinstance(config, dict):
+        return {}
+    return config.get("Build Dependencies", {}).get("blas", {})
+
+
 def versions(
     earth_result: Mapping[str, Any] | None = None, *, rscript: str = "Rscript"
 ) -> dict[str, Any]:
@@ -294,9 +312,7 @@ def versions(
     import sklearn
     import threadpoolctl
 
-    numpy_blas = (
-        np.show_config(mode="dicts").get("Build Dependencies", {}).get("blas", {})
-    )
+    numpy_blas = _numpy_blas()
     info: dict[str, Any] = {
         "python": sys.version.split()[0],
         "numpy": np.__version__,
