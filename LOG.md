@@ -54,6 +54,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:29 PR #40 rebased (e794e69), re-approved as a pure rebase by rebase-check-40 (sonnet; git range-diff all '=', gate B and CI passed), merged as 8760cee; T03 (#5) closed. Decision: a rebase-only re-approval may come from a small checker agent that verifies an empty range-diff, the gate B log and CI (recorded here; a DECISIONS.md line comes with the next tooling PR). Started t04-legacy (sonnet) with runner at 8760cee in <main>/.worktrees/runner-legacy.
 - 01:33 01:33 wake: 5-hour 21 %, weekly 76 % (about 6 per hour; 85 % near 03:00). Running: t04-legacy, t02-harness (slot map fix, #38 rebase), dual review of #37. T05 and T08 to T10 wait for the weekly reset unless the budget allows.
 - 01:43 PR #38 (both parts of T02) APPROVE at 693653e by rev-t02-harness (slot fix: 0 wrong parents in 349 steps; part 1 identical to the approved #36); merged as d4f74f4; T02 (#4) closed; #36 closed as folded in. main: d4f74f4. Next when budget allows: T05 (fixtures) and T18 (legacy description) need briefs.
+- 01:51 T04: check run 192 of 192 without errors; the full legacy run started as a detached driver (PID 65765, 6 workers, about 98 core-hours, 16 to 17 h); draft PR #41. EarthClassifier and GLMEarth bitwise identical again.
 
 ## Core-hour ledger
 

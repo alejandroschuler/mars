@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-26 01:43 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-26 01:51 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -57,7 +57,9 @@ Open pull requests (21:45):
 
 ## Running jobs
 
-None.
+- Legacy full run (T04, #6), started 2026-09-26 01:47 PDT by `t04-legacy`. Runner worktree `<main>/.worktrees/runner-legacy` at 8760cee (detached). Driver `validation/sims/legacy_full_run.sh` (12 `run.py --resume` blocks into one output folder), launched as `nohup caffeinate -i nice -n 15 bash validation/sims/legacy_full_run.sh > validation/runs/legacy_full/driver.log 2>&1 &` from the runner root. PID file `validation/runs/legacy_full/driver.pid` (65765). 6 workers. Expected about 98 core-hours, 16 to 17 hours wall. Order: pilot D4/D5 at 200 (reps 0:100, then 100:300), other 200-case regression cells without D7, 200-case binary, 1,000-case D3/D4/D5/D8 low noise, then the cheap arms.
+- Check on each wake: `ps -p $(cat <runner>/validation/runs/legacy_full/driver.pid)`, `tail <runner>/validation/runs/legacy_full/driver.log`, the count of result files. Restart after a crash: end leftover loky workers (`pgrep -fl "<runner>/.venv/bin/python.*joblib.externals.loky"`), remove a stale `run.lock` folder with rmdir if no run.py uses the folder, and rerun the same launch command (every block resumes).
+- Draft PR #41 (branch `t04-legacy-runs`, head 1c64432) holds the run configuration.
 
 ## Usage and resets
 
