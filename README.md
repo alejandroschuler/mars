@@ -22,7 +22,7 @@ model = earth.Earth(max_degree=2).fit(X, y)
 
 ## Legacy code
 
-Version 1.0.4, the `mars-earth` release on PyPI, is kept under the git tag `legacy-1.0.4-head`. Version 2 removes it, together with the Rust runtime, the language bindings, the command-line tool and the portable model format. [CHANGELOG.md](CHANGELOG.md) lists the changes.
+The legacy code, upstream commit d68b54a with the version string 1.0.4, is kept under the git tag `legacy-1.0.4-head`. The PyPI release mars-earth 1.0.4 differs from that commit in many lines; `validation/legacy/make_venv.sh` installs the release for comparisons. Version 2 removes the legacy code, together with the Rust runtime, the language bindings, the command-line tool and the portable model format. [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
 ## Contributing
 

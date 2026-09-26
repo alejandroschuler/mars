@@ -83,6 +83,8 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           cache-suffix: ${{ github.job }}
+      # The exit-code-5 exception holds only while no slow test exists. It goes
+      # once slow tests exist: task T15 removes it.
       - name: Run the slow tests (pytest exit code 5 means that none exist yet)
         run: |
           status=0

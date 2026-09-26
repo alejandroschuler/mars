@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0.dev0] - unreleased
 
-The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code will follow a written specification and will be checked against the R package earth, as VALIDATION_PLAN.md describes. This version has no estimators yet. The git tag `legacy-1.0.4-head` keeps the 1.0.4 code.
+The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code will follow a written specification and will be checked against the R package earth, as VALIDATION_PLAN.md describes. This version has no estimators yet. The git tag `legacy-1.0.4-head` keeps the legacy code, upstream commit d68b54a with the version string 1.0.4.
 
 ### Changed
 - The build backend is hatchling. The package is pure Python and depends only on numpy 1.23.5 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14.
