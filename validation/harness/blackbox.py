@@ -17,29 +17,19 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from driver import _desanitize
 
 HERE = Path(__file__).resolve().parent
 BLACKBOX_R = HERE / "blackbox.R"
 
-# blackbox.R writes Inf/-Inf/NaN/NA as these exact strings (its write_result
-# comment explains why); undo that after json.loads(), matching driver.py's
-# own _desanitize().
-_R_JSON_SENTINELS = {
-    "Inf": float("inf"),
-    "-Inf": float("-inf"),
-    "NaN": float("nan"),
-    "NA": float("nan"),
-}
-
-
-def _desanitize(value: Any) -> Any:
-    if isinstance(value, str):
-        return _R_JSON_SENTINELS.get(value, value)
-    if isinstance(value, list):
-        return [_desanitize(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _desanitize(v) for k, v in value.items()}
-    return value
+# blackbox.R writes Inf/-Inf/NaN/NA as these exact strings, with na = "string"
+# (blackbox.R's write_result comment explains why), the same convention
+# fit_earth.R uses; driver.py's _desanitize() undoes it the same way here, so
+# that the two scripts share one decoder instead of drifting apart. NA
+# becomes None, distinct from a NaN: lm_fit's coefficients has an R NA (not
+# nan) for a column lm.fit cannot estimate (rank-deficient x, for example two
+# identical columns), and multinom_fit's levels can itself contain the
+# string "NA" as a real factor level, which _STRING_ONLY_KEYS protects.
 
 
 def _rows(a: np.ndarray | None) -> list[list[float]] | None:
@@ -55,6 +45,27 @@ def _rows(a: np.ndarray | None) -> list[list[float]] | None:
     if a.ndim == 1:
         a = a.reshape(-1, 1)
     return [row.tolist() for row in a]
+
+
+def _has_none(value: Any) -> bool:
+    if isinstance(value, list):
+        return any(_has_none(v) for v in value)
+    return value is None
+
+
+def _float_array(values: Any) -> np.ndarray:
+    """A numpy array of ``values`` (a possibly nested list, already through
+    ``_desanitize``), ``dtype=float`` unless an R NA (``None``) is present.
+
+    ``np.asarray(values, dtype=float)`` silently turns ``None`` into ``nan``
+    (numpy's usual float cast), which would erase the NA/NaN distinction
+    ``_desanitize`` exists to keep; a rank-deficient ``lm.fit``/``glm.fit``
+    (for example two identical columns) gives R's real NA, not a NaN, for
+    the aliased coefficient. ``dtype=object`` keeps ``None`` as ``None``
+    instead.
+    """
+    dtype = object if _has_none(values) else float
+    return np.asarray(values, dtype=dtype)
 
 
 def _run(request: dict[str, Any], *, rscript: str = "Rscript") -> dict[str, Any]:
@@ -142,10 +153,15 @@ def pruning_pass(
 
 
 def lm_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
-    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal)."""
+    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal).
+
+    ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
+    deficient (for example two identical columns): R gives the aliased
+    coefficient as NA, which comes back here as ``None``, not ``nan``.
+    """
     result = _run({"call": "lm_fit", "x": _rows(x), "y": _rows(y)})
     return {
-        "coefficients": np.asarray(result["coefficients"], dtype=float),
+        "coefficients": _float_array(result["coefficients"]),
         "residuals": np.asarray(result["residuals"], dtype=float),
         "rank": result["rank"],
     }
@@ -177,7 +193,11 @@ def predict_earth(
 def glm_fit(
     x: np.ndarray, y: np.ndarray, *, family: str = "binomial"
 ) -> dict[str, Any]:
-    """R's ``glm.fit(x, y, family = <family>)``, unpenalized."""
+    """R's ``glm.fit(x, y, family = <family>)``, unpenalized.
+
+    ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
+    deficient: see ``lm_fit``, the same aliasing.
+    """
     result = _run(
         {
             "call": "glm_fit",
@@ -187,7 +207,7 @@ def glm_fit(
         }
     )
     return {
-        "coefficients": np.asarray(result["coefficients"], dtype=float),
+        "coefficients": _float_array(result["coefficients"]),
         "fitted_values": np.asarray(result["fitted_values"], dtype=float),
     }
 

@@ -379,6 +379,62 @@ class TestRunEarth:
         independent_rss = float(np.sum((job.y - B[:, :last_terms] @ coef) ** 2))
         assert fwd[-1] == pytest.approx(independent_rss, rel=1e-6)
 
+    def test_cuts_equal_input_x_values_bit_for_bit(self, tmp_path):
+        # Round-2 review, PR #36 finding 2: digits = I(17) reverted to NA in
+        # fit_earth.R's write_result rounds to 15 significant digits
+        # (jsonlite 2.0.0), not enough to round-trip a double exactly, but
+        # far below any approx() tolerance a normal comparison test would
+        # use. This checks fit_earth.R's own write_result end to end (not a
+        # separate R script, unlike test_precision.py): a knot sits exactly
+        # on an observed x value by construction (the forward pass only
+        # ever proposes observed values as candidate knots), so every
+        # nonzero-coded cuts entry must equal one input x value exactly.
+        rng = np.random.default_rng(10)
+        job = self._job("s01", rng)
+        job.earth_args = {**job.earth_args, "pmethod": "none"}
+        r = run_earth([job], workdir=tmp_path)["s01"]
+        dirs, cuts = np.array(r["dirs"]), np.array(r["cuts"])
+        x = job.X[:, 0]
+        hinge_cuts = cuts[dirs != 0]
+        assert len(hinge_cuts) > 0
+        for c in hinge_cuts:
+            assert np.any(x == c), f"{c!r} is not bit-exactly an input x value"
+
+    def test_weighted_pmethod_none_fit_has_fwd_rss_ending_at_rss(self, tmp_path):
+        # Round-2 review, PR #36 finding 2: forward_rss_path's weighted
+        # branch (lm.wfit) reverted to lm.fit (which ignores weights) still
+        # returns a finite path, and test_weights_are_forwarded does not
+        # call pmethod = "none", so it cannot see this. With no pruning, the
+        # forward pass's full basis *is* the final model, so earth's own
+        # (correctly weighted) rss and forward_rss_path's last entry must
+        # agree; they would not if forward_rss_path silently dropped the
+        # weights.
+        rng = np.random.default_rng(11)
+        job = self._job("s01", rng)
+        job.earth_args = {**job.earth_args, "pmethod": "none"}
+        job.weights = rng.integers(1, 4, size=job.X.shape[0]).astype(float)
+        r = run_earth([job], workdir=tmp_path)["s01"]
+        fwd = np.array(r["fwd_rss"])
+        assert fwd[-1] == pytest.approx(r["rss"], rel=1e-6)
+
+    def test_x_test_is_read_without_a_y_column_for_several_responses(self, tmp_path):
+        # Round-2 review, PR #36 finding 2: read_xy's need_y = FALSE for the
+        # test CSV reverted to the need_y = TRUE default is invisible with a
+        # single response column, because R's d[[y_cols[1]]] on a missing
+        # name just gives NULL, not an error. With several response
+        # columns, read_xy instead does d[, y_cols, drop = FALSE], which
+        # raises "undefined columns selected" when the test CSV (x columns
+        # only, driver.py's own convention) has no response columns at all.
+        rng = np.random.default_rng(12)
+        n = 60
+        X = rng.uniform(size=(n, 2))
+        Y = np.column_stack([X[:, 0] * 2, X[:, 1] ** 2])
+        job = EarthJob(id="multi", X=X, y=Y, earth_args={"degree": 1})
+        job.X_test = rng.uniform(size=(5, 2))
+        r = run_earth([job], workdir=tmp_path)["multi"]
+        assert r.get("error") is None, r.get("error")
+        assert np.array(r["pred_test"]).shape == (5, 2)
+
     def test_include_forward_path_false_omits_it(self, tmp_path):
         rng = np.random.default_rng(5)
         job = self._job("s01", rng)
