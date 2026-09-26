@@ -161,18 +161,18 @@ response).
 | `S02_n020`, `S02_n050` | same as S01 | Span formulas and stopping rules at small n |
 | `S03` | `defaults_d1`, `matched_d1`, `matched_d1_linear` | Pairs against single hinges; linear terms |
 | `S04_p05_n0200`, `S04_p05_n1000`, `S04_p10_n0200`, `S04_p10_n1000` | `defaults_d1`, `defaults_d2`, `matched_d1`, `matched_d2` | Interactions and irrelevant covariates, degree 1 and 2 |
-| `S05` | `defaults_d2`, `matched_d2` | Interaction search; `Adjust.endspan` |
+| `S05` | `defaults_d2`, `matched_d2`, `matched_d2_adjust1` | Interaction search; `Adjust.endspan` |
 | `S06` | `defaults_d3`, `matched_d3` | Degree 3 |
 | `S07` | `defaults_d1`, `matched_d1`, `matched_d1_linear` | `Auto.linpreds` against pymars' linear candidates |
 | `S08` | `defaults_d1`, `matched_d1`, `matched_d1_minspan5` | Repeated x values: distinct values against cases |
 | `S09` | `defaults_d1`, `matched_d1` | Categorical coding through OneHotEncoder |
 | `S10` | `defaults_d1`, `matched_d1` | Tie-breaks across predictors; collinearity |
 | `S11_n03`, `S11_n05`, `S11_n08`, `S11_n12` | `defaults_d1`, `matched_d1` | Degenerate sizes |
-| `S12_base`, `S12_x_1em8`, `S12_x_1e8`, `S12_x_plus_1e6`, `S12_y_1em9`, `S12_y_1e9` | `raw_d1` only (no LA-7 rescaling) | Invariance to scale and shift; earth is not scale invariant (bb14.4) |
-| `S13_int_zeros`(`_repeated`), `S13_int_random`(`_repeated`), `S13_unit`(`_repeated`), `S13_nonint`, `S13_constant_y_weighted`(`_repeated`) | `matched_d1` | Weights: repetition, removal, unit weights, the fixed-basis path for non-integer weights, and a weighted constant response earth may error on |
+| `S12_base`, `S12_x_1em8`, `S12_x_1e8`, `S12_x_plus_1e6`, `S12_y_1em9`, `S12_y_1e9` | `raw_d1` (no LA-7 rescaling, earth's own scale/shift dependence), `defaults_d1`, `matched_d1` | Invariance to scale and shift; earth is not scale invariant (bb14.4) |
+| `S13_int_zeros`(`_repeated`), `S13_int_random`(`_repeated`), `S13_unit`(`_repeated`), `S13_equal2`(`_repeated`), `S13_nonint`, `S13_constant_y_weighted`(`_repeated`) | `matched_d1`, `defaults_d1` (all but `S13_nonint`) | Weights: repetition, removal, unit weights, weights all equal but not 1 (GCV-8/W-8), the fixed-basis path for non-integer weights, and a weighted constant response earth may error on |
 | `S14` | `defaults_d2`, `matched_d2` (`glm_family="binomial"`) | GLM refit |
-| `s15_draws` (an "extra", not a (dataset, mode) fixture) | one shared matched-like mode | 200 small draws from `validation/sims/dgps.py` (D1-D6, D8), each with its own `trace = 8` log |
-| `S16_weighted`, `S16_weighted_repeated` | `matched_d1` | Frequency weights (S04's 5-covariate, 200-case data) against repeated rows |
+| `s15_draws` (an "extra", not a (dataset, mode) fixture) | `matched`/`defaults`, degree 1/2, alternated across reps | 200 draws from `validation/sims/dgps.py` (D1-D6, D8; n = 200, earth's own default term limit); each draw's `trace = 8` log is parsed into a compact per-step summary (`compare.steps_from_trace`) and dropped rather than stored whole. About 1 in 7 draws hits a gap in `steps_from_trace` (FAST-4's slot/row skew after a single-term step) and keeps `dirs`/`cuts`/`rss_per_subset`/`gcv_per_subset` with `steps = null` and `steps_error` set, rather than losing the draw or patching the harness here |
+| `S16_weighted`, `S16_weighted_repeated` | `matched_d1`, `defaults_d1`, `defaults_d2`, `matched_d2` | Frequency weights (S04's 5-covariate, 200-case data) against repeated rows |
 | `S17` | `defaults_d1`, `matched_d1` | Several responses with a shared basis |
 | `S18` | `defaults_d1`, `matched_d1`; plus the extra `s18_multinom` (`nnet::multinom` on earth's selected basis) | Multiclass terms, and probabilities against `nnet::multinom` |
 | `S19_dummies` | `defaults_d1`, `matched_d1`; plus the extra `s19_factor` (earth on a genuine R factor column) | The OneHotEncoder recipe |

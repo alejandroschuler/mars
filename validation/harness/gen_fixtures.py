@@ -457,7 +457,9 @@ def _s11(n: int, seed: int) -> Dataset:
     rng = np.random.default_rng(seed)
     x0 = rng.uniform(0, 1, size=n)
     y = 2.0 * np.maximum(0, x0 - 0.5) + rng.normal(scale=0.05, size=n)
-    return Dataset(id=f"S11_n{n:02d}", X=x0.reshape(-1, 1), y=y)
+    X = x0.reshape(-1, 1)
+    X_test = _short_test_set(X, rng)  # review round 1, #43 finding 7
+    return Dataset(id=f"S11_n{n:02d}", X=X, y=y, X_test=X_test)
 
 
 @register
@@ -488,12 +490,17 @@ for _s11_id in ("S11_n03", "S11_n05", "S11_n08", "S11_n12"):
     DATASET_MODES[_s11_id] = DEFAULT_DATASET_MODES
 
 
-def _s12_base() -> tuple[np.ndarray, np.ndarray]:
+def _s12_base() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(12)
     n = 150
     x = rng.uniform(0, 1, size=n)
     y = 2.0 * np.maximum(0, x - 0.4) + rng.normal(scale=0.05, size=n)
-    return x, y
+    X = x.reshape(-1, 1)
+    # review round 1, #43 finding 7: X_test gets each variant's own
+    # transform below (times 1e-8, plus 1e6, ...), the same as X, so a
+    # variant's test points stay in that variant's own units.
+    X_test = _short_test_set(X, rng)
+    return X, y, X_test
 
 
 @register
@@ -502,43 +509,43 @@ def s12_base() -> Dataset:
     shift (earth is not scale invariant, bb14.4: this reference and its
     variants below all fit raw_d1, earth's own defaults with no LA-7
     rescaling, so their differences are earth's, not the harness's)."""
-    x, y = _s12_base()
-    return Dataset(id="S12_base", X=x.reshape(-1, 1), y=y)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_base", X=X, y=y, X_test=X_test)
 
 
 @register
 def s12_x_1e_minus8() -> Dataset:
     """S12: x times 1e-8."""
-    x, y = _s12_base()
-    return Dataset(id="S12_x_1em8", X=(x * 1e-8).reshape(-1, 1), y=y)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_x_1em8", X=X * 1e-8, y=y, X_test=X_test * 1e-8)
 
 
 @register
 def s12_x_1e8() -> Dataset:
     """S12: x times 1e8."""
-    x, y = _s12_base()
-    return Dataset(id="S12_x_1e8", X=(x * 1e8).reshape(-1, 1), y=y)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_x_1e8", X=X * 1e8, y=y, X_test=X_test * 1e8)
 
 
 @register
 def s12_x_plus_1e6() -> Dataset:
     """S12: x plus 1e6."""
-    x, y = _s12_base()
-    return Dataset(id="S12_x_plus_1e6", X=(x + 1e6).reshape(-1, 1), y=y)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_x_plus_1e6", X=X + 1e6, y=y, X_test=X_test + 1e6)
 
 
 @register
 def s12_y_1e_minus9() -> Dataset:
     """S12: y times 1e-9."""
-    x, y = _s12_base()
-    return Dataset(id="S12_y_1em9", X=x.reshape(-1, 1), y=y * 1e-9)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_y_1em9", X=X, y=y * 1e-9, X_test=X_test)
 
 
 @register
 def s12_y_1e9() -> Dataset:
     """S12: y times 1e9."""
-    x, y = _s12_base()
-    return Dataset(id="S12_y_1e9", X=x.reshape(-1, 1), y=y * 1e9)
+    X, y, X_test = _s12_base()
+    return Dataset(id="S12_y_1e9", X=X, y=y * 1e9, X_test=X_test)
 
 
 for _s12_id in (
@@ -570,73 +577,130 @@ def _expand_by_weights(
     return X[idx], y[idx]
 
 
-def _s13_xy(seed: int, n: int = 120) -> tuple[np.ndarray, np.ndarray]:
+def _s13_xy(seed: int, n: int = 120) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(seed)
     x0 = rng.uniform(0, 1, size=n)
     y = 2.0 * np.maximum(0, x0 - 0.4) + rng.normal(scale=0.1, size=n)
-    return x0.reshape(-1, 1), y
+    X = x0.reshape(-1, 1)
+    # review round 1, #43 finding 7. Drawn once per seed, so a weighted
+    # fixture and its repeated-row sibling (same seed) get the identical
+    # raw X_test, and so -- since they also share scale_override -- the
+    # identical scaled X_test.
+    X_test = _short_test_set(X, rng)
+    return X, y, X_test
 
 
 @register
 def s13_int_zeros() -> Dataset:
     """S13: integer weights with zeros. Weights: removal."""
-    X, y = _s13_xy(1301)
+    X, y, X_test = _s13_xy(1301)
     rng = np.random.default_rng(9001)
     w = rng.integers(0, 4, size=len(y)).astype(float)  # 0 to 3, some zero
     scale = _shared_scale_from_repeated_rows(X, w)
-    return Dataset(id="S13_int_zeros", X=X, y=y, weights=w, scale_override=scale)
+    return Dataset(
+        id="S13_int_zeros", X=X, y=y, weights=w, scale_override=scale, X_test=X_test
+    )
 
 
 @register
 def s13_int_zeros_repeated() -> Dataset:
     """S13: the unweighted reference for s13_int_zeros (repeated rows,
     zero-weight rows dropped)."""
-    X, y = _s13_xy(1301)
+    X, y, X_test = _s13_xy(1301)
     rng = np.random.default_rng(9001)
     w = rng.integers(0, 4, size=len(y)).astype(float)
     scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
-    return Dataset(id="S13_int_zeros_repeated", X=X_rep, y=y_rep, scale_override=scale)
+    return Dataset(
+        id="S13_int_zeros_repeated",
+        X=X_rep,
+        y=y_rep,
+        scale_override=scale,
+        X_test=X_test,
+    )
 
 
 @register
 def s13_int_random() -> Dataset:
     """S13: random positive integer weights. Weights: repetition."""
-    X, y = _s13_xy(1302)
+    X, y, X_test = _s13_xy(1302)
     rng = np.random.default_rng(9002)
     w = rng.integers(1, 5, size=len(y)).astype(float)  # 1 to 4, never zero
     scale = _shared_scale_from_repeated_rows(X, w)
-    return Dataset(id="S13_int_random", X=X, y=y, weights=w, scale_override=scale)
+    return Dataset(
+        id="S13_int_random", X=X, y=y, weights=w, scale_override=scale, X_test=X_test
+    )
 
 
 @register
 def s13_int_random_repeated() -> Dataset:
     """S13: the unweighted reference for s13_int_random (repeated rows)."""
-    X, y = _s13_xy(1302)
+    X, y, X_test = _s13_xy(1302)
     rng = np.random.default_rng(9002)
     w = rng.integers(1, 5, size=len(y)).astype(float)
     scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
-    return Dataset(id="S13_int_random_repeated", X=X_rep, y=y_rep, scale_override=scale)
+    return Dataset(
+        id="S13_int_random_repeated",
+        X=X_rep,
+        y=y_rep,
+        scale_override=scale,
+        X_test=X_test,
+    )
 
 
 @register
 def s13_unit() -> Dataset:
     """S13: equal (unit) weights. Weights: unit weights are the same model
     as no weights."""
-    X, y = _s13_xy(1303)
+    X, y, X_test = _s13_xy(1303)
     w = np.ones(len(y))
     scale = _shared_scale_from_repeated_rows(X, w)
-    return Dataset(id="S13_unit", X=X, y=y, weights=w, scale_override=scale)
+    return Dataset(
+        id="S13_unit", X=X, y=y, weights=w, scale_override=scale, X_test=X_test
+    )
 
 
 @register
 def s13_unit_repeated() -> Dataset:
     """S13: the unweighted reference for s13_unit (repeating every row
     once changes nothing)."""
-    X, y = _s13_xy(1303)
+    X, y, X_test = _s13_xy(1303)
     scale = _shared_scale_from_repeated_rows(X, np.ones(len(y)))
-    return Dataset(id="S13_unit_repeated", X=X, y=y, scale_override=scale)
+    return Dataset(
+        id="S13_unit_repeated", X=X, y=y, scale_override=scale, X_test=X_test
+    )
+
+
+@register
+def s13_equal2() -> Dataset:
+    """S13: equal weights, all 2 (not 1). Weights: earth ignores weights
+    that are all equal (bb02.15, GCV-8); pymars must not (W-8), so this is
+    a different case from s13_unit, which repeating-by-1 cannot tell apart
+    from an unweighted fit at all (review round 1, #43 adversarial
+    finding 12)."""
+    X, y, X_test = _s13_xy(1303)
+    w = np.full(len(y), 2.0)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    return Dataset(
+        id="S13_equal2", X=X, y=y, weights=w, scale_override=scale, X_test=X_test
+    )
+
+
+@register
+def s13_equal2_repeated() -> Dataset:
+    """S13: the unweighted reference for s13_equal2 (every row twice)."""
+    X, y, X_test = _s13_xy(1303)
+    w = np.full(len(y), 2.0)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    X_rep, y_rep = _expand_by_weights(X, y, w)
+    return Dataset(
+        id="S13_equal2_repeated",
+        X=X_rep,
+        y=y_rep,
+        scale_override=scale,
+        X_test=X_test,
+    )
 
 
 @register
@@ -645,11 +709,11 @@ def s13_nonint() -> Dataset:
     "Sample weights"): compared only through the fixed-basis pruning path
     and the coefficients, against weighted earth, since repeated rows do
     not apply to a non-integer weight."""
-    X, y = _s13_xy(1304)
+    X, y, X_test = _s13_xy(1304)
     rng = np.random.default_rng(9004)
     w = rng.uniform(0.2, 3.0, size=len(y))
     w = w * (len(y) / w.sum())  # rescaled so that sum(w) == n
-    return Dataset(id="S13_nonint", X=X, y=y, weights=w)
+    return Dataset(id="S13_nonint", X=X, y=y, weights=w, X_test=X_test)
 
 
 @register
@@ -662,9 +726,15 @@ def s13_constant_y_weighted() -> Dataset:
     X = rng.uniform(0, 1, size=(n, 1))
     y = np.full(n, 3.0)
     w = rng.integers(0, 4, size=n).astype(float)
+    X_test = _short_test_set(X, rng)  # review round 1, #43 finding 7
     scale = _shared_scale_from_repeated_rows(X, w)
     return Dataset(
-        id="S13_constant_y_weighted", X=X, y=y, weights=w, scale_override=scale
+        id="S13_constant_y_weighted",
+        X=X,
+        y=y,
+        weights=w,
+        scale_override=scale,
+        X_test=X_test,
     )
 
 
@@ -676,6 +746,7 @@ def s13_constant_y_weighted_repeated() -> Dataset:
     X = rng.uniform(0, 1, size=(n, 1))
     y = np.full(n, 3.0)
     w = rng.integers(0, 4, size=n).astype(float)
+    X_test = _short_test_set(X, rng)
     scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
     return Dataset(
@@ -683,6 +754,7 @@ def s13_constant_y_weighted_repeated() -> Dataset:
         X=X_rep,
         y=y_rep,
         scale_override=scale,
+        X_test=X_test,
     )
 
 
@@ -693,6 +765,8 @@ for _s13_id in (
     "S13_int_random_repeated",
     "S13_unit",
     "S13_unit_repeated",
+    "S13_equal2",
+    "S13_equal2_repeated",
     "S13_nonint",
     "S13_constant_y_weighted",
     "S13_constant_y_weighted_repeated",
@@ -735,7 +809,16 @@ def s16_weighted() -> Dataset:
     rng = np.random.default_rng(9016)
     w = rng.integers(0, 5, size=len(ds.y)).astype(float)
     scale = _shared_scale_from_repeated_rows(ds.X, w)
-    return Dataset(id="S16_weighted", X=ds.X, y=ds.y, weights=w, scale_override=scale)
+    # X_test (review round 1, #43 finding 7) is S04's own: unaffected by
+    # weights, so reusing it keeps this pair's test points identical too.
+    return Dataset(
+        id="S16_weighted",
+        X=ds.X,
+        y=ds.y,
+        weights=w,
+        scale_override=scale,
+        X_test=ds.X_test,
+    )
 
 
 @register
@@ -747,7 +830,13 @@ def s16_weighted_repeated() -> Dataset:
     w = rng.integers(0, 5, size=len(ds.y)).astype(float)
     scale = _shared_scale_from_repeated_rows(ds.X, w)
     X_rep, y_rep = _expand_by_weights(ds.X, ds.y, w)
-    return Dataset(id="S16_weighted_repeated", X=X_rep, y=y_rep, scale_override=scale)
+    return Dataset(
+        id="S16_weighted_repeated",
+        X=X_rep,
+        y=y_rep,
+        scale_override=scale,
+        X_test=ds.X_test,
+    )
 
 
 # Review round 1 (#43 finding 2/blocking): defaults_d1 (automatic spans)
@@ -881,40 +970,64 @@ def register_extra(fn: ExtraFn) -> ExtraFn:
     return fn
 
 
+def _s15_earth_args(degree: int, mode_family: str) -> dict[str, Any]:
+    """One of the two modes T07 compares (review round 1, #43 finding 4):
+    "matched" (auto_linpreds/fast.k/thresh forced as matched_d1's are, but
+    with automatic spans, since the new code's matched mode does not need
+    them forced to 1, VALIDATION_PLAN.md "Comparison modes") or "defaults"
+    (earth's own defaults, nothing forced). Both use pmethod = "none": with
+    no nprune this still computes the backward-pass statistics as
+    pmethod = "backward" would (PRUNE-7), so gcv_per_subset lets a caller
+    derive the GCV-optimal selected size itself (PRUNE-5) without a second
+    R call, while dirs/cuts/selected_terms stay the full forward set (not
+    the pruned one), which is what the per-step comparison needs."""
+    if mode_family == "matched":
+        args = {
+            k: v
+            for k, v in MODES["matched_d1"].items()
+            if k not in ("minspan", "endspan", "degree")
+        }
+    else:
+        args = {}
+    args["degree"] = degree
+    args["pmethod"] = "none"
+    return args
+
+
 @register_extra
 def s15_draws() -> dict[str, Any]:
     """S15: 200 small draws from validation/sims/dgps.py (VALIDATION_PLAN.md,
     "Data-generating processes"; T05 brief). Purpose: "Rates: the share of
-    fits that agree, the step of the first divergence, and its cause"
-    (T07, which reads this fixture's per-draw trace to find the best and
-    second-best candidate RSS at each forward step, "Ties"). Restricted to
-    the p = 10 DGPs (D1-D6, D8; D7's p = 50 would make every trace far
-    larger for no benefit here), a small n and a low term limit, so 200
-    earth calls with trace = 8 (which carries rss_before for near-tie
-    detection, unlike trace = 7; LA-5) still add up to a small fixture
-    (validation/README.md, "keep validation/fixtures/ small").
+    fits that agree, the step of the first divergence, and its cause".
+
+    Review round 1 (#43, both reviewers, finding 4/blocking): n = 20,
+    p = 10 and nk = 5 (2 forward steps) made every knot search evaluate
+    exactly one case (SPAN-5's cap), so there was almost nothing to
+    diverge on. n = 200 (the simulation's own smallest cell), earth's
+    default term limit (nk = 21 at p = 10) and both degree 1 and 2, in
+    both the "matched" and the "defaults" mode, exercise the search for
+    real. To stay in the size budget without the full trace text (which
+    would be large at this n and term limit), each draw is parsed
+    immediately (compare.steps_from_trace, from trace = 8, which carries
+    rss_before for near-tie detection unlike trace = 7, LA-5) into its
+    per-step summary (parent, pred, direction, knot, best/second-best RSS,
+    rss_before, flags) plus a rank-fix flag (FWD-11: whether the trace
+    printed earth's own "Fixed rank deficient" line), and the raw text is
+    then dropped. X is not stored either; (dgp, noise, rep) and this
+    module's own seeds.train_test_rngs/dgps.generate reconstruct it
+    exactly. Restricted to the p = 10 DGPs (D1-D6, D8; D7's p = 50 would
+    cost far more compute for no benefit here).
     """
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
+    import compare
+
     from validation.sims import dgps, seeds
 
     diagnostics = dgps.load_diagnostics()
     dgp_names = [name for name in dgps.REGRESSION_DGPS if name != "D7"]
-    n = 20
-    # Automatic minspan/endspan (unlike matched_d1's minspan = endspan = 1):
-    # at trace = 8 only *evaluated* cases print (span-skipped ones do not,
-    # unlike trace = 9), so the automatic spans, not a dense minspan = 1
-    # scan, are what keeps 200 traces small. The new code's own matched
-    # mode does not need minspan/endspan forced to 1 either (its automatic
-    # formula already matches earth's, VALIDATION_PLAN.md, "Comparison
-    # modes": "the new code follows earth's conventions for ... the
-    # spans"), so this drops those two keys from matched_d1 rather than
-    # copying them.
-    earth_args = {
-        k: v for k, v in MODES["matched_d1"].items() if k not in ("minspan", "endspan")
-    }
-    earth_args.update(pmethod="none", nk=5)
+    n = 200
 
     jobs: list[driver.EarthJob] = []
     metas: list[dict[str, Any]] = []
@@ -922,22 +1035,31 @@ def s15_draws() -> dict[str, Any]:
         dgp_name = dgp_names[rep % len(dgp_names)]
         dgp = dgps.REGISTRY[dgp_name]
         noise = dgp.levels[rep % len(dgp.levels)]
+        degree = 1 if rep % 2 == 0 else 2
+        mode_family = "matched" if (rep // 2) % 2 == 0 else "defaults"
         rng, _test_rng = seeds.train_test_rngs(f"S15_{dgp_name}_{noise}", rep)
         X, y, _truth = dgps.generate(dgp, rng, n, noise, diagnostics)
-        X_scaled, scale = scaled_matrix(X)
+        X_scaled, _scale = scaled_matrix(X)
         job_id = f"draw{rep:03d}"
         jobs.append(
             driver.EarthJob(
                 id=job_id,
                 X=X_scaled,
                 y=y,
-                earth_args=earth_args,
+                earth_args=_s15_earth_args(degree, mode_family),
                 trace=8,
                 include_forward_path=False,
             )
         )
         metas.append(
-            {"rep": rep, "dgp": dgp_name, "noise": noise, "scale": scale.tolist()}
+            {
+                "rep": rep,
+                "dgp": dgp_name,
+                "noise": noise,
+                "degree": degree,
+                "mode_family": mode_family,
+                "n": n,
+            }
         )
 
     draws = []
@@ -948,19 +1070,48 @@ def s15_draws() -> dict[str, Any]:
             result = results[job.id]
             trace_path = workdir / f"{job.id}_trace.txt"
             trace_text = trace_path.read_text(encoding="utf-8")
-            trace_parse.parse_trace(trace_path)  # fail loudly here, not in T07
+            trace_log = trace_parse.parse_trace(trace_path)
+            dirs = result["dirs"]
+            cuts = result["cuts"]
+            # Not a "fail loudly" spot: steps_from_trace (compare.py, T02)
+            # raises ValueError on some of these draws (about 1 in 15,
+            # empirically: "trace step N: parent slot P maps to dirs row
+            # R, which does not equal this step's own row ... with
+            # predictor column ... removed"). FAST-4 (docs/algorithm.md,
+            # part 2) says a step that adds a single term (a single hinge
+            # or a linear term) leaves the next slot empty, so later slot
+            # numbers run ahead of the dirs row count; steps_from_trace's
+            # slot-to-row map does not appear to account for this. This is
+            # a gap in the harness (T02), not something T05 fixes here
+            # (COMMON.md: build on validation/harness/, do not rewrite
+            # it), so those draws keep dirs/cuts/rss_per_subset/
+            # gcv_per_subset (which do not need trace parsing) with
+            # steps = None and steps_error set, rather than losing the
+            # whole draw or silently patching compare.py. Reported in the
+            # pull request for T02/the spec writer.
+            steps: list[dict[str, Any]] | None
+            steps_error: str | None
+            try:
+                steps = compare.steps_from_trace(trace_log, dirs, cuts)
+                for step in steps:
+                    step["direction"] = sorted(step["direction"])
+                steps_error = None
+            except ValueError as exc:
+                steps = None
+                steps_error = str(exc)
             draws.append(
                 {
                     **meta,
-                    "X": job.X.tolist(),
-                    "y": job.y.tolist(),
-                    "dirs": result["dirs"],
-                    "cuts": result["cuts"],
-                    "selected_terms": result["selected_terms"],
-                    "trace_text": trace_text,
+                    "dirs": dirs,
+                    "cuts": cuts,
+                    "rss_per_subset": result["rss_per_subset"],
+                    "gcv_per_subset": result["gcv_per_subset"],
+                    "steps": steps,
+                    "steps_error": steps_error,
+                    "rank_fix": "Fixed rank deficient" in trace_text,
                 }
             )
-    return {"earth_args": earth_args, "draws": draws}
+    return {"draws": draws}
 
 
 @register_extra

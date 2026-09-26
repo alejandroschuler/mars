@@ -79,6 +79,8 @@ class TestRegistry:
             "S13_int_random_repeated",
             "S13_unit",
             "S13_unit_repeated",
+            "S13_equal2",
+            "S13_equal2_repeated",
             "S13_nonint",
             "S13_constant_y_weighted",
             "S13_constant_y_weighted_repeated",
@@ -109,9 +111,15 @@ class TestRegistry:
                 assert mode in gen_fixtures.MODES, f"{mode!r} unknown ({dataset_id})"
 
     def test_extras_are_registered(self):
-        assert {"s15_draws", "s18_multinom", "s19_factor"} <= set(
-            gen_fixtures.EXTRA_REGISTRY
-        )
+        # Equality, not just "<=": a stray @register_extra on a private
+        # helper (this caught one, on _s15_earth_args) would still pass a
+        # subset check, and make_all_extras() would then try to call the
+        # helper itself as if it were a bespoke fixture generator.
+        assert set(gen_fixtures.EXTRA_REGISTRY) == {
+            "s15_draws",
+            "s18_multinom",
+            "s19_factor",
+        }
 
 
 class TestScaledMatrix:
@@ -168,6 +176,40 @@ class TestRawModes:
                     f"{dataset_id}: has no raw mode left, so nothing shows "
                     "earth's own raw scale/shift dependence (bb14.4)"
                 )
+
+
+class TestTestSets:
+    def test_every_dataset_has_a_test_set(self):
+        # Review round 1 (#43 finding 7/blocking): only S01 had X_test;
+        # the plan's tolerance table compares "predictions on new data"
+        # for every dataset, not S01 alone.
+        for dataset_id, make in gen_fixtures.REGISTRY.items():
+            ds = make()
+            assert ds.X_test is not None, f"{dataset_id}: no X_test"
+            assert ds.X_test.shape[0] > 0, f"{dataset_id}: empty X_test"
+            assert ds.X_test.shape[1] == ds.X.shape[1], (
+                f"{dataset_id}: X_test has {ds.X_test.shape[1]} columns, "
+                f"X has {ds.X.shape[1]}"
+            )
+
+    def test_a_weighted_pair_shares_its_raw_test_set(self):
+        # An integer-weight dataset and its repeated-row sibling share
+        # scale_override (#43 finding 5); they should share their raw
+        # X_test too, so that dividing both by that same scale leaves the
+        # pair's *scaled* test points identical as well.
+        pairs = [
+            ("S13_int_zeros", "S13_int_zeros_repeated"),
+            ("S13_int_random", "S13_int_random_repeated"),
+            ("S13_unit", "S13_unit_repeated"),
+            ("S13_equal2", "S13_equal2_repeated"),
+            ("S16_weighted", "S16_weighted_repeated"),
+        ]
+        for weighted_id, repeated_id in pairs:
+            weighted = gen_fixtures.REGISTRY[weighted_id]()
+            repeated = gen_fixtures.REGISTRY[repeated_id]()
+            assert np.array_equal(weighted.X_test, repeated.X_test), (
+                f"{weighted_id}/{repeated_id}: raw X_test differs"
+            )
 
 
 @pytest.mark.external
@@ -475,3 +517,65 @@ class TestMakeAllComponentsAndCheck:
         target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         result = gen_fixtures.check(fixtures_dir=tmp_path)
         assert any("gcv_grid.json" in p and "differs" in p for p in result.problems)
+
+
+@pytest.mark.external
+@pytest.mark.slow
+class TestS15Draws:
+    @pytest.fixture(scope="class")
+    def s15_payload(self):
+        # Review round 1, #43 finding 4: 200 real draws (n = 200, p = 10,
+        # earth's default term limit) cost real R time, so this is
+        # ``slow`` too (gate A/CI's fast jobs skip it; gate C, and a
+        # direct pytest invocation, run it).
+        return gen_fixtures._extra_payload("s15_draws")
+
+    def test_has_200_draws_covering_both_degrees_and_mode_families(self, s15_payload):
+        draws = s15_payload["draws"]
+        assert len(draws) == 200
+        assert {d["degree"] for d in draws} == {1, 2}
+        assert {d["mode_family"] for d in draws} == {"matched", "defaults"}
+        assert {d["dgp"] for d in draws} <= {
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D8",
+        }
+        assert "D7" not in {d["dgp"] for d in draws}
+
+    def test_every_draw_has_a_forward_path_even_when_steps_failed(self, s15_payload):
+        for d in s15_payload["draws"]:
+            assert d["rss_per_subset"], d
+            assert d["gcv_per_subset"], d
+            assert (d["steps"] is None) == (d["steps_error"] is not None)
+
+    def test_most_draws_have_a_parsed_step_by_step_log(self, s15_payload):
+        # steps_from_trace (compare.py, T02) does not parse every draw
+        # (FAST-4's slot/row skew; reported in the pull request), but it
+        # should not fail on most of them.
+        draws = s15_payload["draws"]
+        ok = sum(1 for d in draws if d["steps"] is not None)
+        assert ok / len(draws) >= 0.7
+
+    def test_a_parsed_step_has_the_documented_fields(self, s15_payload):
+        for d in s15_payload["draws"]:
+            if d["steps"] is None:
+                continue
+            for step in d["steps"]:
+                for key in (
+                    "parent",
+                    "pred",
+                    "direction",
+                    "knot",
+                    "best_rss",
+                    "second_best_rss",
+                    "rss_before",
+                    "flags",
+                ):
+                    assert key in step, f"{d['dgp']} rep {d['rep']}: missing {key!r}"
+                # rss_before needs trace = 8 or 9 (trace_parse.py's own
+                # docstring); trace = 7 only gives one summary line.
+                assert step["rss_before"] is not None

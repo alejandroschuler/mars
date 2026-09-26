@@ -41,6 +41,9 @@ _STRING_ONLY_KEYS = frozenset(
         "component",
         "extra",
         "label",
+        "warnings",
+        "dirs_colnames",
+        "steps_error",
     }
 )
 
@@ -65,6 +68,8 @@ _REQUIRED_RESULT_FIELDS = (
     "pred_train",
     "r_version",
     "earth_version",
+    "warnings",
+    "glm_converged",
 )
 
 _REQUIRED_VERSION_FIELDS = (

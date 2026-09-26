@@ -61,6 +61,7 @@ _STRING_ONLY_KEYS = frozenset(
         "error",
         "call",
         "warnings",
+        "dirs_colnames",
     }
 )
 
