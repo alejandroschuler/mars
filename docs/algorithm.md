@@ -175,7 +175,7 @@ For the matched and earth-compatible comparisons, the harness (T02, T05, T07) di
 
 **PRUNE-1** `pmethod` is `"backward"` (the default) or `"none"`. earth's other methods are not supported ([Departures](#departures-from-earth)).
 
-**PRUNE-2** The input is the M_f forward terms, numbered 0 to M_f − 1 in the order the forward pass added them (term 0 is the intercept), with Y, w, d and N. For each size m = 1, …, M_f the pass keeps the lowest RSS found so far, R[m], and its set of terms, T[m]; at the start R[m] = +∞. [bb07.8; F91 Algorithm 3]
+**PRUNE-2** The input is the M_f kept forward terms ([FWD-11](#forward-pass)), numbered 0 to M_f − 1 in the order the forward pass added them (term 0 is the intercept), with Y, w, d and N; all indices in this section and in `PruningRecord` are these numbers. For each size m = 1, …, M_f the pass keeps the lowest RSS found so far, R[m], and its set of terms, T[m]; at the start R[m] = +∞. [bb07.8; F91 Algorithm 3]
 
 **PRUNE-3** The pass depends on the number K of response columns.
 
@@ -233,14 +233,14 @@ The function first drops the rows with zero weight ([W-3](#weights)), and it nev
 
 An int field accepts a Python int or a numpy integer, and a bool is not an int here. A float field accepts any real number type.
 
-**CORE-3** `MarsFit` is a frozen dataclass. M is the number of selected terms, M_f the number of forward terms and S the number of forward steps. [plan: Core API]
+**CORE-3** `MarsFit` is a frozen dataclass. M is the number of selected terms, M_a the number of terms that the forward pass added, M_f ≤ M_a the number that it kept ([FWD-11](#forward-pass)), and S the number of forward steps. [plan: Core API]
 
 | Field | Type and shape | Content |
 |---|---|---|
 | `dirs` | int8 (M, p) | the selected terms, in increasing forward order |
 | `cuts` | float64 (M, p) | their knots |
 | `coef` | float64 (M, K) | [PRUNE-8](#pruning-pass) |
-| `selected` | int64 (M,) | the forward indices of the selected terms, increasing, starting with 0 |
+| `selected` | int64 (M,) | the indices of the selected terms in the forward record, increasing, starting with 0 |
 | `rss`, `gcv`, `rsq`, `grsq` | float | of the final model, [PRUNE-8](#pruning-pass) |
 | `n_eff` | float | N = Σw after the drop |
 | `max_terms` | int | the resolved M_max |
@@ -252,8 +252,10 @@ An int field accepts a Python int or a numpy integer, and a bool is not an int h
 
 | Field | Type and shape | Content |
 |---|---|---|
-| `dirs`, `cuts` | int8, float64 (M_f, p) | all forward terms, in the order added |
-| `parent`, `step` | int64 (M_f,) | [TERM-6](#terms) |
+| `dirs`, `cuts` | int8, float64 (M_a, p) | all M_a terms that the pass added, in the order added |
+| `kept` | int64 (M_f,) | the indices of the kept terms ([FWD-11](#forward-pass)), increasing; pruning index m is forward index `kept[m]` |
+| `dropped` | int64 (M_a − M_f,) | the indices of the dropped terms, increasing; empty in most fits |
+| `parent`, `step` | int64 (M_a,) | [TERM-6](#terms), with forward indices |
 | `rss` | float64 (S + 1,) | `rss[0]` = TSS, the RSS of the intercept alone; `rss[s]` = the RSS after step s |
 | `termination` | `Termination` | [CORE-4](#core-api) |
 | `candidates` | `CandidateLog` or None | present when `record_candidates=True` |
@@ -330,6 +332,8 @@ For b·x and b·(x − m)₊ the fitted values and the RSS are the same; they di
 
 **FWD-10** Where an implementation scales Y inside the pass ([LA-6](#linear-algebra-contract)), it may, with one response, subtract the weighted mean and divide by any positive constant; with several responses it may subtract each response's weighted mean and divide all responses by one common constant. It must not scale the responses by different constants, because the summed RSS weighs each response by its own units. [bb17.1, bb17.2 (earth scales one response to unit standard deviation), bb17.3a, bb17.4b (with several responses earth does not scale by default, and multiplying one response by 1000 changes its terms)] earth's `Scale.y = TRUE`, which scales each response to unit variance, is not offered.
 
+**FWD-11** When the pass stops, it checks the terms in forward order with the rule of [LA-4](#linear-algebra-contract) on the √w-scaled columns: a term whose column is dependent on the columns of the earlier kept terms is dropped. The pruning pass receives the kept terms, in forward order ([PRUNE-2](#pruning-pass)). The forward record keeps every term that the pass added, and lists the dropped ones ([CORE-3](#core-api)). earth also removes linearly dependent terms at the end of its forward pass [bb23.1; Notes §13.14], but its trace gives only their number [bb23.5], so which of two dependent terms it keeps is not known (OQ-6); pymars keeps the earlier one.
+
 ## Stopping rules
 
 The rules apply in this order at each step. RSq_s = 1 − RSS_s/TSS, and for the step's chosen candidate RSq′ and GRSq′ are those of the model that would result ([GCV-5](#gcv-and-fit-statistics), [GCV-6](#gcv-and-fit-statistics)), with M′ its real number of terms.
@@ -400,7 +404,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 **GLM-3** The solver must reach the minimum of GLM-2: with `glm_alpha` = 0 and two classes, its coefficients agree with R's `glm` on the same columns to a relative 1e-5 where `glm` converges without a warning. A column of B_S that is linearly dependent on earlier ones ([LA-4](#linear-algebra-contract)) gets coefficient 0. [plan: Binary outcomes]
 
-**GLM-4** When the solver does not converge, or when some fitted probability is within 10·ε of 0 or of 1 (ε = 2.2e-16, as in R's `glm`), `fit` issues a sklearn ConvergenceWarning whose message suggests a positive `glm_alpha`, and keeps the last iterate. [plan: Behavior target; earth warns in the same case, bb21.3]
+**GLM-4** When the solver does not converge, or when some fitted probability is within 10·ε of 0 or of 1 (ε = 2.2e-16, the float64 machine epsilon), `fit` issues a sklearn ConvergenceWarning whose message suggests a positive `glm_alpha`, and keeps the last iterate. [plan: Behavior target; earth warns in the same case, bb21.3]
 
 **GLM-5** If B_S is the intercept alone, the refit is not run: the probabilities are the weighted class frequencies. [plan: Behavior target]
 
@@ -519,7 +523,7 @@ Quirks that pymars does not copy: earth's knots can depend on the row order when
 - **OQ-3** ([KNOT-6](#candidate-knots), [LA-3](#linear-algebra-contract), [LA-7](#linear-algebra-contract)). For weights that are not integers, pymars's spans, knots, collinearity test and choice between a pair and a single hinge have no earth counterpart, since earth runs a different code path with weights [bb14.7]. The tests check that integer weights give the same fit as repeated rows, and that the reference and the fast code agree for other weights. No experiment can settle these rules against earth.
 - **OQ-4** ([FAST-4](#fast-mars)), decided. earth's queue addresses parents by slot, so after a step that adds one term the newest terms are not searched as parents until the number of terms reaches their slot, even with `fast.k = 0` [bb16.13; bb16.15, a refuted HYPOTHESIS line, counts 121 such cases]. pymars copies this so that its fits match earth's. It looks accidental, and it can keep a good parent out of the search for several steps. The simulation study (T21, T22) could compare it with a search of all eligible parents; a change would be a spec v2 decision.
 - **OQ-5** ([FWD-4](#forward-pass)). No experiment saw a linear candidate whose RSS reduction exceeded the limit 10·Δ_s, so it is not known whether earth applies the limit to linear candidates. pymars applies it to every candidate. An experiment that settles it needs a step whose best candidate is a linear term with a reduction above 10 times the previous one.
-- **OQ-6** (the end of the forward pass). earth's notes say that the forward pass removes linearly dependent terms before the pruning pass [Notes §13.14]. Whether and when this happens is under test (bb23); with the collinearity test of [LA-3](#linear-algebra-contract) the basis should rarely be rank-deficient, and [LA-4](#linear-algebra-contract) covers a dependent column in the final solve.
+- **OQ-6** ([FWD-11](#forward-pass)). earth removes linearly dependent terms at the end of its forward pass, in bb23 only with `Auto.linpreds = FALSE` at degree 2 or more and with covariates that take few values [bb23.1]. Its trace reports only the number of removed terms [bb23.5], so the terms that it keeps cannot be read; pymars keeps the earlier of two dependent terms. The conformance tests (T07) should label a fixture where the two differ `quirk`.
 - **OQ-7** ([GLM-3](#glm-refit-for-the-classifier)). The spec fixes the objective of the refit and its agreement with R's `glm`, not the solver or its convergence criterion; T14 picks the solver.
 
 ## Sources
