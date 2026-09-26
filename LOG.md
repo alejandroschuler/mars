@@ -66,6 +66,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:51 #37 round 3: both APPROVE at 88c4d10; merged as a8dd024: spec v1 complete on main. #3 closed by the merge; opened #44 'T01 v2' (after T07) with the review notes.
 - 03:52 Load down to 9.9. Started the dual review of #42 and #43 together (run wf_a0b1ef34-9d5). Weekly 84 %, 5-hour 68 %.
 - 04:23 Wrote briefs T06-reference.md and T08-T10-components.md for after the weekly reset. Weekly 86 %, 5-hour 77 %.
+- 04:34 T05 round 1 (#42, #43): both REQUEST_CHANGES, substantive (unconverged multinomial references on separable labels; predict fixture without earth's terms; several-response pruning case that cannot separate the rules; S16 scales differ in the last bits; weights never exercise spans or knots; S12 raw only; S15 draws too small; S18 separable and on raw X; no GLM warnings or convergence; no test sets). Sent to t05-fixtures; the re-review waits for the weekly reset. Weekly 86 %.
 
 ## Core-hour ledger
 
