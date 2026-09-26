@@ -41,6 +41,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 21:43 T01 spec v1 complete: #34 (part 1, d556e28) and #37 (part 2, 0c4121d, stacked). Part 2 findings: earth's 10x cap on a step's RSS reduction (copied as a quirk); stopping rule order; fast.k below 3 acts as 3 and parents are addressed by slot (copied; degree-1 default fits can stop at 18 terms); ties by a fixed order in pymars; earth's per-class binomial probabilities do not sum to 1 (pymars multinomial). Open questions OQ-2, OQ-3, OQ-5, OQ-6, OQ-7.
 - 21:45 PR #40 re-review (round 2) REQUEST_CHANGES at d5d4c54: legacy block size 20 loses finished fits on a kill; no run.main tests for the cache key (data, settings, name) and for pairing; 25 of 48 mutations caught. Sent to t03-sims (round 3 for this PR; reassign to an opus author if it fails again).
 - 21:56 21:56 wake: 5-hour 85 % (no new agents until the 01:00 reset), weekly 71 %. Running: round-3 review of #34, rev-t02-harness (#36, #38), t03-sims (#40 fixes).
+- 21:57 T02 round 2 (rev-t02-harness): #36 and #38 REQUEST_CHANGES on fewer points (precision and trace fixes confirmed). Remaining: NA vs NaN in blackbox.py; 4 surviving mutations in the R side; kappa-scaled tolerance without a ceiling; steps_from_trace calls single hinges pairs and uses 5-digit trace knots; a near-tie mutation survives; silent skips. Sent to t02-harness as round 3.
 
 ## Core-hour ledger
 
