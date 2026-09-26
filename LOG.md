@@ -73,6 +73,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:12 10:12 Saturday: the user said in the session 'you can resume, go ahead and send weekly usage to 99%'. New pacing rule for this week: start new work up to about 96 % weekly; at about 98 %, authors push a checkpoint and stop; never pass 99 %. Resuming: round-2 dual review of #42 and #43, T06 reference (opus), T09 _linalg (opus), T04 pilot analysis (sonnet); T08 if the burn rate allows.
 - 10:13 Started: round-2 dual review of #42 and #43 (wf_7ce0e408-2a3), t06-reference (opus), t09-linalg (opus), t04-pilot (sonnet). T08 waits for the burn rate.
 - 10:26 T04 step 4 (t04-pilot): pilot_legacy.md on #41 (head 9855f80). From reps 0 to 99 at 200 cases: P-cur/E-def gap clear at low noise (z 5.38 D4, 4.75 D5), not distinguishable at high noise (z 0.60, 0.74); P-ear/E-def z 3.8 to 5.3 everywhere; E-pym/E-def mixed (z -5.75 at D5 low). 4 of 12 contrasts fit the 300 cap by n_sim_safe; 4 have |z| < 2. The plan caps legacy repetitions at 300 and says the report states any shortfall (T22).
+- 10:34 10:34: weekly 92 % (about 5.5 per hour with 4 agents), 5-hour 19 %, load 10.7. No new starts; T08 waits for the reset. At about 97 %, tell t06-reference and t09-linalg to checkpoint and stop.
 
 ## Core-hour ledger
 
