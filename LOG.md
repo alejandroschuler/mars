@@ -67,6 +67,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:52 Load down to 9.9. Started the dual review of #42 and #43 together (run wf_a0b1ef34-9d5). Weekly 84 %, 5-hour 68 %.
 - 04:23 Wrote briefs T06-reference.md and T08-T10-components.md for after the weekly reset. Weekly 86 %, 5-hour 77 %.
 - 04:34 T05 round 1 (#42, #43): both REQUEST_CHANGES, substantive (unconverged multinomial references on separable labels; predict fixture without earth's terms; several-response pruning case that cannot separate the rules; S16 scales differ in the last bits; weights never exercise spans or knots; S12 raw only; S15 draws too small; S18 separable and on raw X; no GLM warnings or convergence; no test sets). Sent to t05-fixtures; the re-review waits for the weekly reset. Weekly 86 %.
+- 05:35 05:34 wake: weekly 89 %, 5-hour 95 % (reset 06:00). Only the T05 fixes (open PRs) continue; at about 93 % weekly, ask t05-fixtures to checkpoint and stop. Legacy run: 8,304 result files, load 9.6.
 
 ## Core-hour ledger
 
