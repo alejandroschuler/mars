@@ -47,6 +47,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 22:19 22:20: 5-hour 95 %, weekly 72 %. PR #40 round-3 fixes at c73b833 (legacy block size 1; run.main tests for cache key and pairing; run.lock; captions); its re-review (rev-pr35-sims1) waits until after the 01:00 reset. Also after 01:00: dual review of #37 (1cd798c); re-review of #36 and #38 when t02-harness reports.
 - 22:35 T02 round-3 fixes: #36 4787854, #38 4c66b91 (NA distinct; 4 R-side mutation tests; KAPPA_CAP; steps_from_trace from dirs and cuts; recorded skips; per-size pruning comparison). Both mergeable, CI green. Re-review by rev-t02-harness after the 01:00 reset.
 
+## 2026-09-26
+- 01:02 01:02 wake after the 5-hour reset (0 %); weekly 73 % (reset 2026-09-27 17:00). Started: re-review of #40 (rev-pr35-sims1), re-review of #36 and #38 (rev-t02-harness), dual review of #37 (run wf_3f4c977e-c33). Budget plan: T04 author (sonnet) after #40 merges; then T05 if budget allows; stop new work at 85 %.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
