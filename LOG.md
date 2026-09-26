@@ -62,6 +62,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:01 03:01 wake: weekly 82 %, 5-hour 55 %. Load 10.9 (15-min 10.7, limit 11): no new agents; if it stays above 11, restart the legacy run with fewer workers. Legacy run: pilot reps 100:300 running, 3,056 result files. PR #42 (T05) ready, report pending.
 - 03:09 #37 round-2 text fixes at 88c4d10 (STOP-7 bands; floor noise measured: T07 labels a STOP-5 floor difference 'tie' within 1e-13 TSS; hidden term without a trigger, OQ-6 open, rank-fix fits labeled quirk; K >= 2 floor departure; zeroed statistics). Narrow round-3 dual review started (run wf_a09ca5c1-77d), at most one R process per reviewer because of the load.
 - 03:32 03:32 wake: weekly 84 %, 5-hour 65 %. Load 15-min 11.19 (above 11): no new agents; review of #42 (T05 part 1, component fixtures, 3f1a0e7) waits until the load drops. Legacy run: pilot done; 200-case regression block D1,D2,D3,D6,D8 started 10:03Z; 5,298 result files.
+- 03:35 T05 author done: #42 (component fixtures, 3f1a0e7, about 2.9 MB) and #43 (S02 to S20 and extras, 5b7f4b2, stacked; about 13 MB; the LA-7 scaling applied; S13's weighted constant-response earth error recorded). Retargeted #43 to main. Plan: one dual review covering both, when the load is below 11.
 
 ## Core-hour ledger
 
