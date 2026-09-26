@@ -416,7 +416,14 @@ def _finish_unit(
 ) -> None:
     if use_cache and outcome.ok:
         cache_put(unit.cache_key, outcome)
-    measures = compute_measures(outcome, unit.dgp, unit.truth_test, unit.y_test)
+    try:
+        measures = compute_measures(outcome, unit.dgp, unit.truth_test, unit.y_test)
+    except Exception as e:  # e.g. metrics.py rejects a non-finite prediction;
+        # never let one bad fit stop the run.
+        measures = {
+            "error": f"{type(e).__name__}: {e}",
+            "fit_seconds": outcome.fit_seconds,
+        }
     atomic_write_json(
         result_path(out_dir, unit.cell, unit.arm_name, unit.rep), measures
     )
