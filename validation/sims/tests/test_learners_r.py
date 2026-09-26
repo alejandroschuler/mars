@@ -15,6 +15,10 @@ import pytest
 
 from validation.sims import learners
 
+# Every test here needs Rscript and earth: gate A, gate B and CI skip
+# "external" (pyproject.toml); gate C and a direct pytest invocation run it.
+pytestmark = pytest.mark.external
+
 
 def _friedman1_data(n, seed, binary=False):
     rng = np.random.default_rng(seed)
