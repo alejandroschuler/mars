@@ -81,8 +81,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:14 T05 round-2 fixes: #42 de9f646, #43 609d7ef (multinom reltol 1e-15 with a stability check; pruning seed 138 separates both cases with an assertion; fixtures now 8.0 MB). Narrow round-3 dual review started (wf_761eef3f-925). Weekly 95 %.
 - 11:27 T05 round 3: both APPROVE on #42 (de9f646) and #43 (609d7ef); Newton checks put the multinomial references 1.6e-8 and 5.1e-8 from the minimum; seed 138 separates the pruning rules in both cases. Merged #42 as 288d93c. Asked t05-fixtures for a pure rebase of #43, then a rebase-only re-approval, then merge. Round-3 notes go to a small follow-up PR after the reset (X_test outside the training range; missing-file skip; the stability bar; README note that T10 compares every size).
 - 11:34 #43 re-approved as a pure rebase (rebase-check-43: range-diff all '=', trees identical, gate B and CI passed) and merged as d6cac73; T05 (#7) closed. Weekly 96 % at 11:55: paused until the reset; the reviews of #45 and #46 to #49 wait.
+- 16:37 Legacy full run finished: ALL BLOCKS DONE at 23:13Z (16:13 PDT); 49,441 result files in <main>/.worktrees/runner-legacy/validation/runs/legacy_full; no run.py process or run.lock left. About 76 core-hours (ledger row added). Next: T04 step 6 (collect, summarize, mark #41 ready).
 
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
 |---|---|---|---|
+| 2026-09-26 | T04 legacy full run (runner at 8760cee): 6 workers 01:47 to 11:08, 4 workers 11:08 to 16:13 PDT | about 76 | all blocks done; 49,441 result files; failures to be counted in T04 step 6 |
