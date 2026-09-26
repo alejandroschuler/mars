@@ -55,6 +55,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:33 01:33 wake: 5-hour 21 %, weekly 76 % (about 6 per hour; 85 % near 03:00). Running: t04-legacy, t02-harness (slot map fix, #38 rebase), dual review of #37. T05 and T08 to T10 wait for the weekly reset unless the budget allows.
 - 01:43 PR #38 (both parts of T02) APPROVE at 693653e by rev-t02-harness (slot fix: 0 wrong parents in 349 steps; part 1 identical to the approved #36); merged as d4f74f4; T02 (#4) closed; #36 closed as folded in. main: d4f74f4. Next when budget allows: T05 (fixtures) and T18 (legacy description) need briefs.
 - 01:51 T04: check run 192 of 192 without errors; the full legacy run started as a detached driver (PID 65765, 6 workers, about 98 core-hours, 16 to 17 h); draft PR #41. EarthClassifier and GLMEarth bitwise identical again.
+- 02:00 #37 round 1 (spec part 2): both REQUEST_CHANGES (10x limit not for linear candidates; stop order with thresh > 0; FAST-6 example; STOP-5 near-exact fit; hidden term with Auto.linpreds = FALSE; duplicate columns at degree 2). Sent to t01-spec. Weekly 78 % at 02:05. Budget rule revised: new work that can finish up to 90 %, then only open pull requests, 5 % reserve. Started t05-fixtures (sonnet), brief briefs/T05-fixtures.md.
 
 ## Core-hour ledger
 
