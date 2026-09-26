@@ -20,6 +20,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:08 Recovery drill, watchdog part: the scheduled run at 17:25 (session local_899fec89-88af-4c0a-a262-d50ad9a73f83) started in <main> (not a worktree), model opus-5-5[1m], effort medium, read the fresh heartbeat and stopped after one Bash call. Its permission mode is not reported to this session; the user's default mode is auto. The user no longer needs to click Run now.
 - 18:19 PR #1 review round 1 (rev-pr1-bootstrap): REQUEST_CHANGES at a663d38; blocking: merge_pr.sh counted REVIEW lines from any account and from any line of a comment. Sent the fix and 6 small non-blocking fixes to t00-author.
 - 18:40 Merged PR #1 (bootstrap) as 31e6c13 with merge_pr.sh after review round 2 APPROVE. Issues on; 14 labels; 32 issues (#2 to #33). Synced <main> and <S> to main. Closed #2. Started t01-spec (opus), t02-harness (sonnet), t03-sims (sonnet). Drill: started and stopped drill-helper.
+- 18:45 Recovery drill, helper part: passed. drill-helper was stopped with TaskStop before it wrote anything; on the next wake SendMessage resumed it with its context, and it wrote env/versions.json (R 4.4.3, earth 5.3.4, plotmo 3.6.4, nnet 7.3.20, macOS 15.7.4). Both parts of the P0 recovery drill are done.
 
 ## Core-hour ledger
 

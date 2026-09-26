@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-09-25",
+  "system": {
+    "os": "macOS",
+    "version": "15.7.4",
+    "build": "24G517",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memory_bytes": 34359738368
+  },
+  "r": {
+    "version": "4.4.3",
+    "release_date": "2025-02-28",
+    "packages": {
+      "earth": "5.3.4",
+      "nnet": "7.3.20",
+      "plotmo": "3.6.4",
+      "plotrix": "3.8.13",
+      "Formula": "1.2.5"
+    }
+  },
+  "python": {
+    "venv_path": "/Users/aschuler/Documents/research/projects/pymars/.venv",
+    "status": "not present",
+    "version": "not present",
+    "numpy": "not present",
+    "scipy": "not present",
+    "sklearn": "not present",
+    "threadpoolctl": "not present"
+  },
+  "tools": {
+    "uv": "0.11.11"
+  }
+}

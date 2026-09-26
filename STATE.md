@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-25 18:40 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-25 18:45 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-P0 done except the helper part of the recovery drill (in progress). P1 started 18:45 PDT: T01 (#3), T02 (#4), T03 (#5).
+P0 done, including both parts of the recovery drill. P1 started 18:45 PDT: T01 (#3), T02 (#4), T03 (#5).
 
 Board: T00 #2 (closed), T01 #3, T02 #4, T03 #5, T04 #6, T05 #7, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 #15, T14 #16, T15 #17, T16 #18, T17 #19, T18 #20, T19 #21, T20 #22, T21 #23, T22 #24, T23 #25, T24 #26; later: missing values #27, negative minspan #28, newvar.penalty #29, linpreds #30, allowed #31, pmethod and nfold #32, evimp #33. `board/numbers.json` has the map.
 
@@ -33,7 +33,6 @@ main: 31e6c13 (bootstrap, PR #1). `<main>` and `<S>` are at main. CI runs on the
 
 ## Next actions
 
-1. Drill: restart `drill-helper` with SendMessage; check `env/versions.json`; log the result.
 2. When T03 is ready: one reviewer (`single`, opus); merge; then T04 (legacy pilot, then the legacy full run as detached jobs from a runner worktree in `<main>/.worktrees/`), as early as possible: the detached jobs keep running during a usage pause.
 3. When T01 part 1 is ready: two reviewers (`spec`, `adversarial`); merge; then T08, T09, T10.
 4. When T02 is ready: one reviewer; merge; then T05 (fixtures) and T18 (legacy description).
@@ -44,7 +43,7 @@ main: 31e6c13 (bootstrap, PR #1). `<main>` and `<S>` are at main. CI runs on the
 - `t01-spec` (opus): T01 spec writer, issue #3, branches `t01-spec-part1` then `t01-spec-part2`, worktrees in `<S>/.worktrees/`. Started 18:45.
 - `t02-harness` (sonnet): T02 earth harness, issue #4, branch `t02-harness` (or `t02-harness-r` and `t02-harness-compare`). Started 18:45.
 - `t03-sims` (sonnet): T03 simulation harness, issue #5, branch `t03-sims`. Started 18:45.
-- `drill-helper` (haiku): recovery drill; stopped with TaskStop at 18:46 on purpose; restart it with SendMessage on the next wake and check that it writes `env/versions.json` in this journal.
+- `drill-helper` (haiku): drill passed; done.
 
 ## Running jobs
 
