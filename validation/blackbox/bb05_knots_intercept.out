@@ -1,0 +1,84 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+part 1: 240 settings; nStartSpan matches 240; cut list matches 240; visited range n-1..endspan+1 240
+sorted x: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+  minspan 3 endspan 1 nStartSpan 2 -> cuts 18,15,12,9,6,3 (TolG 111110)
+sorted x: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+  minspan 4 endspan 2 nStartSpan 4 -> cuts 16,12,8,4 (TolG 1111)
+sorted x: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 17 17 17
+  minspan 3 endspan 2 nStartSpan 2 -> cuts 15,12,9,6,3 (TolG 11110)
+sorted x: 1 1 1 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
+  minspan 1 endspan 1 nStartSpan 1 -> cuts 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,1,1 (TolG 111111111111110000)
+     n   p printed_ms printed_es scan_ms scan_es  eq43   eq45 rule_ms rule_es
+     3   1          2          1       2       1 2.348  7.322       2       1
+     5   1          2          1       2       1 2.643  7.322       2       1
+     8   1          2          3       2       3 2.914  7.322       2       3
+    20   1          3          7       3       7 3.443  7.322       3       7
+    21   1          3          7       3       7 3.471  7.322       3       7
+   100   1          4          7       4       7 4.372  7.322       4       7
+ 10000   1          7          7       7       7 7.029  7.322       7       7
+     3   2          2          1       2       1 2.748  8.322       2       1
+     5   2          3          1       3       1 3.043  8.322       3       1
+     8   2          3          3       3       3 3.314  8.322       3       3
+    20   2          3          8       3       8 3.843  8.322       3       8
+    21   2          3          8       3       8 3.871  8.322       3       8
+   100   2          4          8       4       8 4.772  8.322       4       8
+ 10000   2          7          8       7       8 7.429  8.322       7       8
+     3   3          2          1       2       1 2.982  8.907       2       1
+     5   3          3          1       3       1 3.277  8.907       3       1
+     8   3          3          3       3       3 3.548  8.907       3       3
+    20   3          4          8       4       8 4.077  8.907       4       8
+    21   3          4          8       4       8 4.105  8.907       4       8
+   100   3          5          8       5       8 5.006  8.907       5       8
+ 10000   3          7          8       7       8 7.663  8.907       7       8
+     3   5          3          1       3       1 3.277  9.644       3       1
+     5   5          3          1       3       1 3.572  9.644       3       1
+     8   5          3          3       3       3 3.843  9.644       3       3
+    20   5          4          9       4       9 4.372  9.644       4       9
+    21   5          4          9       4       9 4.400  9.644       4       9
+   100   5          5          9       5       9 5.300  9.644       5       9
+ 10000   5          7          9       7       9 7.958  9.644       7       9
+     3  10          3          1       3       1 3.677 10.644       3       1
+     5  10          3          1       3       1 3.972 10.644       3       1
+     8  10          4          3       4       3 4.243 10.644       4       3
+    20  10          4          9       4       9 4.772 10.644       4       9
+    21  10          4          9       4       9 4.800 10.644       4       9
+   100  10          5         10       5      10 5.700 10.644       5      10
+ 10000  10          8         10       8      10 8.358 10.644       8      10
+     3  50          4          1       4       1 4.606 12.966       4       1
+     5  50          4          1       4       1 4.900 12.966       4       1
+     8  50          5          3       5       3 5.172 12.966       5       3
+    20  50          5          9       5       9 5.700 12.966       5       9
+    21  50          5          9       5       9 5.729 12.966       5       9
+   100  50          6         12       6      12 6.629 12.966       6      12
+     3 100          5          1       5       1 5.006 13.966       5       1
+     4 100          5          1       5       1 5.172 13.966       5       1
+     5 100          5          1       5       1 5.300 13.966       5       1
+     6 100          5          2       5       2 5.406 13.966       5       2
+     7 100          5          2       5       2 5.495 13.966       5       2
+     8 100          5          3       5       3 5.572 13.966       5       3
+     9 100          5          3       5       3 5.640 13.966       5       3
+    10 100          5          4       5       4 5.700 13.966       5       4
+    12 100          5          5       5       5 5.806 13.966       5       5
+    16 100          5          7       5       7 5.972 13.966       5       7
+    20 100          6          9       6       9 6.100 13.966       6       9
+    21 100          6          9       6       9 6.129 13.966       6       9
+    22 100          6         10       6      10 6.155 13.966       6      10
+    30 100          6         13       6      13 6.334 13.966       6      13
+    50 100          6         13       6      13 6.629 13.966       6      13
+   100 100          7         13       7      13 7.029 13.966       7      13
+   200 100          7         13       7      13 7.429 13.966       7      13
+  1000 100          8         13       8      13 8.358 13.966       8      13
+n=20 endspan=12: nEndSpan 9, cuts 11,10
+n=40 minspan=30 endspan=1: nStartSpan 5, cuts 35,5
+n=20 minspan=21: ERROR: minspan 21 is greater than the number of cases 20 
+n=20 minspan=20: no error 
+CHECK bb05.1 TRUE the visited cases run from n-1 down to capped endspan+1 in all 240 settings
+CHECK bb05.2 TRUE nEndSpan is the capped endspan and nStartSpan = endspan + ceiling(((n - 2 endspan - 1) mod minspan)/2) in all settings
+CHECK bb05.3 TRUE the evaluated cut list (order and repeats) equals the rule in all settings
+CHECK bb05.4 TRUE automatic minspan = trunc(eq. 43 with n cases and p columns)
+CHECK bb05.5 TRUE automatic endspan = max(1, min(trunc(eq. 45 with p), floor(n/2) - 1))
+CHECK bb05.6 TRUE eq. 43 is truncated, not rounded (some cell has round != trunc)
+CHECK bb05.7 TRUE a user endspan is capped the same way (endspan 12 at n = 20 becomes 9)
+CHECK bb05.8 TRUE a minspan wider than the range follows the same rule (cuts 35,5)
+CHECK bb05.9 TRUE minspan above n is an error and minspan = n is not
+CHECK bb05.10 TRUE in this first search (a pair search), the knots at the repeated minimum 1 are listed and rejected (TolG 0)

@@ -1,0 +1,91 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+case | nterms | code counts (1,-1,2) in selected dirs | coef vs LS | fitted vs bx%*%coef | fitted vs LS | bx vs dirs/cuts (max abs)
+deg1 unweighted      | 13 |  7  5  0 | 0.0e+00 | 8.0e-16 | 0.0e+00 | 0.0e+00 (rel 0.0e+00)
+deg1 w=rep(1:3)      | 15 | 10  4  0 | 0.0e+00 | 1.1e-15 | 0.0e+00 | 1.1e-16 (rel 3.6e-17)
+deg1 w=runif         | 11 |  6  4  0 | 0.0e+00 | 1.0e-15 | 0.0e+00 | 1.1e-16 (rel 3.3e-17)
+deg2 unweighted      | 16 |  9 12  0 | 0.0e+00 | 7.8e-16 | 0.0e+00 | 0.0e+00 (rel 0.0e+00)
+deg2 w=rep(1:3)      | 14 | 11  7  0 | 0.0e+00 | 1.1e-15 | 0.0e+00 | 1.1e-16 (rel 3.6e-17)
+deg2 w=runif         | 14 | 10  7  0 | 0.0e+00 | 3.2e-16 | 0.0e+00 | 1.1e-16 (rel 3.2e-17)
+deg1 3 responses     | 13 |  7  5  0 | 0.0e+00 | 1.2e-15 | 0.0e+00 | 0.0e+00 (rel 0.0e+00)
+deg2 3 responses     | 17 | 10 13  0 | 0.0e+00 | 8.5e-16 | 0.0e+00 | 0.0e+00 (rel 0.0e+00)
+deg2 3 resp w=runif  | 14 | 10  7  0 | 0.0e+00 | 1.2e-15 | 0.0e+00 | 1.1e-16 (rel 3.2e-17)
+deg1 linpreds=4:5    | 12 |  6  3  2 | 0.0e+00 | 8.4e-16 | 0.0e+00 | 0.0e+00 (rel 0.0e+00)
+deg2 linpreds=4:5 w=runif | 15 |  9  7  3 | 0.0e+00 | 6.4e-16 | 0.0e+00 | 1.1e-16 (rel 3.3e-17)
+cuts stored at dirs code 2 entries: 0.00131466 0.00476645 (the basis uses x, not x - cut)
+weighted fit (deg1 w=runif): coef vs unweighted lm.fit on the same bx differs by 6.9e-02
+lm.fit rank rule: X = [1, c2, c3], c3 = c2 + eps*z, z orthogonal to 1 and c2, ||z|| = ||c2||
+  c2 = rnorm: ||c2 - mean|| / ||c2|| = 0.994
+    eps  r(eps)=eps/sqrt(1+eps^2)  r computed  r over centred norm  rank  coef3_NA
+    1.00000000e-03  9.9999950000e-04  9.9999950000e-04  1.006127e-03  3  FALSE
+    3.16227766e-04  3.1622775021e-04  3.1622775021e-04  3.181653e-04  3  FALSE
+    1.00000000e-04  9.9999999500e-05  9.9999999500e-05  1.006127e-04  3  FALSE
+    3.16227766e-05  3.1622776586e-05  3.1622776586e-05  3.181654e-05  3  FALSE
+    1.00000000e-05  9.9999999995e-06  9.9999999995e-06  1.006127e-05  3  FALSE
+    3.16227766e-06  3.1622776602e-06  3.1622776602e-06  3.181654e-06  3  FALSE
+    1.00000000e-06  1.0000000000e-06  1.0000000000e-06  1.006127e-06  3  FALSE
+    3.16227766e-07  3.1622776602e-07  3.1622776603e-07  3.181654e-07  3  FALSE
+    1.00000000e-07  1.0000000000e-07  1.0000000001e-07  1.006127e-07  3  FALSE
+    3.16227766e-08  3.1622776602e-08  3.1622776611e-08  3.181654e-08  2  TRUE
+    1.00000000e-08  1.0000000000e-08  9.9999999976e-09  1.006127e-08  2  TRUE
+    3.16227766e-09  3.1622776602e-09  3.1622776871e-09  3.181654e-09  2  TRUE
+    1.00000000e-09  1.0000000000e-09  1.0000000260e-09  1.006127e-09  2  TRUE
+    3.16227766e-10  3.1622776602e-10  3.1622777749e-10  3.181654e-10  2  TRUE
+    1.00000000e-10  1.0000000000e-10  1.0000000668e-10  1.006127e-10  2  TRUE
+    3.16227766e-11  3.1622776602e-11  3.1622820566e-11  3.181658e-11  2  TRUE
+    1.00000000e-11  1.0000000000e-11  1.0000025761e-11  1.006130e-11  2  TRUE
+    2.00000000e-07  2.0000000000e-07  2.0000000003e-07  2.012254e-07  3  FALSE
+    1.01000000e-07  1.0100000000e-07  1.0100000003e-07  1.016188e-07  3  FALSE
+    1.00100000e-07  1.0010000000e-07  1.0010000002e-07  1.007133e-07  3  FALSE
+    1.00000100e-07  1.0000010000e-07  1.0000010002e-07  1.006128e-07  3  FALSE
+    1.00000000e-07  1.0000000000e-07  1.0000000001e-07  1.006127e-07  3  FALSE
+    9.99999000e-08  9.9999900000e-08  9.9999900026e-08  1.006126e-07  2  TRUE
+    9.99900000e-08  9.9990000000e-08  9.9990000027e-08  1.006027e-07  2  TRUE
+    9.99000000e-08  9.9900000000e-08  9.9900000020e-08  1.005121e-07  2  TRUE
+    9.90000000e-08  9.9000000000e-08  9.9000000010e-08  9.960659e-08  2  TRUE
+    5.00000000e-08  5.0000000000e-08  5.0000000042e-08  5.030636e-08  2  TRUE
+  c2 = 1 + runif: ||c2 - mean|| / ||c2|| = 0.184
+    eps  r(eps)=eps/sqrt(1+eps^2)  r computed  r over centred norm  rank  coef3_NA
+    1.00000000e-06  1.0000000000e-06  9.9999999999e-07  5.438088e-06  3  FALSE
+    3.16227766e-07  3.1622776602e-07  3.1622776602e-07  1.719674e-06  3  FALSE
+    1.00000000e-07  1.0000000000e-07  1.0000000001e-07  5.438088e-07  3  FALSE
+    3.16227766e-08  3.1622776602e-08  3.1622776539e-08  1.719674e-07  2  TRUE
+    1.00000000e-08  1.0000000000e-08  9.9999999861e-09  5.438088e-08  2  TRUE
+    3.16227766e-09  3.1622776602e-09  3.1622776400e-09  1.719674e-08  2  TRUE
+    1.00000000e-09  1.0000000000e-09  9.9999999007e-10  5.438088e-09  2  TRUE
+    2.00000000e-07  2.0000000000e-07  2.0000000002e-07  1.087618e-06  3  FALSE
+    1.01000000e-07  1.0100000000e-07  1.0100000001e-07  5.492469e-07  3  FALSE
+    1.00100000e-07  1.0010000000e-07  1.0010000000e-07  5.443526e-07  3  FALSE
+    1.00000100e-07  1.0000010000e-07  1.0000010001e-07  5.438093e-07  3  FALSE
+    1.00000000e-07  1.0000000000e-07  1.0000000001e-07  5.438088e-07  3  FALSE
+    9.99999000e-08  9.9999900000e-08  9.9999900026e-08  5.438082e-07  2  TRUE
+    9.99900000e-08  9.9990000000e-08  9.9990000002e-08  5.437544e-07  2  TRUE
+    9.99000000e-08  9.9900000000e-08  9.9900000030e-08  5.432650e-07  2  TRUE
+    9.90000000e-08  9.9000000000e-08  9.8999999957e-08  5.383707e-07  2  TRUE
+    5.00000000e-08  5.0000000000e-08  5.0000000028e-08  2.719044e-07  2  TRUE
+    3.00000000e-08  3.0000000000e-08  3.0000000021e-08  1.631426e-07  2  TRUE
+    2.00000000e-08  2.0000000000e-08  2.0000000021e-08  1.087618e-07  2  TRUE
+    1.90000000e-08  1.9000000000e-08  1.9000000011e-08  1.033237e-07  2  TRUE
+    1.80000000e-08  1.8000000000e-08  1.8000000003e-08  9.788558e-08  2  TRUE
+  threshold (full norm): rnorm c2: smallest kept r 1.000000000136546e-07, largest dropped r 9.9999900026271511e-08; 1+runif c2: 1.0000000000632844e-07, 9.9999900026438972e-08
+  threshold (centred norm) for 1+runif c2: smallest kept 5.438088e-07, largest dropped 5.438082e-07
+  [1, c2, c2]: rank 2, coef NA = FALSE FALSE TRUE, pivot = 1 2 3; coef[1:2] - lm.fit([1, c2]) max abs 0.0e+00, identical TRUE
+  [1, c2, c2, c4]: rank 3, coef NA = FALSE FALSE TRUE FALSE, pivot = 1 2 4 3; non-NA coef - lm.fit([1, c2, c4]) max abs 0.0e+00, identical TRUE
+  near-dependent pair (eps = 1e-9): [1, c3, c2] coef NA = FALSE FALSE TRUE; [1, c2, c3] coef NA = FALSE FALSE TRUE
+  [c2, c2, 1] (intercept last): coef NA = FALSE TRUE FALSE
+  lm.wfit: weighted ratio 1.1687e-07 -> rank 3; weighted ratio 7.7916e-08 -> rank 2
+CHECK bb09.1 TRUE coefficients equal lm.fit / lm.wfit coefficients of y on bx (normwise rel 1e-10), all 11 cases
+CHECK bb09.1b TRUE the coefficients are bitwise identical to the lm.fit / lm.wfit coefficients, all 11 cases
+CHECK bb09.2 TRUE the weighted coefficients differ from unweighted lm.fit on the same bx (so bb09.1 tests the weights)
+CHECK bb09.3 TRUE fitted.values equal bx %*% coefficients and the lm.fit / lm.wfit fitted values (normwise rel 1e-10), all cases
+CHECK bb09.4 TRUE bx equals the basis evaluated from dirs and cuts (1: pmax(x-cut,0), -1: pmax(cut-x,0), 2: x), all cases
+CHECK bb09.5 TRUE the cases include dirs code 2 with nonzero stored cuts (so bb09.4 tests 'x, not x - cut' for code 2)
+CHECK bb09.15 TRUE the stored cut of every dirs code 2 entry equals the smallest value of that column of x
+CHECK bb09.6 TRUE colnames(bx) are the dirs rownames of selected.terms, in that order, and match rownames(coefficients)
+CHECK bb09.7 TRUE lm.fit drops the near-dependent column (rank 2, coef[3] NA) for small eps
+CHECK bb09.8 TRUE lm.fit keeps c3 iff ||part orthogonal to earlier columns|| / ||c3|| >= tol = 1e-7 (full, uncentred norm)
+CHECK bb09.9 FALSE ALTERNATIVE: the threshold 1e-7 applies to the ratio over the centred norm of c3
+CHECK bb09.10 TRUE with two identical columns the later one gets NA
+CHECK bb09.11 TRUE the other coefficients (and fitted values) equal the fit without the dropped column (rel 1e-12)
+CHECK bb09.12 TRUE a dropped column in the middle is pivoted to the end; coefficients stay in the original column order with NA there
+CHECK bb09.13 TRUE of two nearly equal columns the later in column order gets NA, whichever of c2, c3 comes first
+CHECK bb09.14 TRUE lm.wfit applies the same 1e-7 rule to the sqrt(w)-scaled columns

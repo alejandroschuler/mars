@@ -1,0 +1,52 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+(a) tie between two terms as the cheapest removal
+run | term (col) of c1, c2 | tie at pos: lm.fit RSS without c1, without c2, bitwise equal, gap to next | earth removed
+S801 pair first                        | c1 3 (1), c2 6 (2) | pos 6: 2.4389507845277199 2.4389507845277203 FALSE gap 1.5e-01 | c2
+S801 pair last                         | c1 6 (7), c2 3 (6) | pos 6: 2.4389507845277207 2.4389507845277181 FALSE gap 1.5e-01 | c2
+S801 pair split                        | c1 6 (7), c2 3 (1) | pos 6: 2.4389507845277207 2.4389507845277181 FALSE gap 1.5e-01 | c2
+S802 pair first                        | c1 3 (1), c2 6 (2) | pos 6: 4.8526975091686415 4.8526975091686451 FALSE gap 2.0e-01 | c2
+S802 pair last                         | c1 6 (8), c2 3 (7) | pos 6: 4.8526975091686424 4.8526975091686433 FALSE gap 2.0e-01 | c2
+S802 pair split                        | c1 6 (8), c2 3 (1) | pos 6: 4.8526975091686424 4.8526975091686433 FALSE gap 2.0e-01 | c2
+S803 pair first                        | c1 6 (1), c2 3 (2) | pos 6: 3.3350175303347211 3.3350175303347114 FALSE gap 4.3e-01 | c2
+S803 pair last                         | c1 6 (8), c2 3 (7) | pos 6: 3.3350175303347211 3.3350175303347114 FALSE gap 4.3e-01 | c2
+S803 pair split                        | c1 6 (8), c2 3 (1) | pos 6: 3.3350175303347211 3.3350175303347114 FALSE gap 4.3e-01 | c2
+S801 pair first, rows swapped in pairs | c1 3 (1), c2 6 (2) | pos 6: 2.4389507845277181 2.4389507845277207 FALSE gap 1.5e-01 | c1
+S801 pair first, rows reversed         | c1 3 (1), c2 6 (2) | pos 6: 2.4389507845277247 2.4389507845277159 FALSE gap 1.5e-01 | c2
+O1 pair first                          | c1 7 (1), c2 6 (2) | pos 7: 20.000000000000004 19.999999999999993 FALSE gap 1.0e+00 | c2
+O1 pair last                           | c1 7 (6), c2 6 (5) | pos 7: 20.000000000000004 19.999999999999993 FALSE gap 1.0e+00 | c2
+O1 pair reversed                       | c1 7 (2), c2 6 (1) | pos 7: 20.000000000000004 19.999999999999993 FALSE gap 1.0e+00 | c2
+O1 all reversed                        | c1 7 (6), c2 6 (5) | pos 7: 20.000000000000004 19.999999999999993 FALSE gap 1.0e+00 | c2
+O2 pair first                          | c1 5 (1), c2 4 (2) | pos 5: 120.00000000000007 119.99999999999999 FALSE gap 3.0e-01 | c2
+O2 pair reversed                       | c1 5 (2), c2 4 (1) | pos 5: 120.00000000000007 119.99999999999999 FALSE gap 3.0e-01 | c2
+O3 pair first                          | c1 6 (1), c2 7 (2) | pos 7: 20.000000000000007 20.000000000000007 TRUE gap 1.0e+00 | ambiguous
+O3 pair reversed                       | c1 6 (2), c2 7 (1) | pos 7: 20.000000000000007 20.000000000000007 TRUE gap 1.0e+00 | ambiguous
+determined in 17 of 19 runs; removed member had the higher term number in 3, the lower column index in 11, the lower lm.fit RSS in 13
+(b) exact ties between model sizes in gcv.per.subset, penalty = -1
+G1 0/1 Hadamard, n=64: basis_ok=TRUE terms C a2 a4 a3 a5 a6; C is term 2; lm.fit coef of C -3.53e-15, RSS change on removing C 3.55e-15
+  rss.per.subset[5:7] = 1.9999999999999993 0.99999999999999978 0.99999999999999978
+  gcv.per.subset[5:7] = 0.03124999999999999 0.015624999999999997 0.015624999999999997
+  sizes with gcv == min(gcv): 6 7 | which.min: 6 | selected size: 6 | row 6 omits C: TRUE
+  forward trace row of C: 2 0.7729 0.7729 0.7729 1 C 0< 2 1  
+G2 +-1 Hadamard, n=64: basis_ok=TRUE terms C h2 h4 h3 h5 h6; C is term 2; lm.fit coef of C -3.53e-15, RSS change on removing C 6.88e-15
+  rss.per.subset[5:7] = 5.0000000000000009 0.99999999999999922 0.99999999999999922
+  gcv.per.subset[5:7] = 0.078125000000000014 0.015624999999999988 0.015624999999999988
+  sizes with gcv == min(gcv): 6 7 | which.min: 6 | selected size: 6 | row 6 omits C: TRUE
+  forward trace row of C: 2 0.7755 0.7755 0.7755 1 C -2.5< 2 1  
+G3 random hinges, n=100: basis_ok=TRUE terms L Bh A P Hv C; C is term 7; lm.fit coef of C 3.79e-16, RSS change on removing C -1.78e-15
+  rss.per.subset[5:7] = 14.411829002292867 12.469770981989406 12.469770981989406
+  gcv.per.subset[5:7] = 0.14411829002292867 0.12469770981989406 0.12469770981989406
+  sizes with gcv == min(gcv): 6 7 | which.min: 6 | selected size: 6 | row 6 omits C: TRUE
+  forward trace row of C: 12 0.8131 0.8131 0 1 C -0.14737< 7 1 final (reached nk 13) 
+CHECK bb08.1 TRUE (a) every run is a valid tie design: one backward step where c1 and c2 are the two cheapest removals, equal to 1e-9 in lm.fit, next candidate >1e-6 higher
+CHECK bb08.2 FALSE (a) HYPOTHESIS the two tied lm.fit RSS values are bitwise equal in every run
+CHECK bb08.3 FALSE (a) HYPOTHESIS the member earth removed is determined (only one forced choice reproduces prune.terms) in every run
+CHECK bb08.4 FALSE (a) HYPOTHESIS earth removes the tied term with the higher term number (entered later)
+CHECK bb08.5 FALSE (a) HYPOTHESIS earth removes the tied term with the lower term number (entered earlier)
+CHECK bb08.6 FALSE (a) HYPOTHESIS earth removes the tied term with the lower x column index
+CHECK bb08.7 FALSE (a) HYPOTHESIS earth removes the tied term with the higher x column index
+CHECK bb08.8 FALSE (a) HYPOTHESIS earth removes the tied term whose removal has the lower lm.fit RSS (rounding agrees with lm.fit)
+CHECK bb08.9 TRUE (a) in each S design, earth removes the same data column in all three column orders
+CHECK bb08.10 TRUE (a) swapping the two rows of every pair (swaps the contents of c1 and c2) flips which named column earth removes
+CHECK bb08.11 TRUE (b) the forward pass entered the zero-coefficient column C in all three constructions
+CHECK bb08.12 TRUE (b) an exact tie was built: gcv.per.subset has two or more bitwise-equal minima in all three constructions
+CHECK bb08.13 TRUE (b) with tied minima earth selects the smallest tied size, which is which.min(gcv.per.subset)
