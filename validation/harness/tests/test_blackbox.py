@@ -33,6 +33,18 @@ class TestGetGcv:
         gcv = bb.get_gcv([10, 5], [1, 2], -1, 60)
         assert gcv == pytest.approx([10 / 60, 5 / 60])
 
+    def test_penalty_minus_one_is_bit_exact_against_rss_over_n(self):
+        # Round-2 review, PR #36 finding 2: digits = I(17) reverted to NA in
+        # blackbox.R's write_result rounds to 15 significant digits
+        # (jsonlite 2.0.0), which the rel=1e-6 approx() above is far too
+        # loose to catch. penalty = -1 is defined as GCV = RSS / ncases
+        # exactly (get_gcv's own docstring), with no fitting or rounding of
+        # its own on either side, so this checks bit equality, not approx.
+        rss = 0.22733602246716966
+        n = 60.0
+        gcv = bb.get_gcv([rss], [3], -1.0, n)
+        assert gcv[0] == rss / n
+
     def test_effective_parameters_at_or_above_n_gives_infinite_gcv(self):
         gcv = bb.get_gcv([10.0], [1], 2.0, 1)
         assert np.isinf(gcv[0])
@@ -119,6 +131,24 @@ class TestLmFit:
         result = bb.lm_fit(X, y)
         assert result["residuals"].shape == (len(y), 1)
 
+    def test_a_duplicated_column_gives_none_not_nan_for_the_aliased_coefficient(
+        self, hinge_data
+    ):
+        # Rank-deficient x (two identical columns): R's lm.fit gives the
+        # aliased coefficient as NA, a real "not estimable" marker, not the
+        # same as a NaN; _desanitize must decode it to None, and lm_fit's
+        # dtype=object coefficients must keep that None instead of numpy's
+        # usual dtype=float cast silently turning it into nan.
+        x, y = hinge_data
+        X = np.column_stack([np.ones(len(y)), x[:, 0], x[:, 0]])
+        result = bb.lm_fit(X, y)
+        assert result["rank"] == 2
+        coefficients = result["coefficients"].ravel().tolist()
+        assert coefficients.count(None) == 1
+        estimated = [c for c in coefficients if c is not None]
+        assert len(estimated) == 2
+        assert not any(np.isnan(c) for c in estimated)
+
 
 class TestPredictEarth:
     def test_predicts_outside_the_training_range(self, hinge_data):
@@ -166,3 +196,17 @@ class TestMultinomFit:
         predicted = [result["levels"][i] for i in result["fitted"].argmax(axis=1)]
         accuracy = np.mean([p == truth for p, truth in zip(predicted, y, strict=True)])
         assert accuracy > 0.9
+
+    def test_a_level_named_na_stays_the_string_na(self):
+        # A class label that is itself the string "NA" is not R's missing
+        # value; write_json's na="string" spells both the same way on the
+        # wire ("NA"), so only treating "levels" as a string-only field (not
+        # decoding sentinel tokens in it at all) tells them apart.
+        rng = np.random.default_rng(3)
+        n = 150
+        x = rng.uniform(-3, 3, size=n)
+        X = np.column_stack([np.ones(n), x])
+        y = np.where(x < -1, "NA", np.where(x > 1, "hi", "mid"))
+        result = bb.multinom_fit(X, y)
+        assert set(result["levels"]) == {"hi", "NA", "mid"}
+        assert all(level is not None for level in result["levels"])

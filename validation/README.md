@@ -67,14 +67,17 @@ result = run_earth([job], workdir="/tmp/example")["example"]
 print(result["selected_terms"], result["gcv"])
 ```
 
-Run the harness's own tests (outside `tests/`, because CI has no R):
+Run the harness's own tests (in `validation/harness/tests/`, on
+`testpaths` alongside `tests/` and `validation/sims/tests/`):
 
 ```bash
 uv run --frozen --group validation pytest validation/harness/tests
 ```
 
-Most of these tests call `Rscript` for real (`fit_earth.R` or
-`blackbox.R`); they are not skipped when R is missing, so run them only
-where R, earth and nnet are installed. The pure-Python parts
+A test that calls `Rscript` for real (`fit_earth.R` or `blackbox.R`) or
+needs `.venv-legacy` is marked `external`; it is not skipped when R or the
+legacy venv is missing, it fails, so gate A, gate B and CI all exclude it
+(`-m "not external"`). Everything else, including the pure-Python parts
 (`trace_parse.py`, `names_map.py`, and `driver.py`'s CSV writing and
-column-naming helpers) have tests that need no R.
+column-naming helpers), needs no R and runs everywhere. Gate C and a plain
+`pytest` invocation run everything, `external` tests included.
