@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-26 03:52 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-26 04:23 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -39,12 +39,11 @@ Open pull requests (21:45):
 
 ## Next actions
 
-1. Merge #40 when approved; start T04 (sonnet author, runner worktree in `<main>/.worktrees/runner-legacy`, full legacy run at the caps with 6 workers; pilot analysis later).
-2. Merge #34 when both roles approve (retarget #37 to main first); then the dual review of #37.
-3. Merge #36 and #38 when approved; then T05 (fixtures; its brief is not written yet) and T18 (legacy description; brief not written yet).
-4. After spec part 1 merges: T08 (_terms, _gcv, _knots), T09 (_linalg), T10 (_pruning) with briefs that cite the spec rule IDs (TERM, GCV, LIMIT, SPAN, KNOT, LA, PRUNE, CORE, W). T06 (the reference) needs the whole spec and T05.
-5. Pacing: weekly 69 % at 21:38 (reset 2026-09-27 17:00 PDT). At 85 %: authors checkpoint and stop. At 90 %: only finish open pull requests. The detached legacy jobs need no Claude usage.
-6. Follow-ups: merge_pr.sh should refuse while another open PR uses the head branch as its base (GitHub closed #39 when #35's branch was deleted). T16 must exclude shift tests where a shifted covariate is a linear factor in a term of degree 2 or more. The plan's edge-case row that calls earth scale invariant is wrong (bb14.4).
+1. T05: dual review of #42 and #43 running (run wf_a0b1ef34-9d5). Fixes by `t05-fixtures` (SendMessage); merge #42 first (#43's base is already main), then rebase #43 and a rebase-only re-approval (small sonnet checker, as for #40), then merge #43.
+2. Pacing: weekly 86 % at 04:22 Saturday. After T05, start no new work until the weekly reset on 2026-09-27 17:00 PDT; keep the heartbeat fresh with short wakes; keep checking the legacy run (detached; no usage).
+3. After the reset, start in parallel (at most 4 authors): T06 reference (brief `briefs/T06-reference.md`, opus), T08 and T09 (brief `briefs/T08-T10-components.md`, opus), and T18 legacy description (brief not written; sonnet), plus the T04 pilot analysis (steps 4 of `briefs/T04-legacy-runs.md`, sonnet, cheap). T10 after T08 and T09. T07 after T06's first parts. T01 v2 (#44) after T07.
+4. When the legacy run ends (about 16 to 17 hours after 01:47 Saturday): T04 step 6 (collect, summarize, mark #41 ready; sonnet).
+5. Tooling follow-ups for one small PR: merge_pr.sh refuses while another open PR uses the head branch as its base; accept a rebase-only re-approval by range-diff; the sims README pgrep pattern and stale run.lock steps (T03 review); DECISIONS.md line for rebase-only re-approvals.
 
 ## Running agents
 
