@@ -50,6 +50,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 ## 2026-09-26
 - 01:02 01:02 wake after the 5-hour reset (0 %); weekly 73 % (reset 2026-09-27 17:00). Started: re-review of #40 (rev-pr35-sims1), re-review of #36 and #38 (rev-t02-harness), dual review of #37 (run wf_3f4c977e-c33). Budget plan: T04 author (sonnet) after #40 merges; then T05 if budget allows; stop new work at 85 %.
 - 01:21 T02 round 3: #36 APPROVE at 4787854 (15 of 15 mutations caught); #38 one blocking point (slot-to-row map after single-hinge steps). Decision: both parts land through #38 (base main, rebased, holds both parts, retitled 'feat: earth harness (T02)'); #36 is closed as folded in after the merge. Saves a second rebase and re-approval.
+- 01:24 PR #40 round 3: APPROVE at c73b833 (44 of 52 mutations caught; kill and resume verified). One commit behind main, so a pure rebase by t03-sims, then a range-diff re-approval. T04 brief: restart notes (pgrep pattern for loky workers, stale run.lock). Follow-up for a tooling PR: merge_pr.sh could accept an approval on an older head when the new head is a pure rebase (empty git range-diff) with a passing gate B log, and must refuse while an open PR uses the head branch as its base.
 
 ## Core-hour ledger
 

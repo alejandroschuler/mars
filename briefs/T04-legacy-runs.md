@@ -12,6 +12,12 @@ You run the simulations of the legacy code (mars-earth 1.0.4) and of earth, with
 - Every job: `nohup caffeinate -i nice -n 15 <command> > <log> 2>&1 &`, with `echo $! > <pidfile>`, both in the run's output folder under `validation/runs/` of the runner worktree. Source `dev/env.sh` first. At most 6 workers in total across your jobs (the executor may lower this with a restart and `--resume` when the load is high).
 - Your own editable worktree for the pull request is `<S>/.worktrees/t04-legacy-runs` (branch `t04-legacy-runs` from `origin/main`); it holds only the run configuration, the pilot report and, at the end, the results and summaries.
 
+## Restarts (from the T03 review)
+
+- Leftover loky workers after a hard kill: find them with `pgrep -fl "<runner>/.venv/bin/python.*joblib.externals.loky"` (the README's pattern does not work) and end them with `kill <pid>` after you read the list.
+- A stale `run.lock` folder in the output folder stops a restart after a hard kill: check that no run.py process uses that folder (`pgrep -fl "run.py.*<out>"`), then `rmdir <out>/run.lock`, then restart with `--resume`.
+- The legacy arms always run with block size 1, so a kill loses at most the fits in progress.
+
 ## Steps
 
 1. Claim the issue. Make both worktrees.
