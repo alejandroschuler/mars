@@ -1,0 +1,56 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+part A: iNewCol 3, 2998 cuts evaluated, 461 rejected
+  largest rejected ratio 0.0099635088, smallest accepted ratio 0.010020979
+  the same test on (t - x)+ instead: rejected ratios up to 0.999, accepted down to 4.35e-10
+  rejected knots print RssWithKnot equal to the linear-only RSS 1015.2: TRUE
+part B: one variable, single hinges after the first pair
+ iNewCol steps_done terms_before searches single rejected   max_rej   min_acc
+       3          0            1        1      0       91 9.733e-03 1.002e-02
+       4          1            3        1      1      240 9.978e-03 1.039e-02
+       6          2            4        1      1      322 9.927e-03 1.012e-02
+       8          3            5        1      1      428 9.946e-03 1.077e-02
+      10          4            6        1      1      446 9.891e-03 1.041e-02
+      12          5            7        1      1      479 9.891e-03 1.040e-02
+      14          6            8        1      1      541 9.969e-03 1.020e-02
+      16          7            9        1      1       27 9.988e-06 1.111e-05
+      18          8           10        1      1       39 9.686e-06 1.091e-05
+      20          9           11        1      1       48 8.707e-06 1.160e-05
+      22         10           12        1      1       67 9.781e-06 1.005e-05
+      24         11           13        1      1       81 9.961e-06 1.045e-05
+      26         12           14        1      1       89 9.961e-06 1.045e-05
+      28         13           15        1      1       94 9.961e-06 1.020e-05
+      30         14           16        1      1      107 9.961e-06 1.007e-05
+      32         15           17        1      1      112 9.961e-06 1.006e-05
+      34         16           18        1      1      127 9.961e-06 1.002e-05
+      36         17           19        1      1      139 9.949e-06 1.002e-05
+      38         18           20        1      1      154 9.949e-06 1.002e-05
+      40         19           21        1      1      155 9.949e-06 1.002e-05
+part C: nine variables, pairs on new variables
+ iNewCol steps_done terms_before searches single rejected   max_rej   min_acc
+       3          0            1        9      0      535 9.981e-03 1.001e-02
+       4          1            3        1      1      180 9.839e-03 1.030e-02
+       5          1            3        8      0      472 9.982e-03 1.000e-02
+       6          2            5        2      2      333 9.836e-03 1.030e-02
+       7          2            5        7      0      423 9.990e-03 1.005e-02
+       8          3            7        3      3      522 9.784e-03 1.024e-02
+       9          3            7        6      0      365 9.978e-03 1.002e-02
+      10          4            9        4      4      655 9.957e-03 1.022e-02
+      11          4            9        5      0      313 9.998e-03 1.000e-02
+      12          5           11        5      5      818 9.941e-03 1.001e-02
+      13          5           11        4      0      245 9.977e-03 1.013e-02
+      14          6           13        6      6      940 9.988e-03 1.006e-02
+      15          6           13        3      0      177 9.953e-03 1.002e-02
+      16          7           15        7      7       53 9.079e-06 1.001e-05
+      17          7           15        2      0       10 8.395e-06 1.163e-05
+      18          8           17        8      8       60 9.979e-06 1.021e-05
+      19          8           17        1      0        7 8.380e-06 1.161e-05
+      20          9           18        8      8       66 9.976e-06 1.010e-05
+      21          9           18        1      0        7 8.377e-06 1.160e-05
+      22         10           20        9      9       77 9.961e-06 1.017e-05
+      24         11           21        9      9       83 9.902e-06 1.016e-05
+CHECK bb11.1 TRUE at the first step the knot is rejected exactly when 1 - R^2 of (x - t)+ on {1, x} is below 0.01 (bracket 0.00996351, 0.010021)
+CHECK bb11.2 TRUE a rejected knot keeps the RSS of the linear part alone (its RSS reduction is that of b*x)
+CHECK bb11.3 TRUE while iNewCol <= 15, every rejected ratio is below 0.01 and every accepted one at least 0.01
+CHECK bb11.4 TRUE once iNewCol >= 16, every rejected ratio is below 1e-5 and every accepted one at least 1e-5
+CHECK bb11.5 TRUE iNewCol is K for a single-hinge search and K + 1 for a pair search, K the term number searched (2, 4, 6, ...)
+CHECK bb11.6 TRUE the tolerance is 0.01 in the first 7 forward steps and 1e-5 from the 8th, for pairs and single hinges alike (steps_done <= 6 vs >= 7)
