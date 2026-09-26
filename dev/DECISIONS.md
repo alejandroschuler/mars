@@ -23,3 +23,4 @@ The table "Decisions" in VALIDATION_PLAN.md has the full text.
 - Gate B runs ruff and `uv lock --check` too. A gate B pass thus covers the lint part of gate A and shows that the lockfile is current. Gate B runs the fast tests on Python 3.13 and 3.14 at the hypothesis `dev` profile: those runs check version support, and the Python 3.12 run has the `ci` profile.
 - The project venv uses Python 3.12, the version of the full gate B run. `dev/tools/new_worktree.sh` and gate B pass `--python 3.12` to uv.
 - CI pins uv 0.11.11, the release that made `uv.lock`, and pins each action to a commit SHA. Update the uv pin when `uv.lock` is made with a newer uv.
+- CODE_OF_CONDUCT.md named the removed SUPPORT.md as its enforcement contact. The contact is now the maintainer of this fork, through the owner's GitHub profile or a private report to the repository owner, with no email address.
