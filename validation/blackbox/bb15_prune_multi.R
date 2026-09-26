@@ -8,7 +8,9 @@
 #    ordinary fits, with no weights, integer weights and non-integer weights.
 # B. Which routine does earth name at trace = 3 for 1 and for several
 #    responses, and for a factor response with 2 and with 3 levels?
-# C. pmethod = "none" with nprune = k: which terms are selected?
+# C. pmethod = "none" with nprune = k: which terms are selected, and which
+#    model do earth's rss, gcv, rsq and grsq describe?
+# D. Exact ties with two responses: which tied term does earth remove?
 suppressMessages(library(earth))
 cat(R.version.string, "| earth", as.character(packageVersion("earth")), "\n")
 quiet <- function(expr) tryCatch(expr, error = function(e) paste("ERROR:", conditionMessage(e)))
@@ -122,15 +124,20 @@ statC <- function(Y, w = NULL, k = 6) {
   bx <- basis(f, X)[, sort(f$selected.terms), drop = FALSE]
   cf_ok <- isTRUE(all.equal(unname(as.matrix(f$coefficients)), unname(as.matrix(if (is.null(w)) lm.fit(bx, Ym)$coefficients else lm.wfit(bx, Ym, w)$coefficients)), tolerance = 1e-10))
   rss_model <- sum(ww * as.matrix(f$residuals)^2)
+  tss <- sum(ww * sweep(Ym, 2, colSums(ww * Ym) / sum(ww))^2)
+  stats_Tk <- isTRUE(all.equal(f$gcv, f$gcv.per.subset[k], tolerance = 1e-12)) &&
+    isTRUE(all.equal(f$rsq, 1 - f$rss.per.subset[k] / tss, tolerance = 1e-10)) &&
+    isTRUE(all.equal(f$grsq, 1 - f$gcv.per.subset[k] / f$gcv.per.subset[1], tolerance = 1e-10))
   c(first_k = identical(sort(as.integer(f$selected.terms)), seq_len(k)), coef_first_k = cf_ok,
     rss_is_Tk = isTRUE(all.equal(f$rss, f$rss.per.subset[k], tolerance = 1e-12)), rss_is_model = isTRUE(all.equal(f$rss, rss_model, tolerance = 1e-8)),
-    rss = f$rss, rss_model = rss_model)
+    gcv_rsq_grsq_Tk = stats_Tk, rss = f$rss, rss_model = rss_model)
 }
 gy <- function(X, n) 4 * pmax(X[, 1] - 0.3, 0) * X[, 2] + sin(5 * X[, 3]) + 0.2 * rnorm(n)
 set.seed(1); wC <- runif(150, 0.5, 2)
 sc <- rbind(one = statC(gy), weighted = statC(gy, wC), two = statC(function(X, n) cbind(gy(X, n), cos(3 * X[, 4]) + 0.2 * rnorm(n))))
 print(sc, digits = 6)
-quirkC <- all(sc[, "first_k"] == 1) && all(sc[, "coef_first_k"] == 1) && all(sc[, "rss_is_Tk"] == 1) && !any(sc[, "rss_is_model"] == 1)
+quirkC <- all(sc[, "first_k"] == 1) && all(sc[, "coef_first_k"] == 1) && all(sc[, "rss_is_Tk"] == 1) && !any(sc[, "rss_is_model"] == 1) &&
+  all(sc[, "gcv_rsq_grsq_Tk"] == 1)
 
 # Part D: exact ties with two responses. Rows come in pairs that swap two
 # columns, so removing either column gives the same summed RSS in exact
@@ -164,7 +171,7 @@ cat(sprintf("CHECK bb15.4 %s with one response the prefix rule holds and plain b
 cat(sprintf("CHECK bb15.5 %s rss.per.subset is the summed (weighted) RSS of each row in all fits\n", all(tally$rss_ok)))
 cat(sprintf("CHECK bb15.6 %s at trace 3 earth names EvalSubsetsUsingXtx for 2 and 3 responses and a 3-level factor, and no routine (leaps) for one response or a 2-level factor\n", xtx_multi))
 cat(sprintf("CHECK bb15.7 %s with pmethod none and nprune = k (3, 5, 8), earth selects the first k forward terms\n", all(selC)))
-cat(sprintf("CHECK bb15.8 %s with pmethod none and nprune = k < M_f earth returns the coefficients of the first k terms but reports rss = rss.per.subset[k], the RSS of the backward subset T[k], not of its returned model (one response, weights, two responses)\n", quirkC))
+cat(sprintf("CHECK bb15.8 %s with pmethod none and nprune = k < M_f earth returns the coefficients of the first k terms but reports the rss, gcv, rsq and grsq of the backward subset T[k], not of its returned model (one response, weights, two responses)\n", quirkC))
 same_in_orders <- all(tapply(tieD$removed, tieD$design, function(v) length(unique(v)) == 1))
 cat(sprintf("CHECK bb15.9 %s with two responses, in each tie design the three column orders give the same removed data column (%d designs, %d with a tied column removed first)\n",
   same_in_orders, length(unique(tieD$design)), length(unique(tied_rows$design))))

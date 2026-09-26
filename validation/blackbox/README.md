@@ -23,7 +23,7 @@ Notes for the trace parser (T02):
 
 | ID | Question | Spec rules |
 |---|---|---|
-| bb01 | the formula of `earth:::get.gcv` over a grid of RSS, terms, penalties and n; the negative penalties that `earth()` accepts | GCV-1, GCV-2 |
+| bb01 | the formula of `earth:::get.gcv` over a grid of RSS, terms, penalties and n; the penalties that `earth()` accepts (−1, 0 to 1000) | GCV-1, GCV-2, CORE-2 |
 | bb02 | the GCV, RSq and GRSq of fitted models; weights; several responses; the default penalty | GCV-1 to GCV-8, W-2 |
 | bb03 | the default `nk`, and how steps count toward it | LIMIT-1, LIMIT-2 |
 | bb05 | the knot scan for the intercept, and the automatic spans; a knot at a repeated minimum | SPAN-1 to SPAN-6, KNOT-3 to KNOT-5 |
@@ -31,7 +31,22 @@ Notes for the trace parser (T02):
 | bb07 | the pruning pass on a fixed basis: the prefix rule, `nprune`, `pmethod` | PRUNE-2 to PRUNE-7 |
 | bb08 | exact ties in the pruning pass, in the removed term and in the size | PRUNE-3, PRUNE-5 |
 | bb09 | the final coefficients, the cut stored for a linear factor, and R's rule for dependent columns | TERM-1 to TERM-3, LA-4, PRUNE-8 |
-| bb10 | the termination codes | CORE-4, LIMIT-2 |
+| bb10 | the termination codes; a constant y, with and without weights | CORE-4, LIMIT-2, GCV-7, EDGE-1 |
 | bb11 | the collinearity tolerance and when it changes | LA-3 |
+| bb12 | how the forward pass chooses a candidate: the RSS reduction, the penalty, the limit MaxLegalRssDelta | FWD-3, FWD-4 |
+| bb13 | the terms that a forward step adds: pairs, single hinges, the linear candidate | FWD-3, FWD-6 |
 | bb14 | when earth runs a pair search and when a single-hinge search; the RSS of a single-hinge search | LA-2, LA-7, KNOT-5 |
 | bb15 | the pruning pass with two or more responses; `pmethod = "none"` with `nprune` | PRUNE-3, PRUNE-4, PRUNE-7, LIMIT-3 |
+| bb16 | the Fast MARS queue: ranks, ageing, `fast_k`, slots, updates | FAST-1 to FAST-6, FWD-2, STOP-2 |
+| bb17 | how earth scales the response in the forward pass | FWD-10, RESP-3 |
+| bb18 | exact ties between candidates in the forward pass | FWD-5, EDGE-4 |
+| bb19 | the stopping rules and their order | STOP-1 to STOP-6 |
+| bb20 | several responses in the forward pass | RESP-1, RESP-2, STOP-6, FWD-4 |
+| bb21 | earth's GLM refit: binomial, weights, separation, a 3-level factor, label types | GLM-1, GLM-2, GLM-4 |
+| bb22 | small and degenerate inputs, constant and duplicated covariates (also at degree 2), non-finite values | EDGE-1 to EDGE-5, ERR-1 |
+| bb23 | the removal of linearly dependent terms at the end of the forward pass | FWD-11 |
+| bb24 | whether the 10x limit on RSS reductions applies to linear candidates | FWD-4, FAST-5 |
+| bb25 | the stop when a step has no legal candidate at thresh > 0, and when the Fast MARS window ends a degree-1 pass; codes 2, 3 and 4 by GRSq(RSS, M + 1) | STOP-2 to STOP-4, FAST-6, CORE-4 |
+| bb26 | the stop at an exact fit: the RSS floor relative to TSS/(n − 1), earth's rounding near it at large n, and the absolute floor with two responses; the statistics that earth reports as 0 or NaN for small values | STOP-5, STOP-7, CORE-4, PRUNE-4, PRUNE-8 |
+| bb27 | earth's hidden term after some linear-option steps with `Auto.linpreds = FALSE`: the kind of parent does not decide it, and the column order can change it | FWD-11, FAST-1 |
+| bb28 | whether R reads doubles back exactly from 17-digit decimal and from hexadecimal strings | LA-7 |

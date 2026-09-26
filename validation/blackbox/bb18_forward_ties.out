@@ -1,0 +1,22 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+           first_step_uses
+kind        x1 x2
+  duplicate 20  0
+  mirror    11  9
+  n seed chosen printed_ties mirror_of_chosen mirror_evaluated
+ 31  101     17           17               15             TRUE
+ 20  102      4         4,17               17             TRUE
+ 31  103     17           17               15             TRUE
+ 30  104     16        15,16               15             TRUE
+ 30  105     15        15,16               16             TRUE
+ 30  106     15        15,16               16             TRUE
+ 20  107     11        10,11               10             TRUE
+ 21  108     12           12               10             TRUE
+ 21  109     12           12               10             TRUE
+ 20  110     11        10,11               10             TRUE
+ 20  111     11        10,11               10             TRUE
+ 20  112     10        10,11               11             TRUE
+CHECK bb18.1 TRUE with an exact duplicate x2 = x1, the first step always uses x1, the lower index (20 of 20)
+CHECK bb18.2 FALSE HYPOTHESIS with a mirror image x2 = 1 - x1, the first step always uses x1 (11 of 20)
+CHECK bb18.3 FALSE HYPOTHESIS in the symmetric designs the chosen knot is the larger of the two mirror knots (8 of 12)
+CHECK bb18.4 TRUE beyond bitwise-identical columns, rounding decides earth's exact ties: the mirror designs use x1 in 11 and x2 in 9 of 20, and the symmetric designs take the smaller knot in 4 of 12

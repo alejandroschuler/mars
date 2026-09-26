@@ -1,0 +1,34 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+Part A
+  degree 1, fast.k 3, thresh 0     : code 6, 5 terms | No new term increases RSq (perhaps reached numerical limits) at 5 terms
+  degree 1, fast.k 3, thresh 1e-06 : code 4, 5 terms | RSq changed by less than 1e-06 at 5 terms (DeltaRSq 0)
+  degree 1, fast.k 3, thresh 0.001 : code 4, 5 terms | RSq changed by less than 0.001 at 5 terms (DeltaRSq 0)
+  degree 1, fast.k 3, thresh 0.01  : code 4, 5 terms | RSq changed by less than 0.01 at 5 terms (DeltaRSq 0)
+  x20                                code 3, 7 terms | last row GRSq -63.6158, DeltaRSq 0 | GRSq(RSS, M + 1) -63.6158 | Reached minimum GRSq -10 at 7 terms (GRSq -64)
+  x14                                code 3, 3 terms | last row GRSq -56.1473, DeltaRSq 0 | GRSq(RSS, M + 1) -56.1473 | Reached minimum GRSq -10 at 3 terms (GRSq -56)
+  the same n = 14 fit with thresh 0: code 6
+Part B
+  24 covariates, pairs, fast.k  5, nk 61, thresh 0:  7 terms, code 6
+  24 covariates, pairs, fast.k 10, nk 61, thresh 0: 11 terms, code 6
+  24 covariates, pairs, fast.k 20, nk 61, thresh 0: 21 terms, code 6
+  the same with fast.k 0: 55 terms, code 7
+  fast.k 5 at the default thresh: 7 terms, code 4
+  15 covariates, many single hinges, nk 81: fast.k 20 gives 53 terms (code 7), fast.k 0 53 terms (code 7), fast.k 3 4 terms
+Part C
+     set pen thresh code fits no_candidate code_as_rule
+1    n40  15  0.001    2    3            3            3
+2  const  20  0.001    2    1            1            1
+3    n14   2  0.001    3   28           28           28
+4  const   2  0.001    4    1            1            1
+5    n14   2  0.001    4   12           12           12
+6    n40   3  0.001    4    3            3            3
+7  const   2  0.000    6    1            1            1
+8    n40   3  0.000    6    3            3            3
+9    n40  15  0.000    6    3            3            3
+10 const  20  0.000    6    1            1            1
+CHECK bb25.1 TRUE a step without a legal candidate ends with code 6 at thresh 0 and with code 4 at thresh 1e-6, 0.001 and 0.01
+CHECK bb25.2 TRUE the code is 3 when the GRSq of the unchanged RSS at M + 1 terms is below -10: the last row prints that GRSq (-63.6158 and -56.1473) with DeltaRSq 0
+CHECK bb25.3 TRUE at degree 1 with pairs, the window ends the pass at 7, 11 and 21 terms for fast.k 5, 10 and 20, the first size M with M - 1 >= nu
+CHECK bb25.4 TRUE when the steps add single hinges, fast.k 20 gives the fit of fast.k 0 (53 terms, code 7), while fast.k 3 stops early
+CHECK bb25.5 TRUE in 56 fits that end with a step without a legal candidate, 52 of them at the Fast MARS window (5 terms, fast.k 3), the code is 2 when GRSq(RSS, M + 1) is -Inf, 3 when it is below -10 and 4 otherwise at thresh 0.001, and 6 at thresh 0; codes 2, 3, 4, 6 occur
+CHECK bb25.6 TRUE with two constant covariates (n = 10), the first step has no legal candidate and ends with code 2 at penalty 20 (C(2) = 12 >= 10) and code 4 at penalty 2 when thresh is 0.001, and with code 6 at thresh 0

@@ -1,0 +1,22 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+part A: degree 1, forward bases for penalties -1, 0, 2, 3, 10 identical: TRUE
+part A: degree 2, forward bases for penalties -1, 0, 2, 3, 10 identical: TRUE
+one x, sin, minspan 1                    steps 10 | MaxLegal formula holds: TRUE | chosen = best valid: 10 of 10 | steps where a MaxG 0 knot beat the choice: 1
+ rss_before prev_delta maxlegal  formula
+   599.0000         NA 604.9900 604.9900
+   473.1490   125.8510 477.8810 477.8805
+   274.1760   198.9730 276.9180 276.9178
+   201.2950    72.8810 203.3080 203.3079
+   124.3560    76.9390 125.6000 125.5996
+   119.6850     4.6710  46.7153  46.7100
+   108.6110    11.0740 109.6970 109.6971
+   107.0880     1.5230  15.2363  15.2300
+    92.0699    15.0181  92.9906  92.9906
+    57.8803    34.1896  58.4591  58.4591
+Friedman #1, degree 1                    steps 10 | MaxLegal formula holds: TRUE | chosen = best valid: 10 of 10 | steps where a MaxG 0 knot beat the choice: 0
+Friedman #1, degree 2                    steps 10 | MaxLegal formula holds: TRUE | chosen = best valid: 10 of 10 | steps where a MaxG 0 knot beat the choice: 0
+interaction after a weak step, degree 2  steps  7 | MaxLegal formula holds: TRUE | chosen = best valid: 7 of 7 | steps where a MaxG 0 knot beat the choice: 0
+CHECK bb12.1 TRUE with thresh = 0 the forward basis is the same for penalties -1, 0, 2, 3 and 10 (degree 1 and 2)
+CHECK bb12.2 TRUE MaxLegalRssDelta = min(1.01 * RSS before the step, 10 * the previous step's RSS reduction), and 1.01 * RSS at the first step
+CHECK bb12.3 TRUE each step chooses the largest RSS reduction among the knots with TolG 1 and MaxG 1 and the linear options
+CHECK bb12.4 TRUE in some steps a knot with MaxG 0 had a larger RSS reduction than the chosen candidate (1 steps)

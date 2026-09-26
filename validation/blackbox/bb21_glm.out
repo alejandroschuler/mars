@@ -1,0 +1,33 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+n = 500 | table(y01): 0=231 1=269 | table(yfac): a=161 b=190 c=149 
+
+part 1: 8 bx columns; max relative coef diff vs glm(y~bx-1,family=binomial): 0
+        same dirs/cuts/selected.terms as earth(x,y,degree=2) without glm: TRUE
+        predict(fit,type="response") vs plogis(bx %*% glm.coefficients): max abs diff 2.22e-16
+
+part 2: integer weights (1:3) max abs coef diff vs glm(weights=w): 0
+        non-integer weights max abs coef diff vs glm(weights=w): 0 (both emit R's usual "non-integer #successes" warning, suppressed here)
+
+part 3 (separation) warnings:
+  WARNING: glm.fit: algorithm did not converge 
+  WARNING: glm.fit: fitted probabilities numerically 0 or 1 occurred 
+  WARNING: the glm algorithm did not converge for response "ysep" 
+        fitted probabilities range [2.22e-16, 1] over n=200; below 1e-6: 89; above 1-1e-6: 111
+
+part 4: 3 response columns (a,b,c); dirs shared across columns (one pass, 20 forward terms)
+        per-class glm vs separate glm(indicator~bx-1,family=binomial): max abs diff 0, 0, 0
+        row sums of the 3 fitted probabilities: range [0.9500, 1.0991]; largest diff vs nnet::multinom on the same bx: 0.0613
+
+part 5: same dirs across 0/1, logical, 2-level factor: TRUE; same glm.coefficients: TRUE; same predictions: TRUE
+        glm.coefficients column name: 0/1 -> "y01", logical -> "ylog", factor -> "yes"
+
+CHECK bb21.1a TRUE glm.coefficients equal (relative 1e-8) glm(y ~ bx - 1, family=binomial) on the fit's own bx
+CHECK bb21.1b TRUE the glm refit does not change dirs/cuts/selected.terms: identical to earth(x,y,degree=2) without glm
+CHECK bb21.1c TRUE predict(fit,type="response") equals plogis(bx %*% glm.coefficients) (max abs diff 2.22e-16)
+CHECK bb21.2 TRUE with integer (1:3) and non-integer weights, the glm refit matches glm(y~bx-1,family=binomial,weights=w) exactly
+CHECK bb21.3 TRUE under perfect separation earth's glm refit warns (glm.fit non-convergence, fitted probabilities numerically 0/1, and earth's own "did not converge for response" wrapper) and fitted probabilities reach both extremes
+CHECK bb21.4a TRUE a 3-level factor response gives 3 response/glm columns sharing one dirs matrix (one forward+prune pass for all classes)
+CHECK bb21.4b TRUE each column's glm is a separate binomial glm of that class indicator on bx, identical to fitting glm(indicator~bx-1,family=binomial) alone
+CHECK bb21.4c FALSE HYPOTHESIS the three per-class fitted probabilities of a row sum to 1
+CHECK bb21.4d TRUE instead each class column is an independent one-vs-rest binomial glm with no sum-to-1 constraint: row sums range 0.9500 to 1.0991, and the largest per-class probability difference from a proper nnet::multinom fit on the same bx is 0.0613
+CHECK bb21.5 TRUE a binary y given as 0/1, logical, or a 2-level factor gives identical dirs, glm.coefficients and predictions (only the response's column name changes)

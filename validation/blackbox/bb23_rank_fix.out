@@ -1,0 +1,37 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+
+Part A: 220 random settings tried, 10 triggered "...rank deficient..."
+  gen=int3  n=80  p=4 extra=sum3  degree=2 nk=51 thresh=0     minspan=1  endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 4 terms, 31 terms remain
+  gen=unif  n=80  p=4 extra=dup   degree=2 nk=31 thresh=0     minspan=1  endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 1 term, 22 terms remain
+  gen=int5  n=100 p=3 extra=dup   degree=2 nk=41 thresh=0     minspan=-1 endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 2 terms, 28 terms remain
+  gen=int5  n=60  p=4 extra=none  degree=2 nk=21 thresh=0     minspan=-1 endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 2 terms, 15 terms remain
+  gen=int5  n=80  p=4 extra=near  degree=3 nk=21 thresh=0     minspan=1  endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 1 term, 15 terms remain
+  gen=int3  n=80  p=4 extra=near  degree=2 nk=41 thresh=0     minspan=-1 endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 1 term, 25 terms remain
+  gen=int5  n=60  p=2 extra=none  degree=2 nk=31 thresh=0     minspan=1  endspan=1  Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 1 term, 18 terms remain
+  gen=int5  n=100 p=4 extra=near  degree=2 nk=51 thresh=0     minspan=1  endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 2 terms, 40 terms remain
+  gen=int5  n=100 p=3 extra=sum3  degree=3 nk=51 thresh=0     minspan=1  endspan=-1 Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 6 terms, 39 terms remain
+  gen=int5  n=100 p=4 extra=sum3  degree=3 nk=51 thresh=0     minspan=-1 endspan=1  Auto.linpreds=FALSE :: Fixed rank deficient bx by removing 2 terms, 48 terms remain
+Every trigger had Auto.linpreds = FALSE: TRUE; every trigger had degree >= 2: TRUE
+
+Case L (few-valued columns alone, no explicit extra column): gen=int5 p=4 extra=none degree=2 (from a Part A hit)
+  message: Fixed rank deficient bx by removing 2 terms, 15 terms remain
+  nrow(dirs) = 15; qr(bx) rank = 15 of 15 columns (full column rank: TRUE)
+  unique rows of x = 59 (the rank ceiling; nrow(dirs) <= ceiling: TRUE); max relative residual of a kept bx column vs the 59-dim unique-row span: 1.87e-17 (tol 1e-6: TRUE)
+
+Case S (an extra column that is the sum of 3 others): gen=int3 p=4 extra=sum3 degree=2 (from a Part A hit)
+  message: Fixed rank deficient bx by removing 4 terms, 31 terms remain
+  nrow(dirs) = 31; qr(bx) rank = 31 of 31 columns (full column rank: TRUE)
+  unique rows of x = 49 (the rank ceiling; nrow(dirs) <= ceiling: TRUE); max relative residual of a kept bx column vs the 49-dim unique-row span: 2.62e-16 (tol 1e-6: TRUE)
+
+Case D (an extra column that exactly duplicates column 1): gen=unif p=4 extra=dup degree=2 (from a Part A hit)
+  message: Fixed rank deficient bx by removing 1 term, 22 terms remain
+  nrow(dirs) = 22; qr(bx) rank = 22 of 22 columns (full column rank: TRUE)
+  unique rows of x = 80 (the rank ceiling; nrow(dirs) <= ceiling: TRUE); max relative residual of a kept bx column vs the 80-dim unique-row span: 0 (tol 1e-6: TRUE)
+  Case D detail: the duplicate column is used by no kept term: TRUE; rebuilding each of the 5 kept terms that use column 1, with the duplicate swapped in for column 1 throughout (same cuts, same other factors), gives relative residual(s) 7.58e-16, 1.06e-16, 1.54e-18, 1.2e-16, 8.39e-17 vs the kept bx (essentially exact copies)
+
+CHECK bb23.1 TRUE at trace>=2, a "Fixed rank deficient bx by removing N term(s), M terms remain" message appeared in 10 of 220 random settings, every one with Auto.linpreds = FALSE and degree >= 2
+CHECK bb23.2 TRUE in every case examined in Part B, the returned bx is exactly full column rank (qr rank == ncol(bx) == nrow(dirs)), and nrow(dirs) never exceeds the number of distinct covariate rows the kept terms use
+CHECK bb23.3 TRUE (tol 1e-6) every kept bx column lies in the span of one indicator per distinct covariate row, in all three cases: a rigorous reason a term MUST become a linear combination of others once a degree>=2 search overshoots that span's dimension, independent of which row earth's fix actually removes
+Part C: 40 traces of the triggering settings checked at trace 2, 3, 5 and 9
+CHECK bb23.4 FALSE HYPOTHESIS the trace names the dirs row(s) that the fix removes, at some trace level up to 9
+CHECK bb23.5 TRUE the message holds only the two counts, and the lines after it name no term, at trace 2, 3, 5 and 9 in all 40 traces, so the trace does not show which term the fix removes

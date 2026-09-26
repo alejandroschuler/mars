@@ -1,0 +1,46 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+        n      below      above      floor
+[1,]   21 4.9993e-12 4.9993e-12 5.0000e-12
+[2,]   57 1.7854e-12 1.7854e-12 1.7857e-12
+[3,]  201 5.0087e-13 5.0087e-13 5.0000e-13
+[4,] 1001 9.8124e-14 9.8124e-14 1.0000e-13
+relative distance of the flip from 1e-10/(n - 1): 0.00013, 0.00015, 0.0017, 0.019
+n = 201 with y times 1e6 and times 1e-6:
+       n      below      above floor
+[1,] 201 5.0005e-13 5.0005e-13 5e-13
+[2,] 201 5.0154e-13 5.0154e-13 5e-13
+n = 201 with thresh 1e-13 and 1e-12:
+       n      below      above floor
+[1,] 201 5.0087e-13 5.0087e-13 5e-13
+[2,] 201 1.0008e-12 1.0008e-12 5e-13
+part C: earth reports rss 0 for residual sums of squares up to 4.83e-11 and the true value from 1.53e-10 up (TSS 72.22)
+part D, n = 3001, design 1: stops at up to 1.070 times the floor, goes on at down to 0.920 times it; 7 of 151 decisions against the rule
+part D, n = 3001, design 2: stops at up to 1.510 times the floor, goes on at down to 1.000 times it; 10 of 151 decisions against the rule
+part D: the largest distance of a decision against the rule from the floor is 1.7e-14 * TSS (the floor is 3.33e-14 * TSS)
+part D, n = 30001, design 2: at 1e-04, 0.01, 0.5 times the floor earth stops: FALSE, FALSE, FALSE
+part E: two responses; per scale of y, the largest summed RSS and RSS/TSS at a stop and the smallest at a go-on, over 57 noise levels
+         s stops stop_rss   go_rss   stop_u     go_u switches
+[1,] 1e-04     0       NA 2.66e-37       NA 3.88e-31        0
+[2,] 1e-03    52 4.57e-11 1.44e-10 6.65e-07 2.10e-06        1
+[3,] 1e-02    48 4.57e-11 1.44e-10 6.65e-09 2.10e-08        1
+[4,] 1e+00    40 4.57e-11 1.44e-10 6.65e-13 2.10e-12        1
+[5,] 1e+02    18 1.44e-10 9.80e-25 2.10e-16 1.43e-30       14
+[6,] 1e+03    16 4.57e-09 7.44e-23 6.65e-17 1.08e-30       21
+part F: y times 1      rss 3.19      rsq 0.9285  gcv 0.0118    grsq 0.9213  | from the residuals: rss 3.19, gcv 0.0118 | zeros in rss.per.subset 0, in gcv.per.subset 0 of 10 | terms as at scale 1: TRUE
+part F: y times 0.1    rss 0.0319    rsq 0.9285  gcv 0.000118  grsq 0.9213  | from the residuals: rss 0.0319, gcv 0.000118 | zeros in rss.per.subset 0, in gcv.per.subset 0 of 10 | terms as at scale 1: TRUE
+part F: y times 0.01   rss 0.000319  rsq 0.9285  gcv 1.18e-06  grsq 0.9213  | from the residuals: rss 0.000319, gcv 1.18e-06 | zeros in rss.per.subset 0, in gcv.per.subset 0 of 10 | terms as at scale 1: TRUE
+part F: y times 0.001  rss 3.19e-06  rsq 0.9285  gcv 1.18e-08  grsq 0.9213  | from the residuals: rss 3.19e-06, gcv 1.18e-08 | zeros in rss.per.subset 0, in gcv.per.subset 0 of 10 | terms as at scale 1: TRUE
+part F: y times 0.0001 rss 3.19e-08  rsq 0.9285  gcv 1.18e-10  grsq 0.9213  | from the residuals: rss 3.19e-08, gcv 1.18e-10 | zeros in rss.per.subset 0, in gcv.per.subset 0 of 10 | terms as at scale 1: TRUE
+part F: y times 1e-05  rss 3.19e-10  rsq 0.9285  gcv 0         grsq NaN     | from the residuals: rss 3.19e-10, gcv 1.18e-12 | zeros in rss.per.subset 0, in gcv.per.subset 10 of 10 | terms as at scale 1: TRUE
+part F: y times 1e-06  rss 0         rsq NaN     gcv 0         grsq NaN     | from the residuals: rss 3.19e-12, gcv 1.18e-14 | zeros in rss.per.subset 10, in gcv.per.subset 10 of 10 | terms as at scale 1: TRUE
+part F: y times 1e-07  rss 0         rsq NaN     gcv 0         grsq NaN     | from the residuals: rss 3.19e-14, gcv 1.18e-16 | zeros in rss.per.subset 10, in gcv.per.subset 10 of 10 | terms as at scale 1: TRUE
+part F: y times 1e-08  rss 0         rsq NaN     gcv 0         grsq NaN     | from the residuals: rss 3.19e-16, gcv 1.18e-18 | zeros in rss.per.subset 10, in gcv.per.subset 10 of 10 | terms as at scale 1: TRUE
+CHECK bb26.1 TRUE at n = 21, 57, 201 and 1001 earth stops with code 5 when 1 - RSq falls below 1e-10/(n - 1), up to earth's rounding (every flip lies within 3% of it)
+CHECK bb26.2 TRUE the flip moves by less than 1% when y is multiplied by 1e6 or 1e-6, so the rule is relative
+CHECK bb26.3 TRUE with thresh = 1e-13 the flip stays at the floor, and with thresh = 1e-12 it moves to 1 - RSq = 1e-12
+CHECK bb26.4 TRUE earth reports rss = 0 and rsq = 1 when its RSS is small in absolute terms (here up to 4.83e-11), while the residuals give the true value
+CHECK bb26.5 TRUE at n = 3001 earth's decision near the floor is not monotone: over two designs it stops at up to 1.51 times the floor and goes on at down to 0.92 times it, and every decision against the rule lies within 1.7e-14 * TSS of the floor, below 1e-13 * TSS
+CHECK bb26.6 TRUE at n = 30001 (design 2) earth does not stop by the floor at 1e-4, 0.01 or 0.5 times it
+CHECK bb26.7 TRUE with two responses and y times 1e-3, 1e-2 and 1, earth stops with code 5 exactly when the summed RSS is below a value between 1e-11 and 1e-9 in the units of y, while RSS/TSS at the flip changes by a factor above 1e5: the floor is absolute
+CHECK bb26.8 TRUE with two responses and y times 1e-4 earth does not stop at 3 terms at any noise level, and with y times 100 and 1000 stops and go-ons alternate as the noise changes (14 and 21 switches)
+CHECK bb26.9 TRUE earth reports gcv 0 and grsq NaN at y times 1e-5, and rss 0 and rsq NaN at y times 1e-6, with gcv.per.subset and then rss.per.subset 0 at every size; the selected terms (8 of 10) are those at y times 1 at every scale down to 1e-8

@@ -1,0 +1,6 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+hinge parent x binary x2               MaxLegal     36.37 | chosen linear, reduction     174.5 | best legal knot     2.185 | terms (Intercept) h(x1-0.747775) h(0.747775-x1) h(0.747775-x1)*x2 x2 h(x1-0.747775)*x2 h(x1-0.664882) h(x1-0.17743) h(x1-0.538161)
+x1*x2 at earth's defaults              MaxLegal     554.2 | chosen linear, reduction      1941 | best legal knot     21.59 | terms (Intercept) x2 x1*x2
+x1*x2, Auto.linpreds = FALSE           MaxLegal     554.2 | chosen linear, reduction     969.6 | best legal knot     21.59 | terms (Intercept) h(x2--1) h(x1--0.99928)*h(x2--1) h(x1-0.986461) h(0.986461-x1)
+two continuous covariates              MaxLegal     371.9 | chosen linear, reduction     456.6 | best legal knot     9.865 | terms (Intercept) h(b-0.938581) h(0.938581-b) a*h(0.938581-b) h(a--0.690646) h(-0.690646-a)
+CHECK bb24.1 TRUE in all 4 designs step 2 takes a linear candidate whose RSS reduction is above MaxLegalRssDelta (1.2 to 4.8 times it), so the limit does not apply to linear candidates

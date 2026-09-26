@@ -1,0 +1,28 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+Part A
+RSq change below thresh (0.05)           code 4 | 11 forward terms | last step: reject (small DeltaRSq) | RSq changed by less than 0.05 at 11 terms (DeltaRSq 0.0046)
+GRSq below -10 (n 20, penalty 3)         code 3 |  5 forward terms | last step: reject (negative GRSq) | Reached minimum GRSq -10 at 5 terms (GRSq -13)
+GRSq -Inf (n 20, penalty 10)             code 2 |  3 forward terms | last step: reject (negative GRSq) | GRSq -Inf at 3 terms
+RSq reaches 1 - thresh (exact hinge)     code 5 |  3 forward terms | last step: final (max RSq) | Reached maximum RSq 0.9990 at 3 terms (RSq 1.0000)
+term limit (nk 9)                        code 7 |  9 forward terms | last step: final (reached nk 9) | Reached nk 9
+Part B
+2      0.1701 0.8138       0.8138    1           x1     0.72441  2   3         1 
+4     -1.5742 0.8859      0.07212    1           x1     0.26043  4             1 
+6        -inf 0.9959         0.11    1           x1      0.5858  5             1 reject (negative GRSq)
+step 2 (a single hinge): printed GRSq -1.5742; GRSq with M = 4 (real terms) -1.5744, with M = 5 (slots) -Inf
+Part C
+GRSq -13 and RSq change 0.027 < 0.05     code 3 |  5 forward terms | last step: reject (small DeltaRSq) | Reached minimum GRSq -10 at 5 terms (GRSq -13)
+n 12, exact hinge, penalty 30            code 2 |  1 forward terms | last step: reject (negative GRSq) | GRSq -Inf at 1 term
+RSq reaches 1 - thresh at the last slot  code 5 |  3 forward terms | last step: final (max RSq) | Reached maximum RSq 0.9990 at 3 terms (RSq 1.0000)
+small RSq change at the last step (nk 13) code 4 | 11 forward terms | last step: reject (small DeltaRSq) | RSq changed by less than 0.05 at 11 terms (DeltaRSq 0.0046)
+Part D
+n 20, thresh 0                           code 6 |  7 forward terms | last step:  | No new term increases RSq (perhaps reached numerical limits) at 7 terms
+CHECK bb19.1 TRUE a GRSq below -10, a GRSq of -Inf and an RSq change below thresh reject the step's candidate and stop (codes 3, 2, 4)
+CHECK bb19.2 TRUE RSq >= 1 - thresh and the term limit keep the step's candidate and stop (codes 5, 7)
+CHECK bb19.3 TRUE the forward terms are those of the steps before a rejected candidate (11, 5, 3), or up to the kept last step (3, 9)
+CHECK bb19.4 TRUE the GRSq of a single-hinge candidate uses the real number of terms (M = 4), not the counted slots (M = 5)
+CHECK bb19.5 TRUE when the GRSq rule and the RSq-change rule both hold, the code is 3
+CHECK bb19.6 TRUE when RSq reaches 1 - thresh with a GRSq below -10, the code is 2 (reject (negative GRSq))
+CHECK bb19.7 TRUE when RSq reaches 1 - thresh at the last slot of nk, the code is 5
+CHECK bb19.8 TRUE when the RSq change is small at the last step that nk allows, the candidate is rejected with code 4 (11 terms)
+CHECK bb19.9 TRUE with thresh = 0 the pass can stop because no candidate reduces the RSS (code 6)
