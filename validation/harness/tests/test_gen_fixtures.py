@@ -151,13 +151,34 @@ class TestScaledMatrix:
     def test_integer_weights_match_the_repeated_row_expansion(self):
         # W-1: an integer weight must give the same fit as repeated rows;
         # scaled_matrix is the harness step both take, so the two must
-        # agree here too.
+        # agree here too. pytest.approx, not exact equality: the two
+        # paths (a weighted average vs. an unweighted average on
+        # np.repeat's expansion) are the same in exact arithmetic but not
+        # always in float64 -- the gap review round 1's #43 finding 1
+        # named, next.
         X = np.array([[1.0], [2.0], [5.0]])
         w = np.array([2, 1, 3])
         _, scale_w = gen_fixtures.scaled_matrix(X, w.astype(float))
         X_rep = np.repeat(X, w, axis=0)
         _, scale_rep = gen_fixtures.scaled_matrix(X_rep)
         assert scale_w == pytest.approx(scale_rep)
+
+    def test_a_weighted_repeated_pair_shares_one_exact_scale(self):
+        # Review round 1 (#43 finding 1/blocking, both reviewers): S16's
+        # weighted and repeated-row fixtures used to compute the scale
+        # twice (the path above), so 782 of 1,955 scaled entries and 3 of
+        # earth's 13 selected knots were not bit-identical between them.
+        # _shared_scale_from_repeated_rows computes it once, from the
+        # repeated rows, for both; this reproduces the adversarial
+        # reviewer's own check on the real (5-column) S16 pair, with
+        # exact equality throughout, not pytest.approx.
+        ds_w = gen_fixtures.REGISTRY["S16_weighted"]()
+        ds_r = gen_fixtures.REGISTRY["S16_weighted_repeated"]()
+        assert np.array_equal(ds_w.scale_override, ds_r.scale_override)
+        w = ds_w.weights.astype(int)
+        X_w_scaled = ds_w.X / ds_w.scale_override
+        X_rep_scaled = ds_r.X / ds_r.scale_override
+        assert np.array_equal(np.repeat(X_w_scaled, w, axis=0), X_rep_scaled)
 
 
 class TestRawModes:
