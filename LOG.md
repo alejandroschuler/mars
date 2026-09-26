@@ -17,6 +17,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:25 The first push of `t00-bootstrap` registered Actions workflows on the fork: `ci.yml` (from the branch) and the inherited `welcome.yml` (pull_request_target from `main`, which posted a welcome comment on PR #1). CI now runs on pull requests, so the merge rule "CI green" applies from PR #1 on. Draft PR #1 is open.
 - 17:30 Wake: 5-hour 27 %, weekly 46 %. Told `t00-author` that CI must pass on the final head.
 - 17:54 T00 author reported: PR #1 ready at a663d38; CoC contact fixed; gate B passed; CI 12/12. Started reviewer `rev-pr1-bootstrap`.
+- 18:08 Recovery drill, watchdog part: the scheduled run at 17:25 (session local_899fec89-88af-4c0a-a262-d50ad9a73f83) started in <main> (not a worktree), model opus-5-5[1m], effort medium, read the fresh heartbeat and stopped after one Bash call. Its permission mode is not reported to this session; the user's default mode is auto. The user no longer needs to click Run now.
 
 ## Core-hour ledger
 
