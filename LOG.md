@@ -18,6 +18,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:30 Wake: 5-hour 27 %, weekly 46 %. Told `t00-author` that CI must pass on the final head.
 - 17:54 T00 author reported: PR #1 ready at a663d38; CoC contact fixed; gate B passed; CI 12/12. Started reviewer `rev-pr1-bootstrap`.
 - 18:08 Recovery drill, watchdog part: the scheduled run at 17:25 (session local_899fec89-88af-4c0a-a262-d50ad9a73f83) started in <main> (not a worktree), model opus-5-5[1m], effort medium, read the fresh heartbeat and stopped after one Bash call. Its permission mode is not reported to this session; the user's default mode is auto. The user no longer needs to click Run now.
+- 18:19 PR #1 review round 1 (rev-pr1-bootstrap): REQUEST_CHANGES at a663d38; blocking: merge_pr.sh counted REVIEW lines from any account and from any line of a comment. Sent the fix and 6 small non-blocking fixes to t00-author.
 
 ## Core-hour ledger
 

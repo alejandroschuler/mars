@@ -184,6 +184,7 @@ Task T15 of `VALIDATION_PLAN.md` ("Fast path", "Gates").
 **Needs.** T06. **Reviewers.** 2. **Target hours.** 14 to 30.
 
 - [ ] Oracle tests; gate C script.
+- [ ] Remove the exit-code-5 exception of the slow CI job in `.github/workflows/ci.yml`, since slow tests now exist.
 
 === T16: invariance and weight tests
 labels: task,P3,todo
