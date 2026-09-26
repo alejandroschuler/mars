@@ -115,3 +115,29 @@ different commit than the one that made the committed fixture, is expected
 and not a regression). Register a new dataset by adding a `@register`-
 decorated function returning a `Dataset` to `gen_fixtures.py`; register a
 new mode by adding an entry to its `MODES` dict.
+
+### Dataset fixtures
+
+`VALIDATION_PLAN.md`, "Test datasets", defines S01 to S20 and what each is
+for; S01 exists as of T02 (issue #38), and T05 (issue #7) adds S02 to S20.
+
+### Component fixtures
+
+`validation/fixtures/components/<name>.json` each target one earth-adjacent
+internal (`VALIDATION_PLAN.md`, "Component tests"), through `blackbox.py`
+rather than a whole `earth()` fit compared end to end. Register a new one
+by adding a `@register_component`-decorated function to `gen_fixtures.py`;
+`make_all_components()`/`gen_fixtures.py --check` cover them the same way
+as the dataset fixtures above.
+
+| Fixture | Tests | For |
+|---|---|---|
+| `gcv_grid.json` | `earth:::get.gcv` (`blackbox.get_gcv`) over a grid of penalties (0 to 6, -1) and case counts (10 to 100,000), 1 to 41 terms | The GCV function (GCV-1, GCV-2) |
+| `pruning_fixed_basis.json` | `earth:::pruning.pass` (`blackbox.pruning_pass`) on a real forward basis (`blackbox.fit_bx_dirs`, degree 2), for one response and for several | Pruning of a fixed basis (PRUNE-1 to PRUNE-9) |
+| `lm_fit_coefficients.json` | R's `lm.fit` (`blackbox.lm_fit`), full rank and a duplicated (rank-deficient) column | Coefficients of fixed terms (LA-4) |
+| `predict_new_points.json` | `predict.earth` (`blackbox.predict_earth`) at points inside and outside the training range, degree 1 and 2 | Prediction at new points (TERM-3) |
+| `classifier_refit.json` | R's `glm.fit` (binomial) and `nnet::multinom` (`blackbox.glm_fit`/`blackbox.multinom_fit`) on fixed columns | The GLM refit's coefficients and fitted probabilities ("Binary outcomes") |
+| `knot_candidates.json` | earth's `trace = 9` case-by-case knot scan (`driver.run_earth`, trace text embedded per case), over the minspan/endspan/degree/`Adjust.endspan`/case-count grid | Candidate knot sets (KNOT-1 to KNOT-7); the comparison and the interpretation are T08's, not this fixture's (clean room) |
+
+Regenerate all of them, and check they reproduce, with the same commands as
+the dataset fixtures above (`gen_fixtures.py` writes and checks both).
