@@ -1,0 +1,5 @@
+R version 4.4.3 (2025-02-28) 
+of 5000 random doubles: 1389 differ after a 17-digit decimal round trip, 0 after a hexadecimal round trip
+example: 0.88537763385102153 is read back as 0.88537763385102142 (-1 ulp)
+CHECK bb28.1 TRUE in this R, some doubles do not survive a 17-digit decimal round trip (1389 of 5000)
+CHECK bb28.2 TRUE every double survives a hexadecimal round trip (sprintf('%a') then as.numeric)

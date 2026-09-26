@@ -26,8 +26,8 @@ y all-but-one equal                    dirs=[(Intercept); h(x2-0.483075); h(0.48
 constant col next to useful            dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x1-0.615259); h(x1-0.805686); h(x1-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
 duplicated column (x2==x1)             dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x1-0.615259); h(x1-0.805686); h(x1-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
 near-duplicate column (x2=x1+1e-9*noise) dirs=[(Intercept); h(x1-0.887377); h(0.887377-x1); h(x2-0.615259); h(x1-0.805686); h(x2-0.460425)] sel=1,2,3 rss=0.4767 gcv=0.009456 rsq=0.9129 grsq=0.8997 termcond=4 | RSq changed by less than 0.001 at 9 terms, 6 terms used (DeltaRSq 5.9e-06)
-reference: x1 alone, no x2 at all      dirs=[(Intercept); h(x1-0.89513); h(0.89513-x1); h(x1-0.653493); h(x1-0.75843); h(x1-0.466109); h(x1-0.869715)] sel=1,2,3,4 rss=0.4397 gcv=0.009391 rsq=0.9196 grsq=0.9004 termcond=4 | RSq changed by less than 0.001 at 11 terms, 7 terms used (DeltaRSq 0)
-  exact duplicate: x2 never appears in any term (TRUE) | near-duplicate: x1 appears TRUE, x2 appears TRUE (both, not a clean single-column tie-break) | near-dup fit matches dropping x2 outright: FALSE
+  degree 2: the exact duplicate udup appears in 4 of 14 forward terms, each a product with a factor in u (e.g. h(u-0.659636)*h(udup-0.815705))
+  exact duplicate: x2 never appears in any term (TRUE) | near-duplicate: x1 appears TRUE, x2 appears TRUE (both, not a clean single-column tie-break) | near-dup fit matches the p = 2 fit with an exact duplicate: TRUE
 
 -- item 4: n < p (n=20,p=50), p=1, and p=200,n=300 --
 n=20,p=50        nk=101  forward_terms(dirs)=9    selected=6    termcond=2
@@ -52,7 +52,8 @@ CHECK bb22.2b TRUE y with all but one value equal: the forward pass records cand
 CHECK bb22.3a TRUE a constant column next to a useful one is never used (no dirs row names it)
 CHECK bb22.3b TRUE an exactly duplicated column resolves to the LOWER column index only (x2 never appears in any term)
 CHECK bb22.3c FALSE HYPOTHESIS a near-duplicate (not exact) column is resolved the same way, to one column only (it is not: the unpruned terms use x1 (TRUE) and use x2 (TRUE), both present)
-CHECK bb22.3d TRUE instead, a near-duplicate is treated as a genuinely different (not tied) column at every knot search, so different terms of the same fit can use either near-duplicate column, and the fit does not match dropping the near-duplicate column outright (rss 0.4767 vs 0.4397)
+CHECK bb22.3d TRUE instead, a near-duplicate is a different column at every knot search, so terms of the same fit use either near-duplicate column, while the fit's rss equals that of the p = 2 fit with an exact duplicate (rss 0.4767 vs 0.4767)
+CHECK bb22.3e TRUE at degree 2 an exact duplicate enters products as the new factor of a parent that holds the original (4 terms)
 CHECK bb22.4 TRUE n < p (n=20,p=50) and p=200,n=300 fit without error, and the default nk follows min(200,max(20,2p))+1 in both; p=1 also fits normally
 CHECK bb22.5 TRUE a single extreme outlier value (1e6 among [0,1]) does not cause an error; the row is kept and fit like any other point
 CHECK bb22.6a TRUE NaN or Inf anywhere in x or y is always a fitting error (never silently dropped or coerced); for x, and for a plain NaN in y, the message names the true offending row (5)

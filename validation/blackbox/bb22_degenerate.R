@@ -68,7 +68,8 @@ f_constcol <- fit_report("constant col next to useful", cbind(x1 = xu, xconst = 
 f_dup      <- fit_report("duplicated column (x2==x1)", cbind(x1 = xu, x2 = xu), y3)
 set.seed(301); xnear <- xu + 1e-9 * rnorm(n3)
 f_near  <- fit_report("near-duplicate column (x2=x1+1e-9*noise)", cbind(x1 = xu, x2 = xnear), y3)
-f_nodup <- fit_report("reference: x1 alone, no x2 at all", cbind(x1 = xu), y3)
+# The reference keeps p = 2 (p enters the automatic spans), with the exact duplicate as the unused x2.
+f_nodup <- f_dup
 
 constcol_unused <- !is.character(f_constcol) && !any(grepl("xconst", rownames(f_constcol$dirs)))
 # "x2" never appears as a substring of any term label when x2 is an exact
@@ -78,7 +79,16 @@ dup_uses_first  <- !is.character(f_dup) && !any(grepl("x2", rownames(f_dup$dirs)
 near_uses_x1 <- !is.character(f_near) && any(grepl("x1", rownames(f_near$dirs)))
 near_uses_x2 <- !is.character(f_near) && any(grepl("x2", rownames(f_near$dirs)))
 near_matches_nodup <- !is.character(f_near) && !is.character(f_nodup) && isTRUE(all.equal(f_near$rss, f_nodup$rss))
-cat(sprintf("  exact duplicate: x2 never appears in any term (%s) | near-duplicate: x1 appears %s, x2 appears %s (both, not a clean single-column tie-break) | near-dup fit matches dropping x2 outright: %s\n",
+# At degree 2 an exact duplicate can be the new factor of a parent that holds the original.
+set.seed(77); nd <- 400; ud <- runif(nd); wd <- runif(nd)
+yd <- 8 * pmax(ud - 0.3, 0) * pmax(ud - 0.6, 0) + 0.3 * wd + 0.01 * rnorm(nd)
+f_dup2 <- tryCatch(earth(cbind(u = ud, w = wd, udup = ud), yd, degree = 2, nk = 15, thresh = 0, fast.k = 0, pmethod = "none"),
+  error = function(e) paste("ERROR:", conditionMessage(e)))
+dup_terms <- if (is.character(f_dup2)) character(0) else grep("udup", rownames(f_dup2$dirs), value = TRUE)
+dup2_in_products <- length(dup_terms) > 0 && all(grepl("\\*", dup_terms)) && all(grepl("h\\(u-|h\\([-0-9.]+-u\\)", dup_terms))
+cat(sprintf("  degree 2: the exact duplicate udup appears in %d of %d forward terms, each a product with a factor in u (e.g. %s)\n",
+  length(dup_terms), if (is.character(f_dup2)) 0 else nrow(f_dup2$dirs), if (length(dup_terms)) dup_terms[1] else "none"))
+cat(sprintf("  exact duplicate: x2 never appears in any term (%s) | near-duplicate: x1 appears %s, x2 appears %s (both, not a clean single-column tie-break) | near-dup fit matches the p = 2 fit with an exact duplicate: %s\n",
   dup_uses_first, near_uses_x1, near_uses_x2, near_matches_nodup))
 
 ## ================= Item 4: n < p, and extreme p =================
@@ -143,9 +153,11 @@ cat(sprintf("CHECK bb22.3b %s an exactly duplicated column resolves to the LOWER
   dup_uses_first))
 cat(sprintf("CHECK bb22.3c %s HYPOTHESIS a near-duplicate (not exact) column is resolved the same way, to one column only (it is not: the unpruned terms use x1 (%s) and use x2 (%s), both present)\n",
   !(near_uses_x1 && near_uses_x2), near_uses_x1, near_uses_x2))
-cat(sprintf("CHECK bb22.3d %s instead, a near-duplicate is treated as a genuinely different (not tied) column at every knot search, so different terms of the same fit can use either near-duplicate column, and the fit does not match dropping the near-duplicate column outright (rss %s vs %s)\n",
-  (near_uses_x1 && near_uses_x2) && !near_matches_nodup,
+cat(sprintf("CHECK bb22.3d %s instead, a near-duplicate is a different column at every knot search, so terms of the same fit use either near-duplicate column, while the fit's rss equals that of the p = 2 fit with an exact duplicate (rss %s vs %s)\n",
+  (near_uses_x1 && near_uses_x2) && near_matches_nodup,
   if (!is.character(f_near)) signif(f_near$rss, 4) else NA, if (!is.character(f_nodup)) signif(f_nodup$rss, 4) else NA))
+cat(sprintf("CHECK bb22.3e %s at degree 2 an exact duplicate enters products as the new factor of a parent that holds the original (%d terms)\n",
+  dup2_in_products, length(dup_terms)))
 cat(sprintf("CHECK bb22.4 %s n < p (n=20,p=50) and p=200,n=300 fit without error, and the default nk follows min(200,max(20,2p))+1 in both; p=1 also fits normally\n",
   np_no_error && np_nk_formula))
 cat(sprintf("CHECK bb22.5 %s a single extreme outlier value (1e6 among [0,1]) does not cause an error; the row is kept and fit like any other point\n",

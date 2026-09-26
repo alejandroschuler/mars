@@ -1,0 +1,24 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+Auto.linpreds FALSE: terms per step 2 1 1 1 1 | queue sizes 3 4 6 7 8 | terms used 8 | nrow(dirs) 7 | Fixed rank deficient bx by removing 1 term, 7 terms remain
+Auto.linpreds TRUE : terms per step 2 1 1 1 1 | queue sizes 3 4 5 6 7 | terms used 7 | nrow(dirs) 7 | no rank fix
+, , hidden_entry = FALSE
+
+             parent_is_intercept
+auto_linpreds FALSE TRUE
+        FALSE     0   80
+        TRUE     46   80
+
+, , hidden_entry = TRUE
+
+             parent_is_intercept
+auto_linpreds FALSE TRUE
+        FALSE    46    0
+        TRUE      0    0
+
+part B: fits with a linear-option step: Auto.linpreds FALSE 80, with the rank fix 46; TRUE 80, with the rank fix 0; steps that are not the linear option with a hidden entry: 0 of 868
+part C: 7 steps, 2 with a hidden term; the printed GRSq matches the visible term count: TRUE; the count with hidden terms is off: TRUE
+CHECK bb27.1 TRUE with Auto.linpreds = FALSE the queue grows by two entries after a step that lists one term, the fit uses one more term than dirs shows (8 against 7), and the rank fix removes it
+CHECK bb27.2 TRUE with Auto.linpreds = TRUE on the same data the queue sizes equal the visible term counts and no rank fix is printed
+CHECK bb27.3 TRUE over random fits at degree 2 and 3, a linear-option step adds a hidden queue entry exactly when Auto.linpreds = FALSE and the parent is not the intercept (252 steps), and no other step does
+CHECK bb27.4 TRUE the rank fix appears only with Auto.linpreds = FALSE (46 of 80 such fits, and 0 of 80 with TRUE)
+CHECK bb27.5 TRUE the forward pass computes GRSq with the visible terms only; the hidden term does not count

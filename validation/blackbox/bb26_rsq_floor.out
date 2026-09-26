@@ -1,0 +1,20 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+        n      below      above      floor
+[1,]   21 4.9993e-12 4.9993e-12 5.0000e-12
+[2,]   57 1.7854e-12 1.7854e-12 1.7857e-12
+[3,]  201 5.0087e-13 5.0087e-13 5.0000e-13
+[4,] 1001 9.8124e-14 9.8124e-14 1.0000e-13
+relative distance of the flip from 1e-10/(n - 1): 0.00013, 0.00015, 0.0017, 0.019
+n = 201 with y times 1e6 and times 1e-6:
+       n      below      above floor
+[1,] 201 5.0005e-13 5.0005e-13 5e-13
+[2,] 201 5.0154e-13 5.0154e-13 5e-13
+n = 201 with thresh 1e-13 and 1e-12:
+       n      below      above floor
+[1,] 201 5.0087e-13 5.0087e-13 5e-13
+[2,] 201 1.0008e-12 1.0008e-12 5e-13
+part C: earth reports rss 0 for residual sums of squares up to 4.83e-11 and the true value from 1.53e-10 up (TSS 72.22)
+CHECK bb26.1 TRUE at n = 21, 57, 201 and 1001 earth stops with code 5 when 1 - RSq falls below 1e-10/(n - 1), up to earth's rounding (every flip lies within 3% of it)
+CHECK bb26.2 TRUE the flip moves by less than 1% when y is multiplied by 1e6 or 1e-6, so the rule is relative
+CHECK bb26.3 TRUE with thresh = 1e-13 the flip stays at the floor, and with thresh = 1e-12 it moves to 1 - RSq = 1e-12
+CHECK bb26.4 TRUE earth reports rss = 0 and rsq = 1 when its RSS is small in absolute terms (here up to 4.83e-11), while the residuals give the true value

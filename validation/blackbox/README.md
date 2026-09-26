@@ -43,5 +43,10 @@ Notes for the trace parser (T02):
 | bb19 | the stopping rules and their order | STOP-1 to STOP-6 |
 | bb20 | several responses in the forward pass | RESP-1, RESP-2, STOP-6, FWD-4 |
 | bb21 | earth's GLM refit: binomial, weights, separation, a 3-level factor, label types | GLM-1, GLM-2, GLM-4 |
-| bb22 | small and degenerate inputs, constant and duplicated covariates, non-finite values | EDGE-1 to EDGE-5, ERR-1 |
+| bb22 | small and degenerate inputs, constant and duplicated covariates (also at degree 2), non-finite values | EDGE-1 to EDGE-5, ERR-1 |
 | bb23 | the removal of linearly dependent terms at the end of the forward pass | FWD-11 |
+| bb24 | whether the 10x limit on RSS reductions applies to linear candidates | FWD-4, FAST-5 |
+| bb25 | the stop when a step has no legal candidate at thresh > 0, and when the Fast MARS window ends a degree-1 pass | STOP-2 to STOP-4, FAST-6, CORE-4 |
+| bb26 | the stop at an exact fit: the RSS floor relative to TSS/(n − 1); earth's reported rss for small RSS | STOP-5, CORE-4 |
+| bb27 | earth's hidden term after a linear-option step with `Auto.linpreds = FALSE` | FWD-11, FAST-1 |
+| bb28 | whether R reads doubles back exactly from 17-digit decimal and from hexadecimal strings | LA-7 |

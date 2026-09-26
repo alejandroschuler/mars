@@ -90,7 +90,8 @@ cat("hinge parent h(z1 - c), covariate z2 with values 0..2; its active cases hav
 print(cbind(fz$dirs, round(fz$cuts, 6)))
 kz <- which(fz$dirs[, 1] != 0 & fz$dirs[, 2] == 1)
 cut_min <- if (length(kz)) fz$cuts[kz[1], 2] else NA
-act_min <- min(z2[z1 > 0.5]); glob_min <- min(z2)
+c_par <- if (length(kz)) fz$cuts[kz[1], 1] else NA        # the knot of the parent h(z1 - c)
+act_min <- min(z2[z1 > c_par]); glob_min <- min(z2)
 
 cat(sprintf("CHECK bb13.1 %s a pair step adds the +1 hinge, then the -1 hinge, with the same knot and the parent's factors (%d pair steps)\n", okA, npairs))
 cat(sprintf("CHECK bb13.3 %s a single-hinge step adds b*(x - t)+ (dirs +1), also for knots near the low end (%d single-hinge steps)\n", okB, nsingles))

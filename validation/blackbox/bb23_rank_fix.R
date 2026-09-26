@@ -12,10 +12,11 @@
 # exactly full column rank (qr), and a linear-dependence argument (qr,
 # tolerance stated).
 #
+# Part C checks, at trace levels 2 to 9, that the message never names a row.
 # What this script could NOT establish: which specific dirs row(s) the fix
 # removes, and hence whether the fix keeps the earlier- or later-built of two
-# dependent terms. The message itself never names a row, at any trace level
-# up to 9 (checked). Reconstructing the pre-fix dirs from the trace = 2 step
+# dependent terms (bb27 later found the term that the fix removes: a hidden
+# term of the Auto.linpreds = FALSE linear option). Reconstructing the pre-fix dirs from the trace = 2 step
 # table's cumulative "Terms" column was tried by hand on two triggering
 # cases: the same reconstruction rule (cumulative-count deltas give each
 # step's row count, mirrored pairs share a cut with opposite-sign codes)
@@ -182,5 +183,27 @@ cat(sprintf("CHECK bb23.2 %s in every case examined in Part B, the returned bx i
 cat(sprintf("CHECK bb23.3 %s (tol 1e-6) every kept bx column lies in the span of one indicator per distinct covariate row, in all three cases: a rigorous reason a term MUST become a linear combination of others once a degree>=2 search overshoots that span's dimension, independent of which row earth's fix actually removes\n",
   !is.null(rL) && !is.null(rS) && !is.null(rD) &&
   rL$fc$max_relresid < 1e-6 && rS$fc$max_relresid < 1e-6 && rD$fc$max_relresid < 1e-6))
-cat(sprintf("CHECK bb23.4 %s HYPOTHESIS the trace (checked up to trace=9) names the specific dirs row(s) the fix removes, so which of two dependent terms -- the one built earlier or later in the forward pass -- was kept can be read off directly\n", FALSE))
-cat(sprintf("CHECK bb23.5 %s instead the message is only ever a count, at every trace level up to 9; reconstructing the pre-fix row order from the trace=2 step table's cumulative \"Terms\" column, tried by hand on two triggering cases, gave an inconsistent row count in one of them and was not trusted further, so which specific term is removed, and whether it is the later- or earlier-built of a dependent pair, is NOT established here (Part B's span argument shows a removal is forced, but not which one)\n", TRUE))
+# Part C: at trace levels 2, 3, 5 and 9, does the message, or any line that
+# follows it before the pruning pass, name the removed term?
+lv_ok <- TRUE; nchk <- 0
+for (h in hits) for (tr in c(2, 3, 5, 9)) {
+  d <- make_data(h$seed, h$gname, h$n, h$p, h$extra)
+  args <- list(x = d$x, y = d$y, trace = tr, degree = h$degree, nk = h$nk, thresh = h$thresh,
+    Auto.linpreds = h$autolp, pmethod = "none")
+  if (h$minspan == 1) args$minspan <- 1
+  if (h$endspan == 1) args$endspan <- 1
+  tf <- tempfile(); zz <- file(tf, open = "wt"); sink(zz)
+  f <- tryCatch(suppressWarnings(do.call(earth, args)), error = function(e) NULL)
+  sink(); close(zz); out <- readLines(tf); unlink(tf)
+  m <- grep("Fixed rank deficient", out)
+  if (!length(m)) next
+  nchk <- nchk + 1
+  only_counts <- grepl("^Fixed rank deficient bx by removing [0-9]+ terms?, [0-9]+ terms remain$", trimws(out[m[1]]))
+  nxt <- out[(m[1] + 1):min(length(out), m[1] + 3)]
+  names_term <- any(grepl("h\\(|removing term|removed term", nxt))
+  lv_ok <- lv_ok && only_counts && !names_term
+}
+cat(sprintf("Part C: %d traces of the triggering settings checked at trace 2, 3, 5 and 9\n", nchk))
+cat(sprintf("CHECK bb23.4 %s HYPOTHESIS the trace names the dirs row(s) that the fix removes, at some trace level up to 9\n", !lv_ok))
+cat(sprintf("CHECK bb23.5 %s the message holds only the two counts, and the lines after it name no term, at trace 2, 3, 5 and 9 in all %d traces, so the trace does not show which term the fix removes\n",
+  lv_ok && nchk > 0, nchk))
