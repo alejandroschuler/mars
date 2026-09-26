@@ -1,0 +1,28 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+nk = 2 (no step fits)        termcond 1,  1 forward terms | Reached maximum number of terms 2
+nk = 1                       termcond 1,  1 forward terms | Reached maximum number of terms 1
+nk = 9                       termcond 7,  9 forward terms | Reached nk 9
+defaults (thresh 0.001)      termcond 7, 16 forward terms | Reached nk 21
+thresh 0.05                  termcond 4, 11 forward terms | RSq changed by less than 0.05 at 11 terms (DeltaRSq 0.0046)
+exact hinge, no noise        termcond 5,  3 forward terms | Reached maximum RSq 0.9990 at 3 terms (RSq 1.0000)
+exact hinge, thresh 0.1      termcond 5,  3 forward terms | Reached maximum RSq 0.9000 at 3 terms (RSq 0.9989)
+n = 20, noise, thresh 0      termcond 6,  7 forward terms | No new term increases RSq (perhaps reached numerical limits) at 7 terms
+n = 20, noise, pen 10, thr 0 termcond 6,  7 forward terms | No new term increases RSq (perhaps reached numerical limits) at 7 terms
+n = 20, noise, penalty -1    termcond 6,  7 forward terms | No new term increases RSq (perhaps reached numerical limits) at 7 terms
+n = 20, noise, penalty 3     termcond 3,  5 forward terms | Reached minimum GRSq -10 at 5 terms (GRSq -13)
+n = 20, noise, penalty 10    termcond 2,  3 forward terms | GRSq -Inf at 3 terms
+n = 40, noise, penalty 6     termcond 3,  7 forward terms | Reached minimum GRSq -10 at 9 terms, 7 terms used (GRSq -16)
+n = 12, one x, thresh 0      termcond 6,  8 forward terms | No new term increases RSq (perhaps reached numerical limits) at 13 terms, 8 terms used
+n = 30, thresh 0, pen -1     termcond 5, 30 forward terms | Reached maximum RSq 1.0000 at 55 terms, 30 terms used (RSq 1.0000)
+constant y                   termcond 4,  1 forward terms | RSq changed by less than 0.001 at 1 term (DeltaRSq 0)
+Warning message:
+Cannot scale y (values are all equal to 1)
+         Use Scale.y=FALSE to silence this warning 
+
+codes seen: nk_start=1, nk_start1=1, nk=7, delta=7, delta2=4, rsq=5, rsq2=5, grsq0=6, grsq0_big=6, grsq_small=6, grsq=3, grsq_big=2, grsq40=3, norsq=6, c=5, const_y=4 
+CHECK bb10.1 TRUE the term limit gives code 1 when no step fits (nk <= 2) and code 7 after steps
+CHECK bb10.2 TRUE an RSq change below thresh gives code 4 (thresh 0.05; and a constant y at the defaults)
+CHECK bb10.3 TRUE RSq of at least 1 - thresh gives code 5
+CHECK bb10.4 TRUE GRSq of -Inf gives code 2 and GRSq below -10 gives code 3, and neither rule acts when thresh = 0
+CHECK bb10.5 TRUE no new term that raises RSq gives code 6
+CHECK bb10.6 TRUE with thresh = 0 the rule RSq >= 1 - thresh still acts (an exact fit gives code 5)
