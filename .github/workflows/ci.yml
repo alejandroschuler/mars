@@ -88,7 +88,7 @@ jobs:
       - name: Run the slow tests (pytest exit code 5 means that none exist yet)
         run: |
           status=0
-          uv run --frozen pytest -m slow || status=$?
+          uv run --frozen pytest -m "slow and not external" || status=$?
           if [ "$status" -eq 5 ]; then
             echo "No slow tests are collected yet."
             status=0
