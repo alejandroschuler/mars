@@ -207,10 +207,14 @@ class TestMakeAllComponentsAndCheck:
     def test_every_component_fixture_has_a_component_key_and_versions(
         self, component_fixtures
     ):
+        # Review round 1 (#42 finding, adversarial, non-blocking): a
+        # component fixture's versions block used to lack r_blas although
+        # the dataset fixtures always have it.
         for name, payload in component_fixtures.items():
             assert payload["component"] == name
             assert payload["versions"]["earth_version"]
             assert payload["versions"]["r_version"]
+            assert payload["versions"]["r_blas"]
 
     def test_gcv_grid_covers_the_documented_penalties_and_case_counts(
         self, component_fixtures

@@ -734,6 +734,14 @@ def _component_payload(name: str) -> dict[str, Any]:
     payload = COMPONENT_REGISTRY[name]()
     versions = driver.versions()
     versions.update(blackbox.versions())
+    # Review round 1 (#42 finding, adversarial, non-blocking): a component
+    # fixture's r_version/earth_version come from blackbox.versions() above,
+    # so the driver.versions() call above has no earth_result, and
+    # driver.versions() only fills in r_blas when given one. Reuse driver's
+    # own R-BLAS probe directly rather than adding an earth_result-free
+    # code path to driver.versions() itself (a harness file): this reads
+    # one existing, side-effect-free helper, not a rewrite.
+    versions["r_blas"] = driver._r_blas()
     return {"component": name, **payload, "versions": _sanitize_versions(versions)}
 
 
