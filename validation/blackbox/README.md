@@ -46,7 +46,7 @@ Notes for the trace parser (T02):
 | bb22 | small and degenerate inputs, constant and duplicated covariates (also at degree 2), non-finite values | EDGE-1 to EDGE-5, ERR-1 |
 | bb23 | the removal of linearly dependent terms at the end of the forward pass | FWD-11 |
 | bb24 | whether the 10x limit on RSS reductions applies to linear candidates | FWD-4, FAST-5 |
-| bb25 | the stop when a step has no legal candidate at thresh > 0, and when the Fast MARS window ends a degree-1 pass | STOP-2 to STOP-4, FAST-6, CORE-4 |
-| bb26 | the stop at an exact fit: the RSS floor relative to TSS/(n − 1); earth's reported rss for small RSS | STOP-5, CORE-4 |
-| bb27 | earth's hidden term after a linear-option step with `Auto.linpreds = FALSE` | FWD-11, FAST-1 |
+| bb25 | the stop when a step has no legal candidate at thresh > 0, and when the Fast MARS window ends a degree-1 pass; codes 2, 3 and 4 by GRSq(RSS, M + 1) | STOP-2 to STOP-4, FAST-6, CORE-4 |
+| bb26 | the stop at an exact fit: the RSS floor relative to TSS/(n − 1), earth's rounding near it at large n, and the absolute floor with two responses; the statistics that earth reports as 0 or NaN for small values | STOP-5, STOP-7, CORE-4, PRUNE-4, PRUNE-8 |
+| bb27 | earth's hidden term after some linear-option steps with `Auto.linpreds = FALSE`: the kind of parent does not decide it, and the column order can change it | FWD-11, FAST-1 |
 | bb28 | whether R reads doubles back exactly from 17-digit decimal and from hexadecimal strings | LA-7 |

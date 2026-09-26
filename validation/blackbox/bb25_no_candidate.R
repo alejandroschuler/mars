@@ -11,6 +11,9 @@
 #    size M with M - 1 >= nu: 7, 11 and 21 terms for fast.k 5, 10 and 20.
 #    When the steps add single hinges, older entries age past the intercept
 #    and the window does not end the pass.
+# C. The code of a step without a legal candidate follows GRSq(RSS, M + 1) of
+#    the unchanged RSS, also when the window ends the pass: 2 when it is -Inf
+#    (C(M + 1) >= n), 3 when it is below -10, 4 otherwise, and 6 at thresh 0.
 suppressMessages(library(earth))
 cat(R.version.string, "| earth", as.character(packageVersion("earth")), "\n")
 quiet <- function(expr) tryCatch(expr, error = function(e) paste("ERROR:", conditionMessage(e)))
@@ -62,6 +65,31 @@ s03 <- run(X15, y15, degree = 1, nk = 81, thresh = 0, fast.k = 3)
 cat(sprintf("  15 covariates, many single hinges, nk 81: fast.k 20 gives %d terms (code %d), fast.k 0 %d terms (code %d), fast.k 3 %d terms\n",
   s20$terms, s20$code, s00$terms, s00$code, s03$terms))
 
+cat("Part C\n")
+no_cand <- function(r) grepl("reject \\(no DeltaRsq\\)", r$last)   # the row of a step without a legal candidate
+rule_code <- function(r, y, pen, th) {
+  n <- length(y); tss <- sum((y - mean(y))^2)
+  g <- 1 - earth:::get.gcv(sum(r$f$residuals^2), r$terms + 1, pen, n) / earth:::get.gcv(tss, 1, pen, n)
+  if (th == 0) 6 else if (!is.finite(g)) 2 else if (g < -10) 3 else 4
+}
+resC <- NULL
+addC <- function(set, X, y, pen, th, ...) {
+  r <- run(X, y, penalty = pen, thresh = th, ...)
+  rbind(resC, data.frame(set = set, pen = pen, thresh = th, terms = r$terms, code = r$code, no_cand = no_cand(r), rule = rule_code(r, y, pen, th)))
+}
+for (sd in 5001:5040) {   # n = 14: the window leaves out the intercept at 5 terms
+  set.seed(sd); X <- matrix(runif(42), 14, 3); colnames(X) <- paste0("x", 1:3); y <- rnorm(14)
+  resC <- addC("n14", X, y, 2, 0.001, degree = 1, fast.k = 3)
+}
+for (sd in 5301:5303) {   # n = 40: with penalty 15, C(6) = 43.5 >= 40
+  set.seed(sd); n <- 40; X <- matrix(runif(n * 3), n, 3); colnames(X) <- paste0("x", 1:3)
+  y <- 3 * abs(X[, 1] - 0.5) + 2 * abs(X[, 2] - 0.35) + 0.05 * rnorm(n)
+  for (pen in c(3, 15)) for (th in c(0, 0.001)) resC <- addC("n40", X, y, pen, th, degree = 1, fast.k = 3)
+}
+set.seed(3302); Xc <- cbind(a = rep(1, 10), b = rep(2, 10)); yc <- rnorm(10)   # constant covariates: no candidate at step 1
+for (pen in c(2, 20)) for (th in c(0, 0.001)) resC <- addC("const", Xc, yc, pen, th)
+print(aggregate(cbind(fits = 1, no_candidate = no_cand, code_as_rule = code == rule) ~ set + pen + thresh + code, data = resC, FUN = sum))
+
 cat(sprintf("CHECK bb25.1 %s a step without a legal candidate ends with code 6 at thresh 0 and with code 4 at thresh 1e-6, 0.001 and 0.01\n",
   all(codesA == c(6, 4, 4, 4))))
 cat(sprintf("CHECK bb25.2 %s the code is 3 when the GRSq of the unchanged RSS at M + 1 terms is below -10: the last row prints that GRSq (%.4f and %.4f) with DeltaRSq 0\n",
@@ -71,3 +99,7 @@ cat(sprintf("CHECK bb25.3 %s at degree 1 with pairs, the window ends the pass at
   all(win["terms", ] == c(7, 11, 21)) && all(win["code", ] == 6) && r0$terms > 21))
 cat(sprintf("CHECK bb25.4 %s when the steps add single hinges, fast.k 20 gives the fit of fast.k 0 (%d terms, code 7), while fast.k 3 stops early\n",
   identical(s20$f$dirs, s00$f$dirs) && identical(s20$f$cuts, s00$f$cuts) && s20$code == 7 && s03$terms < s20$terms, s20$terms))
+cat(sprintf("CHECK bb25.5 %s in %d fits that end with a step without a legal candidate, %d of them at the Fast MARS window (5 terms, fast.k 3), the code is 2 when GRSq(RSS, M + 1) is -Inf, 3 when it is below -10 and 4 otherwise at thresh 0.001, and 6 at thresh 0; codes %s occur\n",
+  all(resC$no_cand) && all(resC$code == resC$rule) && all(c(2, 3, 4, 6) %in% resC$code) && all(resC$terms[resC$set != "const"] == 5), nrow(resC), sum(resC$set != "const"), paste(sort(unique(resC$code)), collapse = ", ")))
+cat(sprintf("CHECK bb25.6 %s with two constant covariates (n = 10), the first step has no legal candidate and ends with code 2 at penalty 20 (C(2) = 12 >= 10) and code 4 at penalty 2 when thresh is 0.001, and with code 6 at thresh 0\n",
+  identical(resC$code[resC$set == "const"], c(6L, 4L, 6L, 2L)) && all(resC$terms[resC$set == "const"] == 1)))

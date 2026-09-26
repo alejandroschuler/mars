@@ -6,7 +6,9 @@
 # final "terms used" count is one more than nrow(dirs); and the end-of-pass
 # rank fix ("Fixed rank deficient bx by removing 1 term") removes one term.
 # With Auto.linpreds = TRUE none of this happens. Part B counts how often the
-# fix appears over random fits with each setting.
+# fix appears over random fits with each setting. Part D tests whether the
+# kind of parent decides which linear-option steps add the hidden entry, on
+# two more designs, at degree 1 and 2 and in two column orders.
 suppressMessages(library(earth))
 cat(R.version.string, "| earth", as.character(packageVersion("earth")), "\n")
 quiet <- function(expr) tryCatch(expr, error = function(e) paste("ERROR:", conditionMessage(e)))
@@ -62,6 +64,9 @@ match_T <- all(rT$queue[seq_along(visible_T)] == visible_T[seq_along(rT$queue)])
 
 # Part B: over random fits with Auto.linpreds = FALSE, which linear-option
 # steps add a hidden queue entry (queue growth above the listed terms)?
+used_of <- function(out) as.integer(sub(".*, ([0-9]+) terms used.*", "\\1", grep("terms used", out, value = TRUE)[1]))
+fits <- data.frame(part = "A", alp = c(FALSE, TRUE), hidden = c(sum(diff(c(1, rF$queue)) > rF$steps), sum(diff(c(1, rT$queue)) > rT$steps)),
+  fix = c(length(rF$fix) > 0, length(rT$fix) > 0), extra = c(rF$used - nrow(rF$f$dirs), rT$used - nrow(rT$f$dirs)))
 set.seed(77); allrec <- NULL; cnt <- c(F_fits = 0, F_fix = 0, T_fits = 0, T_fix = 0)
 for (i in 1:40) {
   n <- 150; Xr <- cbind(x0 = sample(c(-1, 1), n, TRUE) + 0, x1 = runif(n, -1, 1), x2 = sample(0:2, n, TRUE) + 0, x3 = runif(n))
@@ -70,6 +75,8 @@ for (i in 1:40) {
     out <- capture.output(f <- quiet(earth(Xr, yr, degree = dg, trace = 6, pmethod = "none", Auto.linpreds = alp, nk = 15, thresh = 0, fast.k = 0)))
     rec <- step_records(out); rec$alp <- alp; rec$degree <- dg
     fix <- any(grepl("Fixed rank deficient", out))
+    fits <- rbind(fits, data.frame(part = "B", alp = alp, hidden = sum(rec$growth > rec$listed, na.rm = TRUE), fix = fix,
+      extra = used_of(out) - nrow(f$dirs)))
     if (any(rec$linear)) { key <- if (alp) "T" else "F"; cnt[paste0(key, "_fits")] <- cnt[paste0(key, "_fits")] + 1
       cnt[paste0(key, "_fix")] <- cnt[paste0(key, "_fix")] + fix }
     allrec <- rbind(allrec, rec)
@@ -81,7 +88,40 @@ print(with(lin, table(auto_linpreds = alp, parent_is_intercept = parent_intercep
 nonlin <- allrec[!allrec$linear & !is.na(allrec$growth), ]
 cat(sprintf("part B: fits with a linear-option step: Auto.linpreds FALSE %d, with the rank fix %d; TRUE %d, with the rank fix %d; steps that are not the linear option with a hidden entry: %d of %d\n",
   cnt["F_fits"], cnt["F_fix"], cnt["T_fits"], cnt["T_fix"], sum(nonlin$growth > nonlin$listed), nrow(nonlin)))
-rule_hidden <- with(lin, all(hidden == (!alp & !parent_intercept)))
+
+# Part D: two more designs. D1 has a binary b in column 2 (degree 1 and 2);
+# D2 fits the same data with the binary z in column 1 and in column 3.
+recA <- step_records(capture.output(quiet(earth(X, y, degree = 2, trace = 6, pmethod = "none", Auto.linpreds = FALSE, nk = 11, thresh = 0, fast.k = 0))))
+recA$alp <- FALSE; recA$degree <- 2
+cat("part A, Auto.linpreds FALSE, step records:\n"); print(recA)
+runD <- function(tag, Xd, yd, dg, alp) {
+  out <- capture.output(f <- quiet(earth(Xd, yd, degree = dg, trace = 6, pmethod = "none", Auto.linpreds = alp, nk = 15, thresh = 0, fast.k = 0)))
+  rec <- step_records(out); rec$alp <- alp; rec$degree <- dg; rec$design <- tag
+  fits <<- rbind(fits, data.frame(part = "D", alp = alp, hidden = sum(rec$growth > rec$listed, na.rm = TRUE),
+    fix = any(grepl("Fixed rank deficient", out)), extra = used_of(out) - nrow(f$dirs)))
+  rec
+}
+set.seed(3307); nD <- 300; XD <- cbind(a = runif(nD), b = sample(0:1, nD, TRUE) + 0, c = runif(nD))
+yD <- 3 * XD[, 2] + sin(4 * XD[, 1]) + 0.5 * pmax(XD[, 3] - 0.5, 0) + 0.05 * rnorm(nD)
+set.seed(601); nE <- 600; c3 <- runif(nE); c4 <- runif(nE); z <- sample(0:1, nE, TRUE) + 0
+yE <- 2 * z + sin(4 * c3) + 0.5 * abs(c4 - 0.4) + 0.05 * rnorm(nE)
+recD <- NULL
+for (dg in 1:2) for (alp in c(FALSE, TRUE)) {
+  recD <- rbind(recD, runD("D1", XD, yD, dg, alp), runD("D2 z first", cbind(z, c3, c4), yE, dg, alp), runD("D2 z last", cbind(c3, c4, z), yE, dg, alp))
+}
+recD$hidden <- recD$growth > recD$listed
+cat("part D, the first step of each fit:\n"); print(recD[recD$K == 2, c("design", "degree", "alp", "linear", "parent_intercept", "listed", "growth", "hidden")], row.names = FALSE)
+cat("part D, all linear-option steps with Auto.linpreds FALSE:\n")
+print(with(recD[recD$linear & !recD$alp & !is.na(recD$growth), ], table(degree = degree, parent_is_intercept = parent_intercept, hidden_entry = hidden)))
+recA$hidden <- recA$growth > recA$listed
+allsteps <- rbind(allrec[, c("K", "linear", "parent_intercept", "listed", "growth", "alp", "degree")], recA[, c("K", "linear", "parent_intercept", "listed", "growth", "alp", "degree")],
+  recD[, c("K", "linear", "parent_intercept", "listed", "growth", "alp", "degree")])
+allsteps <- allsteps[!is.na(allsteps$growth), ]; allsteps$hidden <- allsteps$growth > allsteps$listed
+rule_hidden <- with(allsteps[allsteps$linear, ], all(hidden == (!alp & !parent_intercept)))
+d1 <- recD[recD$design == "D1" & recD$K == 2 & !recD$alp, ]
+zf <- recD[recD$design == "D2 z first" & recD$K == 2 & !recD$alp, ]; zl <- recD[recD$design == "D2 z last" & recD$K == 2 & !recD$alp, ]
+cat("per fit, over parts A, B and D: hidden entries against the rank fix and the extra terms used\n")
+print(with(fits, table(auto_linpreds = alp, hidden_entries = hidden, rank_fix = fix)))
 
 # Part C: does the forward pass count the hidden term in the GRSq that it
 # prints (and uses in its stopping rules)? Compare each step row's GRSq with
@@ -109,8 +149,15 @@ cat(sprintf("CHECK bb27.1 %s with Auto.linpreds = FALSE the queue grows by two e
   extra_entry && isTRUE(rF$used == nrow(rF$f$dirs) + 1) && length(rF$fix) > 0, rF$used, nrow(rF$f$dirs)))
 cat(sprintf("CHECK bb27.2 %s with Auto.linpreds = TRUE on the same data the queue sizes equal the visible term counts and no rank fix is printed\n",
   match_T && length(rT$fix) == 0))
-cat(sprintf("CHECK bb27.3 %s over random fits at degree 2 and 3, a linear-option step adds a hidden queue entry exactly when Auto.linpreds = FALSE and the parent is not the intercept (%d steps), and no other step does\n",
-  rule_hidden && sum(nonlin$growth > nonlin$listed) == 0, nrow(lin)))
+cat(sprintf("CHECK bb27.3 %s HYPOTHESIS over parts A, B and D, a linear-option step adds a hidden queue entry exactly when Auto.linpreds = FALSE and the parent is not the intercept (%d linear-option steps)\n",
+  rule_hidden, sum(allsteps$linear)))
 cat(sprintf("CHECK bb27.4 %s the rank fix appears only with Auto.linpreds = FALSE (%d of %d such fits, and %d of %d with TRUE)\n",
   cnt["F_fix"] > 0 && cnt["T_fix"] == 0, cnt["F_fix"], cnt["F_fits"], cnt["T_fix"], cnt["T_fits"]))
 cat(sprintf("CHECK bb27.5 %s the forward pass computes GRSq with the visible terms only; the hidden term does not count\n", vis_ok && hid_off && hid > 0))
+cat(sprintf("CHECK bb27.6 %s with Auto.linpreds = FALSE the kind of parent does not decide the hidden entry: in part D the first step, a linear-option step with the intercept as parent, adds one at degree 1 and 2 (design D1), while in part A the linear-option step at K = 10, with parent slot 2, adds none; only linear-option steps add one (0 of %d other steps), and none with Auto.linpreds = TRUE\n",
+  all(d1$linear & d1$parent_intercept & d1$hidden) && nrow(d1) == 2 && any(recA$K == 10 & recA$linear & !recA$parent_intercept & !recA$hidden) &&
+  !any(allsteps$hidden & !allsteps$linear) && !any(allsteps$hidden & allsteps$alp), sum(!allsteps$linear)))
+cat(sprintf("CHECK bb27.7 %s the column order changes it: on the same data (design D2), the first step takes the linear option on z with the intercept as parent, and adds a hidden entry when z is the last column but not when z is the first, at degree 1 and 2\n",
+  nrow(zf) == 2 && nrow(zl) == 2 && all(zf$linear & zf$parent_intercept & !zf$hidden) && all(zl$linear & zl$parent_intercept & zl$hidden)))
+cat(sprintf("CHECK bb27.8 %s in each of the %d fits of parts A, B and D, earth prints the rank fix exactly when a step added a hidden entry, and the fit then uses as many more terms than dirs shows as there are hidden entries\n",
+  all(fits$fix == (fits$hidden > 0)) && all(fits$extra == fits$hidden), nrow(fits)))
