@@ -129,13 +129,14 @@ needs a by-hand look at which bits differ before it counts as a regression.
 The fixtures are Python-only JSON, not strict RFC 8259: a field in
 `test_fixture_contents.py`'s `_MAY_BE_NONFINITE_KEYS` (`gcv`, `grsq`,
 `rsq`, `gcv_per_subset`, and `gcv_grid.json`'s own per-cell `gcv` list)
-may hold a bare `Infinity`/`-Infinity`/`NaN` token where GCV-2 gives one
-(a case count at or below the effective number of parameters). Python's
-`json.loads` reads these back exactly; a strict reader (R's
-`jsonlite::fromJSON` included) does not, and needs a sentinel pass or a
-preprocessing step first (review round 2, #42 spec finding 4; this note
-was in #43's README only, since #43 has more of these fields, but
-`gcv_grid.json` needs it here too).
+may hold a bare `Infinity`/`-Infinity`/`NaN` token where GCV-2 or GCV-7
+gives one (a case count at or below the effective number of parameters;
+a degenerate or near-degenerate fit). Python's `json.loads` reads these
+back exactly; a strict reader (R's `jsonlite::fromJSON` included) does
+not, and needs a sentinel pass, or a preprocessing step, first (review
+round 1, #42 adversarial finding 7; round 2, #42 spec finding 4, added
+`gcv_grid.json` to the fixtures this affects, since round 1 had noted
+it only here on #43).
 
 ### Dataset fixtures
 
