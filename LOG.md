@@ -24,6 +24,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:11 19:10 wake: 5-hour 53 % (reset 20:00), weekly 51 %. PR #35 (T03 part 1, 57f4f87, gate B and CI passed) ready; started reviewer rev-pr35-sims1 (opus, single). PR #34 (T01 part 1) is a draft.
 - 19:32 PR #35 review round 1 (rev-pr35-sims1): REQUEST_CHANGES at 57f4f87: weak formula tests (24 of 34 one-token mutations passed), validation tests not in any gate or CI, shape broadcasting in metrics. Decision: validation test folders go in testpaths; marker 'external' for tests that need R or the legacy venv; gate A runs -m 'not slow and not external', gate B and CI -m 'not external', gate C runs external. Sent to t03-sims and t02-harness.
 - 19:34 T01 part 1 ready: PR #34 at 252082c (gate B passed). Started the dual-review workflow (spec + adversarial), run wf_cbba59e1-bd2; the script is saved as tools/dual_review.js (args: pr, title, head, brief, roles, focus). Spec findings: leaps-style pruning (PRUNE-3), interaction endspan E + round(a*E) capped, exact knot scan, row-order departure within ties, tolerance 1e-2 then 1e-5 from step 8.
+- 19:41 19:41 wake: 5-hour 75 % (reset 20:00), weekly 54 %. PR #36 (T02 part 1, 52b01e0) is ready; its review waits until after the 20:00 reset (pacing rule near 80 %). Drafts: #37 (T01 part 2), #38 (T02 part 2).
 
 ## Core-hour ledger
 
