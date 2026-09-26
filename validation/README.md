@@ -14,6 +14,12 @@ uv sync --frozen --group validation
 Rscript -e 'library(earth); library(jsonlite); library(nnet)'  # sanity check
 ```
 
+`legacy_adapter.py` also needs the legacy venv, made once:
+
+```bash
+validation/legacy/make_venv.sh
+```
+
 ## `validation/harness/`
 
 - `fit_earth.R`: fits R earth on a block of datasets described by a JSON
@@ -39,6 +45,15 @@ Rscript -e 'library(earth); library(jsonlite); library(nnet)'  # sanity check
 - `names_map.py`: `to_earth_args(**pymars_params)` maps pymars 2.0
   constructor parameter names to earth's own argument names, resolving
   `None` ("earth's automatic value") for the parameters that need it.
+- `legacy_adapter.py`: `fit_legacy(X, y, **earth_kwargs)` fits the legacy
+  code (mars-earth 1.0.4, `.venv-legacy`) in a subprocess and converts its
+  result to the common schema.
+- `new_adapter.py`: `mars_fit_to_common(fit)` converts a `MarsFit`
+  (`pymars._core`, once it exists) to the common schema.
+- `compare.py`: `compare_fit(a, b, ...)` compares two common-schema results
+  by the tolerance table; `compare_forward_steps(a_steps, b_steps)` compares
+  two forward-pass candidate logs up to the first near-tie.
+- `gen_fixtures.py`: the fixture generator (its own section below).
 
 Example: fit earth on one dataset with a trace, using `driver.py` directly.
 These modules are plain scripts, not a `validation.harness` package (there
@@ -71,7 +86,7 @@ Run the harness's own tests (in `validation/harness/tests/`, on
 `testpaths` alongside `tests/` and `validation/sims/tests/`):
 
 ```bash
-uv run --frozen --group validation pytest validation/harness/tests
+uv run --frozen --group validation pytest validation/harness/tests -v
 ```
 
 A test that calls `Rscript` for real (`fit_earth.R` or `blackbox.R`) or
@@ -81,3 +96,22 @@ legacy venv is missing, it fails, so gate A, gate B and CI all exclude it
 (`trace_parse.py`, `names_map.py`, and `driver.py`'s CSV writing and
 column-naming helpers), needs no R and runs everywhere. Gate C and a plain
 `pytest` invocation run everything, `external` tests included.
+
+## Fixture generator
+
+`gen_fixtures.py` writes `validation/fixtures/<dataset>_<mode>.json` for
+every registered dataset and earth argument set ("mode"), each with that
+pair's inputs, earth arguments, `driver.run_earth` result and versions:
+
+```bash
+python validation/harness/gen_fixtures.py           # write every fixture
+python validation/harness/gen_fixtures.py --check   # remake them in a temp
+                                                     # folder and diff
+```
+
+`--check` exits nonzero if any fixture fails to reproduce exactly (a
+difference in `versions.pymars_commit` alone, from running it on a
+different commit than the one that made the committed fixture, is expected
+and not a regression). Register a new dataset by adding a `@register`-
+decorated function returning a `Dataset` to `gen_fixtures.py`; register a
+new mode by adding an entry to its `MODES` dict.
