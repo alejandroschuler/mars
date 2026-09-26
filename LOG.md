@@ -58,6 +58,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 02:00 #37 round 1 (spec part 2): both REQUEST_CHANGES (10x limit not for linear candidates; stop order with thresh > 0; FAST-6 example; STOP-5 near-exact fit; hidden term with Auto.linpreds = FALSE; duplicate columns at degree 2). Sent to t01-spec. Weekly 78 % at 02:05. Budget rule revised: new work that can finish up to 90 %, then only open pull requests, 5 % reserve. Started t05-fixtures (sonnet), brief briefs/T05-fixtures.md.
 - 02:15 #37 round-1 fixes at b0faace (bb24 to bb28; stop order STOP-1, 3, 4, 2, 5; hidden-term trigger found, pymars departs; EDGE-4 at degree 1 only). Round-2 dual review started (run wf_f55805c9-246). Weekly 79 %. The spec writer's note on R reading 17-digit decimals one ulp off is already handled: the T02 harness passes hex floats and the T03 harness raw float64.
 - 02:31 02:31 wake: weekly 80 %, 5-hour 44 %. Legacy run: pilot block reps 0:100 done at 09:11Z (25 min); reps 100:300 running; 1,944 result files; load 10.4 (limit 11).
+- 02:40 #37 round 2: spec APPROVE, adversarial REQUEST_CHANGES (STOP-5 near-tie band relative to the RSS before the step; the hidden-term trigger is refuted, so text only, OQ-6 reopened, T07 labels rank-fix fits as quirk). Sent text fixes to t01-spec; a narrow round 3 by both roles follows.
 
 ## Core-hour ledger
 
