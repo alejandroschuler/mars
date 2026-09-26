@@ -182,14 +182,13 @@ def test_collinearity_ratio_centers_h():
 
 
 def test_collinearity_ratio_of_a_constant_column_is_zero():
-    Q = _qbasis(np.ones((7, 1)))
-    # Rounding makes the computed deviations of seven 0.1s nonzero, so only
-    # the exact test of the values (Conventions) gives 0.
-    assert np.sum((np.full(7, 0.1) - np.full(7, 0.1).mean()) ** 2) > 0.0
-    assert la.collinearity_ratio(Q, np.full(7, 0.1)) == 0.0
-    assert la.collinearity_ratio(Q, np.zeros(7)) == 0.0
+    # The computed centered sums of these constant columns are positive by
+    # rounding, so only the exact test of the values (Conventions) gives 0.
+    Q = _qbasis(np.ones((6, 1)))
+    assert la.collinearity_ratio(Q, np.full(6, 0.1)) == 0.0
+    assert la.collinearity_ratio(Q, np.zeros(6)) == 0.0
     # A zero-weight row is not a case (W-3).
-    h, w = np.array([5.0, 2, 2, 2, 2, 2, 2]), np.array([0.0, 1, 1, 1, 1, 1, 1])
+    h, w = np.append(5.0, np.full(6, 0.1)), np.append(0.0, np.ones(6))
     assert la.collinearity_ratio(_qbasis(np.ones((7, 1)), w), h, w) == 0.0
     assert la.knot_rejected(0.0, 40)
     with pytest.raises(ValueError, match="1-D"):
@@ -206,6 +205,16 @@ def test_collinearity_ratio_with_integer_weights_equals_repeated_rows(seed, n):
     got = la.collinearity_ratio(_qbasis(G, w), h, w)
     want = la.collinearity_ratio(_qbasis(G[rep]), h[rep])
     assert got == pytest.approx(want, rel=1e-10)
+
+
+def test_collinearity_ratio_keeps_the_sums_of_squares_in_range():
+    rng = np.random.default_rng(12)
+    G = _basis(rng, 30, 3)
+    h = np.maximum(G[:, 1] - 0.1, 0.0) * G[:, 2]
+    want = la.collinearity_ratio(_qbasis(G), h)
+    for scale in (1e200, 1e-200):
+        got = la.collinearity_ratio(_qbasis(G), scale * h)
+        assert got == pytest.approx(want, rel=1e-12)
 
 
 def test_collinearity_ratio_with_underflowing_weights_is_zero():
