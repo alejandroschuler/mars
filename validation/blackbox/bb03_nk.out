@@ -1,0 +1,194 @@
+R version 4.4.3 (2025-02-28) 
+earth 5.3.4 
+
+---- Part 1: default nk vs min(200,max(20,2p))+1 ----
+n=60 p=1    fit$nk=21   candidate=21   match=TRUE
+n=60 p=5    fit$nk=21   candidate=21   match=TRUE
+n=60 p=9    fit$nk=21   candidate=21   match=TRUE
+n=60 p=10   fit$nk=21   candidate=21   match=TRUE
+n=60 p=11   fit$nk=23   candidate=23   match=TRUE
+n=60 p=50   fit$nk=101  candidate=101  match=TRUE
+n=60 p=99   fit$nk=199  candidate=199  match=TRUE
+n=60 p=100  fit$nk=201  candidate=201  match=TRUE
+n=60 p=101  fit$nk=201  candidate=201  match=TRUE
+n=60 p=150  fit$nk=201  candidate=201  match=TRUE
+
+Small-n edge cases (candidate formula ignores n):
+n=10 p=5:  fit$nk=21  candidate(ignoring n)=21
+  Forward pass line: Forward pass: minspan 3 endspan 4   x[10,5] 400 Bytes   bx[10,21] 1.64 kB 
+n=30 p=150: fit$nk=201  candidate(ignoring n)=201
+  Forward pass line: Forward pass: minspan 6 endspan 14   x[30,150] 35.2 kB   bx[30,201] 47.1 kB 
+
+---- Part 2: pairs and nk (single covariate, thresh=0, pmethod=none) ----
+nk=2: nrow(dirs)=1 termcond=1 attempted(forward-pass-complete)=1
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,2] 1.56 kB"      
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"
+[3] "1      0.0000 0.0000                    (Intercept)"                             
+[4] "Reached maximum number of terms 2"                                               
+[5] "After forward pass GRSq 1.000 RSq 0.000"                                         
+[6] "Forward pass complete: 1 term"                                                   
+[7] "Using EvalSubsetsUsingXtx (rather than leaps) because ncol(bx) <= 2"             
+[8] "Prune none penalty 2 nprune null: selected 1 of 1 terms, and 0 of 1 preds"       
+[9] "After pruning pass GRSq 0 RSq 0"                                                 
+
+nk=3: nrow(dirs)=3 termcond=7 attempted(forward-pass-complete)=3
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,3] 2.34 kB"                           
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+[3] "1      0.0000 0.0000                    (Intercept)"                                                  
+[4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 final (reached nk 3)"
+[5] "Reached nk 3"                                                                                         
+[6] "After forward pass GRSq 0.803 RSq 0.819"                                                              
+[7] "Forward pass complete: 3 terms"                                                                       
+[8] "Prune none penalty 2 nprune null: selected 3 of 3 terms, and 1 of 1 preds"                            
+[9] "After pruning pass GRSq 0.803 RSq 0.819"                                                              
+
+nk=4: nrow(dirs)=3 termcond=7 attempted(forward-pass-complete)=3
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,4] 3.12 kB"                           
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+[3] "1      0.0000 0.0000                    (Intercept)"                                                  
+[4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 final (reached nk 4)"
+[5] "Reached nk 4"                                                                                         
+[6] "After forward pass GRSq 0.803 RSq 0.819"                                                              
+[7] "Forward pass complete: 3 terms"                                                                       
+[8] "Prune none penalty 2 nprune null: selected 3 of 3 terms, and 1 of 1 preds"                            
+[9] "After pruning pass GRSq 0.803 RSq 0.819"                                                              
+
+nk=5: nrow(dirs)=4 termcond=7 attempted(forward-pass-complete)=5
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,5] 3.91 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 "                    
+ [5] "4      0.9645 0.9687       0.1497    1           x1        0.79  4             1 final (reached nk 5)"
+ [6] "Reached nk 5"                                                                                         
+ [7] "After forward pass GRSq 0.965 RSq 0.969"                                                              
+ [8] "Forward pass complete: 5 terms, 4 terms used"                                                         
+ [9] "Prune none penalty 2 nprune null: selected 4 of 4 terms, and 1 of 1 preds"                            
+[10] "After pruning pass GRSq 0.965 RSq 0.969"                                                              
+
+nk=6: nrow(dirs)=4 termcond=7 attempted(forward-pass-complete)=5
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,6] 4.69 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 "                    
+ [5] "4      0.9645 0.9687       0.1497    1           x1        0.79  4             1 final (reached nk 6)"
+ [6] "Reached nk 6"                                                                                         
+ [7] "After forward pass GRSq 0.965 RSq 0.969"                                                              
+ [8] "Forward pass complete: 5 terms, 4 terms used"                                                         
+ [9] "Prune none penalty 2 nprune null: selected 4 of 4 terms, and 1 of 1 preds"                            
+[10] "After pruning pass GRSq 0.965 RSq 0.969"                                                              
+
+nk=7: nrow(dirs)=5 termcond=7 attempted(forward-pass-complete)=7
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,7] 5.47 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 "                    
+ [5] "4      0.9645 0.9687       0.1497    1           x1        0.79  4             1 "                    
+ [6] "6      0.9847 0.9871      0.01838    1           x1        0.32  5             1 final (reached nk 7)"
+ [7] "Reached nk 7"                                                                                         
+ [8] "After forward pass GRSq 0.985 RSq 0.987"                                                              
+ [9] "Forward pass complete: 7 terms, 5 terms used"                                                         
+[10] "Prune none penalty 2 nprune null: selected 5 of 5 terms, and 1 of 1 preds"                            
+[11] "After pruning pass GRSq 0.985 RSq 0.987"                                                              
+
+nk=8: nrow(dirs)=5 termcond=7 attempted(forward-pass-complete)=7
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,8] 6.25 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 "                    
+ [5] "4      0.9645 0.9687       0.1497    1           x1        0.79  4             1 "                    
+ [6] "6      0.9847 0.9871      0.01838    1           x1        0.32  5             1 final (reached nk 8)"
+ [7] "Reached nk 8"                                                                                         
+ [8] "After forward pass GRSq 0.985 RSq 0.987"                                                              
+ [9] "Forward pass complete: 7 terms, 5 terms used"                                                         
+[10] "Prune none penalty 2 nprune null: selected 5 of 5 terms, and 1 of 1 preds"                            
+[11] "After pruning pass GRSq 0.985 RSq 0.987"                                                              
+
+nk=9: nrow(dirs)=6 termcond=7 attempted(forward-pass-complete)=9
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,9] 7.03 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 "                    
+ [5] "4      0.9645 0.9687       0.1497    1           x1        0.79  4             1 "                    
+ [6] "6      0.9847 0.9871      0.01838    1           x1        0.32  5             1 "                    
+ [7] "8      0.9902 0.9921      0.00501    1           x1        0.68  6             1 final (reached nk 9)"
+ [8] "Reached nk 9"                                                                                         
+ [9] "After forward pass GRSq 0.990 RSq 0.992"                                                              
+[10] "Forward pass complete: 9 terms, 6 terms used"                                                         
+[11] "Prune none penalty 2 nprune null: selected 6 of 6 terms, and 1 of 1 preds"                            
+[12] "After pruning pass GRSq 0.99 RSq 0.992"                                                               
+
+Refined rule check -- nk: 3 4 5 6 7 8 9 
+  attempted (actual):   3 3 5 5 7 7 9 
+  attempted (expected): 3 3 5 5 7 7 9 
+Repeat with Auto.linpreds=TRUE, nk=2,3:
+nk=2 (Auto.linpreds=TRUE): nrow(dirs)=1 termcond=1 attempted=1
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,2] 1.56 kB"      
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"
+[3] "1      0.0000 0.0000                    (Intercept)"                             
+[4] "Reached maximum number of terms 2"                                               
+[5] "After forward pass GRSq 1.000 RSq 0.000"                                         
+[6] "Forward pass complete: 1 term"                                                   
+[7] "Using EvalSubsetsUsingXtx (rather than leaps) because ncol(bx) <= 2"             
+[8] "Prune none penalty 2 nprune null: selected 1 of 1 terms, and 0 of 1 preds"       
+[9] "After pruning pass GRSq 0 RSq 0"                                                 
+
+nk=3 (Auto.linpreds=TRUE): nrow(dirs)=3 termcond=7 attempted=3
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,3] 2.34 kB"                           
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+[3] "1      0.0000 0.0000                    (Intercept)"                                                  
+[4] "2      0.8034 0.8190        0.819    1           x1         0.2  2   3         1 final (reached nk 3)"
+[5] "Reached nk 3"                                                                                         
+[6] "After forward pass GRSq 0.803 RSq 0.819"                                                              
+[7] "Forward pass complete: 3 terms"                                                                       
+[8] "Prune none penalty 2 nprune null: selected 3 of 3 terms, and 1 of 1 preds"                            
+[9] "After pruning pass GRSq 0.803 RSq 0.819"                                                              
+
+---- Part 3: does a single-hinge step count as 1 or 2 toward nk? ----
+unconstrained: nrow(dirs)=5 (nk default=21), termcond=4
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,21] 16.4 kB"                             
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                        
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                     
+ [4] "2      0.9902 0.9910        0.991    1           x1     0.65452  2   3         1 "                       
+ [5] "4      0.9962 0.9967     0.005689    1           x1     0.26189  4             1 "                       
+ [6] "6      0.9975 0.9979     0.001211    1           x1     0.72441  5             1 "                       
+ [7] "8      0.9975 0.9980    9.727e-05    1           x1     0.44133  6             1 reject (small DeltaRSq)"
+ [8] "RSq changed by less than 0.001 at 7 terms, 5 terms used (DeltaRSq 9.7e-05)"                              
+ [9] "After forward pass GRSq 0.997 RSq 0.998"                                                                 
+[10] "Forward pass complete: 7 terms, 5 terms used"                                                            
+[11] "Prune none penalty 2 nprune null: selected 5 of 5 terms, and 1 of 1 preds"                               
+[12] "After pruning pass GRSq 0.997 RSq 0.998"                                                                 
+nk=4: nrow(dirs)=3 termcond=7 attempted=3
+[1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,4] 3.12 kB"                           
+[2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+[3] "1      0.0000 0.0000                    (Intercept)"                                                  
+[4] "2      0.9902 0.9910        0.991    1           x1     0.65452  2   3         1 final (reached nk 4)"
+[5] "Reached nk 4"                                                                                         
+[6] "After forward pass GRSq 0.990 RSq 0.991"                                                              
+[7] "Forward pass complete: 3 terms"                                                                       
+[8] "Prune none penalty 2 nprune null: selected 3 of 3 terms, and 1 of 1 preds"                            
+[9] "After pruning pass GRSq 0.99 RSq 0.991"                                                               
+
+nk=5: nrow(dirs)=4 termcond=7 attempted=5
+ [1] "Forward pass: minspan 1 endspan 1   x[100,1] 800 Bytes   bx[100,5] 3.91 kB"                           
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                     
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                  
+ [4] "2      0.9902 0.9910        0.991    1           x1     0.65452  2   3         1 "                    
+ [5] "4      0.9962 0.9967     0.005689    1           x1     0.26189  4             1 final (reached nk 5)"
+ [6] "Reached nk 5"                                                                                         
+ [7] "After forward pass GRSq 0.996 RSq 0.997"                                                              
+ [8] "Forward pass complete: 5 terms, 4 terms used"                                                         
+ [9] "Prune none penalty 2 nprune null: selected 4 of 4 terms, and 1 of 1 preds"                            
+[10] "After pruning pass GRSq 0.996 RSq 0.997"                                                              
+
+going from nk=4 to nk=5: nrow(dirs) grows by 1; 'attempted' (forward-pass-complete count) grows by 2
+
+CHECK bb03.1 TRUE fit$nk == min(200,max(20,2p))+1 for every p in {1,5,9,10,11,50,99,100,101,150} at n=60
+CHECK bb03.2 TRUE nk is not reduced below the formula for small n (n=10,p=5 and n=30,p=150)
+CHECK bb03.3 FALSE HYPOTHESIS nk is reduced for small n (fit$nk < formula in at least one edge case)
+CHECK bb03.4 TRUE the forward pass never lets nrow(dirs) exceed nk, for nk in 2..9
+CHECK bb03.5 FALSE HYPOTHESIS whenever termcond signals the term limit was reached, nrow(dirs) == nk exactly
+CHECK bb03.6 FALSE HYPOTHESIS whenever termcond signals the term limit was reached, the counted terms (forward-pass-complete line) == nk
+CHECK bb03.7 TRUE going from nk=4 to nk=5 adds exactly one row to dirs (a single hinge, not a rejected pair)
+CHECK bb03.8 FALSE HYPOTHESIS a single-hinge step is counted as 1 (not 2) toward the 'attempted' term budget too (attempted also grows by 1 from nk=4 to nk=5)
+CHECK bb03.9 TRUE a single-hinge step is counted as a full pair (2 slots) against the budget even though only 1 real term results (attempted grows by 2, matching Part 2's pattern)
+CHECK bb03.10 TRUE for nk = 3..9 the counted terms == nk when (nk-1) is even; attempted == nk-1 when (nk-1) is odd (the forward pass always budgets 2 slots per pair attempt and never spends a lone leftover slot)

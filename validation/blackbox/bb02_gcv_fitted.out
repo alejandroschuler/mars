@@ -1,0 +1,136 @@
+R version 4.4.3 (2025-02-28) 
+earth 5.3.4 
+
+fit(c) attempt 1 (continuous-linear x1) dirs:
+               x1 x2
+(Intercept)     0  0
+h(x1-0.965782)  1  0
+h(0.965782-x1) -1  0
+h(x2-0.510064)  0  1
+h(0.510064-x2)  0 -1
+attempt 1 dirs contains a 2: FALSE (expected TRUE; a merely-linear continuous x1 still gets hinged)
+
+fit(c) corrected (two-level x1) dirs, Auto.linpreds=TRUE:
+               x1 x2
+(Intercept)     0  0
+x1              2  0
+h(x2-0.510064)  0  1
+h(0.510064-x2)  0 -1
+fit(c) corrected dirs, Auto.linpreds=FALSE (for comparison):
+               x1 x2
+(Intercept)     0  0
+x1              1  0
+h(x2-0.510064)  0  1
+h(0.510064-x2)  0 -1
+corrected dirs contains a 2 (Auto.linpreds=TRUE): TRUE 
+corrected dirs contains a 2 (Auto.linpreds=FALSE): FALSE (x1 is still coded linear -- row name has no h(...) -- just with a 1, not a 2)
+
+---- Part 1: gcv.per.subset formula, rsq, grsq for fits a-d ----
+fit(a): penalty=2 K=16  gcv.per.subset maxreldiff=0 | rsq rd=0 | grsq rd=1.23e-16
+fit(b): penalty=3 K=20  gcv.per.subset maxreldiff=0 | rsq rd=0 | grsq rd=0
+fit(c): penalty=2 K=4  gcv.per.subset maxreldiff=0 | rsq rd=0 | grsq rd=0
+fit(d): penalty=2 K=5  gcv.per.subset maxreldiff=0 | rsq rd=1.13e-16 | grsq rd=1.14e-16
+
+fit(d) dirs:
+               x1
+(Intercept)     0
+h(x1-0.669945)  1
+h(0.669945-x1) -1
+h(x1-0.294601)  1
+h(x1-0.711944)  1
+fit(d) termcond: 4 
+naive test - nrow(dirs)-1 odd (would prove a single-hinge step, but misses an EVEN count of them): FALSE 
+fit(d) trace=2 step table:
+ [1] "Forward pass: minspan 1 endspan 1   x[200,1] 1.56 kB   bx[200,21] 32.8 kB"                               
+ [2] "         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg"                        
+ [3] "1      0.0000 0.0000                    (Intercept)"                                                     
+ [4] "2      0.9687 0.9699       0.9699    1           x1     0.66994  2   3         1 "                       
+ [5] "4      0.9762 0.9776     0.007728    1           x1      0.2946  4             1 "                       
+ [6] "6      0.9778 0.9795     0.001914    1           x1     0.71194  5             1 "                       
+ [7] "8      0.9775 0.9797    0.0001874    1           x1     0.57761  6             1 reject (small DeltaRSq)"
+ [8] "RSq changed by less than 0.001 at 7 terms, 5 terms used (DeltaRSq 0.00019)"                              
+ [9] "After forward pass GRSq 0.978 RSq 0.980"                                                                 
+[10] "Forward pass complete: 7 terms, 5 terms used"                                                            
+[11] "Prune none penalty 2 nprune null: selected 5 of 5 terms, and 1 of 1 preds"                               
+[12] "After pruning pass GRSq 0.978 RSq 0.98"                                                                  
+
+fit(c) selected model: M=4  hinge_terms=2  linear_terms=1  distinct_knots=1
+fit(d) selected model: M=5  hinge_terms=4  linear_terms=0  distinct_knots=3
+corrected test - fit(d): (M-1) < 2*distinct_knots (proves at least one single-hinge step): TRUE 
+
+---- Part 2: weights ----
+mean(w): all2=2 int=1.995 int10=19.95
+weights=all2 : maxreldiff with n=nrow(x)=200 -> 0 | with n=sum(w)=400 -> 1.38
+weights=int  : maxreldiff with n=nrow(x)=200 -> 0 | with n=sum(w)=399 -> 1.35
+weights=int10: maxreldiff with n=nrow(x)=200 -> 0 | with n=sum(w)=3990 -> 26.5
+
+Does a CONSTANT weight vector (all2) give a fit identical to no weights at all?
+  fit_a (unweighted) rss=408.9381884 rsq=0.9249413652 | wfits$all2 rss=408.9381884 rsq=0.9249413652 | identical: TRUE
+
+rss.per.subset vs weighted RSS from lm(y ~ bx - 1, weights=w), at k=1 and k=selected:
+  weights=all2  k=1   actual=5448.249754  sum(w*resid^2)=10896.49951 (rd=0.5)  /mean(w)=5448.249754 (rd=3.34e-16)
+  weights=all2  k=13  actual=408.9381884  sum(w*resid^2)=817.8763767 (rd=0.5)  /mean(w)=408.9381884 (rd=4.17e-16)
+  weights=int   k=1   actual=11883.03888  sum(w*resid^2)=11883.03888 (rd=1.53e-16)  /mean(w)=5956.410466 (rd=0.995)
+  weights=int   k=15  actual=782.9618756  sum(w*resid^2)=782.9618756 (rd=5.81e-16)  /mean(w)=392.462093 (rd=0.995)
+  weights=int10 k=1   actual=118830.3888  sum(w*resid^2)=118830.3888 (rd=4.9e-16)  /mean(w)=5956.410466 (rd=18.9)
+  weights=int10 k=15  actual=7829.618756  sum(w*resid^2)=7829.618756 (rd=1.28e-15)  /mean(w)=392.462093 (rd=18.9)
+
+tss behind rsq: weighted sum(w*(y-weighted.mean(y,w))^2), undivided vs /mean(w):
+  weights=all2  actual rsq=0.9249413652  cand(tss undiv)=0.9624706826  cand(tss/mean(w))=0.9249413652
+  weights=int   actual rsq=0.9341109725  cand(tss undiv)=0.9341109725  cand(tss/mean(w))=0.8685513901
+  weights=int10 actual rsq=0.9341109725  cand(tss undiv)=0.9341109725  cand(tss/mean(w))=-0.3144860986
+
+scaling weights by 10 (int -> int10): structure and value invariance:
+  dirs/cuts/selected.terms identical: FALSE
+  |rsq diff|=1.11e-16  |grsq diff|=1.11e-16  |rss reldiff|=9  |gcv reldiff|=9  rss ratio=10  gcv ratio=10
+
+---- Part 3: penalty=-1 and penalty=0 on fit (a)'s data ----
+penalty=-1: maxreldiff(gcv.per.subset, rss.per.subset/n) = 0
+penalty=0:  maxreldiff(gcv.per.subset, rss/(n*(1-k/n)^2)) = 0
+
+---- Part 4: three response columns ----
+fit_m: M=13 penalty=2
+rss=2046.419321  sum(rss.per.response)=2046.419321  match: TRUE
+gcv=13.36437107  sum(gcv.per.response)=13.36437107  match: TRUE
+gcv.per.response == get.gcv(rss.per.response[j], M, penalty, n): maxreldiff=0
+rss.per.subset[k] vs sum over responses of per-response RSS (via lm.fit):
+  k=1   actual=27723.48274  sum_j(RSS_j)=27723.48274  (rd=9.19e-16)
+  k=1   actual gcv.per.subset=140.0140539  sum_j(get.gcv(RSS_j,k,pen,n))=140.0140539  (rd=8.12e-16)
+  k=13  actual=2046.419321  sum_j(RSS_j)=2046.419321  (rd=5.56e-16)
+  k=13  actual gcv.per.subset=13.36437107  sum_j(get.gcv(RSS_j,k,pen,n))=13.36437107  (rd=5.32e-16)
+
+fit_m has rsq.per.response: TRUE ; has grsq.per.response: TRUE
+rsq: actual=0.9261846233  hyp(1-sum(rss)/sum(tss))=0.9261846233  hyp(mean rsq.per.response)=0.9167776544
+grsq: actual=0.9045497884  hyp(1-sum(gcv)/sum(gcv.null))=0.9045497884  hyp(mean grsq.per.response)=0.8923856944
+
+1-column matrix y gives identical fit to vector y: TRUE
+
+CHECK bb02.1 TRUE gcv.per.subset matches get.gcv(rss.per.subset[k],k,penalty,n) for fit(a)
+CHECK bb02.2 TRUE gcv.per.subset matches get.gcv(rss.per.subset[k],k,penalty,n) for fit(b)
+CHECK bb02.3 TRUE gcv.per.subset matches get.gcv(rss.per.subset[k],k,penalty,n) for fit(c)
+CHECK bb02.4 TRUE gcv.per.subset matches get.gcv(rss.per.subset[k],k,penalty,n) for fit(d)
+CHECK bb02.5 TRUE rsq == 1-rss/tss for all of fits a-d
+CHECK bb02.6 TRUE grsq == 1-gcv/gcv.null for all of fits a-d
+CHECK bb02.7 FALSE HYPOTHESIS a continuous predictor that is exactly linear in the DGP gets dirs code 2 under Auto.linpreds
+CHECK bb02.8 TRUE a two-level (0/1) predictor gets dirs code 2 under Auto.linpreds=TRUE
+CHECK bb02.9 FALSE HYPOTHESIS fit(d) has an odd non-intercept term count
+CHECK bb02.10 TRUE fit(d): (M-1) < 2*distinct_knots, proving at least one single-hinge step
+CHECK bb02.11 FALSE HYPOTHESIS get.gcv's n argument is sum(w) across weights={all2,int,int10}
+CHECK bb02.12 TRUE get.gcv's n argument is nrow(x), unaffected by weights
+CHECK bb02.13 FALSE HYPOTHESIS rss.per.subset is the un-normalized weighted RSS sum(w*(y-yhat)^2), for ALL of {all2,int,int10}
+CHECK bb02.14 TRUE rss.per.subset is the un-normalized weighted RSS when the weights are not all equal (int, int10)
+CHECK bb02.15 TRUE a CONSTANT weight vector (all2) gives a fit identical in every respect to no weights at all
+CHECK bb02.16 FALSE HYPOTHESIS rsq's tss is the un-normalized weighted sum(w*(y-weighted.mean(y,w))^2), for ALL of {all2,int,int10}
+CHECK bb02.17 TRUE rsq's tss is the un-normalized weighted tss when the weights are not all equal (int, int10)
+CHECK bb02.18 FALSE HYPOTHESIS scaling all (non-constant) weights by 10 leaves dirs/cuts/selected.terms unchanged
+CHECK bb02.19 TRUE scaling all (non-constant) weights by 10 leaves rsq,grsq unchanged (ratio-invariant, <1e-8 abs diff)
+CHECK bb02.20 TRUE scaling all (non-constant) weights by 10 scales raw rss,gcv by 10x (NOT invariant; ratio in [9.99,10.01])
+CHECK bb02.21 TRUE gcv.per.subset == rss.per.subset/n for penalty=-1 (maxreldiff=0)
+CHECK bb02.22 TRUE gcv.per.subset matches C=nterms rule for penalty=0 (maxreldiff=0)
+CHECK bb02.23 TRUE rss == sum(rss.per.response) for the 3-response fit
+CHECK bb02.24 TRUE gcv == sum(gcv.per.response) AND gcv.per.response[j] == get.gcv(rss.per.response[j],M,penalty,n)
+CHECK bb02.25 TRUE rss.per.subset[k] == sum_j(per-response RSS of that subset) at k=1,k=selected
+CHECK bb02.26 TRUE gcv.per.subset[k] == sum_j(get.gcv(rss_jk,k,penalty,n)) at k=1,k=selected
+CHECK bb02.27 TRUE multi-response rsq == 1-sum(rss.per.response)/sum(tss.per.response)
+CHECK bb02.28 TRUE multi-response grsq == 1-sum(gcv.per.response)/sum(gcv.null.per.response)
+CHECK bb02.29 TRUE a 1-column matrix y gives an identical fit to the equivalent vector y

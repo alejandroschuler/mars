@@ -1,0 +1,53 @@
+R version 4.4.3 (2025-02-28) 
+earth 5.3.4 
+
+Grid cells: 5166  ERROR cells: 0 
+
+Max relative difference over 3212 finite cells: 0
+Worst cell:
+ rss nterms penalty  n actual candidate C
+   1      1      -1 10    0.1       0.1 0
+
+Inf-vs-C>=n mismatches over full grid: 0
+
+Hand-picked cells with C == n exactly:
+     rss nterms penalty  n  C actual
+   1.000      4     4.0 10 10    Inf
+   1.000      5     2.5 10 10    Inf
+ 123.456      4     4.0 10 10    Inf
+   1.000     21     1.0 31 31    Inf
+All hand-picked C==n cells give non-finite actual GCV: TRUE 
+
+nterms=1, penalty>=0: candidate C==1 for all 112 cells: TRUE; max reldiff vs earth: 0
+
+get.gcv at penalty -0.5 and -2 (for the record; no claim):
+     rss nterms penalty   n   actual  err
+   1.000      1    -0.5  10  0.10000 <NA>
+ 123.456      1    -0.5  10 12.34560 <NA>
+   1.000      5    -0.5  10  0.10000 <NA>
+ 123.456      5    -0.5  10 12.34560 <NA>
+   1.000     20    -0.5  10  0.10000 <NA>
+ 123.456     20    -0.5  10 12.34560 <NA>
+   1.000      1    -2.0  10  0.10000 <NA>
+ 123.456      1    -2.0  10 12.34560 <NA>
+   1.000      5    -2.0  10  0.10000 <NA>
+ 123.456      5    -2.0  10 12.34560 <NA>
+   1.000     20    -2.0  10  0.10000 <NA>
+ 123.456     20    -2.0  10 12.34560 <NA>
+   1.000      1    -0.5 100  0.01000 <NA>
+ 123.456      1    -0.5 100  1.23456 <NA>
+   1.000      5    -0.5 100  0.01000 <NA>
+ 123.456      5    -0.5 100  1.23456 <NA>
+   1.000     20    -0.5 100  0.01000 <NA>
+ 123.456     20    -0.5 100  1.23456 <NA>
+   1.000      1    -2.0 100  0.01000 <NA>
+ 123.456      1    -2.0 100  1.23456 <NA>
+   1.000      5    -2.0 100  0.01000 <NA>
+ 123.456      5    -2.0 100  1.23456 <NA>
+   1.000     20    -2.0 100  0.01000 <NA>
+ 123.456     20    -2.0 100  1.23456 <NA>
+
+CHECK bb01.1 TRUE max relative difference over finite cells is < 1e-12 (got 0)
+CHECK bb01.2 TRUE Inf occurs in earth's output exactly when candidate C >= n over the full grid
+CHECK bb01.3 TRUE hand-picked cells with C == n exactly all give non-finite GCV
+CHECK bb01.4 TRUE nterms=1 gives candidate C=1 at every penalty >= 0, matching earth to < 1e-12 (got 0)
