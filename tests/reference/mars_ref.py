@@ -19,6 +19,8 @@ How it computes, and how that differs from the fast code:
 - The forward pass evaluates every candidate of every visited parent with
   its explicit columns, and follows the queue, the slots and the stopping
   rules of the spec one step at a time.
+- ``fit_mars`` is the entry point: it returns the fields of ``MarsFit`` as
+  the dict of CORE-5.
 - Two knot scans are here: a loop that follows KNOT-3 step by step (unit
   weights), and the cumulative-weight scan of KNOT-6, so that each checks
   the other.
@@ -1096,3 +1098,157 @@ def forward_pass(
         "candidates": _candidate_log(log) if record_candidates else None,
     }
     return record, B
+
+
+# ---------------------------------------------------------------------------
+# The fit [CORE-1, CORE-3, CORE-5, W-3, EDGE-1, EDGE-6, GCV-7]
+
+
+def _unscale(value, power: int):
+    """``value`` times 2**power, exactly; an overflow gives inf and an
+    underflow 0, as the arithmetic without the scaling would [EDGE-6]."""
+    with np.errstate(over="ignore", under="ignore"):
+        out = np.ldexp(np.asarray(value, dtype=np.float64), power)
+    return float(out) if out.ndim == 0 else out
+
+
+def y_scale_power(Y) -> int:
+    """j of EDGE-6: D 2**j lies in [1, 2), where D is the largest |Y_ik|;
+    0 when D = 0."""
+    D = float(np.max(np.abs(Y)))
+    return 0 if D == 0.0 else 1 - math.frexp(D)[1]
+
+
+def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
+    """The fit of CORE-1, returned as the dict of CORE-5.
+
+    X is (n, p); Y is (n, K), or (n,) for K = 1 [RESP-2]; w is (n,) with a
+    positive sum, or None for w_i = 1 exactly [W-5]. The input is valid,
+    as the estimators check it first [CORE-1]. Rows with zero weight are
+    dropped before anything else [W-3]. Y is multiplied by 2**j before any
+    sum, and every value on the scale of Y is scaled back [EDGE-6]. The
+    keys follow CORE-3; ``forward``, ``pruning`` and ``candidates`` are
+    nested dicts and ``termination`` is the integer code [CORE-5].
+    """
+    params = as_params(params)
+    X = np.asarray(X, dtype=np.float64)
+    Y = np.asarray(Y, dtype=np.float64)
+    Y = Y.reshape(Y.shape[0], -1)
+    w = np.ones(X.shape[0]) if w is None else np.asarray(w, dtype=np.float64)
+    rows = w > 0
+    X, Y, w = X[rows], Y[rows], w[rows]
+    n, p = X.shape
+    N0 = weight_sum(w)
+    tau_N = weight_tol(N0)
+    N = snap(N0, tau_N)
+    j = y_scale_power(Y)
+    Ys = np.ldexp(Y, j)
+    constant = bool(np.all(Y[0] == Y))  # every response is constant
+    tss = 0.0  # by definition when every response is constant [GCV-7]
+    if not constant:
+        tss = rss(np.ones((n, 1)), Ys, w)
+        if not (math.isfinite(tss) and tss >= np.finfo(np.float64).tiny):
+            raise ValueError(
+                "the scale of y or of the weights is out of range: the weighted "
+                f"total sum of squares of the scaled y is {tss!r}"
+            )
+    common = {
+        "n_eff": N,
+        "max_terms": params.resolved_max_terms(p),
+        "penalty": params.resolved_penalty(),
+    }
+    if N <= 1 or constant:
+        return _degenerate_fit(Ys, w, j, constant, tss, p, record_candidates, common)
+    forward, B = forward_pass(
+        X,
+        Ys,
+        w,
+        params,
+        N=N,
+        tau_N=tau_N,
+        tss=tss,
+        record_candidates=record_candidates,
+    )
+    kept = forward["kept"]
+    pruned = prune(
+        B[:, kept],
+        Ys,
+        w,
+        penalty=common["penalty"],
+        N=N,
+        tau_N=tau_N,
+        pmethod=params.pmethod,
+        nprune=params.nprune,
+    )
+    selected = kept[pruned["selected"]]
+    forward = {**forward, "rss": _unscale(forward["rss"], -2 * j)}
+    if forward["candidates"] is not None:
+        log = forward["candidates"]
+        forward["candidates"] = {
+            **log,
+            "best_rss": _unscale(log["best_rss"], -2 * j),
+            "second_rss": _unscale(log["second_rss"], -2 * j),
+        }
+    return {
+        "dirs": forward["dirs"][selected],
+        "cuts": forward["cuts"][selected],
+        "coef": _unscale(pruned["coef"], -j),
+        "selected": selected,
+        "rss": _unscale(pruned["rss"], -2 * j),
+        "gcv": _unscale(pruned["gcv"], -2 * j),
+        "rsq": pruned["rsq"],
+        "grsq": pruned["grsq"],
+        **common,
+        "forward": forward,
+        "pruning": {
+            "removed": pruned["removed"],
+            "rss_per_size": _unscale(pruned["rss_per_size"], -2 * j),
+            "gcv_per_size": _unscale(pruned["gcv_per_size"], -2 * j),
+            "subsets": pruned["subsets"],
+            "selected_size": pruned["selected_size"],
+        },
+    }
+
+
+def _degenerate_fit(Ys, w, j, constant, tss, p, record_candidates, common) -> dict:
+    """The intercept alone, when N <= 1 or every response is constant [EDGE-1,
+    GCV-7]: its coefficient is the weighted mean of each response, gcv is
+    +inf, rsq and grsq are 0, and TSS and rss are 0 exactly when every
+    response is constant, else computed."""
+    n = Ys.shape[0]
+    if constant:
+        coef = Ys[:1].copy()  # the weighted mean of a constant is its value
+        final_rss = 0.0
+    else:
+        coef = lstsq_coef(np.ones((n, 1)), Ys, w)
+        final_rss = float(np.sum(w[:, None] * (Ys - coef) ** 2))
+    tss_row = np.array([_unscale(tss, -2 * j)])
+    return {
+        "dirs": np.zeros((1, p), dtype=np.int8),
+        "cuts": np.zeros((1, p)),
+        "coef": _unscale(coef, -j),
+        "selected": np.array([0], dtype=np.int64),
+        "rss": _unscale(final_rss, -2 * j),
+        "gcv": math.inf,
+        "rsq": 0.0,
+        "grsq": 0.0,
+        **common,
+        "forward": {
+            "dirs": np.zeros((1, p), dtype=np.int8),
+            "cuts": np.zeros((1, p)),
+            "kept": np.array([0], dtype=np.int64),
+            "dropped": np.zeros(0, dtype=np.int64),
+            "parent": np.array([-1], dtype=np.int64),
+            "step": np.array([0], dtype=np.int64),
+            "rss": tss_row,
+            "termination": DEGENERATE,
+            "candidates": _candidate_log([]) if record_candidates else None,
+        },
+        "pruning": {
+            "removed": np.zeros(0, dtype=np.int64),
+            "rss_per_size": tss_row.copy(),
+            "gcv_per_size": np.array([math.inf]),
+            "subsets": np.ones((1, 1), dtype=bool),
+            "selected_size": 1,
+        },
+    }
