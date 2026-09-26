@@ -4,7 +4,8 @@
 # Usage: dev/tools/new_worktree.sh [--parent <folder>] <branch> [<base>]
 # The parent folder is --parent, else $PYMARS_WORKTREES, else <main>/.worktrees,
 # where <main> is the main clone. Safe to run again: it reuses the worktree, the
-# local branch or origin/<branch> when one of them exists.
+# local branch or origin/<branch> when one of them exists, and it fast-forwards
+# a local branch that is behind origin/<branch>.
 set -euo pipefail
 parent=${PYMARS_WORKTREES:-}
 if [ "${1:-}" = "--parent" ]; then
@@ -31,6 +32,17 @@ elif git -C "$main" show-ref --verify --quiet "refs/remotes/origin/$branch"; the
   git -C "$main" worktree add --track -b "$branch" "$path" "origin/$branch"
 else
   git -C "$main" worktree add --no-track -b "$branch" "$path" "$base"
+fi
+
+# A restart continues from origin/<branch>: fast-forward a local branch that is
+# behind it, and stop if the two have diverged.
+if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+  if git -C "$path" merge-base --is-ancestor HEAD "origin/$branch"; then
+    git -C "$path" merge --ff-only --quiet "origin/$branch"
+  elif ! git -C "$path" merge-base --is-ancestor "origin/$branch" HEAD; then
+    echo "$branch and origin/$branch have diverged; reconcile them in $path first" >&2
+    exit 1
+  fi
 fi
 
 cd "$path"
