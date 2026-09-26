@@ -14,6 +14,8 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:22 Incident: the auto-mode classifier denied `run_scheduled_task` for the recovery drill. Not retried by any other route. The user was asked in the session to click Run now once on the routine.
 - 16:30 Incident: the app's worktree guard blocks the Write and Edit tools outside the session worktree (also after request_directory granted `<main>`; change_directory is refused for a worktree session). Decision: this executor keeps the journal worktree and the task worktrees under its session worktree, `<S>/.worktrees/`. The lock, heartbeat and gate logs stay in `<main>/.git/pymars-executor/`, written by the plan's shell commands. Moved the journal worktree to `<S>/.worktrees/journal`.
 - 16:38 Started agent `t00-author` (opus) with `briefs/T00-bootstrap-author.md`.
+- 17:25 The first push of `t00-bootstrap` registered Actions workflows on the fork: `ci.yml` (from the branch) and the inherited `welcome.yml` (pull_request_target from `main`, which posted a welcome comment on PR #1). CI now runs on pull requests, so the merge rule "CI green" applies from PR #1 on. Draft PR #1 is open.
+- 17:30 Wake: 5-hour 27 %, weekly 46 %. Told `t00-author` that CI must pass on the final head.
 
 ## Core-hour ledger
 
