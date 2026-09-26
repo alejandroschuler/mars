@@ -65,36 +65,55 @@ class TestGetGcv:
         assert more >= fewer
 
 
+class TestFitBxDirs:
+    def test_returns_a_real_forward_basis(self, hinge_data):
+        x, y = hinge_data
+        result = bb.fit_bx_dirs(
+            x,
+            y,
+            {
+                "degree": 1,
+                "pmethod": "none",
+                "nk": 11,
+                "thresh": 0,
+                "minspan": 1,
+                "endspan": 1,
+                "fast.k": 0,
+                "Auto.linpreds": False,
+            },
+        )
+        n_terms = result["dirs"].shape[0]
+        assert result["bx"].shape == (len(y), n_terms)
+        assert result["cuts"].shape == (n_terms, 1)
+        assert result["dirs"][0].tolist() == [0]  # row 0 is the intercept
+        assert np.array_equal(result["bx"][:, 0], np.ones(len(y)))
+        assert len(result["selected_terms"]) <= n_terms
+
+    def test_accepts_a_multi_response_y(self, hinge_data):
+        x, y = hinge_data
+        Y = np.column_stack([y, -y])
+        result = bb.fit_bx_dirs(x, Y, {"degree": 1, "nk": 11})
+        assert result["bx"].shape[0] == len(y)
+
+
 class TestPruningPass:
     def _fixed_basis(self, x, y):
         """A real forward-only fit's bx/dirs, for the pruning pass to prune."""
-        # bx/dirs are not part of the documented result schema (they would
-        # duplicate earth's own forward pass output for every fixture), so
-        # this reaches past driver.run_earth for them with its own R call,
-        # which is still just calling earth() as a black box.
-        import json
-        import subprocess
-        import tempfile
-        from pathlib import Path
-
-        import driver
-
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            driver.write_csv(tmp / "d.csv", {"x0": x[:, 0], "y": y})
-            script = tmp / "get_bx.R"
-            out = tmp / "bx.json"
-            script.write_text(f"""
-suppressMessages({{library(earth); library(jsonlite)}})
-d <- read.csv("{tmp / "d.csv"}")
-fit <- earth(x=as.matrix(d["x0"]), y=d$y, degree=1, pmethod="none", nk=11,
-             thresh=0, minspan=1, endspan=1, fast.k=0, Auto.linpreds=FALSE)
-write_json(list(bx=unname(fit$bx), dirs=unname(fit$dirs)), "{out}",
-           digits=NA, auto_unbox=TRUE)
-""")
-            subprocess.run(["Rscript", str(script)], check=True, capture_output=True)
-            data = json.loads(out.read_text())
-        return np.array(data["bx"]), np.array(data["dirs"])
+        result = bb.fit_bx_dirs(
+            x,
+            y,
+            {
+                "degree": 1,
+                "pmethod": "none",
+                "nk": 11,
+                "thresh": 0,
+                "minspan": 1,
+                "endspan": 1,
+                "fast.k": 0,
+                "Auto.linpreds": False,
+            },
+        )
+        return result["bx"], result["dirs"]
 
     def test_prunes_a_real_forward_basis(self, hinge_data):
         x, y = hinge_data

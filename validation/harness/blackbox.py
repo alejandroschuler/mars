@@ -212,6 +212,37 @@ def glm_fit(
     }
 
 
+def fit_bx_dirs(
+    x: np.ndarray, y: np.ndarray, earth_args: dict[str, Any]
+) -> dict[str, Any]:
+    """Fit earth on (x, y) and return its forward basis: ``bx`` (the design
+    matrix), ``dirs``, ``cuts`` and ``selected_terms`` (1-based, as earth
+    returns them).
+
+    For the pruning-of-a-fixed-basis and the classifier-refit component
+    tests, which need a real ``bx``/``dirs`` pair to hand to
+    ``pruning_pass``, ``lm_fit`` or ``multinom_fit``. ``bx`` is not part of
+    ``driver.run_earth``'s result schema (it would duplicate earth's own
+    forward-pass output in every dataset fixture), so this reaches past it
+    with its own black-box call, the same way ``test_blackbox.py``'s
+    ``_fixed_basis`` helper already does.
+    """
+    result = _run(
+        {
+            "call": "fit_bx_dirs",
+            "x": _rows(x),
+            "y": _rows(y),
+            "earth_args": earth_args,
+        }
+    )
+    return {
+        "bx": np.asarray(result["bx"], dtype=float),
+        "dirs": np.asarray(result["dirs"], dtype=float),
+        "cuts": np.asarray(result["cuts"], dtype=float),
+        "selected_terms": np.asarray(result["selected_terms"], dtype=int),
+    }
+
+
 def multinom_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
     """``nnet::multinom`` on fixed columns (earth's selected basis, including
     its intercept column).

@@ -110,6 +110,28 @@ calls <- list(
     )
   },
 
+  # A fresh earth fit on (x, y), returning its forward basis (bx, dirs,
+  # cuts): the fixture generator's way to get a real fixed basis to prune or
+  # to hand to lm_fit/multinom_fit, without adding bx to every fit_earth.R
+  # result (test_blackbox.py's _fixed_basis helper already reaches past
+  # driver.run_earth the same way, for the same reason: bx would duplicate
+  # earth's own forward-pass output in every dataset fixture).
+  fit_bx_dirs = function(req) {
+    x <- to_matrix(req$x)
+    y <- to_matrix(req$y)
+    if (ncol(y) == 1) {
+      y <- y[, 1]
+    }
+    args <- c(list(x = x, y = y), req$earth_args)
+    fit <- do.call(earth, args)
+    list(
+      bx = mat_json(fit$bx),
+      dirs = mat_json(fit$dirs),
+      cuts = mat_json(fit$cuts),
+      selected_terms = vec_json(as.integer(fit$selected.terms))
+    )
+  },
+
   # nnet::multinom on fixed columns (earth's own selected basis, including
   # its intercept column, so "- 1" does not add a second one): the reference
   # for multiclass probabilities, which earth's one-binomial-glm-per-class
