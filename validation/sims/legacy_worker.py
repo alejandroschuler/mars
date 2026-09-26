@@ -68,8 +68,12 @@ def _glm_earth_probabilities(model: earth.GLMEarth, x: np.ndarray) -> np.ndarray
 
 
 def run_job(job: dict) -> dict:
-    train = pd.read_csv(job["train_csv"])
-    test = pd.read_csv(job["test_csv"])
+    # float_precision="round_trip": pandas' default C parser can be off by
+    # 1-2 ULP from the float64 numpy wrote (a review measured this on real
+    # data); round_trip recovers the exact bit pattern, as every arm must see
+    # the same data.
+    train = pd.read_csv(job["train_csv"], float_precision="round_trip")
+    test = pd.read_csv(job["test_csv"], float_precision="round_trip")
     x_cols = _x_columns(train)
     x_train = train[x_cols].to_numpy(dtype=np.float64)
     y_train = train["y"].to_numpy(dtype=np.float64)

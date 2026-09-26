@@ -6,39 +6,66 @@ Usage (from the repository root, after ``. dev/env.sh``)::
         --arms E-def,OLS,HGB --sizes 200 --n-jobs 2 --reps 0:2 --resume
 
 Results land under ``--out``, one JSON file per (cell, arm, repetition):
-``<out>/<cell-name>/<arm>/rep<NNNN>.json``, written atomically (a temp file,
-then ``os.replace``). ``--resume`` skips any such file that already exists
-and parses as JSON; a missing or truncated file (an interrupted run) is
-redone. ``<out>/manifest.json`` records this invocation's settings, package
-versions, the pymars commit, the earth version and each requested arm's
-source hash. Long runs are meant to start under
+``<out>/<cell-name>/<arm>/rep<NNNN>.json``. Each unit (one cell, one arm, one
+repetition, or one block of several repetitions for an R/legacy arm)
+generates its own data, fits, computes its measures and writes its own result
+file *inside the worker task that runs it*, atomically (a temp file, then
+``os.replace``), the moment that unit finishes, not after the whole
+invocation completes. A run killed partway therefore keeps every unit that
+had already finished; ``--resume`` skips a result file that already exists
+and parses as JSON, and redoes one that does not (an interrupted write) or,
+with ``--retry-failed``, one that recorded an error (for example P-fix before
+``pymars.EarthRegressor`` existed). ``<out>/manifest.json`` is a JSON list,
+one entry per invocation (never overwritten), each with that invocation's
+settings and package versions. Long runs are meant to start under
 ``nohup caffeinate -i nice -n 15 ...``; this script writes its own PID to
-``<out>/run.pid`` at startup.
+``<out>/run.pid`` at startup and removes it on a clean exit, and turns
+SIGTERM/SIGINT into a normal exit so joblib shuts its worker processes down
+instead of leaving them orphaned.
 
 Predictions are also cached, keyed by a hash of the training and test data,
-the arm's name, its fixed settings, its source code and the package
-versions, in the git-ignored ``validation/runs/.cache/`` (shared across every
-``--out``, so a rerun with different filters still reuses earlier fits). The
-per-repetition result files under ``--out`` are the record; the cache only
-saves time.
+the arm's name, its fixed settings, its source code (including this module
+and, for an R or legacy arm, the block script) and only the package versions
+that arm's own kind depends on, in the git-ignored ``validation/runs/.cache/``
+(shared across every ``--out``, so a rerun with different filters still
+reuses earlier fits). The per-repetition result files under ``--out`` are the
+record; the cache only saves time.
+
+No dataset is ever held for more than one unit (or one block of units, for an
+R/legacy arm) at a time: each is generated from its name and repetition
+inside the task that fits it, not built up front for the whole invocation.
 """
 
 from __future__ import annotations
 
-import argparse
-import hashlib
-import json
 import os
-import subprocess
-import sys
-import time
-from dataclasses import dataclass
-from pathlib import Path
 
-import joblib
-import numpy as np
+# One BLAS thread per process (dev/env.sh does the same); set before numpy
+# loads, so this holds even if a caller forgets to source it.
+for _name in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(_name, "1")
 
-from . import dgps, learners, metrics, seeds
+import argparse  # noqa: E402
+import contextlib  # noqa: E402
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import signal  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import joblib  # noqa: E402
+import numpy as np  # noqa: E402
+
+from . import dgps, learners, metrics, seeds  # noqa: E402
 
 TEST_N = 10_000
 DEFAULT_BLOCK_SIZE = 20
@@ -116,6 +143,25 @@ def gather_versions(arm_names: list[str]) -> dict:
     if "legacy" in kinds:
         versions.update(_legacy_versions())
     return versions
+
+
+def versions_for_arm(all_versions: dict, arm: learners.Arm) -> dict:
+    """Only the versions ``arm``'s own kind depends on. Without this, every
+    arm's cache key carried whichever of the R and legacy versions the
+    invocation happened to gather for *other* requested arms: OLS got a
+    different key depending on whether E-def was also requested, even though
+    OLS does not touch R at all (a review found this).
+    """
+    result = {
+        k: all_versions[k]
+        for k in ("numpy", "scipy", "sklearn", "pymars", "pymars_commit")
+    }
+    if arm.kind == "r":
+        result["r_earth"] = all_versions.get("r_earth")
+    elif arm.kind == "legacy":
+        result["legacy_mars_earth"] = all_versions.get("legacy_mars_earth")
+        result["legacy_sklearn"] = all_versions.get("legacy_sklearn")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -198,21 +244,27 @@ def result_path(out_dir: Path, cell: dgps.Cell, arm_name: str, rep: int) -> Path
     return out_dir / cell.name / arm_name / f"rep{rep:04d}.json"
 
 
-def is_done(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    try:
-        json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return False
-    return True
-
-
-def atomic_write_json(path: Path, data: dict) -> None:
+def atomic_write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
     os.replace(tmp, path)
+
+
+def is_done(path: Path, retry_failed: bool) -> bool:
+    """True when ``path`` holds a result that ``--resume`` should leave
+    alone. A recorded failure counts as done unless ``retry_failed``: without
+    that flag, a run into the same folder after P-fix's estimators land, or
+    after installing a previously-missing R or .venv-legacy, would never
+    retry any of the fits that failed for that reason.
+    """
+    if not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return not (retry_failed and data.get("error") is not None)
 
 
 def compute_measures(
@@ -263,23 +315,40 @@ def compute_measures(
     return measures
 
 
+def _write_measures(
+    unit: Unit,
+    outcome: learners.FitOutcome,
+    dgp: dgps.Dgp,
+    truth_test: np.ndarray,
+    y_test: np.ndarray,
+    out_dir: Path,
+) -> None:
+    try:
+        measures = compute_measures(outcome, dgp, truth_test, y_test)
+    except Exception as e:  # e.g. metrics.py rejects a non-finite prediction;
+        # never let one bad fit stop the run.
+        measures = {
+            "error": f"{type(e).__name__}: {e}",
+            "fit_seconds": outcome.fit_seconds,
+        }
+    atomic_write_json(
+        result_path(out_dir, unit.cell, unit.arm_name, unit.rep), measures
+    )
+
+
 # ---------------------------------------------------------------------------
-# Scheduling.
+# Scheduling. A Unit is only a name: no data is generated, and no cache
+# lookup happens, until the task that fits it actually runs (in the worker
+# process, one unit or one block of units at a time), which is what keeps
+# memory bounded regardless of how many repetitions the invocation covers.
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class Unit:
     cell: dgps.Cell
     arm_name: str
     rep: int
-    dgp: dgps.Dgp
-    x_train: np.ndarray
-    y_train: np.ndarray
-    x_test: np.ndarray
-    truth_test: np.ndarray
-    y_test: np.ndarray
-    cache_key: str
 
 
 def generate_dataset(cell: dgps.Cell, rep: int, diagnostics: dict):
@@ -299,134 +368,132 @@ def build_units(
     arm_names: list[str],
     reps: range,
     out_dir: Path,
-    diagnostics: dict,
-    versions: dict,
     resume: bool,
+    retry_failed: bool,
 ) -> list[Unit]:
     units: list[Unit] = []
     for cell in cells:
         dgp = dgps.REGISTRY[cell.dgp]
         applicable = [a for a in arm_names if learners.ARMS[a].supports(dgp.binary)]
-        if not applicable:
-            continue
         for rep in reps:
-            pending = [
-                a
-                for a in applicable
-                if not (resume and is_done(result_path(out_dir, cell, a, rep)))
-            ]
-            if not pending:
-                continue
-            x_train, y_train, x_test, y_test, truth_test = generate_dataset(
-                cell, rep, diagnostics
-            )
-            for arm_name in pending:
-                arm = learners.ARMS[arm_name]
-                units.append(
-                    Unit(
-                        cell=cell,
-                        arm_name=arm_name,
-                        rep=rep,
-                        dgp=dgp,
-                        x_train=x_train,
-                        y_train=y_train,
-                        x_test=x_test,
-                        truth_test=truth_test,
-                        y_test=y_test,
-                        cache_key=cache_key(x_train, y_train, x_test, arm, versions),
-                    )
-                )
+            for arm_name in applicable:
+                path = result_path(out_dir, cell, arm_name, rep)
+                if resume and is_done(path, retry_failed):
+                    continue
+                units.append(Unit(cell, arm_name, rep))
     return units
 
 
-def _run_inline_unit(unit: Unit) -> tuple[Unit, learners.FitOutcome]:
+def _process_inline_unit(
+    unit: Unit, diagnostics: dict, out_dir: Path, versions: dict, use_cache: bool
+) -> None:
+    dgp = dgps.REGISTRY[unit.cell.dgp]
+    x_train, y_train, x_test, y_test, truth_test = generate_dataset(
+        unit.cell, unit.rep, diagnostics
+    )
     arm = learners.ARMS[unit.arm_name]
-    try:
-        outcome = arm.fit_predict(
-            unit.x_train, unit.y_train, unit.x_test, unit.dgp.binary
-        )
-    except Exception as e:  # an arm's failure must not stop the run
-        outcome = learners.FitOutcome(
-            predictions=None, error=f"{type(e).__name__}: {e}"
-        )
-    return unit, outcome
+    key = cache_key(x_train, y_train, x_test, arm, versions_for_arm(versions, arm))
+    outcome = cache_get(key) if use_cache else None
+    if outcome is None:
+        try:
+            outcome = arm.fit_predict(x_train, y_train, x_test, dgp.binary)
+        except Exception as e:  # an arm's failure must not stop the run
+            outcome = learners.FitOutcome(
+                predictions=None, error=f"{type(e).__name__}: {e}"
+            )
+        if use_cache and outcome.ok:
+            cache_put(key, outcome)
+    _write_measures(unit, outcome, dgp, truth_test, y_test, out_dir)
 
 
-def _run_block_chunk(
-    arm_name: str, chunk: list[Unit]
-) -> list[tuple[Unit, learners.FitOutcome]]:
+def _process_block_chunk(
+    chunk: list[Unit],
+    arm_name: str,
+    diagnostics: dict,
+    out_dir: Path,
+    versions: dict,
+    use_cache: bool,
+) -> None:
     arm = learners.ARMS[arm_name]
-    jobs = [
-        learners.BlockJob(f"u{i}", u.x_train, u.y_train, u.x_test, u.dgp.binary)
-        for i, u in enumerate(chunk)
-    ]
-    try:
-        outcomes = arm.run_block(jobs)
-    except Exception as e:  # a block-level crash must not stop the run
-        message = f"{type(e).__name__}: {e}"
-        outcomes = {
-            job.job_id: learners.FitOutcome(predictions=None, error=message)
-            for job in jobs
-        }
-    return [(u, outcomes[f"u{i}"]) for i, u in enumerate(chunk)]
+    contexts: dict[Unit, tuple] = {}
+    keys: dict[Unit, str] = {}
+    cached_outcomes: dict[Unit, learners.FitOutcome] = {}
+    jobs: list[tuple[Unit, learners.BlockJob]] = []
+    for i, unit in enumerate(chunk):
+        dgp = dgps.REGISTRY[unit.cell.dgp]
+        x_train, y_train, x_test, y_test, truth_test = generate_dataset(
+            unit.cell, unit.rep, diagnostics
+        )
+        contexts[unit] = (dgp, truth_test, y_test)
+        key = cache_key(x_train, y_train, x_test, arm, versions_for_arm(versions, arm))
+        keys[unit] = key
+        cached = cache_get(key) if use_cache else None
+        if cached is not None:
+            cached_outcomes[unit] = cached
+        else:
+            job = learners.BlockJob(f"u{i}", x_train, y_train, x_test, dgp.binary)
+            jobs.append((unit, job))
+
+    outcomes_by_job_id: dict[str, learners.FitOutcome] = {}
+    if jobs:
+        try:
+            outcomes_by_job_id = arm.run_block([job for _, job in jobs])
+        except Exception as e:  # a block-level crash must not stop the run
+            message = f"{type(e).__name__}: {e}"
+            outcomes_by_job_id = {
+                job.job_id: learners.FitOutcome(predictions=None, error=message)
+                for _, job in jobs
+            }
+    job_id_by_unit = {unit: job.job_id for unit, job in jobs}
+
+    for unit in chunk:
+        if unit in cached_outcomes:
+            outcome = cached_outcomes[unit]
+        else:
+            outcome = outcomes_by_job_id[job_id_by_unit[unit]]
+            if use_cache and outcome.ok:
+                cache_put(keys[unit], outcome)
+        dgp, truth_test, y_test = contexts[unit]
+        _write_measures(unit, outcome, dgp, truth_test, y_test, out_dir)
 
 
 def run_units(
-    units: list[Unit], out_dir: Path, n_jobs: int, block_size: int, use_cache: bool
+    units: list[Unit],
+    diagnostics: dict,
+    out_dir: Path,
+    n_jobs: int,
+    block_size: int,
+    versions: dict,
+    use_cache: bool,
 ) -> None:
-    cached_units, remaining = [], []
-    for unit in units:
-        cached = cache_get(unit.cache_key) if use_cache else None
-        (cached_units if cached is not None else remaining).append((unit, cached))
-
-    tasks = []
-    for unit, outcome in cached_units:
-        _finish_unit(unit, outcome, out_dir, use_cache=False)  # already cached
-
-    inline_units = [
-        u for u, _ in remaining if learners.ARMS[u.arm_name].kind == "inline"
-    ]
+    inline_units = [u for u in units if learners.ARMS[u.arm_name].kind == "inline"]
     block_units_by_arm: dict[str, list[Unit]] = {}
-    for u, _ in remaining:
-        arm = learners.ARMS[u.arm_name]
-        if arm.kind != "inline":
+    for u in units:
+        if learners.ARMS[u.arm_name].kind != "inline":
             block_units_by_arm.setdefault(u.arm_name, []).append(u)
 
-    for unit in inline_units:
-        tasks.append(joblib.delayed(_run_inline_unit)(unit))
+    tasks = [
+        joblib.delayed(_process_inline_unit)(
+            u, diagnostics, out_dir, versions, use_cache
+        )
+        for u in inline_units
+    ]
     for arm_name, arm_units in block_units_by_arm.items():
         for i in range(0, len(arm_units), block_size):
+            chunk = arm_units[i : i + block_size]
             tasks.append(
-                joblib.delayed(_run_block_chunk)(
-                    arm_name, arm_units[i : i + block_size]
+                joblib.delayed(_process_block_chunk)(
+                    chunk, arm_name, diagnostics, out_dir, versions, use_cache
                 )
             )
 
     if not tasks:
         return
-    results = joblib.Parallel(n_jobs=n_jobs, backend="loky")(tasks)
-    for r in results:
-        pairs = r if isinstance(r, list) else [r]
-        for unit, outcome in pairs:
-            _finish_unit(unit, outcome, out_dir, use_cache=use_cache)
-
-
-def _finish_unit(
-    unit: Unit, outcome: learners.FitOutcome, out_dir: Path, use_cache: bool
-) -> None:
-    if use_cache and outcome.ok:
-        cache_put(unit.cache_key, outcome)
-    try:
-        measures = compute_measures(outcome, unit.dgp, unit.truth_test, unit.y_test)
-    except Exception as e:  # e.g. metrics.py rejects a non-finite prediction;
-        # never let one bad fit stop the run.
-        measures = {
-            "error": f"{type(e).__name__}: {e}",
-            "fit_seconds": outcome.fit_seconds,
-        }
-    atomic_write_json(
-        result_path(out_dir, unit.cell, unit.arm_name, unit.rep), measures
-    )
+    # inner_max_num_threads=1: each worker's own BLAS stays single-threaded
+    # even if the caller did not source dev/env.sh (a review measured 5
+    # OpenMP threads per worker at --n-jobs 2 without it).
+    with joblib.parallel_config(backend="loky", inner_max_num_threads=1):
+        joblib.Parallel(n_jobs=n_jobs)(tasks)
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +561,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--block-size", type=int, default=DEFAULT_BLOCK_SIZE)
     p.add_argument("--resume", action="store_true")
     p.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="with --resume, also redo a unit whose result recorded an error",
+    )
+    p.add_argument(
         "--no-cache",
         action="store_true",
         help="ignore and do not populate the prediction cache",
@@ -501,48 +573,92 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _install_signal_handlers() -> None:
+    def _handle(signum, _frame):
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, _handle)
+    signal.signal(signal.SIGINT, _handle)
+
+
 def main(argv: list[str] | None = None) -> None:
+    _install_signal_handlers()
     args = build_arg_parser().parse_args(argv)
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "run.pid").write_text(str(os.getpid()), encoding="utf-8")
+    pid_path = out_dir / "run.pid"
+    pid_path.write_text(str(os.getpid()), encoding="utf-8")
 
-    arm_names = args.arms.split(",")
-    unknown_arms = set(arm_names) - set(learners.ARMS)
-    if unknown_arms:
-        raise SystemExit(f"unknown arm name(s): {sorted(unknown_arms)}")
+    try:
+        arm_names = args.arms.split(",")
+        unknown_arms = set(arm_names) - set(learners.ARMS)
+        if unknown_arms:
+            raise SystemExit(f"unknown arm name(s): {sorted(unknown_arms)}")
 
-    diagnostics = dgps.load_diagnostics()
-    cells = parse_cells(args, dgps.all_cells())
-    reps = parse_reps(args.reps)
-    versions = gather_versions(arm_names)
+        diagnostics = dgps.load_diagnostics()
+        cells = parse_cells(args, dgps.all_cells())
+        reps = parse_reps(args.reps)
+        versions = gather_versions(arm_names)
 
-    manifest = {
-        "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "arms": {name: learners.ARMS[name].config for name in arm_names},
-        "arm_source_hash": {
-            name: hashlib.sha256(learners.ARMS[name].source_text.encode()).hexdigest()[
-                :16
-            ]
-            for name in arm_names
-        },
-        "cells": [c.name for c in cells],
-        "reps": [reps.start, reps.stop],
-        "versions": versions,
-        "test_n": TEST_N,
-    }
-    atomic_write_json(out_dir / "manifest.json", manifest)
+        append_manifest_entry(
+            out_dir,
+            {
+                "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "arms": {name: learners.ARMS[name].config for name in arm_names},
+                "arm_source_hash": {
+                    name: hashlib.sha256(
+                        learners.ARMS[name].source_text.encode()
+                    ).hexdigest()[:16]
+                    for name in arm_names
+                },
+                "cells": [c.name for c in cells],
+                "reps": [reps.start, reps.stop],
+                "versions": versions,
+                "test_n": TEST_N,
+                "resume": args.resume,
+                "retry_failed": args.retry_failed,
+            },
+        )
 
-    units = build_units(
-        cells, arm_names, reps, out_dir, diagnostics, versions, args.resume
-    )
-    print(
-        f"{len(units)} (cell, arm, repetition) units to run, out of "
-        f"{len(cells) * len(arm_names) * len(reps)} requested",
-        file=sys.stderr,
-    )
-    run_units(units, out_dir, args.n_jobs, args.block_size, use_cache=not args.no_cache)
-    print("done", file=sys.stderr)
+        units = build_units(
+            cells, arm_names, reps, out_dir, args.resume, args.retry_failed
+        )
+        print(
+            f"{len(units)} (cell, arm, repetition) units to run, out of "
+            f"{len(cells) * len(arm_names) * len(reps)} requested",
+            file=sys.stderr,
+        )
+        run_units(
+            units,
+            diagnostics,
+            out_dir,
+            args.n_jobs,
+            args.block_size,
+            versions,
+            use_cache=not args.no_cache,
+        )
+        print("done", file=sys.stderr)
+    finally:
+        with contextlib.suppress(OSError):
+            pid_path.unlink(missing_ok=True)
+
+
+def append_manifest_entry(out_dir: Path, entry: dict) -> None:
+    """Appends to ``manifest.json`` (a JSON list, one entry per invocation)
+    instead of overwriting it, so a folder that saw more than one invocation
+    (for example the D7-excepted legacy arms, run separately from the rest)
+    keeps every invocation's settings and versions, not just the last one.
+    """
+    path = out_dir / "manifest.json"
+    history = []
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            history = loaded if isinstance(loaded, list) else [loaded]
+        except (json.JSONDecodeError, OSError):
+            history = []
+    history.append(entry)
+    atomic_write_json(path, history)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,85 @@ def test_every_arm_has_a_nonempty_source_text():
         assert len(arm.source_text) > 0, name
 
 
+def test_mars_degree_is_2_for_every_simulation_arm():
+    """VALIDATION_PLAN.md, "Behavior target": "Every simulation arm sets 2."
+    A review tried degree 1 for every MARS arm and found no test failed.
+    """
+    assert learners.MARS_DEGREE == 2
+    for name in ("P-cur", "P-ear", "EarthClassifier", "GLMEarth"):
+        assert learners.ARMS[name].config["kwargs"]["max_degree"] == 2, name
+    for name in ("E-def", "E-pym"):
+        assert learners.ARMS[name].config["args"]["degree"] == 2, name
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_config"),
+    [
+        ("E-def", {"args": {"degree": 2}}),
+        (
+            "E-pym",
+            {
+                "args": {
+                    "degree": 2,
+                    "penalty": 6,
+                    "thresh": 0,
+                    "minspan": 1,
+                    "endspan": 1,
+                    "fast.k": 0,
+                    "Adjust.endspan": 1,
+                }
+            },
+        ),
+        ("P-cur", {"class_name": "Earth", "kwargs": {"max_degree": 2}}),
+        (
+            "P-ear",
+            {
+                "class_name": "Earth",
+                "kwargs": {
+                    "max_degree": 2,
+                    "penalty": 1.5,
+                    "minspan_alpha": 0.05,
+                    "endspan_alpha": 0.05,
+                },
+            },
+        ),
+        (
+            "EarthClassifier",
+            {"class_name": "EarthClassifier", "kwargs": {"max_degree": 2}},
+        ),
+        ("GLMEarth", {"class_name": "GLMEarth", "kwargs": {"max_degree": 2}}),
+    ],
+)
+def test_arm_config_matches_the_plans_learners_and_settings_table(
+    name, expected_config
+):
+    """VALIDATION_PLAN.md, "Learners and settings". A review changed one
+    setting at a time (E-pym's penalty, thresh, "fast.k", "Adjust.endspan";
+    P-ear's penalty and minspan_alpha) in a scratch copy and found every test
+    still passed; pinning the whole config dict catches any of them.
+    """
+    assert learners.ARMS[name].config == expected_config
+
+
+@pytest.mark.parametrize(
+    ("name", "substrings"),
+    [
+        ("HGB", ["learning_rate=0.1", "max_iter=1000", "early_stopping=True"]),
+        ("OLS", ["LinearRegression"]),
+        ("LogReg", ["C=np.inf"]),
+    ],
+)
+def test_inline_arm_source_contains_its_plan_settings(name, substrings):
+    """The settings for these three arms are literal keyword arguments in
+    their fit_predict source, not a separate config dict; pinning the source
+    text is what catches a review's HGB max_iter/early_stopping mutations and
+    a penalized LogReg (default C=1) in place of C=np.inf.
+    """
+    source = learners.ARMS[name].source_text
+    for substring in substrings:
+        assert substring in source, (name, substring)
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -90,6 +169,13 @@ def test_hgb_classifier_predicts_probabilities():
 
 
 def test_logreg_is_unpenalized_and_predicts_probabilities():
+    """Compares the arm's own output (not a model the test fits on the side)
+    against a directly-fit unpenalized reference, and separately shows a
+    penalized fit would have given different predictions. A review's repro:
+    the previous version of this test fit two reference models itself and
+    never checked outcome.predictions against either, so replacing C=np.inf
+    with scikit-learn's default (C=1, penalized) in the arm passed anyway.
+    """
     from sklearn.linear_model import LogisticRegression
 
     x_train, y_train = _linear_data(seed=0, binary=True)
@@ -97,12 +183,16 @@ def test_logreg_is_unpenalized_and_predicts_probabilities():
     outcome = learners.ARMS["LogReg"].fit_predict(x_train, y_train, x_test, True)
     assert outcome.ok
     assert (outcome.predictions >= 0).all() and (outcome.predictions <= 1).all()
+
     unpenalized = LogisticRegression(C=np.inf).fit(x_train, y_train)
-    penalized = LogisticRegression().fit(x_train, y_train)  # default C=1
-    # An unpenalized fit's coefficients are at least as large in magnitude as
-    # a penalized fit's (F9: the legacy code's default penalty shrinks by
-    # about 20%), which is what distinguishes the two in this arm.
-    assert np.abs(unpenalized.coef_).sum() >= np.abs(penalized.coef_).sum()
+    reference_predictions = unpenalized.predict_proba(x_test)[:, 1]
+    assert np.allclose(outcome.predictions, reference_predictions, atol=1e-8)
+
+    penalized = LogisticRegression().fit(
+        x_train, y_train
+    )  # scikit-learn's default, C=1
+    penalized_predictions = penalized.predict_proba(x_test)[:, 1]
+    assert not np.allclose(outcome.predictions, penalized_predictions, atol=1e-6)
 
 
 def test_p_fix_raises_not_implemented_today():

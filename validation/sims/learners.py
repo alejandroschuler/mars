@@ -33,12 +33,16 @@ import numpy as np
 import pymars
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+THIS_SCRIPT = Path(__file__)
 R_SCRIPT = Path(__file__).with_name("fit_earth_block.R")
 LEGACY_WORKER_SCRIPT = Path(__file__).with_name("legacy_worker.py")
 LEGACY_PYTHON = REPO_ROOT / ".venv-legacy" / "bin" / "python"
 
 MARS_DEGREE = 2  # every simulation arm's degree / max_degree (Behavior target)
 _MISSING_OUTPUT = "missing output file (the block process may have failed)"
+# Generous: a D7 (p=50) legacy fit alone can take minutes (Compute ledger), and
+# a block batches several. This only guards against a truly hung subprocess.
+SUBPROCESS_TIMEOUT_S = 4 * 3600
 
 
 @dataclass(frozen=True)
@@ -184,6 +188,12 @@ def _p_fix_fit_predict(x_train, y_train, x_test, binary: bool) -> FitOutcome:
 
 
 def _write_csv(path: Path, x: np.ndarray, y: np.ndarray | None) -> None:
+    """CSV at full round-trip precision, for the legacy path: the reader is
+    ``pandas.read_csv(..., float_precision="round_trip")`` in
+    ``legacy_worker.py``, which recovers the exact float64 bit pattern (its
+    default C parser can be off by 1-2 ULP; a review measured this on real
+    data).
+    """
     p = x.shape[1]
     header = ",".join(f"x{j + 1}" for j in range(p))
     cols = [x]
@@ -192,6 +202,24 @@ def _write_csv(path: Path, x: np.ndarray, y: np.ndarray | None) -> None:
         cols.append(y.reshape(-1, 1))
     data = np.hstack(cols)
     np.savetxt(path, data, delimiter=",", header=header, comments="", fmt="%.17g")
+
+
+def _write_binary_matrix(path: Path, x: np.ndarray) -> None:
+    """Raw float64, column-major (R's native matrix layout), so
+    ``matrix(readBin(path, "double", n), nrow, ncol)`` (the default
+    ``byrow = FALSE``) reconstructs it exactly. Unlike a decimal round trip,
+    there is no parser to get almost-right: R and Python read the identical
+    bit pattern this writes. ``ndarray.tofile`` always flattens in C
+    (row-major) order regardless of the array's own memory layout (this is
+    documented numpy behavior, not a bug to route around some other way), so
+    this transposes first: a C-order flatten of ``x.T`` is a column-major
+    flatten of ``x``.
+    """
+    np.ascontiguousarray(x.T, dtype=np.float64).tofile(path)
+
+
+def _write_binary_vector(path: Path, y: np.ndarray) -> None:
+    np.ascontiguousarray(y, dtype=np.float64).tofile(path)
 
 
 def to_covariates_tuple(value) -> tuple[int, ...] | None:
@@ -225,34 +253,39 @@ def _read_result(path: Path) -> FitOutcome:
 def _run_subprocess_block(
     jobs: Sequence[BlockJob],
     command: list[str],
-    build_job_entry: Callable[[BlockJob, Path, Path, Path], dict],
+    build_job_entry: Callable[[BlockJob, Path], dict],
 ) -> dict[str, FitOutcome]:
     with tempfile.TemporaryDirectory(prefix="pymars-sim-block-") as tmp:
         tmp_path = Path(tmp)
         manifest_jobs = []
         out_paths = {}
         for job in jobs:
-            train_csv = tmp_path / f"{job.job_id}_train.csv"
-            test_csv = tmp_path / f"{job.job_id}_test.csv"
             out_json = tmp_path / f"{job.job_id}_out.json"
-            _write_csv(train_csv, job.x_train, job.y_train)
-            _write_csv(test_csv, job.x_test, None)
             out_paths[job.job_id] = out_json
-            manifest_jobs.append(build_job_entry(job, train_csv, test_csv, out_json))
+            manifest_jobs.append(build_job_entry(job, tmp_path))
+            manifest_jobs[-1]["out_json"] = str(out_json)
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps({"jobs": manifest_jobs}), encoding="utf-8")
 
-        proc = subprocess.run(
-            [*command, str(manifest_path)], capture_output=True, text=True, check=False
-        )
+        try:
+            proc = subprocess.run(
+                [*command, str(manifest_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=SUBPROCESS_TIMEOUT_S,
+            )
+            returncode, stderr = proc.returncode, proc.stderr
+        except subprocess.TimeoutExpired:
+            returncode, stderr = None, f"timed out after {SUBPROCESS_TIMEOUT_S} s"
         outcomes = {job_id: _read_result(p) for job_id, p in out_paths.items()}
-        if proc.returncode != 0:
-            stderr_tail = proc.stderr[-2000:]
+        if returncode != 0:
+            stderr_tail = stderr[-2000:]
             for job_id, outcome in outcomes.items():
                 if outcome.error == _MISSING_OUTPUT:
                     outcomes[job_id] = FitOutcome(
                         predictions=None,
-                        error=f"process exited {proc.returncode}: {stderr_tail}",
+                        error=f"process exited {returncode}: {stderr_tail}",
                     )
         return outcomes
 
@@ -260,12 +293,21 @@ def _run_subprocess_block(
 def _make_r_run_block(
     r_args: dict,
 ) -> Callable[[Sequence[BlockJob]], dict[str, FitOutcome]]:
-    def build(job: BlockJob, train_csv: Path, test_csv: Path, out_json: Path) -> dict:
+    def build(job: BlockJob, tmp_path: Path) -> dict:
+        train_x = tmp_path / f"{job.job_id}_train_x.bin"
+        train_y = tmp_path / f"{job.job_id}_train_y.bin"
+        test_x = tmp_path / f"{job.job_id}_test_x.bin"
+        _write_binary_matrix(train_x, job.x_train)
+        _write_binary_vector(train_y, job.y_train)
+        _write_binary_matrix(test_x, job.x_test)
         return {
             "id": job.job_id,
-            "train_csv": str(train_csv),
-            "test_csv": str(test_csv),
-            "out_json": str(out_json),
+            "train_x": str(train_x),
+            "train_y": str(train_y),
+            "test_x": str(test_x),
+            "n_train": job.x_train.shape[0],
+            "n_test": job.x_test.shape[0],
+            "p": job.x_train.shape[1],
             "args": r_args,
             "glm_family": "binomial" if job.binary else None,
         }
@@ -279,12 +321,15 @@ def _make_r_run_block(
 def _make_legacy_run_block(
     class_name: str, kwargs: dict
 ) -> Callable[[Sequence[BlockJob]], dict[str, FitOutcome]]:
-    def build(job: BlockJob, train_csv: Path, test_csv: Path, out_json: Path) -> dict:
+    def build(job: BlockJob, tmp_path: Path) -> dict:
+        train_csv = tmp_path / f"{job.job_id}_train.csv"
+        test_csv = tmp_path / f"{job.job_id}_test.csv"
+        _write_csv(train_csv, job.x_train, job.y_train)
+        _write_csv(test_csv, job.x_test, None)
         return {
             "id": job.job_id,
             "train_csv": str(train_csv),
             "test_csv": str(test_csv),
-            "out_json": str(out_json),
             "class_name": class_name,
             "kwargs": kwargs,
         }
@@ -328,7 +373,7 @@ ARMS: dict[str, Arm] = {
         kind="r",
         supports_regression=True,
         supports_binary=True,
-        source_text=_file_source(R_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, R_SCRIPT),
         config={"args": _E_DEF_ARGS},
         run_block=_make_r_run_block(_E_DEF_ARGS),
     ),
@@ -337,7 +382,7 @@ ARMS: dict[str, Arm] = {
         kind="r",
         supports_regression=True,
         supports_binary=False,
-        source_text=_file_source(R_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, R_SCRIPT),
         config={"args": _E_PYM_ARGS},
         run_block=_make_r_run_block(_E_PYM_ARGS),
     ),
@@ -346,7 +391,7 @@ ARMS: dict[str, Arm] = {
         kind="legacy",
         supports_regression=True,
         supports_binary=False,
-        source_text=_file_source(LEGACY_WORKER_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, LEGACY_WORKER_SCRIPT),
         config={"class_name": "Earth", "kwargs": _P_CUR_KWARGS},
         run_block=_make_legacy_run_block("Earth", _P_CUR_KWARGS),
     ),
@@ -355,7 +400,7 @@ ARMS: dict[str, Arm] = {
         kind="legacy",
         supports_regression=True,
         supports_binary=False,
-        source_text=_file_source(LEGACY_WORKER_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, LEGACY_WORKER_SCRIPT),
         config={"class_name": "Earth", "kwargs": _P_EAR_KWARGS},
         run_block=_make_legacy_run_block("Earth", _P_EAR_KWARGS),
     ),
@@ -364,7 +409,7 @@ ARMS: dict[str, Arm] = {
         kind="legacy",
         supports_regression=False,
         supports_binary=True,
-        source_text=_file_source(LEGACY_WORKER_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, LEGACY_WORKER_SCRIPT),
         config={"class_name": "EarthClassifier", "kwargs": _EARTH_CLASSIFIER_KWARGS},
         run_block=_make_legacy_run_block("EarthClassifier", _EARTH_CLASSIFIER_KWARGS),
     ),
@@ -373,7 +418,7 @@ ARMS: dict[str, Arm] = {
         kind="legacy",
         supports_regression=False,
         supports_binary=True,
-        source_text=_file_source(LEGACY_WORKER_SCRIPT),
+        source_text=_file_source(THIS_SCRIPT, LEGACY_WORKER_SCRIPT),
         config={"class_name": "GLMEarth", "kwargs": _GLM_EARTH_KWARGS},
         run_block=_make_legacy_run_block("GLMEarth", _GLM_EARTH_KWARGS),
     ),

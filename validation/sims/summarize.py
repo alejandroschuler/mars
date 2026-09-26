@@ -38,6 +38,64 @@ DGP_LABELS = {
 RATIO_TABLE_DGPS = list(DGP_LABELS)
 EQUIVALENCE_MARGIN = np.log(1.05)
 
+# VALIDATION_PLAN.md, "Mockups": each display's caption, naming the claim it
+# serves. The brief: "Captions come from the plan and name the claim each
+# display serves." Written once here and reused for every file this module
+# writes, so the claim a display supports is never left for the reader to
+# guess from the code.
+CAPTIONS = {
+    "ratio_table.csv": (
+        "Ratio table. Excess risk of the current pymars and of the two "
+        "ablation arms relative to earth, at 200 cases and the low-noise "
+        "level, as a ratio of geometric means over repetitions, with an "
+        "interval of +/-3 Monte Carlo standard errors on the log scale, the "
+        "width the decision rules use. Values above 1 favor earth. The first "
+        "column tests the GAP CLAIM; the two ablation columns show whether "
+        "settings or rules cause the gap. The D7 row has no P-cur or P-ear "
+        "value: the legacy code is too slow there."
+    ),
+    "ratio_table_n1000.csv": (
+        "Appendix ratio table at 1,000 cases (see ratio_table.csv), for the "
+        "GAP CLAIM: D3, D4, D5 and D8 at the low-noise level are the cells "
+        "the plan's pilot runs at this size; the other DGPs show as missing "
+        "until the low-priority batch runs them too."
+    ),
+    "equivalence_figure.png": (
+        "Equivalence figure. Log ratio of excess risk, P-fix over E-def, "
+        "with intervals of +/-3 Monte Carlo standard errors, the width the "
+        "equivalence rule uses; one row per DGP, one panel per sample size, "
+        "point shape by noise level. The shaded band marks the equivalence "
+        "margin of +/-log 1.05. Supports the PARITY CLAIM across the whole "
+        "grid."
+    ),
+    "box_plots.png": (
+        "Per-repetition box plots. Log ratios against E-def, at 200 cases, "
+        "for P-cur, P-ear, E-pym and P-fix. Show whether a few bad fits "
+        "drive the means in the ratio table and the equivalence figure "
+        "(the GAP and PARITY CLAIMS)."
+    ),
+    "selection_table.csv": (
+        "Selection table. Model size and selection on D4, D6, D7 and D8 at "
+        "200 cases: the median number of terms with its interquartile range, "
+        "the share of fits that use any irrelevant covariate, and the mean "
+        "number of irrelevant covariates used, for E-def, P-cur and P-fix. "
+        "Supports the SPARSITY CLAIM."
+    ),
+    "binary_outcome_table.csv": (
+        "Binary-outcome table. Ratio of excess log loss (pymars over earth) "
+        "and the calibration slope, for D3-bin and D4-bin, for "
+        "EarthClassifier and GLMEarth as they are in 1.0.4 (200 cases) and "
+        "for P-fix (200, 1,000 and 5,000 cases). Supports the PARITY CLAIM "
+        "for binary outcomes and measures the effect of finding F9 (the "
+        "penalized refit)."
+    ),
+    "appendix_table.csv": (
+        "Appendix: every cell run so far, with its Monte Carlo standard "
+        "error and its failure count, for whichever claim's evidence that "
+        "cell belongs to."
+    ),
+}
+
 
 # ---------------------------------------------------------------------------
 # Loading.
@@ -92,11 +150,14 @@ def load_results(results_dir: Path) -> pd.DataFrame:
         "error",
         "excess_risk",
         "excess_log_loss",
+        "excess_brier_score",
         "calibration_slope",
         "n_terms",
+        "covariates_used",
         "uses_irrelevant_covariate",
         "n_irrelevant_covariates",
         "fit_seconds",
+        "extra",
     ]
     return (
         pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
@@ -246,8 +307,19 @@ def equivalence_figure(df: pd.DataFrame, out_path: Path) -> None:
         ax.set_xlabel("log ratio (P-fix / E-def)")
         ax.set_yticks(range(len(dgps_here)))
         ax.set_yticklabels(y_labels)
+    axes[0].legend(
+        handles=[
+            plt.Line2D([], [], marker="o", color="tab:blue", linestyle="", label="lo"),
+            plt.Line2D(
+                [], [], marker="s", color="tab:orange", linestyle="", label="hi"
+            ),
+        ],
+        title="noise",
+        loc="best",
+        fontsize="small",
+    )
     fig.suptitle(
-        "Excess risk log ratio, P-fix / E-def, +/-3 MC SE "
+        "Parity claim: excess risk log ratio, P-fix / E-def, +/-3 MC SE "
         "(shaded: equivalence margin +/-log 1.05)"
     )
     fig.tight_layout()
@@ -295,7 +367,9 @@ def box_plots(df: pd.DataFrame, out_path: Path, n: int = 200) -> None:
         ax.text(0.5, 0.5, "no paired repetitions yet", ha="center", va="center")
     ax.axhline(0, color="black", linewidth=0.5)
     ax.set_ylabel("log ratio (arm / E-def)")
-    ax.set_title(f"Per-repetition log ratios at n = {n}")
+    ax.set_title(
+        f"Gap and parity claims: per-repetition log ratios against E-def at n = {n}"
+    )
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150)
@@ -315,10 +389,20 @@ def selection_table(df: pd.DataFrame, n: int = 200) -> pd.DataFrame:
     rows = []
     for dgp in ("D4", "D6", "D7", "D8"):
         for arm in ("E-def", "P-cur", "P-fix"):
-            if dgp == "D7" and arm == "P-cur":
-                continue
             noises = (None,) if dgp == "D6" else ("lo", "hi")
             for noise in noises:
+                row = {"DGP": DGP_LABELS[dgp], "noise": noise or "na", "arm": arm}
+                if dgp == "D7" and arm == "P-cur":
+                    row.update(
+                        {
+                            "median_terms": "n/a (legacy code too slow at p=50)",
+                            "iqr_terms": "n/a (legacy code too slow at p=50)",
+                            "share_irrelevant": "n/a (legacy code too slow at p=50)",
+                            "mean_n_irrelevant": "n/a (legacy code too slow at p=50)",
+                        }
+                    )
+                    rows.append(row)
+                    continue
                 sub = df[
                     (df.dgp == dgp)
                     & (df.n == n)
@@ -326,7 +410,6 @@ def selection_table(df: pd.DataFrame, n: int = 200) -> pd.DataFrame:
                     & (df.arm == arm)
                     & df.error.isna()
                 ]
-                row = {"DGP": DGP_LABELS[dgp], "noise": noise or "na", "arm": arm}
                 if sub.empty:
                     row.update(
                         {
@@ -435,6 +518,18 @@ def appendix_table(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
+def write_captions(out_dir: Path) -> None:
+    """``captions.md``: one caption per display, from ``CAPTIONS``, each
+    naming the claim the display serves (VALIDATION_PLAN.md, "Mockups"; the
+    brief: "Captions come from the plan and name the claim each display
+    serves").
+    """
+    lines = ["# Display captions\n"]
+    for filename, caption in CAPTIONS.items():
+        lines.append(f"## `{filename}`\n\n{caption}\n")
+    (out_dir / "captions.md").write_text("\n".join(lines), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", required=True, type=Path)
@@ -449,11 +544,13 @@ def main(argv: list[str] | None = None) -> None:
     # CSV, not Markdown: pandas' to_markdown needs the optional "tabulate"
     # package, which is not one of this project's dependencies.
     ratio_table(df).to_csv(out_dir / "ratio_table.csv", index=False)
+    ratio_table(df, n=1000).to_csv(out_dir / "ratio_table_n1000.csv", index=False)
     selection_table(df).to_csv(out_dir / "selection_table.csv", index=False)
     binary_outcome_table(df).to_csv(out_dir / "binary_outcome_table.csv", index=False)
     appendix_table(df).to_csv(out_dir / "appendix_table.csv", index=False)
     equivalence_figure(df, out_dir / "equivalence_figure.png")
     box_plots(df, out_dir / "box_plots.png")
+    write_captions(out_dir)
     print(f"wrote the mockups' displays to {out_dir}")
 
 
