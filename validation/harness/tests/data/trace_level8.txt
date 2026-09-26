@@ -1,0 +1,375 @@
+Call: earth(x=c(0.0856,0.2368...), y=c(0.0246,-0.081...), pmethod="none",
+            trace=8, degree=1, penalty=2, nk=11, thresh=0, minspan=1,
+            endspan=1, fast.k=0, Auto.linpreds=FALSE)
+
+maxmem 0.0 GB
+earth.c version 5.3.4
+BetaCache 968 Bytes
+Forward pass: minspan 1 endspan 1   x[60,1] 480 Bytes   bx[60,11] 5.16 kB
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 2    RssDelta 0 MaxLegalRssDelta 59.59
+
+|Parent 1  Pred 1  Case   -1 Cut      0.00149< Rss 11.897      
+--FindKnotBegin-- iPred 1 iNewCol 3 RssBeforeAddingHinge 59 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   59 RssWithKnot       11.131 RssDelta       47.869 Cut      0.95627  best
+--FindKnot--Case   58 RssWithKnot       10.242 RssDelta       48.758 Cut      0.93146  best
+--FindKnot--Case   57 RssWithKnot       9.3441 RssDelta       49.656 Cut      0.89171  best
+--FindKnot--Case   56 RssWithKnot       9.0972 RssDelta       49.903 Cut      0.87848  best
+--FindKnot--Case   55 RssWithKnot       8.8909 RssDelta       50.109 Cut      0.87114  best
+--FindKnot--Case   54 RssWithKnot       8.2303 RssDelta        50.77 Cut      0.84977  best
+--FindKnot--Case   53 RssWithKnot       7.7607 RssDelta       51.239 Cut      0.82989  best
+--FindKnot--Case   52 RssWithKnot       7.5451 RssDelta       51.455 Cut      0.82008  best
+--FindKnot--Case   51 RssWithKnot        7.149 RssDelta       51.851 Cut      0.80127  best
+--FindKnot--Case   50 RssWithKnot       6.7631 RssDelta       52.237 Cut      0.77328  best
+--FindKnot--Case   49 RssWithKnot       6.6189 RssDelta       52.381 Cut      0.75871  best
+--FindKnot--Case   48 RssWithKnot       6.4884 RssDelta       52.512 Cut      0.74176  best
+--FindKnot--Case   47 RssWithKnot       6.4702 RssDelta        52.53 Cut      0.73784  best
+--FindKnot--Case   46 RssWithKnot       6.4512 RssDelta       52.549 Cut      0.73458  best
+--FindKnot--Case   45 RssWithKnot       6.4439 RssDelta       52.556 Cut      0.72216  best
+--FindKnot--Case   44 RssWithKnot       6.5438 RssDelta       52.456 Cut      0.70697 
+--FindKnot--Case   43 RssWithKnot       6.6589 RssDelta       52.341 Cut      0.69843 
+--FindKnot--Case   42 RssWithKnot       6.7015 RssDelta       52.298 Cut      0.69622 
+--FindKnot--Case   41 RssWithKnot       7.0021 RssDelta       51.998 Cut       0.6828 
+--FindKnot--Case   40 RssWithKnot       7.5699 RssDelta        51.43 Cut       0.6605 
+--FindKnot--Case   39 RssWithKnot       7.6441 RssDelta       51.356 Cut      0.65765 
+--FindKnot--Case   38 RssWithKnot        7.886 RssDelta       51.114 Cut      0.64855 
+--FindKnot--Case   37 RssWithKnot       8.4169 RssDelta       50.583 Cut      0.63009 
+--FindKnot--Case   36 RssWithKnot       8.8728 RssDelta       50.127 Cut      0.61291 
+--FindKnot--Case   35 RssWithKnot       9.5533 RssDelta       49.447 Cut       0.5868 
+--FindKnot--Case   34 RssWithKnot       9.5956 RssDelta       49.404 Cut      0.58516 
+--FindKnot--Case   33 RssWithKnot       9.6732 RssDelta       49.327 Cut      0.58216 
+--FindKnot--Case   32 RssWithKnot       10.156 RssDelta       48.844 Cut      0.56181 
+--FindKnot--Case   31 RssWithKnot       11.054 RssDelta       47.946 Cut      0.51674 
+--FindKnot--Case   30 RssWithKnot       11.556 RssDelta       47.444 Cut      0.47968 
+--FindKnot--Case   29 RssWithKnot       11.563 RssDelta       47.437 Cut      0.47905 
+--FindKnot--Case   28 RssWithKnot       11.639 RssDelta       47.361 Cut      0.47131 
+--FindKnot--Case   27 RssWithKnot       11.869 RssDelta       47.131 Cut      0.43313 
+--FindKnot--Case   26 RssWithKnot       11.875 RssDelta       47.125 Cut      0.43063 
+--FindKnot--Case   25 RssWithKnot        11.88 RssDelta        47.12 Cut      0.42857 
+--FindKnot--Case   24 RssWithKnot       11.887 RssDelta       47.113 Cut      0.39966 
+--FindKnot--Case   23 RssWithKnot       11.877 RssDelta       47.123 Cut      0.39393 
+--FindKnot--Case   22 RssWithKnot       11.871 RssDelta       47.129 Cut      0.39123 
+--FindKnot--Case   21 RssWithKnot       11.822 RssDelta       47.178 Cut      0.37424 
+--FindKnot--Case   20 RssWithKnot       11.448 RssDelta       47.552 Cut      0.31399 
+--FindKnot--Case   19 RssWithKnot       11.299 RssDelta       47.701 Cut       0.2984 
+--FindKnot--Case   18 RssWithKnot       11.297 RssDelta       47.703 Cut      0.29816 
+--FindKnot--Case   17 RssWithKnot       11.255 RssDelta       47.745 Cut      0.29272 
+--FindKnot--Case   16 RssWithKnot        11.25 RssDelta        47.75 Cut      0.29198 
+--FindKnot--Case   15 RssWithKnot       11.218 RssDelta       47.782 Cut       0.2842 
+--FindKnot--Case   14 RssWithKnot       11.195 RssDelta       47.805 Cut      0.27537 
+--FindKnot--Case   13 RssWithKnot       11.163 RssDelta       47.837 Cut      0.23681 
+--FindKnot--Case   12 RssWithKnot       11.199 RssDelta       47.801 Cut      0.21872 
+--FindKnot--Case   11 RssWithKnot       11.227 RssDelta       47.773 Cut      0.20719 
+--FindKnot--Case   10 RssWithKnot       11.256 RssDelta       47.744 Cut      0.19664 
+--FindKnot--Case    9 RssWithKnot       11.376 RssDelta       47.624 Cut      0.15974 
+--FindKnot--Case    8 RssWithKnot       11.897 RssDelta       47.103 Cut      0.14633 
+--FindKnot--Case    7 RssWithKnot       11.897 RssDelta       47.103 Cut      0.11367 
+--FindKnot--Case    6 RssWithKnot       11.897 RssDelta       47.103 Cut      0.10232 
+--FindKnot--Case    5 RssWithKnot       11.897 RssDelta       47.103 Cut     0.094129 
+--FindKnot--Case    4 RssWithKnot       11.897 RssDelta       47.103 Cut     0.090853 
+--FindKnot--Case    3 RssWithKnot       11.897 RssDelta       47.103 Cut     0.085649 
+--FindKnot--Case    2 RssWithKnot       11.897 RssDelta       47.103 Cut     0.030346 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   45 Cut       0.7222  Rss 6.4439       RssDelta 52.556          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+2      0.8743 0.8908       0.8908    1           x0     0.72216  2   3         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 4    RssDelta 0 MaxLegalRssDelta 6.50831
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 4 RssBeforeAddingHinge 6.44387 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   59 RssWithKnot       6.4274 RssDelta     0.016463 Cut      0.95627  best
+--FindKnot--Case   58 RssWithKnot       6.4377 RssDelta    0.0061967 Cut      0.93146 
+--FindKnot--Case   57 RssWithKnot       6.4433 RssDelta   0.00061871 Cut      0.89171 
+--FindKnot--Case   56 RssWithKnot       6.4427 RssDelta    0.0011846 Cut      0.87848 
+--FindKnot--Case   55 RssWithKnot       6.4425 RssDelta    0.0013553 Cut      0.87114 
+--FindKnot--Case   54 RssWithKnot       6.4434 RssDelta   0.00048239 Cut      0.84977 
+--FindKnot--Case   53 RssWithKnot       6.4434 RssDelta   0.00047124 Cut      0.82989 
+--FindKnot--Case   52 RssWithKnot       6.4433 RssDelta    0.0006104 Cut      0.82008 
+--FindKnot--Case   51 RssWithKnot       6.4433 RssDelta   0.00060553 Cut      0.80127 
+--FindKnot--Case   50 RssWithKnot       6.4424 RssDelta    0.0014805 Cut      0.77328 
+--FindKnot--Case   49 RssWithKnot       6.4429 RssDelta   0.00095588 Cut      0.75871 
+--FindKnot--Case   48 RssWithKnot       6.4439 RssDelta            0 Cut      0.74176 
+--FindKnot--Case   47 RssWithKnot       6.4439 RssDelta            0 Cut      0.73784 
+--FindKnot--Case   46 RssWithKnot       6.4439 RssDelta            0 Cut      0.73458 
+--FindKnot--Case   45 RssWithKnot       6.4439 RssDelta            0 Cut      0.72216 
+--FindKnot--Case   44 RssWithKnot       6.4439 RssDelta            0 Cut      0.70697 
+--FindKnot--Case   43 RssWithKnot       6.4439 RssDelta            0 Cut      0.69843 
+--FindKnot--Case   42 RssWithKnot       6.4439 RssDelta            0 Cut      0.69622 
+--FindKnot--Case   41 RssWithKnot       6.2212 RssDelta       0.2227 Cut       0.6828  best
+--FindKnot--Case   40 RssWithKnot       6.0372 RssDelta      0.40662 Cut       0.6605  best
+--FindKnot--Case   39 RssWithKnot       6.0147 RssDelta      0.42916 Cut      0.65765  best
+--FindKnot--Case   38 RssWithKnot       5.9303 RssDelta      0.51353 Cut      0.64855  best
+--FindKnot--Case   37 RssWithKnot       5.7188 RssDelta      0.72505 Cut      0.63009  best
+--FindKnot--Case   36 RssWithKnot       5.5645 RssDelta      0.87936 Cut      0.61291  best
+--FindKnot--Case   35 RssWithKnot       5.3075 RssDelta       1.1364 Cut       0.5868  best
+--FindKnot--Case   34 RssWithKnot       5.2869 RssDelta        1.157 Cut      0.58516  best
+--FindKnot--Case   33 RssWithKnot       5.2401 RssDelta       1.2037 Cut      0.58216  best
+--FindKnot--Case   32 RssWithKnot       4.9254 RssDelta       1.5185 Cut      0.56181  best
+--FindKnot--Case   31 RssWithKnot       4.2725 RssDelta       2.1714 Cut      0.51674  best
+--FindKnot--Case   30 RssWithKnot       3.8242 RssDelta       2.6197 Cut      0.47968  best
+--FindKnot--Case   29 RssWithKnot       3.8142 RssDelta       2.6297 Cut      0.47905  best
+--FindKnot--Case   28 RssWithKnot       3.6858 RssDelta       2.7581 Cut      0.47131  best
+--FindKnot--Case   27 RssWithKnot       3.0964 RssDelta       3.3475 Cut      0.43313  best
+--FindKnot--Case   26 RssWithKnot        3.066 RssDelta       3.3778 Cut      0.43063  best
+--FindKnot--Case   25 RssWithKnot       3.0387 RssDelta       3.4051 Cut      0.42857  best
+--FindKnot--Case   24 RssWithKnot       2.6055 RssDelta       3.8384 Cut      0.39966  best
+--FindKnot--Case   23 RssWithKnot       2.5401 RssDelta       3.9038 Cut      0.39393  best
+--FindKnot--Case   22 RssWithKnot       2.5041 RssDelta       3.9397 Cut      0.39123  best
+--FindKnot--Case   21 RssWithKnot       2.2725 RssDelta       4.1713 Cut      0.37424  best
+--FindKnot--Case   20 RssWithKnot       1.7919 RssDelta        4.652 Cut      0.31399  best
+--FindKnot--Case   19 RssWithKnot       1.7441 RssDelta       4.6997 Cut       0.2984  best
+--FindKnot--Case   18 RssWithKnot       1.7434 RssDelta       4.7005 Cut      0.29816  best
+--FindKnot--Case   17 RssWithKnot       1.7434 RssDelta       4.7005 Cut      0.29272  best
+--FindKnot--Case   16 RssWithKnot       1.7438 RssDelta       4.7001 Cut      0.29198 
+--FindKnot--Case   15 RssWithKnot       1.7786 RssDelta       4.6653 Cut       0.2842 
+--FindKnot--Case   14 RssWithKnot       1.8416 RssDelta       4.6023 Cut      0.27537 
+--FindKnot--Case   13 RssWithKnot       2.3316 RssDelta       4.1123 Cut      0.23681 
+--FindKnot--Case   12 RssWithKnot       2.7231 RssDelta       3.7208 Cut      0.21872 
+--FindKnot--Case   11 RssWithKnot       2.9659 RssDelta        3.478 Cut      0.20719 
+--FindKnot--Case   10 RssWithKnot       3.1658 RssDelta       3.2781 Cut      0.19664 
+--FindKnot--Case    9 RssWithKnot       6.4439 RssDelta            0 Cut      0.15974 
+--FindKnot--Case    8 RssWithKnot       6.4439 RssDelta            0 Cut      0.14633 
+--FindKnot--Case    7 RssWithKnot       6.4439 RssDelta            0 Cut      0.11367 
+--FindKnot--Case    6 RssWithKnot       6.4439 RssDelta            0 Cut      0.10232 
+--FindKnot--Case    5 RssWithKnot       6.4439 RssDelta            0 Cut     0.094129 
+--FindKnot--Case    4 RssWithKnot       6.4439 RssDelta            0 Cut     0.090853 
+--FindKnot--Case    3 RssWithKnot       6.4439 RssDelta            0 Cut     0.085649 
+--FindKnot--Case    2 RssWithKnot       6.4439 RssDelta            0 Cut     0.030346 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   17 Cut       0.2927  Rss 1.7434       RssDelta 4.7005          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+4      0.9634 0.9705      0.07967    1           x0     0.29272  4             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 6    RssDelta 0 MaxLegalRssDelta 1.7608
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 6 RssBeforeAddingHinge 1.74337 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   59 RssWithKnot       1.6688 RssDelta     0.074543 Cut      0.95627  best
+--FindKnot--Case   58 RssWithKnot       1.6597 RssDelta     0.083623 Cut      0.93146  best
+--FindKnot--Case   57 RssWithKnot        1.658 RssDelta     0.085348 Cut      0.89171  best
+--FindKnot--Case   56 RssWithKnot       1.6418 RssDelta      0.10157 Cut      0.87848  best
+--FindKnot--Case   55 RssWithKnot       1.6317 RssDelta      0.11163 Cut      0.87114  best
+--FindKnot--Case   54 RssWithKnot       1.6131 RssDelta      0.13027 Cut      0.84977  best
+--FindKnot--Case   53 RssWithKnot       1.5862 RssDelta      0.15718 Cut      0.82989  best
+--FindKnot--Case   52 RssWithKnot       1.5685 RssDelta      0.17486 Cut      0.82008  best
+--FindKnot--Case   51 RssWithKnot        1.531 RssDelta      0.21236 Cut      0.80127  best
+--FindKnot--Case   50 RssWithKnot       1.4368 RssDelta      0.30654 Cut      0.77328  best
+--FindKnot--Case   49 RssWithKnot       1.3897 RssDelta      0.35364 Cut      0.75871  best
+--FindKnot--Case   48 RssWithKnot       1.7434 RssDelta            0 Cut      0.74176 
+--FindKnot--Case   47 RssWithKnot       1.7434 RssDelta            0 Cut      0.73784 
+--FindKnot--Case   46 RssWithKnot       1.7434 RssDelta            0 Cut      0.73458 
+--FindKnot--Case   45 RssWithKnot       1.7434 RssDelta            0 Cut      0.72216 
+--FindKnot--Case   44 RssWithKnot       1.7434 RssDelta            0 Cut      0.70697 
+--FindKnot--Case   43 RssWithKnot       1.7434 RssDelta            0 Cut      0.69843 
+--FindKnot--Case   42 RssWithKnot       1.7434 RssDelta            0 Cut      0.69622 
+--FindKnot--Case   41 RssWithKnot       1.5313 RssDelta      0.21211 Cut       0.6828 
+--FindKnot--Case   40 RssWithKnot       1.5857 RssDelta      0.15771 Cut       0.6605 
+--FindKnot--Case   39 RssWithKnot       1.5884 RssDelta        0.155 Cut      0.65765 
+--FindKnot--Case   38 RssWithKnot       1.5911 RssDelta      0.15223 Cut      0.64855 
+--FindKnot--Case   37 RssWithKnot       1.6162 RssDelta      0.12719 Cut      0.63009 
+--FindKnot--Case   36 RssWithKnot       1.6188 RssDelta      0.12457 Cut      0.61291 
+--FindKnot--Case   35 RssWithKnot       1.6388 RssDelta      0.10455 Cut       0.5868 
+--FindKnot--Case   34 RssWithKnot        1.641 RssDelta      0.10234 Cut      0.58516 
+--FindKnot--Case   33 RssWithKnot       1.6449 RssDelta     0.098435 Cut      0.58216 
+--FindKnot--Case   32 RssWithKnot       1.6584 RssDelta     0.084966 Cut      0.56181 
+--FindKnot--Case   31 RssWithKnot        1.693 RssDelta     0.050413 Cut      0.51674 
+--FindKnot--Case   30 RssWithKnot       1.7174 RssDelta     0.025943 Cut      0.47968 
+--FindKnot--Case   29 RssWithKnot       1.7181 RssDelta     0.025246 Cut      0.47905 
+--FindKnot--Case   28 RssWithKnot       1.7245 RssDelta     0.018898 Cut      0.47131 
+--FindKnot--Case   27 RssWithKnot       1.7419 RssDelta    0.0015094 Cut      0.43313 
+--FindKnot--Case   26 RssWithKnot       1.7421 RssDelta    0.0012557 Cut      0.43063 
+--FindKnot--Case   25 RssWithKnot       1.7423 RssDelta    0.0011112 Cut      0.42857 
+--FindKnot--Case   24 RssWithKnot       1.7427 RssDelta   0.00068003 Cut      0.39966 
+--FindKnot--Case   23 RssWithKnot       1.7425 RssDelta   0.00085775 Cut      0.39393 
+--FindKnot--Case   22 RssWithKnot       1.7423 RssDelta    0.0010267 Cut      0.39123 
+--FindKnot--Case   21 RssWithKnot       1.7434 RssDelta            0 Cut      0.37424 
+--FindKnot--Case   20 RssWithKnot       1.7434 RssDelta            0 Cut      0.31399 
+--FindKnot--Case   19 RssWithKnot       1.7434 RssDelta            0 Cut       0.2984 
+--FindKnot--Case   18 RssWithKnot       1.7434 RssDelta            0 Cut      0.29816 
+--FindKnot--Case   17 RssWithKnot       1.7434 RssDelta            0 Cut      0.29272 
+--FindKnot--Case   16 RssWithKnot       1.7434 RssDelta            0 Cut      0.29198 
+--FindKnot--Case   15 RssWithKnot       1.7434 RssDelta            0 Cut       0.2842 
+--FindKnot--Case   14 RssWithKnot       1.7434 RssDelta            0 Cut      0.27537 
+--FindKnot--Case   13 RssWithKnot       1.7434 RssDelta            0 Cut      0.23681 
+--FindKnot--Case   12 RssWithKnot       1.7434 RssDelta            0 Cut      0.21872 
+--FindKnot--Case   11 RssWithKnot       1.7434 RssDelta            0 Cut      0.20719 
+--FindKnot--Case   10 RssWithKnot       1.7434 RssDelta            0 Cut      0.19664 
+--FindKnot--Case    9 RssWithKnot       1.7434 RssDelta            0 Cut      0.15974 
+--FindKnot--Case    8 RssWithKnot       1.7434 RssDelta            0 Cut      0.14633 
+--FindKnot--Case    7 RssWithKnot       1.7434 RssDelta            0 Cut      0.11367 
+--FindKnot--Case    6 RssWithKnot       1.7434 RssDelta            0 Cut      0.10232 
+--FindKnot--Case    5 RssWithKnot       1.7434 RssDelta            0 Cut     0.094129 
+--FindKnot--Case    4 RssWithKnot       1.7434 RssDelta            0 Cut     0.090853 
+--FindKnot--Case    3 RssWithKnot       1.7434 RssDelta            0 Cut     0.085649 
+--FindKnot--Case    2 RssWithKnot       1.7434 RssDelta            0 Cut     0.030346 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   49 Cut       0.7587  Rss 1.3897       RssDelta 0.35364         best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+6      0.9685 0.9764     0.005994    1           x0     0.75871  5             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 8    RssDelta 0 MaxLegalRssDelta 1.40363
+|Parent 5                                                       skip (degree of term would be 102)
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 8 RssBeforeAddingHinge 1.38973 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   59 RssWithKnot       1.3815 RssDelta    0.0082793 Cut      0.95627  best
+--FindKnot--Case   58 RssWithKnot       1.3893 RssDelta   0.00043629 Cut      0.93146 
+--FindKnot--Case   57 RssWithKnot        1.386 RssDelta    0.0037346 Cut      0.89171 
+--FindKnot--Case   56 RssWithKnot       1.3867 RssDelta    0.0030597 Cut      0.87848 
+--FindKnot--Case   55 RssWithKnot       1.3865 RssDelta    0.0032145 Cut      0.87114 
+--FindKnot--Case   54 RssWithKnot        1.381 RssDelta    0.0086956 Cut      0.84977  best
+--FindKnot--Case   53 RssWithKnot       1.3778 RssDelta     0.011947 Cut      0.82989  best
+--FindKnot--Case   52 RssWithKnot       1.3772 RssDelta     0.012499 Cut      0.82008  best
+--FindKnot--Case   51 RssWithKnot       1.3731 RssDelta     0.016627 Cut      0.80127  best
+--FindKnot--Case   50 RssWithKnot       1.3897 RssDelta            0 Cut      0.77328 
+--FindKnot--Case   49 RssWithKnot       1.3897 RssDelta            0 Cut      0.75871 
+--FindKnot--Case   48 RssWithKnot       1.3897 RssDelta            0 Cut      0.74176 
+--FindKnot--Case   47 RssWithKnot       1.3897 RssDelta            0 Cut      0.73784 
+--FindKnot--Case   46 RssWithKnot       1.3897 RssDelta            0 Cut      0.73458 
+--FindKnot--Case   45 RssWithKnot       1.3897 RssDelta            0 Cut      0.72216 
+--FindKnot--Case   44 RssWithKnot       1.3897 RssDelta            0 Cut      0.70697 
+--FindKnot--Case   43 RssWithKnot       1.3897 RssDelta            0 Cut      0.69843 
+--FindKnot--Case   42 RssWithKnot       1.3897 RssDelta            0 Cut      0.69622 
+--FindKnot--Case   41 RssWithKnot       1.3897 RssDelta            0 Cut       0.6828 
+--FindKnot--Case   40 RssWithKnot       1.3883 RssDelta    0.0014123 Cut       0.6605 
+--FindKnot--Case   39 RssWithKnot       1.3883 RssDelta     0.001432 Cut      0.65765 
+--FindKnot--Case   38 RssWithKnot       1.3875 RssDelta    0.0021949 Cut      0.64855 
+--FindKnot--Case   37 RssWithKnot       1.3887 RssDelta     0.001049 Cut      0.63009 
+--FindKnot--Case   36 RssWithKnot       1.3872 RssDelta    0.0025297 Cut      0.61291 
+--FindKnot--Case   35 RssWithKnot       1.3876 RssDelta    0.0021303 Cut       0.5868 
+--FindKnot--Case   34 RssWithKnot       1.3878 RssDelta     0.001922 Cut      0.58516 
+--FindKnot--Case   33 RssWithKnot       1.3882 RssDelta    0.0015421 Cut      0.58216 
+--FindKnot--Case   32 RssWithKnot       1.3889 RssDelta   0.00087984 Cut      0.56181 
+--FindKnot--Case   31 RssWithKnot       1.3897 RssDelta   2.2613e-05 Cut      0.51674 
+--FindKnot--Case   30 RssWithKnot       1.3883 RssDelta    0.0014383 Cut      0.47968 
+--FindKnot--Case   29 RssWithKnot       1.3882 RssDelta    0.0015759 Cut      0.47905 
+--FindKnot--Case   28 RssWithKnot       1.3865 RssDelta    0.0032443 Cut      0.47131 
+--FindKnot--Case   27 RssWithKnot       1.3725 RssDelta     0.017239 Cut      0.43313  best
+--FindKnot--Case   26 RssWithKnot       1.3721 RssDelta     0.017655 Cut      0.43063  best
+--FindKnot--Case   25 RssWithKnot       1.3718 RssDelta     0.017901 Cut      0.42857  best
+--FindKnot--Case   24 RssWithKnot       1.3582 RssDelta     0.031506 Cut      0.39966  best
+--FindKnot--Case   23 RssWithKnot       1.3584 RssDelta     0.031369 Cut      0.39393 
+--FindKnot--Case   22 RssWithKnot       1.3578 RssDelta     0.031946 Cut      0.39123  best
+--FindKnot--Case   21 RssWithKnot       1.3897 RssDelta            0 Cut      0.37424 
+--FindKnot--Case   20 RssWithKnot       1.3897 RssDelta            0 Cut      0.31399 
+--FindKnot--Case   19 RssWithKnot       1.3897 RssDelta            0 Cut       0.2984 
+--FindKnot--Case   18 RssWithKnot       1.3897 RssDelta            0 Cut      0.29816 
+--FindKnot--Case   17 RssWithKnot       1.3897 RssDelta            0 Cut      0.29272 
+--FindKnot--Case   16 RssWithKnot       1.3897 RssDelta            0 Cut      0.29198 
+--FindKnot--Case   15 RssWithKnot       1.3897 RssDelta            0 Cut       0.2842 
+--FindKnot--Case   14 RssWithKnot       1.3897 RssDelta            0 Cut      0.27537 
+--FindKnot--Case   13 RssWithKnot       1.3897 RssDelta            0 Cut      0.23681 
+--FindKnot--Case   12 RssWithKnot       1.3897 RssDelta            0 Cut      0.21872 
+--FindKnot--Case   11 RssWithKnot       1.3897 RssDelta            0 Cut      0.20719 
+--FindKnot--Case   10 RssWithKnot       1.3897 RssDelta            0 Cut      0.19664 
+--FindKnot--Case    9 RssWithKnot       1.3897 RssDelta            0 Cut      0.15974 
+--FindKnot--Case    8 RssWithKnot       1.3897 RssDelta            0 Cut      0.14633 
+--FindKnot--Case    7 RssWithKnot       1.3897 RssDelta            0 Cut      0.11367 
+--FindKnot--Case    6 RssWithKnot       1.3897 RssDelta            0 Cut      0.10232 
+--FindKnot--Case    5 RssWithKnot       1.3897 RssDelta            0 Cut     0.094129 
+--FindKnot--Case    4 RssWithKnot       1.3897 RssDelta            0 Cut     0.090853 
+--FindKnot--Case    3 RssWithKnot       1.3897 RssDelta            0 Cut     0.085649 
+--FindKnot--Case    2 RssWithKnot       1.3897 RssDelta            0 Cut     0.030346 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   22 Cut       0.3912  Rss 1.3578       RssDelta 0.031946        best for term
+|Parent 3                                                       skip (degree of term would be 2)
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+8      0.9666 0.9770    0.0005415    1           x0     0.39123  6             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 10   RssDelta 0 MaxLegalRssDelta 0.319463
+|Parent 6                                                       skip (degree of term would be 2)
+|Parent 5                                                       skip (degree of term would be 102)
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 10 RssBeforeAddingHinge 1.35779 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   59 RssWithKnot         1.35 RssDelta    0.0078079 Cut      0.95627  best
+--FindKnot--Case   58 RssWithKnot       1.3575 RssDelta   0.00028475 Cut      0.93146 
+--FindKnot--Case   57 RssWithKnot       1.3534 RssDelta     0.004427 Cut      0.89171 
+--FindKnot--Case   56 RssWithKnot        1.354 RssDelta    0.0037392 Cut      0.87848 
+--FindKnot--Case   55 RssWithKnot       1.3538 RssDelta    0.0039497 Cut      0.87114 
+--FindKnot--Case   54 RssWithKnot       1.3477 RssDelta     0.010104 Cut      0.84977  best
+--FindKnot--Case   53 RssWithKnot        1.344 RssDelta     0.013822 Cut      0.82989  best
+--FindKnot--Case   52 RssWithKnot       1.3433 RssDelta     0.014527 Cut      0.82008  best
+--FindKnot--Case   51 RssWithKnot       1.3385 RssDelta     0.019237 Cut      0.80127  best
+--FindKnot--Case   50 RssWithKnot       1.3578 RssDelta            0 Cut      0.77328 
+--FindKnot--Case   49 RssWithKnot       1.3578 RssDelta            0 Cut      0.75871 
+--FindKnot--Case   48 RssWithKnot       1.3578 RssDelta            0 Cut      0.74176 
+--FindKnot--Case   47 RssWithKnot       1.3578 RssDelta            0 Cut      0.73784 
+--FindKnot--Case   46 RssWithKnot       1.3578 RssDelta            0 Cut      0.73458 
+--FindKnot--Case   45 RssWithKnot       1.3578 RssDelta            0 Cut      0.72216 
+--FindKnot--Case   44 RssWithKnot       1.3578 RssDelta            0 Cut      0.70697 
+--FindKnot--Case   43 RssWithKnot       1.3578 RssDelta            0 Cut      0.69843 
+--FindKnot--Case   42 RssWithKnot       1.3578 RssDelta            0 Cut      0.69622 
+--FindKnot--Case   41 RssWithKnot       1.3578 RssDelta            0 Cut       0.6828 
+--FindKnot--Case   40 RssWithKnot       1.3433 RssDelta     0.014488 Cut       0.6605 
+--FindKnot--Case   39 RssWithKnot       1.3427 RssDelta     0.015053 Cut      0.65765 
+--FindKnot--Case   38 RssWithKnot       1.3378 RssDelta         0.02 Cut      0.64855  best
+--FindKnot--Case   37 RssWithKnot       1.3376 RssDelta     0.020159 Cut      0.63009  best
+--FindKnot--Case   36 RssWithKnot       1.3262 RssDelta     0.031629 Cut      0.61291  best
+--FindKnot--Case   35 RssWithKnot       1.3202 RssDelta     0.037619 Cut       0.5868  best
+--FindKnot--Case   34 RssWithKnot       1.3207 RssDelta     0.037076 Cut      0.58516 
+--FindKnot--Case   33 RssWithKnot       1.3215 RssDelta     0.036303 Cut      0.58216 
+--FindKnot--Case   32 RssWithKnot       1.3141 RssDelta     0.043699 Cut      0.56181  best
+--FindKnot--Case   31 RssWithKnot        1.302 RssDelta     0.055746 Cut      0.51674  best
+--FindKnot--Case   30 RssWithKnot       1.3578 RssDelta            0 Cut      0.47968 
+--FindKnot--Case   29 RssWithKnot       1.3578 RssDelta            0 Cut      0.47905 
+--FindKnot--Case   28 RssWithKnot       1.3578 RssDelta            0 Cut      0.47131 
+--FindKnot--Case   27 RssWithKnot       1.3578 RssDelta            0 Cut      0.43313 
+--FindKnot--Case   26 RssWithKnot       1.3578 RssDelta            0 Cut      0.43063 
+--FindKnot--Case   25 RssWithKnot       1.3578 RssDelta            0 Cut      0.42857 
+--FindKnot--Case   24 RssWithKnot       1.3578 RssDelta            0 Cut      0.39966 
+--FindKnot--Case   23 RssWithKnot       1.3578 RssDelta            0 Cut      0.39393 
+--FindKnot--Case   22 RssWithKnot       1.3578 RssDelta            0 Cut      0.39123 
+--FindKnot--Case   21 RssWithKnot       1.3578 RssDelta            0 Cut      0.37424 
+--FindKnot--Case   20 RssWithKnot       1.3578 RssDelta            0 Cut      0.31399 
+--FindKnot--Case   19 RssWithKnot       1.3578 RssDelta            0 Cut       0.2984 
+--FindKnot--Case   18 RssWithKnot       1.3578 RssDelta            0 Cut      0.29816 
+--FindKnot--Case   17 RssWithKnot       1.3578 RssDelta            0 Cut      0.29272 
+--FindKnot--Case   16 RssWithKnot       1.3578 RssDelta            0 Cut      0.29198 
+--FindKnot--Case   15 RssWithKnot       1.3578 RssDelta            0 Cut       0.2842 
+--FindKnot--Case   14 RssWithKnot       1.3578 RssDelta            0 Cut      0.27537 
+--FindKnot--Case   13 RssWithKnot       1.3578 RssDelta            0 Cut      0.23681 
+--FindKnot--Case   12 RssWithKnot       1.3578 RssDelta            0 Cut      0.21872 
+--FindKnot--Case   11 RssWithKnot       1.3578 RssDelta            0 Cut      0.20719 
+--FindKnot--Case   10 RssWithKnot       1.3578 RssDelta            0 Cut      0.19664 
+--FindKnot--Case    9 RssWithKnot       1.3578 RssDelta            0 Cut      0.15974 
+--FindKnot--Case    8 RssWithKnot       1.3578 RssDelta            0 Cut      0.14633 
+--FindKnot--Case    7 RssWithKnot       1.3578 RssDelta            0 Cut      0.11367 
+--FindKnot--Case    6 RssWithKnot       1.3578 RssDelta            0 Cut      0.10232 
+--FindKnot--Case    5 RssWithKnot       1.3578 RssDelta            0 Cut     0.094129 
+--FindKnot--Case    4 RssWithKnot       1.3578 RssDelta            0 Cut     0.090853 
+--FindKnot--Case    3 RssWithKnot       1.3578 RssDelta            0 Cut     0.085649 
+--FindKnot--Case    2 RssWithKnot       1.3578 RssDelta            0 Cut     0.030346 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   31 Cut       0.5167  Rss 1.302        RssDelta 0.055746        best for term
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+10     0.9652 0.9779    0.0009449    1           x0     0.51674  7             1 final (reached nk 11)
+
+-----------------------------------------------------------------------------
+
+Reached nk 11
+After forward pass GRSq 0.965 RSq 0.978
+Forward pass complete: 11 terms, 7 terms used
+
+Prune none penalty 2 nprune null: selected 7 of 7 terms, and 1 of 1 preds
+After pruning pass GRSq 0.965 RSq 0.978
