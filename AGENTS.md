@@ -37,6 +37,6 @@ pymars is Apache-2.0 and earth is GPL-3, so earth is used only as a black box.
 - Commit after each step and push after each commit, so that no work lives only in your context. Open the pull request early as a draft.
 - Run `dev/gate_a.sh` before every commit. Run `dev/gate_b.sh` on a clean checkout before you ask for a review; its log goes to `<git-common-dir>/pymars-executor/gates/`.
 - Commit subjects follow Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `build:`, `ci:`, `chore:`). End every commit message with a trailer that names your model, for example `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. End every pull request body with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
-- A reviewer posts one comment, `REVIEW <role> <head-sha>: APPROVE` or `REVIEW <role> <head-sha>: REQUEST_CHANGES`, with numbered findings. Only the executor merges, with `dev/tools/merge_pr.sh`.
+- A reviewer posts one comment with numbered findings and the line `REVIEW <role> <head-sha>: APPROVE` or `REVIEW <role> <head-sha>: REQUEST_CHANGES`. That line stands alone, with no other text or formatting, because `dev/tools/merge_pr.sh` reads only such lines. Only the executor merges, with that script.
 - Do not bind a pull request to a desktop session.
 - Keep your reports to the executor under 30 lines.
