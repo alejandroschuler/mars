@@ -116,6 +116,14 @@ and not a regression). Register a new dataset by adding a `@register`-
 decorated function returning a `Dataset` to `gen_fixtures.py`; register a
 new mode by adding an entry to its `MODES` dict.
 
+The committed fixtures were made on macOS arm64. `--check` compares every
+stored double exactly, so running it on a different OS or architecture (for
+example `earth-conformance.yml`'s `ubuntu-latest`, x86_64) can fail from a
+last-bit difference in a transcendental function or a BLAS routine alone,
+with no change to the harness or the datasets. Exact reproduction is
+reliable only on the machine that made the fixtures; a failure elsewhere
+needs a by-hand look at which bits differ before it counts as a regression.
+
 ### Dataset fixtures
 
 `VALIDATION_PLAN.md`, "Test datasets", defines S01 to S20 and what each is
