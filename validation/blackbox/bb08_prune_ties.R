@@ -190,8 +190,8 @@ for (nm in names(gcv_runs)) {
 }
 
 CHECK("bb08.1", all(sapply(res, `[[`, "valid")), "(a) every run is a valid tie design: one backward step where c1 and c2 are the two cheapest removals, equal to 1e-9 in lm.fit, next candidate >1e-6 higher")
-CHECK("bb08.2", all(sapply(res, `[[`, "bitwise")), "(a) the two tied lm.fit RSS values are bitwise equal in every run")
-CHECK("bb08.3", length(det) == length(res), "(a) the member earth removed is determined (only one forced choice reproduces prune.terms) in every run")
+CHECK("bb08.2", all(sapply(res, `[[`, "bitwise")), "(a) HYPOTHESIS the two tied lm.fit RSS values are bitwise equal in every run")
+CHECK("bb08.3", length(det) == length(res), "(a) HYPOTHESIS the member earth removed is determined (only one forced choice reproduces prune.terms) in every run")
 CHECK("bb08.4", length(det) > 0 && all(sapply(det, `[[`, "higher_term")), "(a) HYPOTHESIS earth removes the tied term with the higher term number (entered later)")
 CHECK("bb08.5", length(det) > 0 && !any(sapply(det, `[[`, "higher_term")), "(a) HYPOTHESIS earth removes the tied term with the lower term number (entered earlier)")
 CHECK("bb08.6", length(det) > 0 && all(sapply(det, `[[`, "lower_col")), "(a) HYPOTHESIS earth removes the tied term with the lower x column index")

@@ -347,3 +347,5 @@ cat(sprintf("CHECK bb02.26 %s gcv.per.subset[k] == sum_j(get.gcv(rss_jk,k,penalt
 cat(sprintf("CHECK bb02.27 %s multi-response rsq == 1-sum(rss.per.response)/sum(tss.per.response)\n", ifelse(rsq_hyp1_ok, "TRUE", "FALSE")))
 cat(sprintf("CHECK bb02.28 %s multi-response grsq == 1-sum(gcv.per.response)/sum(gcv.null.per.response)\n", ifelse(grsq_hyp1_ok, "TRUE", "FALSE")))
 cat(sprintf("CHECK bb02.29 %s a 1-column matrix y gives an identical fit to the equivalent vector y\n", ifelse(onecol_same, "TRUE", "FALSE")))
+cat(sprintf("CHECK bb02.30 %s the default penalty is 2 at degree 1 (fit a) and 3 at degree 2 (fit b)\n",
+  ifelse(isTRUE(fit_a$penalty == 2) && isTRUE(fit_b$penalty == 3), "TRUE", "FALSE")))

@@ -81,3 +81,4 @@ CHECK bb05.6 TRUE eq. 43 is truncated, not rounded (some cell has round != trunc
 CHECK bb05.7 TRUE a user endspan is capped the same way (endspan 12 at n = 20 becomes 9)
 CHECK bb05.8 TRUE a minspan wider than the range follows the same rule (cuts 35,5)
 CHECK bb05.9 TRUE minspan above n is an error and minspan = n is not
+CHECK bb05.10 TRUE in this first search (a pair search), the knots at the repeated minimum 1 are listed and rejected (TolG 0)

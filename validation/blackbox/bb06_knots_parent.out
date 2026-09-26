@@ -8,6 +8,11 @@ activity along the scan, 0-based sorted index 39 down to 2
   rows in input order within ties:  11111110010110001011010110000001001000 
 row permutations of a tied design (x2 = 12 values x 5): 25 of 40 change the cuts
 part 4: 80 searches on tied x2; the rule matches 80
+a = 0.099999999999999992, E = 15: E + floor(aE + 0.5) = 16, floor((1 + a)E + 0.5) = 17, earth nEndSpan 16
+a = 1.1799999999999999, E = 25: E + floor(aE + 0.5) = 55, floor((1 + a)E + 0.5) = 54, earth nEndSpan 55
+a = 1.22, E = 25: E + floor(aE + 0.5) = 56, floor((1 + a)E + 0.5) = 55, earth nEndSpan 56
+a = 1.26, E = 25: E + floor(aE + 0.5) = 57, floor((1 + a)E + 0.5) = 56, earth nEndSpan 57
+a = 1.3, E = 25: E + floor(aE + 0.5) = 58, floor((1 + a)E + 0.5) = 57, earth nEndSpan 58
 CHECK bb06.1 TRUE nMinSpan = minspan, or trunc(eq. 43) with the parent's N_m active cases, in all 120 searches
 CHECK bb06.2 TRUE nEndSpan = cap(es + floor(adj*es + 0.5)) with the cap from all n cases, in all searches
 CHECK bb06.3 TRUE nStartSpan uses all n cases, as at the intercept, in all searches
@@ -18,3 +23,5 @@ CHECK bb06.7 TRUE for a linear parent only cases with a positive parent value ar
 CHECK bb06.8 TRUE within equal x2 values earth's scan order is not the input row order
 CHECK bb06.9 TRUE permuting the rows of a design with tied x2 changes earth's cuts (25 of 40 permutations)
 CHECK bb06.10 TRUE with ties, the rule (cuts at or above the largest active x2 skipped) matches all 80 searches given earth's activity order
+CHECK bb06.11 TRUE in the example the lowest active value, 21, is a knot although endspan is 1: the lower bound counts inactive cases
+CHECK bb06.12 TRUE where the two float64 forms differ (5 settings), earth's endspan is E + floor(a E + 0.5)

@@ -119,3 +119,11 @@ cat(sprintf("CHECK bb01.3 %s hand-picked cells with C == n exactly all give non-
             ifelse(exact_all_nonfinite, "TRUE", "FALSE")))
 cat(sprintf("CHECK bb01.4 %s nterms=1 gives candidate C=1 at every penalty >= 0, matching earth to < 1e-12 (got %.3g)\n",
             ifelse(c_is_1 && max_sub1_reldiff < 1e-12, "TRUE", "FALSE"), max_sub1_reldiff))
+
+## earth() itself: which negative penalties does it accept?
+set.seed(1); xe <- matrix(runif(100 * 2), 100, 2); ye <- xe[, 1] + 0.1 * rnorm(100)
+pen_msg <- sapply(c(-1, -0.5, -2, -10), function(pen) {
+  r <- tryCatch({ earth(xe, ye, penalty = pen); "fits" }, error = function(e) paste("ERROR:", conditionMessage(e)))
+  cat(sprintf("earth(penalty = %g): %s\n", pen, r)); r })
+cat(sprintf("CHECK bb01.5 %s earth() fits with penalty = -1 and stops with an error for the negative penalties -0.5, -2 and -10\n",
+  if (pen_msg[1] == "fits" && all(grepl("^ERROR", pen_msg[-1]))) "TRUE" else "FALSE"))

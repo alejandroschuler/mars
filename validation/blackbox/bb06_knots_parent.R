@@ -122,6 +122,7 @@ r <- Filter(function(r) r$parent == k && r$pred == 2, second_step(out))[[1]]
 cat(sprintf("example: parent %s is active for x2 in 21..40; evaluated cuts %s\n", rownames(f$dirs)[k],
   paste(r$cut[r$evaluated], collapse = ",")))
 low_from_inactive <- 20 %in% r$cut[r$evaluated]
+lowest_active_is_knot <- 21 %in% r$cut[r$evaluated]
 
 # Part 2: a linear parent with negative values and a zero. linpreds = 1
 # makes x1 enter linearly, which gives the same kind of term (dirs code 2)
@@ -195,6 +196,23 @@ for (i in 1:40) {
 cat(sprintf("part 4: %d searches on tied x2; the rule matches %d\n", tot4, ok4))
 if (length(bad4)) cat(paste(" ", head(bad4, 10)), sep = "\n")
 
+
+# Part 5: the float64 form of the adjusted endspan. For these (a, E) the two
+# forms E + floor(a E + 0.5) and floor((1 + a) E + 0.5) differ in float64.
+avals <- seq(0.01, 1.5, by = 0.01); pairs <- NULL
+for (a in avals) for (E in 1:25) { f1 <- E + floor(a * E + 0.5); f2 <- floor((1 + a) * E + 0.5); if (f1 != f2) pairs <- rbind(pairs, c(a, E, f1, f2)) }
+n <- 200; set.seed(12); x1 <- sample(1:n) + 0; x2 <- sample(1:n) + 0
+y <- 8 * pmax(x1 - 100, 0) + 3 * pmax(100 - x1, 0) + 0.2 * pmax(x1 - 100, 0) * sin(x2 / 7) + 0.05 * rnorm(n)
+ok5 <- TRUE
+for (i in seq_len(nrow(pairs))) {
+  a <- pairs[i, 1]; E <- pairs[i, 2]
+  out <- capture.output(f <- quiet(earth(cbind(x1, x2), y, degree = 2, trace = 9, nk = 5, minspan = 1, endspan = E,
+    Adjust.endspan = a, Auto.linpreds = FALSE, pmethod = "none", thresh = 0, fast.k = 0)))
+  es <- unique(sapply(Filter(function(r) r$parent >= 2, second_step(out)), `[[`, "es"))
+  cat(sprintf("a = %.17g, E = %d: E + floor(aE + 0.5) = %d, floor((1 + a)E + 0.5) = %d, earth nEndSpan %s\n", a, E,
+    pairs[i, 3], pairs[i, 4], paste(es, collapse = ",")))
+  ok5 <- ok5 && length(es) == 1 && es == pairs[i, 3]
+}
 cat(sprintf("CHECK bb06.1 %s nMinSpan = minspan, or trunc(eq. 43) with the parent's N_m active cases, in all %d searches\n", ok_ms == tot, tot))
 cat(sprintf("CHECK bb06.2 %s nEndSpan = cap(es + floor(adj*es + 0.5)) with the cap from all n cases, in all searches\n", ok_es == tot))
 cat(sprintf("CHECK bb06.3 %s nStartSpan uses all n cases, as at the intercept, in all searches\n", ok_start == tot))
@@ -206,3 +224,6 @@ cat(sprintf("CHECK bb06.7 %s for a linear parent only cases with a positive pare
 cat(sprintf("CHECK bb06.8 %s within equal x2 values earth's scan order is not the input row order\n", !identical(act_trace, act_stable)))
 cat(sprintf("CHECK bb06.9 %s permuting the rows of a design with tied x2 changes earth's cuts (%d of 40 permutations)\n", ndiff > 0, ndiff))
 cat(sprintf("CHECK bb06.10 %s with ties, the rule (cuts at or above the largest active x2 skipped) matches all %d searches given earth's activity order\n", ok4 == tot4 && tot4 > 0, tot4))
+
+cat(sprintf("CHECK bb06.11 %s in the example the lowest active value, 21, is a knot although endspan is 1: the lower bound counts inactive cases\n", lowest_active_is_knot))
+cat(sprintf("CHECK bb06.12 %s where the two float64 forms differ (%d settings), earth's endspan is E + floor(a E + 0.5)\n", ok5, nrow(pairs)))

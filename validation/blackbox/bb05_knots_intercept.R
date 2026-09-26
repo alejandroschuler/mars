@@ -21,9 +21,17 @@ cat(R.version.string, "| earth", as.character(packageVersion("earth")), "\n")
 
 # Every earth call is wrapped so that a failure prints only its message.
 quiet <- function(expr) tryCatch(expr, error = function(e) paste("ERROR:", conditionMessage(e)))
+# Traces are long; sink() to a file is much faster than traced_out().
+# The expression is a promise, so assignments inside it land in the caller.
+traced_out <- function(expr) {
+  tf <- tempfile(); zz <- file(tf, open = "wt"); sink(zz)
+  tryCatch(force(expr), error = function(e) cat("ERROR:", conditionMessage(e), "\n"))
+  sink(); close(zz); out <- readLines(tf); unlink(tf)
+  out
+}
 
 first_scan <- function(x, y, minspan, endspan) {
-  out <- capture.output(quiet(earth(matrix(x, ncol = 1), y, trace = 9, nk = 3,
+  out <- traced_out(quiet(earth(matrix(x, ncol = 1), y, trace = 9, nk = 3,
     minspan = minspan, endspan = endspan, Auto.linpreds = FALSE,
     pmethod = "none", thresh = 0)))
   b <- grep("--FindKnotBegin--", out)[1]
@@ -97,16 +105,17 @@ show <- function(x, ms, es) {
   set.seed(1); r <- first_scan(x, sin(x / 3) + 0.2 * rnorm(length(x)), ms, es)
   cat(sprintf("sorted x: %s\n  minspan %d endspan %d nStartSpan %d -> cuts %s (TolG %s)\n",
     paste(sort(x), collapse = " "), r$ms, r$es, r$start, paste(r$cuts, collapse = ","), paste(r$tolg, collapse = "")))
+  invisible(r)
 }
 set.seed(2); show(sample(1:20) + 0, 3, 1); show(sample(1:20) + 0, 4, 2)
-set.seed(3); show(sample(c(1:16, rep(17, 4))) + 0, 3, 2); show(sample(c(rep(1, 4), 2:17)) + 0, 1, 1)
+set.seed(3); show(sample(c(1:16, rep(17, 4))) + 0, 3, 2); rmin <- show(sample(c(rep(1, 4), 2:17)) + 0, 1, 1)
 
 # Part 2: automatic spans (minspan = 0, endspan = 0) at the intercept.
 res <- NULL
 for (p in c(1, 2, 3, 5, 10, 50, 100)) for (n in c(3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20, 21, 22, 30, 50, 100, 200, 1000, 10000)) {
   if (n * p > 2e5) next
   set.seed(n + p); x <- matrix(runif(n * p), n, p); y <- x[, 1] + 0.1 * rnorm(n)
-  out <- capture.output(quiet(earth(x, y, trace = 9, nk = 3, pmethod = "none")))
+  out <- traced_out(quiet(earth(x, y, trace = 9, nk = 3, pmethod = "none")))
   l <- grep("--FindKnotBegin--", out, value = TRUE)[1]
   f <- grep("Forward pass: minspan", out, value = TRUE)[1]
   res <- rbind(res, data.frame(n = n, p = p,
@@ -146,3 +155,6 @@ cat(sprintf("CHECK bb05.8 %s a minspan wider than the range follows the same rul
   identical(r2$cuts, cuts_rule(x40, 30, 1, start_rule(40, 30, 1))), paste(r2$cuts, collapse = ",")))
 cat(sprintf("CHECK bb05.9 %s minspan above n is an error and minspan = n is not\n",
   is.character(m3) && grepl("minspan", m3) && !is.character(m4)))
+
+cat(sprintf("CHECK bb05.10 %s in this first search (a pair search), the knots at the repeated minimum 1 are listed and rejected (TolG 0)\n",
+  any(rmin$cuts == 1) && all(rmin$tolg[rmin$cuts == 1] == 0)))

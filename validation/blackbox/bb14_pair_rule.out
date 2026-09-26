@@ -1,0 +1,19 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+part A: 1966 searches (637 single-hinge); largest A of a single-hinge search 0.00950996, smallest A of a pair search 0.0107171
+        1 - R^2 of b*x: single-hinge searches up to 0.5073, pair searches down to 0.001146
+    scale          A one_minus_r2 single
+ 0.218845 0.00990022      0.30143   TRUE
+ 0.221045 0.01010027      0.30143  FALSE
+part C: x      : (Intercept) h(x-0.811833) h(0.811833-x) h(x-0.239193) h(x-0.706735) h(x-0.385399) 
+        x / 100: (Intercept) h(x-0.00169963) h(x-0.00733547) h(x-0.00290825) 
+part D: parent h(0.194569-x1) with x2: A = 0.00333, 1 - R^2 = 0.0768, single-hinge search: TRUE
+        knot 0.5: traced RssWithKnot 2.8916 | RSS(current + h) 2.8916 | RSS(current + b*x2 + h) 2.7147
+        knot 0 (the repeated minimum of x2): TolG 1
+part E (weighted): 876 searches; pair searches with A < 0.01: 253 (smallest A of a pair search 4.93e-38)
+CHECK bb14.1 TRUE in unweighted fits a search is a pair search exactly when A >= 0.01 (1966 searches; bracket 0.00950996, 0.0107171)
+CHECK bb14.2 TRUE 1 - R^2 of b*x does not decide the kind: single-hinge searches reach 0.507 and pair searches go down to 0.00115
+CHECK bb14.3 TRUE at a fixed 1 - R^2, rescaling x2 moves A from 0.009900 to 0.010100 and the search from single-hinge to pair
+CHECK bb14.4 TRUE the same data with x and with x / 100 give different models, beyond the scaling of the knots
+CHECK bb14.5 TRUE in a single-hinge search the RSS of a knot is RSS(current columns + h), without b*x
+CHECK bb14.6 TRUE in a single-hinge search a knot at a repeated minimum can pass the collinearity test (TolG 1)
+CHECK bb14.7 TRUE with weights that are not all equal, earth runs pair searches below A = 0.01

@@ -107,17 +107,34 @@ y <- rowSums(sapply(1:9, function(j) (10 - j) * pmax(X[, j] - 0.3 - 0.04 * j, 0)
 tabC <- follow(X, y, 25)
 cat("part C: nine variables, pairs on new variables\n"); print(agg(tabC), digits = 4, row.names = FALSE)
 
+# Trace parent numbers count slots: every step takes two, and a one-term step
+# leaves its second slot empty. The step lines (Terms counts dirs rows) give the
+# map from slots to dirs rows.
+steps_of <- function(out) {
+  i <- grep("^[0-9]+ +[-0-9.]+ +[-0-9.]+ +[-0-9.e]+ +[0-9]+ +x[0-9]+ ", out)
+  lapply(i, function(ii) {
+    tk <- strsplit(trimws(sub(" final.*", "", out[ii])), " +")[[1]]
+    rest <- as.integer(tk[8:length(tk)]); deg <- tail(rest, 1)
+    list(K = as.integer(tk[1]), terms = if (deg >= 2) rest[seq_len(length(rest) - 2)] else rest[seq_len(length(rest) - 1)])
+  })
+}
+slot_map <- function(st) {
+  m <- c(`1` = 1L); row <- 1L
+  for (s in st) for (q in seq_along(s$terms)) { row <- row + 1L; m[as.character(s$K + q - 1)] <- row }
+  m
+}
 # Part D: a hinge parent at degree 2. For each search with a parent other
 # than the intercept, the ratio uses h = b*(x - t)+ and E = the existing
 # columns plus b*x for a pair search.
 follow2 <- function(X, y, nk) {
   out <- capture.output(f <- quiet(earth(X, y, degree = 2, trace = 9, nk = nk, minspan = 1, endspan = 1,
     Adjust.endspan = 0, Auto.linpreds = FALSE, pmethod = "none", thresh = 0, fast.k = 0)))
-  B <- basis(f, X); ys <- (y - mean(y)) / sd(y)
+  B <- basis(f, X); ys <- (y - mean(y)) / sd(y); smap <- slot_map(steps_of(out))
   rss_m <- sapply(1:ncol(B), function(m) sum(qr.resid(qr(B[, 1:m, drop = FALSE]), ys)^2))
   tab <- NULL
   for (s in scans(out)) {
     if (s$parent < 2 || length(s$cut) == 0) next
+    s$parent <- unname(smap[as.character(s$parent)]); if (is.na(s$parent)) next
     before <- as.numeric(sub(".*RssBeforeAddingHinge ([-0-9.e]+).*", "\\1", out[s$line]))
     m <- which(abs(rss_m - before) <= 1e-4 * before)[1]
     if (is.na(m) || s$parent > m) next

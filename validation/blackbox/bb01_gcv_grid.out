@@ -51,3 +51,8 @@ CHECK bb01.1 TRUE max relative difference over finite cells is < 1e-12 (got 0)
 CHECK bb01.2 TRUE Inf occurs in earth's output exactly when candidate C >= n over the full grid
 CHECK bb01.3 TRUE hand-picked cells with C == n exactly all give non-finite GCV
 CHECK bb01.4 TRUE nterms=1 gives candidate C=1 at every penalty >= 0, matching earth to < 1e-12 (got 0)
+earth(penalty = -1): fits
+earth(penalty = -0.5): ERROR: penalty -0.5 is less than 0 and the only legal value less than 0 is -1 (meaning terms and knots are free)
+earth(penalty = -2): ERROR: penalty -2 is less than 0 and the only legal value less than 0 is -1 (meaning terms and knots are free)
+earth(penalty = -10): ERROR: penalty -10 is less than 0 and the only legal value less than 0 is -1 (meaning terms and knots are free)
+CHECK bb01.5 TRUE earth() fits with penalty = -1 and stops with an error for the negative penalties -0.5, -2 and -10

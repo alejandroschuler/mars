@@ -38,8 +38,8 @@ G3 random hinges, n=100: basis_ok=TRUE terms L Bh A P Hv C; C is term 7; lm.fit 
   sizes with gcv == min(gcv): 6 7 | which.min: 6 | selected size: 6 | row 6 omits C: TRUE
   forward trace row of C: 12 0.8131 0.8131 0 1 C -0.14737< 7 1 final (reached nk 13) 
 CHECK bb08.1 TRUE (a) every run is a valid tie design: one backward step where c1 and c2 are the two cheapest removals, equal to 1e-9 in lm.fit, next candidate >1e-6 higher
-CHECK bb08.2 FALSE (a) the two tied lm.fit RSS values are bitwise equal in every run
-CHECK bb08.3 FALSE (a) the member earth removed is determined (only one forced choice reproduces prune.terms) in every run
+CHECK bb08.2 FALSE (a) HYPOTHESIS the two tied lm.fit RSS values are bitwise equal in every run
+CHECK bb08.3 FALSE (a) HYPOTHESIS the member earth removed is determined (only one forced choice reproduces prune.terms) in every run
 CHECK bb08.4 FALSE (a) HYPOTHESIS earth removes the tied term with the higher term number (entered later)
 CHECK bb08.5 FALSE (a) HYPOTHESIS earth removes the tied term with the lower term number (entered earlier)
 CHECK bb08.6 FALSE (a) HYPOTHESIS earth removes the tied term with the lower x column index

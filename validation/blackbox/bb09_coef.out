@@ -79,6 +79,7 @@ CHECK bb09.2 TRUE the weighted coefficients differ from unweighted lm.fit on the
 CHECK bb09.3 TRUE fitted.values equal bx %*% coefficients and the lm.fit / lm.wfit fitted values (normwise rel 1e-10), all cases
 CHECK bb09.4 TRUE bx equals the basis evaluated from dirs and cuts (1: pmax(x-cut,0), -1: pmax(cut-x,0), 2: x), all cases
 CHECK bb09.5 TRUE the cases include dirs code 2 with nonzero stored cuts (so bb09.4 tests 'x, not x - cut' for code 2)
+CHECK bb09.15 TRUE the stored cut of every dirs code 2 entry equals the smallest value of that column of x
 CHECK bb09.6 TRUE colnames(bx) are the dirs rownames of selected.terms, in that order, and match rownames(coefficients)
 CHECK bb09.7 TRUE lm.fit drops the near-dependent column (rank 2, coef[3] NA) for small eps
 CHECK bb09.8 TRUE lm.fit keeps c3 iff ||part orthogonal to earlier columns|| / ||c3|| >= tol = 1e-7 (full, uncentred norm)

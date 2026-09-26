@@ -134,3 +134,4 @@ CHECK bb02.26 TRUE gcv.per.subset[k] == sum_j(get.gcv(rss_jk,k,penalty,n)) at k=
 CHECK bb02.27 TRUE multi-response rsq == 1-sum(rss.per.response)/sum(tss.per.response)
 CHECK bb02.28 TRUE multi-response grsq == 1-sum(gcv.per.response)/sum(gcv.null.per.response)
 CHECK bb02.29 TRUE a 1-column matrix y gives an identical fit to the equivalent vector y
+CHECK bb02.30 TRUE the default penalty is 2 at degree 1 (fit a) and 3 at degree 2 (fit b)

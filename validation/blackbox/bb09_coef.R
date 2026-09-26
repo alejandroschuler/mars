@@ -56,7 +56,7 @@ cases <- list(
   list(lab = "deg1 linpreds=4:5", deg = 1, Y = y, w = NULL, lp = 4:5),
   list(lab = "deg2 linpreds=4:5 w=runif", deg = 2, Y = y, w = w_unif, lp = 4:5))
 cat("case | nterms | code counts (1,-1,2) in selected dirs | coef vs LS | fitted vs bx%*%coef | fitted vs LS | bx vs dirs/cuts (max abs)\n")
-ok_coef <- ok_fit <- ok_bx <- ok_names <- ok_bitwise <- TRUE; n_code2 <- 0; cut2 <- numeric(0)
+ok_coef <- ok_fit <- ok_bx <- ok_names <- ok_bitwise <- TRUE; n_code2 <- 0; cut2 <- numeric(0); cut2_is_min <- TRUE
 for (cs in cases) {
   lp <- if (is.null(cs$lp)) FALSE else cs$lp
   fit <- if (is.null(cs$w)) earth_bb(x = x, y = cs$Y, degree = cs$deg, linpreds = lp) else
@@ -73,6 +73,8 @@ for (cs in cases) {
   sd <- fit$dirs[fit$selected.terms, , drop = FALSE]
   cc <- c(sum(sd == 1), sum(sd == -1), sum(sd == 2)); n_code2 <- n_code2 + cc[3]
   if (cc[3] > 0) cut2 <- c(cut2, fit$cuts[fit$selected.terms, , drop = FALSE][sd == 2])
+  for (k in which(apply(sd == 2, 1, any))) for (jj in which(sd[k, ] == 2))
+    cut2_is_min <- cut2_is_min && fit$cuts[fit$selected.terms[k], jj] == min(x[, jj])
   cat(sprintf("%-20s | %2d | %2d %2d %2d | %.1e | %.1e | %.1e | %.1e (rel %.1e)\n", cs$lab, ncol(bx), cc[1], cc[2], cc[3],
               d_coef, d_fit, d_fitls, d_bx, r_bx))
   ok_coef <- ok_coef && d_coef < 1e-10; ok_fit <- ok_fit && d_fit < 1e-10 && d_fitls < 1e-10
@@ -156,6 +158,7 @@ CHECK("bb09.2", d_unw > 1e-6, "the weighted coefficients differ from unweighted 
 CHECK("bb09.3", ok_fit, "fitted.values equal bx %*% coefficients and the lm.fit / lm.wfit fitted values (normwise rel 1e-10), all cases")
 CHECK("bb09.4", ok_bx, "bx equals the basis evaluated from dirs and cuts (1: pmax(x-cut,0), -1: pmax(cut-x,0), 2: x), all cases")
 CHECK("bb09.5", n_code2 > 0 && any(cut2 != 0), "the cases include dirs code 2 with nonzero stored cuts (so bb09.4 tests 'x, not x - cut' for code 2)")
+CHECK("bb09.15", n_code2 > 0 && cut2_is_min, "the stored cut of every dirs code 2 entry equals the smallest value of that column of x")
 CHECK("bb09.6", ok_names, "colnames(bx) are the dirs rownames of selected.terms, in that order, and match rownames(coefficients)")
 CHECK("bb09.7", sum(sA[, "na"]) > 0 && all((sA[, "rank"] == 2) == sA[, "na"]), "lm.fit drops the near-dependent column (rank 2, coef[3] NA) for small eps")
 CHECK("bb09.8", rank_rule_full, "lm.fit keeps c3 iff ||part orthogonal to earlier columns|| / ||c3|| >= tol = 1e-7 (full, uncentred norm)")
