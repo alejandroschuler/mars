@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # Squash-merge a pull request of alejandroschuler/mars when every merge rule of
 # VALIDATION_PLAN.md ("Pull requests and reviews") holds. Read it before you run it.
-# Usage: dev/tools/merge_pr.sh [--dry-run] [--require-gate-c] [--session <id>]
-#                              <pr-number> <role> [<role> ...]
+# Usage: dev/tools/merge_pr.sh [--dry-run] [--require-gate-c] [--allow-no-checks]
+#                              [--session <id>] <pr-number> <role> [<role> ...]
 # The checks:
 # - the pull request is open, not a draft and based on main, and its title (the
 #   squash subject) is a conventional commit subject;
-# - for each role, the newest line "REVIEW <role> <sha>: <VERDICT>" in the
-#   comments and reviews is for the head SHA and says APPROVE, and no line
-#   "REVIEW <role> <head-sha>: REQUEST_CHANGES" is newer than that approval;
+# - for each role, the newest verdict is APPROVE for the head, and no
+#   REQUEST_CHANGES for the head is newer. A verdict is the first line of a
+#   comment or review by the fork's account (every agent posts as that account),
+#   exactly "REVIEW <role> <sha>: APPROVE" or "... REQUEST_CHANGES", with the
+#   full 40-character SHA;
 # - the gate B log of the head passed (and the gate C log with --require-gate-c);
-# - every check on the head passed (no checks yet is allowed, with a note);
+# - every check on the head passed; no checks at all fails, unless
+#   --allow-no-checks is given;
 # - the head contains origin/main;
 # - fencing: <git-common-dir>/pymars-executor/lock/owner holds the session ID
 #   from --session or $EXECUTOR_SESSION.
@@ -21,11 +24,12 @@
 set -uo pipefail
 REPO=alejandroschuler/mars
 TRAILER=${MERGE_TRAILER:-"Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"}
-dry_run=0 gate_c=0 session=${EXECUTOR_SESSION:-} args=()
+dry_run=0 gate_c=0 no_checks_ok=0 session=${EXECUTOR_SESSION:-} args=()
 while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) dry_run=1 ;;
     --require-gate-c) gate_c=1 ;;
+    --allow-no-checks) no_checks_ok=1 ;;
     --session) session=${2:-} && shift ;;
     -*) echo "unknown option: $1" >&2 && exit 2 ;;
     *) args+=("$1") ;;
@@ -33,7 +37,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 if [ ${#args[@]} -lt 2 ]; then
-  echo "usage: merge_pr.sh [--dry-run] [--require-gate-c] [--session <id>] <pr> <role>..." >&2
+  echo "usage: merge_pr.sh [--dry-run] [--require-gate-c] [--allow-no-checks] [--session <id>] <pr> <role>..." >&2
   exit 2
 fi
 pr=${args[0]} roles=("${args[@]:1}")
@@ -52,19 +56,22 @@ IFS=$'\t' read -r pr_state draft base head_ref head title <<<"$fields"
 conventional='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?: .+'
 [[ $title =~ $conventional ]] && pass "conventional title: $title" || fail "not a conventional title: $title"
 
-# One line per REVIEW line, oldest first: "<time> <role> <sha> <verdict>".
+# One line per verdict, oldest first: "<time> <role> <sha> <verdict>". Only the
+# first line of a body by the fork's account (alejandroschuler) can be a verdict.
 reviews=$(gh pr view "$pr" --repo "$REPO" --json comments,reviews --jq '
-  [(.comments[] | {at: .createdAt, body}), (.reviews[] | select(.submittedAt) | {at: .submittedAt, body})]
-  | sort_by(.at) | .[] | .at as $at | .body | split("\n") | .[] | sub("\r$"; "")
-  | capture("^REVIEW (?<role>[A-Za-z0-9_.-]+) (?<sha>[0-9a-f]{7,40}): (?<verdict>APPROVE|REQUEST_CHANGES) *$")
+  [(.comments[] | select(.author.login == "alejandroschuler") | {at: .createdAt, body}),
+   (.reviews[] | select(.submittedAt and .author.login == "alejandroschuler")
+    | {at: .submittedAt, body})]
+  | sort_by(.at) | .[] | .at as $at | .body | split("\n") | .[0] | sub("\r$"; "")
+  | capture("^REVIEW (?<role>[A-Za-z0-9_.-]+) (?<sha>[0-9a-f]{40}): (?<verdict>APPROVE|REQUEST_CHANGES) *$")
   | "\($at) \(.role) \(.sha) \(.verdict)"') || exit 1
 for role in "${roles[@]}"; do
   newest=$(awk -v r="$role" '$2 == r' <<<"$reviews" | tail -n 1)
   read -r at _ sha verdict <<<"$newest"
-  if [ -n "$newest" ] && [[ $head == "$sha"* ]] && [ "$verdict" = APPROVE ]; then
+  if [ -n "$newest" ] && [ "$sha" = "$head" ] && [ "$verdict" = APPROVE ]; then
     pass "$role approved $head at $at"
     later=$(awk -v r="$role" -v t="$at" -v h="$head" \
-      '$2 == r && $4 == "REQUEST_CHANGES" && index(h, $3) == 1 && $1 > t' <<<"$reviews")
+      '$2 == r && $4 == "REQUEST_CHANGES" && $3 == h && $1 > t' <<<"$reviews")
     [ -z "$later" ] || fail "$role asked for changes after its approval: $later"
   else
     fail "the newest $role review is '${newest:-none}', not APPROVE for $head"
@@ -81,8 +88,10 @@ fi
 
 checks=$(gh pr view "$pr" --repo "$REPO" --json statusCheckRollup --jq '.statusCheckRollup[]
   | "\(.status // "-")\t\(.conclusion // .state // "-")\t\(.name // .context)"') || exit 1
-if [ -z "$checks" ]; then
-  echo "NOTE #$pr has no checks yet, so the local gates decide"
+if [ -z "$checks" ] && [ "$no_checks_ok" = 1 ]; then
+  echo "NOTE #$pr has no checks, which --allow-no-checks accepts"
+elif [ -z "$checks" ]; then
+  fail "#$pr has no checks, so CI did not run for the head (--allow-no-checks accepts that)"
 else
   pending=$(awk -F'\t' '!(($1 == "COMPLETED" || $1 == "-") && $2 ~ /^(SUCCESS|NEUTRAL|SKIPPED)$/)' <<<"$checks")
   [ -z "$pending" ] && pass "all $(wc -l <<<"$checks" | tr -d ' ') checks passed" ||

@@ -5,6 +5,7 @@
 #   at least 90 percent on pymars/ (fail_under in pyproject.toml);
 # - the fast tests on Python 3.13 and 3.14 at the dev profile, each in its own
 #   project venv;
+# - the tests of dev/tools/merge_pr.sh (dev/tools/test_merge_pr.sh);
 # - uv build, then the wheel installed into a fresh venv and a smoke check.
 # Every selection above holds tests, so pytest exit code 5 (no tests) fails.
 # The log is <git-common-dir>/pymars-executor/gates/<head-sha>.gateB.log, and
@@ -48,6 +49,7 @@ for v in 3.13 3.14; do
   step "fast tests, Python $v" env UV_PROJECT_ENVIRONMENT=".venv-$v" \
     uv run --frozen --python "$v" pytest -n 2 -m "not slow" -q
 done
+step "merge_pr.sh tests" bash dev/tools/test_merge_pr.sh
 
 # The build folder is reused; the --clear options empty it, so no rm is needed.
 out=build/gate_b
