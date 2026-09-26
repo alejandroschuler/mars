@@ -9,7 +9,7 @@ You run the simulations of the legacy code (mars-earth 1.0.4) and of earth, with
 ## Where the jobs run
 
 - A runner worktree at a fixed commit, outside any session worktree: `git -C /Users/aschuler/Documents/research/projects/pymars worktree add --detach /Users/aschuler/Documents/research/projects/pymars/.worktrees/runner-legacy <main-sha>`, where `<main-sha>` is `origin/main` after T03 merged. Record the SHA. Make its venvs there (`uv sync --frozen --group dev --group validation`, and `validation/legacy/make_venv.sh` for `.venv-legacy`), after reading the scripts.
-- Every job: `nohup caffeinate -i nice -n 15 <command> > <log> 2>&1 &`, with `echo $! > <pidfile>`, both in the run's output folder under `validation/runs/` of the runner worktree. Source `dev/env.sh` first. At most 4 workers for the legacy arms. Never more than 8 workers in total across your jobs.
+- Every job: `nohup caffeinate -i nice -n 15 <command> > <log> 2>&1 &`, with `echo $! > <pidfile>`, both in the run's output folder under `validation/runs/` of the runner worktree. Source `dev/env.sh` first. At most 6 workers in total across your jobs (the executor may lower this with a restart and `--resume` when the load is high).
 - Your own editable worktree for the pull request is `<S>/.worktrees/t04-legacy-runs` (branch `t04-legacy-runs` from `origin/main`); it holds only the run configuration, the pilot report and, at the end, the results and summaries.
 
 ## Steps
