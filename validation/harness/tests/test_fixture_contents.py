@@ -39,7 +39,11 @@ _STRING_ONLY_KEYS = frozenset(
         "dataset",
         "mode",
         "component",
+        "extra",
         "label",
+        "warnings",
+        "dirs_colnames",
+        "steps_error",
     }
 )
 
@@ -64,6 +68,8 @@ _REQUIRED_RESULT_FIELDS = (
     "pred_train",
     "r_version",
     "earth_version",
+    "warnings",
+    "glm_converged",
 )
 
 _REQUIRED_VERSION_FIELDS = (
@@ -85,8 +91,24 @@ _REQUIRED_VERSION_FIELDS = (
 _MAY_BE_NONFINITE_KEYS = frozenset({"gcv", "grsq", "rsq", "gcv_per_subset"})
 
 
-def _dataset_fixture_paths() -> list[Path]:
+def _load(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _top_level_fixture_paths() -> list[Path]:
+    """Every ``validation/fixtures/*.json`` file: a (dataset, mode) fixture
+    (a ``"dataset"`` key) or a bespoke "extra" one (an ``"extra"`` key,
+    gen_fixtures.py's ``EXTRA_REGISTRY``, for example S15's 200 draws);
+    which is which is decided by content, not by a filename guess."""
     return sorted(p for p in FIXTURES_DIR.glob("*.json") if p.is_file())
+
+
+def _dataset_fixture_paths() -> list[Path]:
+    return [p for p in _top_level_fixture_paths() if "dataset" in _load(p)]
+
+
+def _extra_fixture_paths() -> list[Path]:
+    return [p for p in _top_level_fixture_paths() if "extra" in _load(p)]
 
 
 def _component_fixture_paths() -> list[Path]:
@@ -95,11 +117,7 @@ def _component_fixture_paths() -> list[Path]:
 
 
 def _all_fixture_paths() -> list[Path]:
-    return _dataset_fixture_paths() + _component_fixture_paths()
-
-
-def _load(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return _top_level_fixture_paths() + _component_fixture_paths()
 
 
 def _walk_leaves(value: Any, under_string_only_key: bool) -> Iterator[tuple[Any, bool]]:
@@ -138,6 +156,7 @@ def test_at_least_one_dataset_and_one_component_fixture_are_committed():
     assert _component_fixture_paths(), (
         f"no component fixtures committed in {FIXTURES_DIR / 'components'}"
     )
+    assert _extra_fixture_paths(), f"no extra fixtures committed in {FIXTURES_DIR}"
 
 
 def test_every_fixture_is_valid_json():
@@ -211,3 +230,68 @@ def test_every_component_fixture_names_itself():
             f"{path.name}: payload['component'] is {payload.get('component')!r}, "
             "not this file's own name"
         )
+
+
+def test_every_extra_fixture_names_itself():
+    for path in _extra_fixture_paths():
+        payload = _load(path)
+        assert payload.get("extra") == path.stem, (
+            f"{path.name}: payload['extra'] is {payload.get('extra')!r}, "
+            "not this file's own name"
+        )
+
+
+# Review round 2 (#43 adversarial, non-blocking): "_fixture_payload ignores
+# scale_override" and the several other ways a weighted/repeated pair could
+# quietly drift apart "survive every test outside gate C" (which needs R).
+# This one reads the committed JSON directly, so it runs in gate A, gate B
+# and CI too, not only a `gen_fixtures.py --check` on a machine with R.
+_WEIGHTED_REPEATED_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("S13_int_zeros", "S13_int_zeros_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_int_random", "S13_int_random_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_unit", "S13_unit_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_equal2", "S13_equal2_repeated", ("matched_d1", "defaults_d1")),
+    (
+        "S13_constant_y_weighted",
+        "S13_constant_y_weighted_repeated",
+        ("matched_d1", "defaults_d1"),
+    ),
+    (
+        "S16_weighted",
+        "S16_weighted_repeated",
+        ("matched_d1", "defaults_d1", "defaults_d2", "matched_d2"),
+    ),
+)
+
+
+def test_committed_weighted_and_repeated_pairs_are_bit_identical():
+    for weighted_id, repeated_id, modes in _WEIGHTED_REPEATED_PAIRS:
+        for mode in modes:
+            w_path = FIXTURES_DIR / f"{weighted_id}_{mode}.json"
+            r_path = FIXTURES_DIR / f"{repeated_id}_{mode}.json"
+            if not w_path.is_file() or not r_path.is_file():
+                continue  # a constant-y case may hold an earth error instead
+            w_payload, r_payload = _load(w_path), _load(r_path)
+            w_in, r_in = w_payload["inputs"], r_payload["inputs"]
+            label = f"{weighted_id}/{repeated_id} ({mode})"
+
+            assert w_payload["scale"] == r_payload["scale"], (
+                f"{label}: scale is not shared exactly"
+            )
+
+            weights = [int(x) for x in w_in["weights"]]
+            rows = zip(w_in["X"], weights, strict=True)
+            expanded_X = [row for row, w in rows if w for _ in range(w)]
+            assert expanded_X == r_in["X"], (
+                f"{label}: repeating the weighted X by its weights does not "
+                "give the repeated fixture's X exactly"
+            )
+            ys = zip(w_in["y"], weights, strict=True)
+            expanded_y = [y for y, w in ys if w for _ in range(w)]
+            assert expanded_y == r_in["y"], (
+                f"{label}: repeating the weighted y by its weights does not "
+                "give the repeated fixture's y exactly"
+            )
+            assert w_in["X_test"] == r_in["X_test"], (
+                f"{label}: X_test is not shared exactly"
+            )

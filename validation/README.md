@@ -114,7 +114,9 @@ difference in `versions.pymars_commit` alone, from running it on a
 different commit than the one that made the committed fixture, is expected
 and not a regression). Register a new dataset by adding a `@register`-
 decorated function returning a `Dataset` to `gen_fixtures.py`; register a
-new mode by adding an entry to its `MODES` dict.
+new mode by adding an entry to its `MODES` dict; a dataset not listed in
+`DATASET_MODES` is generated under `DEFAULT_DATASET_MODES`
+(`defaults_d1`/`matched_d1`).
 
 The committed fixtures were made on macOS arm64. `--check` compares every
 stored double exactly, so running it on a different OS or architecture (for
@@ -127,18 +129,64 @@ needs a by-hand look at which bits differ before it counts as a regression.
 The fixtures are Python-only JSON, not strict RFC 8259: a field in
 `test_fixture_contents.py`'s `_MAY_BE_NONFINITE_KEYS` (`gcv`, `grsq`,
 `rsq`, `gcv_per_subset`, and `gcv_grid.json`'s own per-cell `gcv` list)
-may hold a bare `Infinity`/`-Infinity`/`NaN` token where GCV-2 gives one
-(a case count at or below the effective number of parameters). Python's
-`json.loads` reads these back exactly; a strict reader (R's
-`jsonlite::fromJSON` included) does not, and needs a sentinel pass or a
-preprocessing step first (review round 2, #42 spec finding 4; this note
-was in #43's README only, since #43 has more of these fields, but
-`gcv_grid.json` needs it here too).
+may hold a bare `Infinity`/`-Infinity`/`NaN` token where GCV-2 or GCV-7
+gives one (a case count at or below the effective number of parameters;
+a degenerate or near-degenerate fit). Python's `json.loads` reads these
+back exactly; a strict reader (R's `jsonlite::fromJSON` included) does
+not, and needs a sentinel pass, or a preprocessing step, first (review
+round 1, #42 adversarial finding 7; round 2, #42 spec finding 4, added
+`gcv_grid.json` to the fixtures this affects, since round 1 had noted
+it only here on #43).
 
 ### Dataset fixtures
 
 `VALIDATION_PLAN.md`, "Test datasets", defines S01 to S20 and what each is
-for; S01 exists as of T02 (issue #38), and T05 (issue #7) adds S02 to S20.
+for. A dataset with more than one size or variant (for example S04's 5 and
+10 covariates, 200 and 1,000 cases) is registered as several dataset ids,
+one file set per variant; `gen_fixtures.DATASET_MODES` names which modes
+each dataset id is generated under (`DEFAULT_DATASET_MODES`,
+`defaults_d1`/`matched_d1`, for a dataset not listed there).
+
+In the matched and earth-compatible (`defaults_*`) modes, `inputs.X` is the
+LA-7-scaled matrix (each non-constant covariate divided by its weighted
+standard deviation, divisor N, not centered; `gen_fixtures.scaled_matrix`),
+and the top-level `scale` field gives the per-column divisors used (`null`
+for a raw mode, `gen_fixtures.RAW_MODES`, S12's own fits). Where earth
+errors on an input, `result` is `{"error": ..., "r_version": ...,
+"earth_version": ...}` instead of a full result (S13's weighted constant
+response).
+
+| Dataset id(s) | Modes | Purpose |
+|---|---|---|
+| `S01` | `defaults_d1`, `matched_d1`, the 9 `span_*` (minspan 1/5/auto x endspan 1/10/auto) | Knot recovery |
+| `S02_n020`, `S02_n050` | same as S01 | Span formulas and stopping rules at small n |
+| `S03` | `defaults_d1`, `matched_d1`, `matched_d1_linear` | Pairs against single hinges; linear terms |
+| `S04_p05_n0200`, `S04_p05_n1000`, `S04_p10_n0200`, `S04_p10_n1000` | `defaults_d1`, `defaults_d2`, `matched_d1`, `matched_d2` | Interactions and irrelevant covariates, degree 1 and 2 |
+| `S05` | `defaults_d2`, `matched_d2`, `matched_d2_adjust1` | Interaction search; `Adjust.endspan` |
+| `S06` | `defaults_d3`, `matched_d3` | Degree 3 |
+| `S07` | `defaults_d1`, `matched_d1`, `matched_d1_linear` | `Auto.linpreds` against pymars' linear candidates |
+| `S08` | `defaults_d1`, `matched_d1`, `matched_d1_minspan5` | Repeated x values: distinct values against cases |
+| `S09` | `defaults_d1`, `matched_d1` | Categorical coding through OneHotEncoder |
+| `S10` | `defaults_d1`, `matched_d1` | Tie-breaks across predictors; collinearity |
+| `S11_n03`, `S11_n05`, `S11_n08`, `S11_n12` | `defaults_d1`, `matched_d1` | Degenerate sizes |
+| `S12_base`, `S12_x_1em8`, `S12_x_1e8`, `S12_x_plus_1e6`, `S12_y_1em9`, `S12_y_1e9` | `raw_d1` (no LA-7 rescaling, earth's own scale/shift dependence), `defaults_d1`, `matched_d1` | Invariance to scale and shift; earth is not scale invariant (bb14.4) |
+| `S13_int_zeros`(`_repeated`), `S13_int_random`(`_repeated`), `S13_unit`(`_repeated`), `S13_equal2`(`_repeated`), `S13_nonint`, `S13_constant_y_weighted`(`_repeated`) | `matched_d1`, `defaults_d1` (every id, `S13_nonint` included) | Weights: repetition, removal, unit weights, weights all equal but not 1 (GCV-8/W-8), the fixed-basis path for non-integer weights, and a weighted constant response earth may error on |
+| `S14` | `defaults_d2`, `matched_d2` (`glm_family="binomial"`) | GLM refit |
+| `s15_draws` (an "extra", not a (dataset, mode) fixture) | `matched`/`defaults`, degree 1/2, alternated across reps | 200 draws from `validation/sims/dgps.py` (D1-D6, D8; n = 200, earth's own default term limit); each draw's `trace = 8` log is parsed into a compact per-step summary (`compare.steps_from_trace`) and dropped rather than stored whole. About 1 in 7 draws hits a gap in `steps_from_trace` (FAST-4's slot/row skew after a single-term step) and keeps `dirs`/`cuts`/`rss_per_subset`/`gcv_per_subset` with `steps = null` and `steps_error` set, rather than losing the draw or patching the harness here. Each step's `best_rss`/`second_best_rss`/`rss_before` are `trace = 8` text (at most 5 significant digits, on y standardized to variance 1, not `rss_per_subset`'s own scale in the same record): not precise enough for a 1e-7 near-tie call, which T07 should take from pymars's own candidate log instead (review round 2, #43 spec finding 3; also stored as `steps_rss_precision_note` in the fixture itself) |
+| `S16_weighted`, `S16_weighted_repeated` | `matched_d1`, `defaults_d1`, `defaults_d2`, `matched_d2` | Frequency weights (S04's 5-covariate, 200-case data) against repeated rows |
+| `S17` | `defaults_d1`, `matched_d1` | Several responses with a shared basis |
+| `S18` | `defaults_d1`, `matched_d1`; plus the extra `s18_multinom` (`nnet::multinom` on earth's selected basis) | Multiclass terms, and probabilities against `nnet::multinom` |
+| `S19_dummies` | `defaults_d1`, `matched_d1`; plus the extra `s19_factor` (earth on a genuine R factor column) | The OneHotEncoder recipe |
+| `S20` | `defaults_d1`, `matched_d1` (`glm_family="binomial"`) | Separation warnings and fitted probabilities near 0 or 1 |
+
+### Extra fixtures
+
+Three bespoke, one-off fixtures do not fit the (dataset, mode) registry
+(`gen_fixtures.EXTRA_REGISTRY`/`make_all_extras()`, `validation/fixtures/
+<name>.json`, alongside the dataset fixtures): `s15_draws.json` (S15),
+`s18_multinom.json` (S18's `nnet::multinom` comparison) and
+`s19_factor.json` (S19's "factor" side). Register a new one by adding a
+`@register_extra`-decorated function to `gen_fixtures.py`.
 
 ### Component fixtures
 

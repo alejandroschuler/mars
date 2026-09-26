@@ -110,6 +110,48 @@ calls <- list(
     )
   },
 
+  # A fresh earth fit with one column as a genuine R factor (plus optional
+  # other numeric columns), the "factor" side of S19's comparison
+  # (VALIDATION_PLAN.md, "Categorical inputs": "earth on the factor must
+  # equal earth on the dummies"); driver.run_earth's CSV-based x is numeric
+  # only, so this reaches past it for a plain data.frame(...) call, the
+  # standard, documented way to hand earth a factor column, not internals.
+  # Only a summary comes back (fitted values, gcv, term count), because a
+  # factor fit's own dirs/cuts/bx are not comparable in shape with the
+  # dummy-encoded fit's.
+  earth_factor_fit = function(req) {
+    y <- as.numeric(unlist(req$y))
+    cols <- list()
+    if (!is.null(req$labels)) {
+      cols$.f <- factor(unlist(req$labels))
+    }
+    other <- req$other_x
+    if (!is.null(other) && length(other) > 0) {
+      other_x <- to_matrix(other)
+      for (j in seq_len(ncol(other_x))) {
+        cols[[paste0("x", j)]] <- other_x[, j]
+      }
+    }
+    df <- as.data.frame(cols)
+    args <- c(list(x = df, y = y), req$earth_args)
+    fit <- do.call(earth, args)
+    list(
+      fitted = vec_json(as.numeric(fitted(fit))),
+      gcv = fit$gcv,
+      rsq = fit$rsq,
+      nterms = nrow(fit$dirs),
+      # dirs's own column names (review round 1, #43 adversarial finding
+      # 9): a genuine factor column ".f" expands to one name per non-
+      # baseline level (".fb", ".fc", ...); a mutation that instead passed
+      # the factor's numeric codes would leave a single column named
+      # ".f", which a fitted-values/gcv comparison alone cannot tell
+      # apart (with only as many distinct rows as there are levels, a
+      # hinge fit on the numeric codes can still match arbitrary level
+      # means exactly).
+      dirs_colnames = vec_json(colnames(fit$dirs))
+    )
+  },
+
   # A fresh earth fit on (x, y), predicted at newx; the prediction-at-new-
   # points component test compares this with pymars' basis_matrix()/predict.
   # Returns the model (dirs, cuts, selected_terms, coefficients) alongside

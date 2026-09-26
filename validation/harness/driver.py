@@ -61,6 +61,7 @@ _STRING_ONLY_KEYS = frozenset(
         "error",
         "call",
         "warnings",
+        "dirs_colnames",
     }
 )
 
@@ -212,13 +213,27 @@ def _write_job_data(job: EarthJob, workdir: Path) -> dict[str, Any]:
 
 
 def run_earth(
-    jobs: Sequence[EarthJob], *, workdir: Path, rscript: str = "Rscript"
+    jobs: Sequence[EarthJob],
+    *,
+    workdir: Path,
+    rscript: str = "Rscript",
+    raise_on_error: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Fit every job in ``jobs`` with one R process (a block), and return
     ``{job.id: result}`` in the schema this module's docstring gives.
 
     One process fits every job in the block, so the caller pays R's
     start-up time once rather than once per dataset.
+
+    ``raise_on_error`` (default ``True``) is what most callers want: a job
+    whose result has an ``"error"`` key (earth itself raised, for example a
+    weighted constant response, docs/algorithm.md bb10.9) raises
+    ``RuntimeError`` rather than being mistaken for a successful fit. A
+    fixture generator that means to record such an error as data instead of
+    dropping the case (VALIDATION_PLAN.md, "Test datasets") passes
+    ``raise_on_error=False``; the job's entry in the returned dict is then
+    the bare ``{"id", "error", "r_version", "earth_version"}`` dict
+    ``fit_earth.R`` wrote, not a full result.
     """
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -241,7 +256,7 @@ def run_earth(
     results: dict[str, dict[str, Any]] = {}
     for job, r_job in zip(jobs, r_jobs, strict=True):
         result = _desanitize(json.loads(Path(r_job["out"]).read_text(encoding="utf-8")))
-        if "error" in result:
+        if "error" in result and raise_on_error:
             raise RuntimeError(f"earth failed for job {job.id!r}: {result['error']}")
         results[job.id] = result
     return results

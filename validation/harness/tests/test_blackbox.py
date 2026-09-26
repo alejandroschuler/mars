@@ -176,6 +176,49 @@ class TestLmFit:
         assert not any(np.isnan(c) for c in estimated)
 
 
+class TestEarthFactorFit:
+    def test_factor_and_dummy_encodings_agree(self):
+        rng = np.random.default_rng(5)
+        n = 100
+        labels = rng.choice(["a", "b", "c", "d"], size=n)
+        effect = {"a": 0.0, "b": 1.0, "c": -0.5, "d": 2.0}
+        y = np.array([effect[lbl] for lbl in labels]) + rng.normal(scale=0.1, size=n)
+        earth_args = {"degree": 1, "nk": 11}
+        factor_result = bb.earth_factor_fit(labels, y, earth_args)
+        # drop="first" dummies (OneHotEncoder's recipe): one indicator per
+        # non-baseline level.
+        dummies = np.column_stack(
+            [(labels == level).astype(float) for level in ("b", "c", "d")]
+        )
+        dummy_result = bb.earth_factor_fit(None, y, earth_args, other_x=dummies)
+        assert factor_result["nterms"] == dummy_result["nterms"]
+        assert factor_result["gcv"] == pytest.approx(dummy_result["gcv"], rel=1e-8)
+        assert factor_result["fitted"] == pytest.approx(
+            dummy_result["fitted"], rel=1e-6
+        )
+
+    def test_a_genuine_factor_expands_to_one_column_per_level(self):
+        # Review round 1, #43 adversarial finding 9: fitted values and gcv
+        # alone cannot tell a genuine factor column from a mutation that
+        # passed its numeric codes instead (with only as many distinct
+        # rows as there are levels, a hinge fit on the codes can still
+        # match arbitrary level means exactly); dirs' own column names
+        # can, since a real factor ".f" expands to ".fb"/".fc"/... and a
+        # numeric ".f" does not expand at all.
+        rng = np.random.default_rng(6)
+        n = 100
+        labels = rng.choice(["a", "b", "c", "d"], size=n)
+        effect = {"a": 0.0, "b": 1.0, "c": -0.5, "d": 2.0}
+        y = np.array([effect[lbl] for lbl in labels]) + rng.normal(scale=0.1, size=n)
+        earth_args = {"degree": 1, "nk": 11}
+        factor_result = bb.earth_factor_fit(labels, y, earth_args)
+        assert factor_result["dirs_colnames"], "no dirs_colnames returned"
+        assert all(name.startswith(".f") for name in factor_result["dirs_colnames"])
+        # At least one expanded, level-suffixed name (".fb", ".fc", ...),
+        # not just the bare, unexpanded ".f" a numeric mutation would give.
+        assert any(name != ".f" for name in factor_result["dirs_colnames"])
+
+
 class TestPredictEarth:
     def test_predicts_outside_the_training_range(self, hinge_data):
         x, y = hinge_data
