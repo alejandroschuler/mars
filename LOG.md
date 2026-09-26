@@ -44,6 +44,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 21:57 T02 round 2 (rev-t02-harness): #36 and #38 REQUEST_CHANGES on fewer points (precision and trace fixes confirmed). Remaining: NA vs NaN in blackbox.py; 4 surviving mutations in the R side; kappa-scaled tolerance without a ceiling; steps_from_trace calls single hinges pairs and uses 5-digit trace knots; a near-tie mutation survives; silent skips. Sent to t02-harness as round 3.
 - 22:02 PR #34 round 3: both APPROVE at d556e28. Retargeted #37 to main, then merged #34 as b0d642d (spec v1 part 1 on main). Asked t01-spec to rebase #37 onto main and fold in the round-3 non-blocking notes. The component modules T08 to T10 can start after the weekly reset (budget); T05 needs T02 merged.
 - 22:09 #37 (spec part 2) rebased onto main: head 1cd798c, gate B and CI passed, round-3 notes folded in (EDGE-6 power-of-2 prescaling for an underflowing TSS; bb10.7 to bb10.9). Dual review after the 01:00 reset.
+- 22:19 22:20: 5-hour 95 %, weekly 72 %. PR #40 round-3 fixes at c73b833 (legacy block size 1; run.main tests for cache key and pairing; run.lock; captions); its re-review (rev-pr35-sims1) waits until after the 01:00 reset. Also after 01:00: dual review of #37 (1cd798c); re-review of #36 and #38 when t02-harness reports.
 
 ## Core-hour ledger
 
