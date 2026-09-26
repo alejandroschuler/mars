@@ -7,6 +7,7 @@ Bracketed IDs cite ``docs/algorithm.md``.
 
 import importlib.util
 import math
+import types
 from pathlib import Path
 
 import numpy as np
@@ -859,6 +860,296 @@ class TestPruning:
         B, Y, w = random_basis(0, M=2)
         with pytest.raises(ValueError, match="pmethod"):
             prune(B, Y, w, pmethod="exhaustive")
+
+
+# ---------------------------------------------------------------------------
+# Parameters [CORE-2]
+
+
+class TestParams:
+    def test_defaults_and_resolved_values(self):
+        assert ref.Params().resolved_max_terms(3) == 21
+        assert ref.Params().resolved_penalty() == 2.0
+        assert ref.Params(max_degree=2).resolved_penalty() == 3.0
+        params = ref.Params(max_degree=np.int64(2), max_terms=np.int32(9), penalty=-1)
+        assert params.resolved_max_terms(3) == 9 and params.resolved_penalty() == -1.0
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("max_degree", 0),
+            ("max_degree", True),
+            ("max_degree", 2.0),
+            ("max_terms", 0),
+            ("penalty", -0.5),
+            ("penalty", math.inf),
+            ("thresh", -1e-3),
+            ("thresh", math.nan),
+            ("minspan", 0),
+            ("endspan", 1.5),
+            ("adjust_endspan", -1.0),
+            ("auto_linpreds", 1),
+            ("fast_k", -1),
+            ("fast_beta", math.inf),
+            ("pmethod", "cv"),
+            ("nprune", 0),
+        ],
+    )
+    def test_a_value_out_of_range_names_its_field(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            ref.Params(**{field: value})
+
+    def test_as_params_reads_a_mapping_or_attributes(self):
+        assert ref.as_params(None) == ref.Params()
+        assert ref.as_params({"max_degree": 2}).max_degree == 2
+        other = types.SimpleNamespace(max_degree=3, fast_k=0)
+        assert ref.as_params(other) == ref.Params(max_degree=3, fast_k=0)
+        with pytest.raises(ValueError, match="unknown"):
+            ref.as_params({"degree": 2})
+
+
+# ---------------------------------------------------------------------------
+# The forward pass [FWD, STOP, FAST]
+
+
+def run_forward(X, y, w=None, trace=None, **params):
+    """The forward pass on (X, y, w), with N, tau_N and TSS as a fit sets them."""
+    X = np.asarray(X, dtype=float)
+    Y = np.asarray(y, dtype=float).reshape(len(X), -1)
+    w = np.ones(len(X)) if w is None else np.asarray(w, dtype=float)
+    N = ref.weight_sum(w)
+    tau = ref.weight_tol(N)
+    record, _ = ref.forward_pass(
+        X,
+        Y,
+        w,
+        params,
+        N=ref.snap(N, tau),
+        tau_N=tau,
+        tss=ref.rss(np.ones((len(X), 1)), Y, w),
+        record_candidates=True,
+        trace=trace,
+    )
+    return record
+
+
+class TestQueue:
+    def test_table_after_two_pair_steps_at_degree_one(self):
+        # FAST-6: the intercept (entry 1) has aged rank 4, the others 2 or 3
+        entries = [(5.0, 4), (math.inf, 2), (math.inf, 2), (math.inf, 4), (math.inf, 4)]
+        assert ref.queue_table(entries, 2, 1.0) == [2, 4, 3, 5, 1]
+        assert ref.queue_table(entries, 2, 0.0) == [2, 3, 4, 5, 1]
+
+    def test_equal_aged_ranks_go_in_increasing_rank(self):
+        # ranks: entry 2 -> 0, entry 3 -> 1, entry 1 -> 2; aged 2, 1, 2
+        entries = [(3.0, 4), (math.inf, 2), (math.inf, 4)]
+        assert ref.queue_table(entries, 2, 1.0) == [3, 2, 1]
+
+    def test_the_first_table_holds_the_intercept(self):
+        assert ref.queue_table([(math.inf, 0)], 0, 1.0) == [1]
+
+    def test_window(self):
+        table = list(range(1, 8))
+        assert ref.window(table, 0) == table
+        assert ref.window(table, 1) == [1, 2, 3]
+        assert ref.window(table, 5) == [1, 2, 3, 4, 5]
+        assert ref.window(table[:3], 5) == [1, 2, 3]
+
+
+class TestLegality:
+    def test_max_legal(self):
+        assert ref.max_legal([10.0]) == pytest.approx(10.1)
+        assert ref.max_legal([10.0, 8.0]) == pytest.approx(8.08)
+        assert ref.max_legal([10.0, 9.5]) == pytest.approx(5.0)
+
+    def test_knots_are_capped_and_linear_candidates_are_not(self):
+        assert not ref.is_legal(ref.PAIR, 0.0, 5.0)
+        assert ref.is_legal(ref.SINGLE, 5.0, 5.0)
+        assert not ref.is_legal(ref.PAIR, 5.000001, 5.0)
+        assert ref.is_legal(ref.LINEAR, 100.0, 5.0)
+        assert not ref.is_legal(ref.LINEAR, 0.0, 5.0)
+
+    def test_collinearity_tolerance_changes_after_seven_steps(self):
+        assert ref.collinearity_tol(0) == ref.collinearity_tol(6) == 0.01
+        assert ref.collinearity_tol(7) == 1e-5
+
+
+def noisy_data(seed, n=60, p=2):
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(size=(n, p))
+    y = np.abs(X[:, 0] - 0.4) + X[:, 0] * np.maximum(X[:, -1] - 0.5, 0)
+    return X, y + rng.normal(scale=0.05, size=n)
+
+
+class TestForwardPass:
+    def test_a_single_true_knot(self):
+        x = np.arange(21.0) / 20
+        rec = run_forward(x[:, None], 2 * np.maximum(x - 0.5, 0), minspan=1, endspan=1)
+        np.testing.assert_array_equal(rec["dirs"], [[0], [1], [-1]])
+        np.testing.assert_array_equal(rec["cuts"], [[0.0], [0.5], [0.5]])
+        np.testing.assert_array_equal(rec["parent"], [-1, 0, 0])
+        np.testing.assert_array_equal(rec["step"], [0, 1, 1])
+        assert rec["termination"] == ref.RSQ_HIGH
+        assert rec["rss"][1] < 1e-20 * rec["rss"][0]
+        log = rec["candidates"]
+        np.testing.assert_array_equal(log["best_rss"], rec["rss"][1:])
+        assert log["second_rss"][0] > log["best_rss"][0]
+        default = run_forward(x[:, None], 2 * np.maximum(x - 0.5, 0))
+        np.testing.assert_array_equal(default["cuts"], rec["cuts"])
+
+    def test_a_linear_truth_adds_the_linear_term(self):
+        x = np.arange(21.0) / 20
+        rec = run_forward(x[:, None], 1 + 2 * x)
+        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+        np.testing.assert_array_equal(rec["cuts"], [[0.0], [0.0]])
+        assert rec["termination"] == ref.RSQ_HIGH
+        hinge = run_forward(x[:, None], 1 + 2 * x, auto_linpreds=False)
+        np.testing.assert_array_equal(hinge["dirs"], [[0], [1]])
+        np.testing.assert_array_equal(hinge["cuts"], [[0.0], [0.0]])  # min x
+
+    def test_a_binary_covariate_offers_only_its_linear_term(self):
+        # its one knot is the repeated minimum, which LA-3 rejects [KNOT-5]
+        rng = np.random.default_rng(0)
+        x = (np.arange(40) % 2).astype(float)
+        rec = run_forward(
+            x[:, None], 3 * x + rng.normal(scale=0.1, size=40), max_terms=3
+        )
+        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+        assert rec["termination"] == ref.TERM_LIMIT
+        assert rec["candidates"]["second_kind"][0] == ref.NO_KIND
+
+    def test_constant_and_duplicate_covariates_never_enter_at_degree_one(self):
+        X, y = noisy_data(1)
+        X3 = np.column_stack([X[:, 0], np.full(60, 3.0), X[:, 0]])
+        rec = run_forward(X3, y)
+        assert len(rec["dirs"]) > 3
+        assert not rec["dirs"][:, 1:].any()  # [EDGE-3, EDGE-4]
+
+    def test_a_second_search_on_the_same_covariate_is_a_single_hinge(self):
+        x = np.arange(40.0) / 40
+        y = 5 * np.abs(x - 0.3) + np.maximum(x - 0.7, 0)
+        rec = run_forward(x[:, None], y, minspan=1, endspan=1)
+        np.testing.assert_array_equal(rec["step"], [0, 1, 1, 2])
+        assert sorted(rec["dirs"][1:3, 0].tolist()) == [-1, 1]
+        assert rec["dirs"][3, 0] == 1  # b x is in the span: LA-7
+        assert {rec["cuts"][1, 0], rec["cuts"][3, 0]} == {0.3, 0.7}
+        assert rec["termination"] == ref.RSQ_HIGH
+
+    def test_a_term_in_a_slot_above_m_waits(self):
+        # step 1 adds the linear term x0 (slot 2; slot 3 stays empty), step 2 a
+        # pair on x1 (slots 4 and 5). At step 3 the entries 1 to 4 stand for
+        # slots 1 to 4, so the term in slot 5 is not searched [FAST-4, FWD-9].
+        rng = np.random.default_rng(2)
+        x0 = (np.arange(80) % 2).astype(float)
+        x1 = rng.uniform(size=80)
+        y = 3 * x0 + 2 * np.abs(x1 - 0.5) + rng.normal(scale=0.1, size=80)
+        trace = []
+        rec = run_forward(
+            np.column_stack([x0, x1]), y, trace=trace, max_degree=2, fast_k=0
+        )
+        np.testing.assert_array_equal(rec["dirs"][1], [2, 0])
+        assert sorted(rec["dirs"][2:4, 1].tolist()) == [-1, 1]
+        np.testing.assert_array_equal(rec["parent"][:4], [-1, 0, 0, 0])
+        assert trace[2]["visited"] == trace[2]["table"] and len(trace[2]["table"]) == 4
+        assert set(trace[2]["searched"]) == {0, 1, 2}
+
+    def test_a_parent_without_a_free_covariate_gets_minus_one(self):
+        rng = np.random.default_rng(3)
+        x = rng.uniform(size=60)
+        trace = []
+        run_forward(
+            x[:, None],
+            np.abs(x - 0.5) + rng.normal(scale=0.05, size=60),
+            trace=trace,
+            max_degree=2,
+            max_terms=5,
+        )
+        assert trace[1]["entries"][1] == (-1.0, 4)  # [FAST-5]
+        assert trace[1]["entries"][2] == (-1.0, 4)
+
+    @pytest.mark.parametrize(("fast_k", "size"), [(3, 5), (5, 7)])
+    def test_at_degree_one_the_pass_ends_when_the_intercept_leaves_the_window(
+        self, fast_k, size
+    ):
+        rng = np.random.default_rng(4)
+        X = rng.uniform(size=(100, 6))
+        y = np.abs(X - 0.5) @ [32.0, 16.0, 8.0, 4.0, 2.0, 1.0]
+        rec = run_forward(X, y, fast_k=fast_k, thresh=0.0)
+        assert rec["termination"] == ref.NO_GAIN  # [FAST-6, STOP-2]
+        assert len(rec["dirs"]) == size
+        np.testing.assert_array_equal(np.bincount(rec["step"])[1:], 2)
+        rec = run_forward(X, y, fast_k=fast_k)
+        assert rec["termination"] == ref.RSQ_CHANGE_SMALL and len(rec["dirs"]) == size
+
+    def test_the_term_limit(self):
+        X, y = noisy_data(5)
+        for max_terms in (1, 2):
+            rec = run_forward(X, y, max_terms=max_terms)
+            assert rec["termination"] == ref.NO_ROOM and len(rec["dirs"]) == 1
+            assert len(rec["rss"]) == 1 and len(rec["candidates"]["best_rss"]) == 0
+        for max_terms in (3, 4):
+            rec = run_forward(X, y, max_terms=max_terms)
+            assert rec["termination"] == ref.TERM_LIMIT and len(rec["rss"]) == 2
+
+    def test_small_samples_stop_on_grsq(self):
+        x = np.arange(5.0)[:, None]
+        rec = run_forward(x, [0.0, 1.0, 0.0, 1.0, 0.0])
+        assert rec["termination"] == ref.GRSQ_NEG_INF and len(rec["dirs"]) == 1
+        x = np.arange(8.0)[:, None]
+        rec = run_forward(x, [1.0, -1.0] * 4, penalty=4.0)
+        assert rec["termination"] == ref.GRSQ_LOW and len(rec["dirs"]) == 1
+
+    def test_integer_weights_give_the_pass_of_repeated_rows(self):
+        X, y = noisy_data(6, n=30)
+        w = np.random.default_rng(6).integers(1, 4, size=30)
+        weighted = run_forward(X, y, w=w, max_degree=2)
+        repeated = run_forward(np.repeat(X, w, axis=0), np.repeat(y, w), max_degree=2)
+        for key in ("dirs", "cuts", "parent", "step", "termination"):
+            np.testing.assert_array_equal(weighted[key], repeated[key])
+        np.testing.assert_allclose(weighted["rss"], repeated["rss"], rtol=1e-9)
+
+    def test_the_pass_does_not_depend_on_the_row_order_or_the_scale_of_y(self):
+        X, y = noisy_data(7)
+        base = run_forward(X, y, max_degree=2)
+        perm = np.random.default_rng(7).permutation(60)
+        for other, scale in [
+            (run_forward(X[perm], y[perm], max_degree=2), 1.0),
+            (run_forward(X, 1000.0 * y, max_degree=2), 1e6),
+        ]:
+            for key in ("dirs", "cuts", "parent", "step", "termination"):
+                np.testing.assert_array_equal(other[key], base[key])
+            np.testing.assert_allclose(other["rss"], scale * base["rss"], rtol=1e-9)
+
+    def test_the_records_are_consistent(self):
+        X, y = noisy_data(8, p=3)
+        rec = run_forward(X, y, max_degree=3)
+        M, S = len(rec["dirs"]), len(rec["rss"]) - 1
+        assert rec["dirs"].dtype == np.int8 and rec["cuts"].shape == (M, 3)
+        np.testing.assert_array_equal(
+            np.sort(np.concatenate([rec["kept"], rec["dropped"]])), np.arange(M)
+        )
+        assert np.all(np.diff(rec["rss"]) < 0)
+        log = rec["candidates"]
+        kinds = log["second_kind"]
+        assert len(kinds) == S and set(kinds.tolist()) <= {0, 1, 2, 3}
+        np.testing.assert_array_equal(
+            np.isnan(log["second_knot"]), np.isin(kinds, [0, 3])
+        )
+        np.testing.assert_array_equal(log["second_parent"] == -1, kinds == 0)
+        assert np.all(log["second_rss"] >= log["best_rss"])
+        for k in range(1, M):  # column k is the parent's column times the new factor
+            assert (
+                ref.term_degree(rec["dirs"][k])
+                == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
+            )
+
+    def test_inputs_are_not_changed(self):
+        X, y = noisy_data(9)
+        w = np.ones(60)
+        copies = X.copy(), y.copy(), w.copy()
+        run_forward(X, y, w=w)
+        for original, copy in zip((X, y, w), copies, strict=True):
+            np.testing.assert_array_equal(original, copy)
 
 
 # ---------------------------------------------------------------------------
