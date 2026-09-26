@@ -74,11 +74,37 @@ uv run --frozen python -m validation.sims.run \
 - D7 (50 covariates) is far more expensive for the legacy arms (P-cur,
   P-ear): run it as its own invocation without them, for example
   `--arms E-def,E-pym,OLS,HGB --dgps D7`.
+- `--block-size` (default 20) is how many repetitions one `Rscript` call
+  covers for an R arm (E-def, E-pym): its fits take milliseconds, so batching
+  amortizes `Rscript`'s own start-up meaningfully, and a lost block is cheap
+  to redo. A legacy arm (P-cur, P-ear, EarthClassifier, GLMEarth) always uses
+  block size 1, regardless of this flag: its interpreter starts in 0.24 to
+  0.38 s, against fits of 15 to 130 s (tens of minutes for D7), so batching
+  saves almost nothing, while a kill loses every already-finished fit in an
+  unfinished block (the block worker writes its outputs to a temporary folder
+  that a kill removes unread). With block size 1, a kill can cost at most the
+  one repetition whose block is still open.
 - A run this size (minutes or more) is meant to start under
   `nohup caffeinate -i nice -n 15 ...`; `run.py` writes its own PID to
   `<out>/run.pid` at startup and removes it on a clean exit, and turns
   SIGTERM/SIGINT into a normal exit so joblib shuts its workers down instead
   of leaving them orphaned.
+- `<out>/run.lock` (made with `mkdir`, so a second invocation fails to create
+  it) stops two `run.py` calls from writing into the same `--out` folder at
+  once; a clean exit removes it. If a run was `SIGKILL`ed (which cannot clean
+  up its own lock), `run.pid` (or `ps`) tells you whether anything is still
+  actually running before you remove `run.lock` by hand and retry.
+- After a `SIGKILL` (not a plain `SIGTERM`/`Ctrl-C`, which joblib shuts down
+  cleanly), the loky worker processes `--n-jobs` started can outlive the
+  parent and keep holding CPU and memory. Find them with
+  `pgrep -f 'multiprocessing.*semaphore_tracker\|joblib.*resource_tracker\|loky'`
+  or, more broadly, `ps aux | grep -i '[p]ython.*validation.sims'` (the
+  bracket avoids matching your own `grep`), and end any that are still around
+  with `kill <pid>` (or `kill -9` if they do not respond). Check for these
+  after any restart from a `SIGKILL`, before starting a new invocation into
+  the same or a different `--out`: they otherwise keep competing for the same
+  machine's cores. T04: this applies whenever a long run needs a hard
+  restart.
 - `<out>/manifest.json` is a list, one entry per invocation, not overwritten.
 
 ### Smoke run

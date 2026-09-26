@@ -111,20 +111,62 @@ def test_arm_config_matches_the_plans_learners_and_settings_table(
 @pytest.mark.parametrize(
     ("name", "substrings"),
     [
-        ("HGB", ["learning_rate=0.1", "max_iter=1000", "early_stopping=True"]),
         ("OLS", ["LinearRegression"]),
-        ("LogReg", ["C=np.inf"]),
     ],
 )
 def test_inline_arm_source_contains_its_plan_settings(name, substrings):
-    """The settings for these three arms are literal keyword arguments in
-    their fit_predict source, not a separate config dict; pinning the source
-    text is what catches a review's HGB max_iter/early_stopping mutations and
-    a penalized LogReg (default C=1) in place of C=np.inf.
+    """The settings for this arm are literal keyword arguments in its
+    fit_predict source, not a separate config dict. (HGB and LogReg get a
+    behavioral check instead, below and in test_logreg_is_unpenalized_and_
+    predicts_probabilities: a review found that a source-text substring check
+    for HGB's early_stopping=True still passed after the arm was changed to
+    early_stopping="auto", because that string was still present, in a
+    comment.)
     """
     source = learners.ARMS[name].source_text
     for substring in substrings:
         assert substring in source, (name, substring)
+
+
+def test_hgb_fit_predict_uses_the_plans_exact_settings(monkeypatch):
+    """Behavioral, not a source-text substring: records the keyword arguments
+    the arm's own code actually passes to HistGradientBoosting{Regressor,
+    Classifier}, by subclassing the real class (so .fit/.predict/.predict_proba
+    keep their real behavior) and patching it in where _hgb_fit_predict's own
+    local ``from sklearn.ensemble import ...`` will find it.
+    """
+    import sklearn.ensemble
+
+    captured: dict = {}
+
+    def _recording_subclass(real_cls):
+        class _Recorder(real_cls):
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                super().__init__(**kwargs)
+
+        return _Recorder
+
+    monkeypatch.setattr(
+        sklearn.ensemble,
+        "HistGradientBoostingRegressor",
+        _recording_subclass(sklearn.ensemble.HistGradientBoostingRegressor),
+    )
+    monkeypatch.setattr(
+        sklearn.ensemble,
+        "HistGradientBoostingClassifier",
+        _recording_subclass(sklearn.ensemble.HistGradientBoostingClassifier),
+    )
+    x_train, y_train = _linear_data(seed=0)
+    x_test, _y_test = _linear_data(seed=1)
+    outcome = learners.ARMS["HGB"].fit_predict(x_train, y_train, x_test, False)
+    assert outcome.ok
+    assert captured == {
+        "learning_rate": 0.1,
+        "max_iter": 1000,
+        "early_stopping": True,
+        "random_state": 0,
+    }
 
 
 @pytest.mark.parametrize(

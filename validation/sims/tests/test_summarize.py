@@ -185,12 +185,19 @@ def test_ratio_table_missing_when_no_data_at_all():
 
 
 def test_selection_table_median_and_iqr_hand_case(tmp_path):
-    """n_terms = [1, 2, 3, 4, 5] (pandas' default linear interpolation):
-    median 3, Q1 2, Q3 4, IQR 2. A mean in place of the median would give 3.0
-    too by coincidence here, so this also checks the IQR, which a mean has
-    no equivalent of at all.
+    """n_terms = [1, 1, 1, 1, 10] (an asymmetric sample, pandas' default
+    linear interpolation): median 1, mean 2.8, Q1 1, Q3 1, IQR 0. A mean
+    computed in place of the median would give 2.8, not 1: this is the
+    asymmetric case a review asked for, since [1, 2, 3, 4, 5]'s median and
+    mean coincide (3.0 either way) and so cannot tell the two apart.
+    uses_irrelevant_covariate = [True, False, False, False, False] and
+    n_irrelevant_covariates = [2, 0, 0, 0, 0]: a mean gives 0.2 and 0.4; a max
+    (also tried) would give 1 and 2 instead.
     """
-    for rep, n_terms in enumerate([1, 2, 3, 4, 5]):
+    n_terms_values = [1, 1, 1, 1, 10]
+    uses_irrelevant = [True, False, False, False, False]
+    n_irrelevant_values = [2, 0, 0, 0, 0]
+    for rep in range(5):
         _write_result(
             tmp_path,
             "D4_n00200_lo",
@@ -198,9 +205,9 @@ def test_selection_table_median_and_iqr_hand_case(tmp_path):
             rep,
             {
                 "error": None,
-                "n_terms": n_terms,
-                "uses_irrelevant_covariate": False,
-                "n_irrelevant_covariates": 0,
+                "n_terms": n_terms_values[rep],
+                "uses_irrelevant_covariate": uses_irrelevant[rep],
+                "n_irrelevant_covariates": n_irrelevant_values[rep],
             },
         )
     df = summ.load_results(tmp_path)
@@ -210,5 +217,81 @@ def test_selection_table_median_and_iqr_hand_case(tmp_path):
         & (table["arm"] == "E-def")
         & (table["noise"] == "lo")
     ].iloc[0]
-    assert row["median_terms"] == pytest.approx(3.0)
-    assert row["iqr_terms"] == pytest.approx(2.0)
+    assert row["median_terms"] == pytest.approx(1.0)
+    assert row["median_terms"] != pytest.approx(2.8)  # rules out a mean
+    assert row["iqr_terms"] == pytest.approx(0.0)
+    assert row["share_irrelevant"] == pytest.approx(0.2)
+    assert row["share_irrelevant"] != pytest.approx(1.0)  # rules out a max
+    assert row["mean_n_irrelevant"] == pytest.approx(0.4)
+    assert row["mean_n_irrelevant"] != pytest.approx(2.0)  # rules out a max
+
+
+def test_binary_outcome_table_uses_excess_log_loss_not_excess_risk(tmp_path):
+    """A review's repro: a mutation that computed the binary table's ratio
+    from excess_risk instead of excess_log_loss passed every existing test.
+    Gives each measure a distinct, hand-chosen value so the two cannot agree
+    by coincidence.
+    """
+    for rep in range(2):
+        _write_result(
+            tmp_path,
+            "D3-bin_n00200",
+            "E-def",
+            rep,
+            {"error": None, "excess_risk": 100.0, "excess_log_loss": 1.0},
+        )
+        _write_result(
+            tmp_path,
+            "D3-bin_n00200",
+            "EarthClassifier",
+            rep,
+            {"error": None, "excess_risk": 300.0, "excess_log_loss": 4.0},
+        )
+    df = summ.load_results(tmp_path)
+    table = summ.binary_outcome_table(df)
+    row = table[
+        (table["DGP"] == "D3-bin")
+        & (table["arm"] == "EarthClassifier")
+        & (table["n"] == 200)
+    ].iloc[0]
+    # excess_log_loss ratio: 4/1 = 4. excess_risk ratio would be 300/100 = 3.
+    assert "4.000" in row["excess_log_loss_ratio"]
+    assert "3.000" not in row["excess_log_loss_ratio"]
+
+
+def test_paired_log_ratio_is_sensitive_to_pairing_order(tmp_path):
+    """The mean of paired log ratios is invariant to which repetition of one
+    arm gets paired with which of the other (it is still the same values
+    summed, just reordered), so a reversed-pairing bug cannot be caught by
+    checking the ratio alone; the previous hand case also held E-def
+    constant, which independently makes any pairing give the same result. Both
+    arms vary here, and asymmetrically, so the *spread* (se, and so the
+    interval) differs under a reversed pairing even though the ratio would not.
+    """
+    e_def = [1.0, 2.0]
+    p_cur = [3.0, 9.0]
+    for rep in range(2):
+        _write_result(
+            tmp_path,
+            "D1_n00200_lo",
+            "E-def",
+            rep,
+            {"error": None, "excess_risk": e_def[rep]},
+        )
+        _write_result(
+            tmp_path,
+            "D1_n00200_lo",
+            "P-cur",
+            rep,
+            {"error": None, "excess_risk": p_cur[rep]},
+        )
+    df = summ.load_results(tmp_path)
+    stats = summ.paired_log_ratio(df, "D1", 200, "lo", "P-cur", "E-def", "excess_risk")
+    # Correct (same-repetition) pairing: g = [log3 - log1, log9 - log2].
+    assert stats["se"] == pytest.approx(0.202733, abs=1e-5)
+    # A reversed pairing (rep 0 of P-cur with rep 1 of E-def and vice versa)
+    # would give se = 0.895880 instead, from the same two g_bar-preserving
+    # but differently spread values (g_bar itself, 1.301345, is identical
+    # either way: a sum of the same two values in a different order).
+    assert stats["se"] != pytest.approx(0.895880, abs=1e-5)
+    assert stats["g_bar"] == pytest.approx(1.301345, abs=1e-5)

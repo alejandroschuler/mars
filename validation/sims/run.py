@@ -7,12 +7,15 @@ Usage (from the repository root, after ``. dev/env.sh``)::
 
 Results land under ``--out``, one JSON file per (cell, arm, repetition):
 ``<out>/<cell-name>/<arm>/rep<NNNN>.json``. Each unit (one cell, one arm, one
-repetition, or one block of several repetitions for an R/legacy arm)
-generates its own data, fits, computes its measures and writes its own result
-file *inside the worker task that runs it*, atomically (a temp file, then
-``os.replace``), the moment that unit finishes, not after the whole
-invocation completes. A run killed partway therefore keeps every unit that
-had already finished; ``--resume`` skips a result file that already exists
+repetition, or one block of several repetitions for an R arm; a legacy arm's
+own block is always exactly one repetition, since its interpreter's own
+start-up, 0.24 to 0.38 s, is negligible next to one fit, 15 to 130 s, and a
+larger block would risk more already-finished work on a kill) generates its
+own data, fits, computes its measures and writes its own result file *inside
+the worker task that runs it*, atomically (a temp file, then ``os.replace``),
+the moment that unit finishes, not after the whole invocation completes. A
+run killed partway therefore keeps every unit that had already finished;
+``--resume`` skips a result file that already exists
 and parses as JSON, and redoes one that does not (an interrupted write) or,
 with ``--retry-failed``, one that recorded an error (for example P-fix before
 ``pymars.EarthRegressor`` existed). ``<out>/manifest.json`` is a JSON list,
@@ -457,6 +460,21 @@ def _process_block_chunk(
         _write_measures(unit, outcome, dgp, truth_test, y_test, out_dir)
 
 
+def block_size_for(arm: learners.Arm, r_block_size: int) -> int:
+    """How many repetitions one block (one subprocess call) covers for
+    ``arm``. Always 1 for a legacy arm, regardless of ``r_block_size``: its
+    interpreter starts in 0.24 to 0.38 s, against fits of 15 to 130 s (tens
+    of minutes for D7), so batching saves almost nothing, while a kill loses
+    every already-finished fit in an unfinished block (the block worker
+    writes its outputs to a temporary folder that a kill removes unread; a
+    review measured 2 of 4 legacy fits lost this way). An earth (R) fit
+    takes milliseconds, so batching ``r_block_size`` of them still amortizes
+    ``Rscript``'s own start-up meaningfully, and a lost block is cheap to
+    redo.
+    """
+    return 1 if arm.kind == "legacy" else r_block_size
+
+
 def run_units(
     units: list[Unit],
     diagnostics: dict,
@@ -479,8 +497,9 @@ def run_units(
         for u in inline_units
     ]
     for arm_name, arm_units in block_units_by_arm.items():
-        for i in range(0, len(arm_units), block_size):
-            chunk = arm_units[i : i + block_size]
+        size = block_size_for(learners.ARMS[arm_name], block_size)
+        for i in range(0, len(arm_units), size):
+            chunk = arm_units[i : i + size]
             tasks.append(
                 joblib.delayed(_process_block_chunk)(
                     chunk, arm_name, diagnostics, out_dir, versions, use_cache
@@ -558,7 +577,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--reps", required=True, help="repetition range start:end (half-open), e.g. 0:2"
     )
     p.add_argument("--n-jobs", type=int, default=1)
-    p.add_argument("--block-size", type=int, default=DEFAULT_BLOCK_SIZE)
+    p.add_argument(
+        "--block-size",
+        type=int,
+        default=DEFAULT_BLOCK_SIZE,
+        help=(
+            "repetitions per Rscript block for E-def/E-pym (default "
+            f"{DEFAULT_BLOCK_SIZE}); a legacy arm (P-cur, P-ear, "
+            "EarthClassifier, GLMEarth) always uses 1, regardless of this "
+            "flag, since its own subprocess start-up is negligible next to "
+            "one fit and a larger block risks more finished work on a kill"
+        ),
+    )
     p.add_argument("--resume", action="store_true")
     p.add_argument(
         "--retry-failed",
@@ -573,19 +603,50 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _install_signal_handlers() -> None:
+def _install_signal_handlers() -> tuple:
+    """Installs the handlers and returns the previous ones, so ``main`` can
+    put them back. Without this, ``main`` (called directly, not only as
+    ``python -m validation.sims.run``) would leave its handler installed in
+    the calling process for good; a review found a pytest session kept it
+    after test_run.py's own tests finished.
+    """
+    previous = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
+
     def _handle(signum, _frame):
         raise SystemExit(128 + signum)
 
     signal.signal(signal.SIGTERM, _handle)
     signal.signal(signal.SIGINT, _handle)
+    return previous
+
+
+def acquire_lock(out_dir: Path) -> Path:
+    """``<out_dir>/run.lock``, made with ``mkdir`` (atomic, like the
+    executor's own lock in VALIDATION_PLAN.md): stops a second invocation
+    from writing into the same folder at once. Raises SystemExit, naming the
+    lock, if one is already held; a run.py killed by SIGKILL cannot remove
+    its own lock (nothing can run in the process at that point), so the
+    message says to check run.pid before removing it by hand.
+    """
+    lock_path = out_dir / "run.lock"
+    try:
+        lock_path.mkdir()
+    except FileExistsError:
+        raise SystemExit(
+            f"{lock_path} already exists: another run.py may be using {out_dir}. "
+            f"Check {out_dir / 'run.pid'} (or `ps`) for a still-running process; "
+            f"if none is running (a SIGKILL cannot clean up its own lock), "
+            f"remove {lock_path} and retry."
+        ) from None
+    return lock_path
 
 
 def main(argv: list[str] | None = None) -> None:
-    _install_signal_handlers()
+    previous_handlers = _install_signal_handlers()
     args = build_arg_parser().parse_args(argv)
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = acquire_lock(out_dir)
     pid_path = out_dir / "run.pid"
     pid_path.write_text(str(os.getpid()), encoding="utf-8")
 
@@ -641,6 +702,10 @@ def main(argv: list[str] | None = None) -> None:
     finally:
         with contextlib.suppress(OSError):
             pid_path.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            lock_path.rmdir()
+        signal.signal(signal.SIGTERM, previous_handlers[0])
+        signal.signal(signal.SIGINT, previous_handlers[1])
 
 
 def append_manifest_entry(out_dir: Path, entry: dict) -> None:

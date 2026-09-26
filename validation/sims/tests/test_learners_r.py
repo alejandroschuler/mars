@@ -100,6 +100,55 @@ def test_r_arm_covariates_used_survives_a_single_selected_covariate():
     assert outcome.covariates_used == (3,)
 
 
+def test_r_arm_n_terms_is_the_pruned_count_not_the_forward_pass_count(tmp_path):
+    """fit_earth_block.R reports n_terms = length(fit$selected.terms): the
+    final, GCV-pruned model, not nrow(fit$dirs) (earth's raw forward-pass
+    basis, before the backward pass removes any term). A mutation swapping
+    in the forward-pass count, or an off-by-one in either count, would still
+    pass every other test here, since none of them independently knows how
+    many terms the forward pass itself produced.
+
+    This calls earth() directly, reading the same two public, documented
+    fields fit_earth_block.R itself reads ($dirs and $selected.terms; never
+    earth's own source), on the identical data, and checks that pruning
+    really happened (the two counts differ) so the comparison is not
+    vacuous.
+    """
+    import subprocess
+
+    x_train, y_train = _friedman1_data(200, seed=0)
+    x_test, _y_test = _friedman1_data(20, seed=1)
+
+    csv_path = tmp_path / "train.csv"
+    p = x_train.shape[1]
+    header = ",".join(f"x{j}" for j in range(p)) + ",y"
+    data = np.hstack([x_train, y_train.reshape(-1, 1)])
+    np.savetxt(csv_path, data, delimiter=",", header=header, comments="", fmt="%.17g")
+
+    r_script = f"""
+    suppressMessages(library(earth))
+    d <- read.csv("{csv_path}")
+    x <- as.matrix(d[, 1:{p}])
+    y <- d$y
+    fit <- earth(x, y, degree = 2)
+    cat(nrow(fit$dirs), length(fit$selected.terms))
+    """
+    proc = subprocess.run(
+        ["Rscript", "-e", r_script], capture_output=True, text=True, check=True
+    )
+    forward_pass_terms, pruned_terms = (int(v) for v in proc.stdout.split())
+    assert forward_pass_terms > pruned_terms, (
+        "this dataset must make earth's own backward pass actually prune "
+        "something, or the comparison below is vacuous"
+    )
+
+    job = learners.BlockJob("job1", x_train, y_train, x_test, binary=False)
+    outcome = learners.ARMS["E-def"].run_block([job])["job1"]
+    assert outcome.ok, outcome.error
+    assert outcome.n_terms == pruned_terms
+    assert outcome.n_terms != forward_pass_terms
+
+
 def test_r_arm_records_an_error_instead_of_crashing_on_bad_data():
     # A single-row training set cannot fit anything sensible in earth; this
     # should come back as a per-job error, not raise out of run_block.

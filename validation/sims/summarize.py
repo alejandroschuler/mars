@@ -56,9 +56,10 @@ CAPTIONS = {
     ),
     "ratio_table_n1000.csv": (
         "Appendix ratio table at 1,000 cases (see ratio_table.csv), for the "
-        "GAP CLAIM: D3, D4, D5 and D8 at the low-noise level are the cells "
-        "the plan's pilot runs at this size; the other DGPs show as missing "
-        "until the low-priority batch runs them too."
+        "GAP CLAIM: D3, D4, D5 and D8 at the low-noise level are the mockup "
+        "cells the full run covers at this size ('Goals'; the compute "
+        "ledger's 'Legacy, 1,000 cases, the mockup cells'); the other DGPs "
+        "show as missing unless the low-priority batch runs them too."
     ),
     "equivalence_figure.png": (
         "Equivalence figure. Log ratio of excess risk, P-fix over E-def, "
