@@ -358,7 +358,7 @@ The queue decides which parents a step searches. It follows Friedman (1993) with
 
 **FAST-5** Each searched entry gets K_c = K and R_c = the largest legal RSS reduction ([FWD-4](#forward-pass)) among its candidates in the step, or 0 when it has none, or −1 when no covariate could be searched for it. The chosen parent is updated too. Entries that were not visited or were skipped keep their values. [bb16.17, bb16.18, bb16.19, bb16.24] Only the order of the values R matters, so the scale of Y does not.
 
-**FAST-6** At degree 1 only the intercept is ever searched. The defaults are `fast_k` = 20 and `fast_beta` = 1.0. [bb16.22, bb16.26]
+**FAST-6** A term whose degree equals `max_degree` is never searched, so its entry keeps R = +∞ and ranks near the top of the table, where it takes a row of the window ([FAST-4](#fast-mars)). At degree 1 only the intercept is ever searched; once the other entries fill the window, the step searches nothing and the pass ends with code 6 ([STOP-2](#stopping-rules)), whatever `max_terms` is: at 5 terms with `fast_k` = 3 and at 18 with `fast_k` = 20 in bb16.22. The defaults are `fast_k` = 20 and `fast_beta` = 1.0. [bb16.21, bb16.22, bb16.23, bb16.26]
 
 ## Weights
 
@@ -506,6 +506,7 @@ Quirks that pymars copies, so that its fits match earth's:
 - a step may not reduce the RSS by more than 10 times the previous step's reduction ([FWD-4](#forward-pass));
 - `fast_k` = 1 or 2 acts as 3 ([FAST-3](#fast-mars));
 - the queue addresses parents by slot, so the newest terms can wait several steps before they are searched as parents ([FAST-4](#fast-mars)).
+- terms at the maximum degree stay in the queue and take rows of its window, so a degree-1 fit can end before it reaches `max_terms` ([FAST-6](#fast-mars)).
 
 Quirks that pymars does not copy: earth's knots can depend on the row order when equal x values have different activity ([KNOT-2](#candidate-knots)); earth's choice between a pair and a single hinge depends on the units of x ([LA-7](#linear-algebra-contract)); with `pmethod="none"` and `nprune`, earth's statistics belong to another model than its coefficients ([PRUNE-7](#pruning-pass)).
 
