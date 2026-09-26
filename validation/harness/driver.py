@@ -35,27 +35,39 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 FIT_EARTH_R = HERE / "fit_earth.R"
 
-# fit_earth.R writes Inf/-Inf/NaN/NA as these exact strings (its write_result
+# fit_earth.R writes Inf/-Inf/NaN as these exact strings (its write_result
 # comments explain why); undo that after json.loads() so a caller sees plain
-# floats, matching what a finite value already looks like.
-_R_JSON_SENTINELS = {
-    "Inf": float("inf"),
-    "-Inf": float("-inf"),
-    "NaN": float("nan"),
-    "NA": float("nan"),
-}
+# floats, matching what a finite value already looks like. NA is not here:
+# it decodes to None (see _desanitize), distinct from a NaN, because R's NA
+# and NaN are different values that the JSON round trip must not conflate.
+_R_JSON_SENTINELS = {"Inf": float("inf"), "-Inf": float("-inf"), "NaN": float("nan")}
+
+# Fields whose value is always a string or a list of strings, never numeric,
+# so _desanitize must not touch them even when a value happens to spell one
+# of the four sentinel tokens (a term name, or a factor level actually named
+# "NA"). Shared by fit_earth.R's and blackbox.R's result shapes.
+_STRING_ONLY_KEYS = frozenset(
+    {"id", "term_names", "levels", "r_version", "earth_version", "error", "call"}
+)
 
 
 def _desanitize(value: Any) -> Any:
-    """Recursively convert fit_earth.R's Inf/-Inf/NaN/NA sentinel strings
-    back to floats; every other string (an id, a term name, a level) passes
-    through unchanged."""
+    """Recursively convert fit_earth.R's Inf/-Inf/NaN/NA sentinel strings in
+    numeric fields back to Python values (NA to None, NaN to float("nan"),
+    so the two stay distinguishable); a value under a key in
+    ``_STRING_ONLY_KEYS`` (an id, a term name, a level, a version) passes
+    through unchanged, even if it happens to equal one of those tokens."""
     if isinstance(value, str):
+        if value == "NA":
+            return None
         return _R_JSON_SENTINELS.get(value, value)
     if isinstance(value, list):
         return [_desanitize(v) for v in value]
     if isinstance(value, dict):
-        return {k: _desanitize(v) for k, v in value.items()}
+        return {
+            k: (v if k in _STRING_ONLY_KEYS else _desanitize(v))
+            for k, v in value.items()
+        }
     return value
 
 
@@ -80,12 +92,28 @@ class EarthJob:
     include_forward_path: bool = True
 
 
+def _csv_quote(value: str) -> str:
+    """Standard CSV quoting: wrap in double quotes, doubling any embedded
+    quote, whenever the field would otherwise be ambiguous."""
+    if any(c in value for c in (",", '"', "\n", "\r")):
+        return '"' + value.replace('"', '""') + '"'
+    return value
+
+
 def write_csv(path: Path, columns: Mapping[str, np.ndarray]) -> None:
     """Write named equal-length columns as CSV.
 
-    Numeric columns are written at 17 significant digits (``%.17g``), so
-    ``read.csv`` on the R side loses no precision from the original double;
-    a factor-response column of string labels is written as plain text.
+    Numeric columns are written as C99 hex floats (Python's ``float.hex()``,
+    for example ``0x1.d1958c6d97fe0p-3``), which R's ``read.csv`` parses to
+    the identical double: checked directly, on this machine (R 4.4.3
+    aarch64, no long double), decimal text at 17 significant digits
+    (``%.17g``) does not round-trip exactly through ``read.csv`` (about 1 in
+    3 values off by 1-3 ulps), while every one of 4,000 hex floats did, at
+    every stage of the CSV round trip (not just through ``as.numeric`` on a
+    single string). A factor-response column of string labels is written as
+    plain text, double-quoted (with an embedded quote doubled) when it
+    contains a comma, a quote or a newline, standard CSV quoting that
+    ``read.csv`` (like Python's own csv module) undoes on the way in.
     """
     names = list(columns)
     arrays = [np.asarray(columns[name]) for name in names]
@@ -95,7 +123,9 @@ def write_csv(path: Path, columns: Mapping[str, np.ndarray]) -> None:
     lines = [",".join(names)]
     for i in range(n):
         cells = [
-            f"{a[i]:.17g}" if np.issubdtype(a.dtype, np.number) else str(a[i])
+            float(a[i]).hex()
+            if np.issubdtype(a.dtype, np.number)
+            else _csv_quote(str(a[i]))
             for a in arrays
         ]
         lines.append(",".join(cells))
@@ -125,7 +155,12 @@ def _y_columns(y: np.ndarray, factor_response: bool) -> dict[str, np.ndarray]:
 
 
 def _x_columns(X: np.ndarray) -> dict[str, np.ndarray]:
-    X = np.atleast_2d(np.asarray(X))
+    """One column per feature. A 1-D X (n,) is n samples of one feature, so
+    it reshapes to (n, 1), not (1, n): np.atleast_2d would prepend an axis
+    instead, turning n samples into 1 sample of n features."""
+    X = np.asarray(X)
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
     return {f"x{j}": X[:, j] for j in range(X.shape[1])}
 
 
@@ -212,20 +247,63 @@ def _git_commit(cwd: Path) -> str | None:
     return proc.stdout.strip()
 
 
-def versions(earth_result: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def _r_blas(rscript: str = "Rscript") -> dict[str, str] | None:
+    """R's own BLAS library, via La_library() and extSoftVersion()["BLAS"]
+    (threadpoolctl only sees libraries loaded into *this* process, and only
+    ones it recognizes; on this platform's R + Accelerate build, neither
+    ``versions()``'s own threadpoolctl scan nor numpy's build metadata says
+    anything about R's BLAS, so this asks R directly). ``None`` if
+    ``rscript`` cannot be run at all (not just a nonzero exit), so a caller
+    with a fake ``earth_result`` (a test, for example) does not need R
+    installed either.
+    """
+    try:
+        proc = subprocess.run(
+            [
+                rscript,
+                "-e",
+                'cat(La_library(), "|", extSoftVersion()[["BLAS"]], sep="")',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0 or "|" not in proc.stdout:
+        return None
+    la_library, blas = proc.stdout.split("|", 1)
+    return {"la_library": la_library, "blas": blas}
+
+
+def versions(
+    earth_result: Mapping[str, Any] | None = None, *, rscript: str = "Rscript"
+) -> dict[str, Any]:
     """Record the versions a fixture or a comparison run depends on.
 
     Python-side versions come straight from the imported packages;
-    ``threadpoolctl`` names the BLAS libraries actually loaded. When
+    ``threadpoolctl`` names the BLAS libraries actually loaded, and numpy's
+    own build metadata (``numpy.show_config``) names the one numpy itself
+    was built against (on macOS this is often Accelerate, which
+    threadpoolctl does not recognize, so the two can disagree). When
     ``earth_result`` is given (any dict ``run_earth`` returned), its
-    ``r_version`` and ``earth_version`` are copied in too.
+    ``r_version`` and ``earth_version`` are copied in, and R's own BLAS
+    (``La_library()``/``extSoftVersion()``) is recorded too, with one more
+    ``Rscript`` call.
     """
     import sklearn
     import threadpoolctl
 
+    numpy_blas = (
+        np.show_config(mode="dicts").get("Build Dependencies", {}).get("blas", {})
+    )
     info: dict[str, Any] = {
         "python": sys.version.split()[0],
         "numpy": np.__version__,
+        "numpy_blas": {
+            "name": numpy_blas.get("name"),
+            "version": numpy_blas.get("version"),
+        },
         "scikit_learn": sklearn.__version__,
         "blas": [
             {
@@ -240,4 +318,5 @@ def versions(earth_result: Mapping[str, Any] | None = None) -> dict[str, Any]:
     if earth_result is not None:
         info["r_version"] = earth_result.get("r_version")
         info["earth_version"] = earth_result.get("earth_version")
+        info["r_blas"] = _r_blas(rscript)
     return info
