@@ -903,6 +903,27 @@ def _step_candidates(
     return candidates
 
 
+def _slot_to_row_map(groups: list[list[int]], steps: list[Any]) -> dict[int, int]:
+    """Earth's own internal term-slot numbers (1-based; slot 1 is always the
+    intercept, ``dirs`` row 0) mapped to the ``dirs`` row each became,
+    built by walking the forward steps in order, ``groups`` alongside
+    them: the step for "new term N" (``ForwardStep.term``) uses slot N for
+    its first (or only) row, and slot N + 1 only when it is a pair, for
+    the second row. A single hinge or a linear term leaves slot N + 1
+    forever unused (round-3 review, PR #38 finding 1: every step reserves
+    two slots whether or not it adds two terms), so ``parent_slot - 1`` is
+    *not* a dirs row index in general, only up to a fit's first single-
+    term step; a later step's parent slot can be offset by however many
+    single-term steps came before it, and this map is the only way to
+    resolve it correctly."""
+    slot_to_row = {1: 0}
+    for group, step in zip(groups, steps, strict=False):
+        slot_to_row[step.term] = group[0]
+        if len(group) == 2:
+            slot_to_row[step.term + 1] = group[1]
+    return slot_to_row
+
+
 def steps_from_trace(trace_log: Any, dirs: Any, cuts: Any) -> list[dict[str, Any]]:
     """Build ``compare_forward_steps``'s per-step dicts from a
     ``trace_parse.TraceLog`` together with the same fit's ``dirs``/``cuts``
@@ -915,9 +936,15 @@ def steps_from_trace(trace_log: Any, dirs: Any, cuts: Any) -> list[dict[str, Any
     trace's 1-based earth slot/column numbers (``trace_parse``'s own
     docstring: ``parent`` counts internal slots, not ``dirs`` rows) to the
     0-based ``dirs`` row/column indices ``new_adapter.py``'s pymars side
-    also uses, and checked against ``dirs`` itself: a step whose reported
-    parent slot is not an earlier row of its own group raises, rather than
-    silently comparing against the wrong term.
+    also uses. The slot-to-row conversion goes through ``_slot_to_row_map``
+    (built from the same step history), not a bare ``parent_slot - 1``:
+    every forward step reserves two slots, so a single hinge or a linear
+    term (using only the first) leaves a gap that throws a fixed offset
+    off after the first one. The result is checked against ``dirs``
+    itself two ways: the parent row must be earlier than the step's own
+    row, and the parent row's pattern must equal the new row's with the
+    predictor column removed; either failing raises, rather than silently
+    comparing against the wrong term.
 
     A trace step that added no term (earth's forward pass always stops on
     one, for example a final "reject" line) has no matching row group and
@@ -941,6 +968,7 @@ def steps_from_trace(trace_log: Any, dirs: Any, cuts: Any) -> list[dict[str, Any
             f"{len(trace_log.steps)} trace steps; the trace does not match "
             "this fit"
         )
+    slot_to_row = _slot_to_row_map(groups, trace_log.steps)
     steps = []
     for group, step in zip(groups, trace_log.steps, strict=False):
         candidates = _step_candidates(step)
@@ -953,12 +981,30 @@ def steps_from_trace(trace_log: Any, dirs: Any, cuts: Any) -> list[dict[str, Any
         tagged = [c for c in candidates if c[4]]
         winner = tagged[-1] if tagged else candidates[-1]
         _, parent_slot, pred_slot, winner_cut, _, flags = winner
-        parent_row, pred_col = parent_slot - 1, pred_slot - 1
+        pred_col = pred_slot - 1
+        parent_row = slot_to_row.get(parent_slot)
+        if parent_row is None:
+            raise ValueError(
+                f"trace step {step.term}: parent slot {parent_slot} does "
+                "not map to any dirs row (it may be a slot a single-hinge "
+                "or linear step earlier in the fit left unused, or one "
+                "from a step that has not happened yet)"
+            )
         if not (0 <= parent_row < group[0]):
             raise ValueError(
-                f"trace step {step.term}: parent slot {parent_slot} is not "
-                f"an earlier dirs row than this step's own {group} "
-                f"(mapped to row {parent_row})"
+                f"trace step {step.term}: parent slot {parent_slot} maps "
+                f"to row {parent_row}, not earlier than this step's own "
+                f"{group}"
+            )
+        expected_parent_pattern = dirs[group[0]].copy()
+        expected_parent_pattern[pred_col] = 0
+        if not np.array_equal(dirs[parent_row], expected_parent_pattern):
+            raise ValueError(
+                f"trace step {step.term}: parent slot {parent_slot} maps "
+                f"to dirs row {parent_row} ({dirs[parent_row].tolist()}), "
+                f"which does not equal this step's own row {group[0]} "
+                f"({dirs[group[0]].tolist()}) with predictor column "
+                f"{pred_col} removed"
             )
         knots = {float(cuts[r, pred_col]) for r in group}
         if len(knots) != 1:

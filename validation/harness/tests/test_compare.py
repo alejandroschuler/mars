@@ -19,6 +19,7 @@ from compare import (
     KAPPA_RSS_LIMIT,
     Difference,
     Skip,
+    _dirs_row_groups,
     compare_defaults,
     compare_fit,
     compare_forward_steps,
@@ -32,6 +33,8 @@ from trace_parse import parse_trace
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 TRACE_STEPS = _DATA_DIR / "trace_steps.txt"
 TRACE_STEPS_FIT = _DATA_DIR / "trace_steps_fit.json"
+TRACE_STEPS_SLOTGAP = _DATA_DIR / "trace_steps_slotgap.txt"
+TRACE_STEPS_SLOTGAP_FIT = _DATA_DIR / "trace_steps_slotgap_fit.json"
 
 
 class TestConditionNumber:
@@ -550,6 +553,60 @@ class TestStepsFromTrace:
         fake_log = SimpleNamespace(steps=[fake_step])
         with pytest.raises(ValueError, match="parent slot"):
             steps_from_trace(fake_log, dirs, cuts)
+
+
+def _load_slotgap_fixture():
+    """A real degree-2 fit (numpy default_rng(303), 150 cases, 3 covariates,
+    nk = 25, thresh = 0, pmethod = "none") with five consecutive single-
+    hinge steps (dirs rows 13-17, each its own row group), then a step
+    (the trace's "new term 20") whose winning candidate's parent is slot
+    16 -- the step for "new term 16", itself a single hinge. Round-3
+    review, PR #38 finding 1's own reproduction: ``parent_slot - 1`` gives
+    row 15 (a different term, on a different predictor, that only
+    happens to be an earlier row), not row 14, the actual parent."""
+    log = parse_trace(TRACE_STEPS_SLOTGAP, sample_var_y=None)
+    fit = json.loads(TRACE_STEPS_SLOTGAP_FIT.read_text())
+    return log, np.array(fit["dirs"]), np.array(fit["cuts"]), np.array(fit["x"])
+
+
+class TestStepsFromTraceSlotGap:
+    """Round-3 review, PR #38 finding 1: ``parent_slot - 1`` holds only
+    until the fit's first single-term step, because every forward step
+    reserves two slots regardless of whether it adds one term or two;
+    ``test_a_later_terms_parent_is_the_earlier_single_hinges_row`` above
+    only exercises a parent that is the fit's first single hinge, where
+    slot and row still happen to agree."""
+
+    def test_a_parent_after_several_single_hinge_steps_is_mapped_correctly(
+        self,
+    ):
+        log, dirs, cuts, _ = _load_slotgap_fixture()
+        # Confirms the reviewer's own reproduction numbers before trusting
+        # the fix: row 14 is h(x1 - ...) (the true parent), row 15 is a
+        # same-shape-looking h(x2 - ...) that parent_slot - 1 = 16 - 1
+        # would wrongly return instead.
+        assert dirs[14].tolist() == [0, 1, 0]
+        assert dirs[15].tolist() == [0, 0, 1]
+        steps = steps_from_trace(log, dirs, cuts)
+        assert steps[9]["parent"] == 14
+        assert steps[9]["pred"] == 2
+
+    def test_every_parent_in_this_fit_is_earlier_and_matches_the_masked_row(
+        self,
+    ):
+        # A whole-fit sanity check beyond the one hand-picked step above:
+        # every resolved parent must be a real, earlier dirs row whose
+        # pattern equals the new row's with the predictor column removed
+        # (steps_from_trace's own two post-hoc checks, exercised here
+        # against real data rather than a fabricated counterexample).
+        log, dirs, cuts, _ = _load_slotgap_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
+        groups = _dirs_row_groups(dirs, cuts)
+        for step, group in zip(steps, groups, strict=True):
+            assert step["parent"] < group[0]
+            expected = dirs[group[0]].copy()
+            expected[step["pred"]] = 0
+            assert dirs[step["parent"]].tolist() == expected.tolist()
 
 
 class TestRemovedSequence:
