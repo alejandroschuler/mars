@@ -61,6 +61,8 @@ class Dataset:
     y: np.ndarray
     X_test: np.ndarray | None = None
     factor_response: bool = False
+    weights: np.ndarray | None = None
+    glm_family: str | None = None
 
 
 DatasetFn = Callable[[], Dataset]
@@ -70,9 +72,13 @@ REGISTRY: dict[str, DatasetFn] = {}
 # defaults_d1 is earth at its own defaults; matched_d1 is the legacy-code
 # matched mode from the seed prototype (validation/legacy/compare_earth.py),
 # hinge-only and every case a candidate knot, so the two implementations
-# should make the same forward choices except at near-ties.
+# should make the same forward choices except at near-ties. The other
+# entries are degree, span-grid, linear-candidate and weighted variants of
+# these two that individual S02-S20 datasets opt into (DATASET_MODES).
 MODES: dict[str, dict[str, Any]] = {
     "defaults_d1": {"degree": 1},
+    "defaults_d2": {"degree": 2},
+    "defaults_d3": {"degree": 3},
     "matched_d1": {
         "degree": 1,
         "penalty": 2,
@@ -85,6 +91,38 @@ MODES: dict[str, dict[str, Any]] = {
         "pmethod": "backward",
     },
 }
+MODES["matched_d2"] = {**MODES["matched_d1"], "degree": 2}
+MODES["matched_d3"] = {**MODES["matched_d1"], "degree": 3}
+# S03/S07 ("Linear terms"): matched but Auto.linpreds = TRUE, so a true
+# linear covariate can be picked directly instead of approximated by a
+# mirrored hinge pair.
+MODES["matched_d1_linear"] = {**MODES["matched_d1"], "Auto.linpreds": True}
+# S08 ("Ties"): matched but minspan = 5, so the candidate knots differ from
+# matched_d1's (minspan = 1) by design; S08 measures that difference.
+MODES["matched_d1_minspan5"] = {**MODES["matched_d1"], "minspan": 5}
+# S01/S02 ("Knot recovery"/"Span formulas ... at small n"): the minspan x
+# endspan grid (1, 5, automatic) x (1, 10, automatic), degree 1 throughout.
+# Automatic is the plain absence of the key (earth's own default, 0).
+for _minspan_label, _minspan in (("1", 1), ("5", 5), ("auto", None)):
+    for _endspan_label, _endspan in (("1", 1), ("10", 10), ("auto", None)):
+        _args: dict[str, Any] = {"degree": 1}
+        if _minspan is not None:
+            _args["minspan"] = _minspan
+        if _endspan is not None:
+            _args["endspan"] = _endspan
+        MODES[f"span_m{_minspan_label}_e{_endspan_label}"] = _args
+SPAN_GRID_MODES: tuple[str, ...] = tuple(k for k in MODES if k.startswith("span_"))
+# S12 ("Invariance to scale and shift"): earth's own defaults, but the
+# fixture generator must not apply the LA-7 harness rescaling to it (below)
+# -- the whole point is earth's raw, unscaled behavior. RAW_MODES names
+# every mode that must bypass that step.
+MODES["raw_d1"] = {"degree": 1}
+RAW_MODES: frozenset[str] = frozenset({"raw_d1"})
+
+DEFAULT_DATASET_MODES: tuple[str, ...] = ("defaults_d1", "matched_d1")
+# Which modes each dataset is generated under; a dataset not listed here
+# uses DEFAULT_DATASET_MODES. Filled in as S02-S20 are registered below.
+DATASET_MODES: dict[str, tuple[str, ...]] = {}
 
 
 def register(fn: DatasetFn) -> DatasetFn:
@@ -92,6 +130,34 @@ def register(fn: DatasetFn) -> DatasetFn:
     ``id`` (calling it once, at import time, to read that id)."""
     REGISTRY[fn().id] = fn
     return fn
+
+
+def scaled_matrix(
+    X: np.ndarray, w: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """The LA-7 harness step (docs/algorithm.md, "Linear algebra contract";
+    VALIDATION_PLAN.md, "Comparison modes"): each non-constant covariate
+    divided by its weighted standard deviation (divisor N = sum(w), not
+    centered); a constant column (every value equal over the n cases, the
+    Conventions section's exact-equality test) stays as it is. Returns
+    ``(X_scaled, scale)``, where ``scale[j]`` is column j's divisor (1.0 for
+    a constant column), so a caller can apply the same divisors to a test
+    matrix (``X_test / scale``) instead of rescaling it independently.
+    """
+    X = np.asarray(X, dtype=float)
+    n, p = X.shape
+    w = np.ones(n) if w is None else np.asarray(w, dtype=float)
+    scale = np.ones(p)
+    X_scaled = X.copy()
+    for j in range(p):
+        col = X[:, j]
+        if np.all(col == col[0]):
+            continue  # constant column: stays as it is
+        mean = np.average(col, weights=w)
+        variance = np.average((col - mean) ** 2, weights=w)  # divisor N
+        scale[j] = np.sqrt(variance)
+        X_scaled[:, j] = col / scale[j]
+    return X_scaled, scale
 
 
 @register
@@ -107,6 +173,728 @@ def s01() -> Dataset:
 
     y = f(x[:, 0]) + rng.normal(scale=0.1, size=n)
     return Dataset(id="S01", X=x, y=y, X_test=x_test)
+
+
+DATASET_MODES["S01"] = (*DEFAULT_DATASET_MODES, *SPAN_GRID_MODES)
+
+
+def _s01_f(x0: np.ndarray) -> np.ndarray:
+    return 2 * np.maximum(0, x0 - 0.3) - 3 * np.maximum(0, x0 - 0.7)
+
+
+def _s02(n: int, seed: int) -> Dataset:
+    rng = np.random.default_rng(seed)
+    x = rng.uniform(0, 1, size=(n, 1))
+    y = _s01_f(x[:, 0]) + rng.normal(scale=0.1, size=n)
+    return Dataset(id=f"S02_n{n:03d}", X=x, y=y)
+
+
+@register
+def s02_n020() -> Dataset:
+    """S02: S01 with 20 cases. Span formulas and stopping rules at small n."""
+    return _s02(20, seed=201)
+
+
+@register
+def s02_n050() -> Dataset:
+    """S02: S01 with 50 cases. Span formulas and stopping rules at small n."""
+    return _s02(50, seed=202)
+
+
+DATASET_MODES["S02_n020"] = (*DEFAULT_DATASET_MODES, *SPAN_GRID_MODES)
+DATASET_MODES["S02_n050"] = (*DEFAULT_DATASET_MODES, *SPAN_GRID_MODES)
+
+
+@register
+def s03() -> Dataset:
+    """S03: three covariates, (x1)+, |x2| (two mirrored hinges) and a linear
+    term in x3. Pairs against single hinges; linear terms."""
+    rng = np.random.default_rng(3)
+    n = 300
+    X = rng.uniform(-1, 1, size=(n, 3))
+    y = (
+        2.0 * np.maximum(0, X[:, 0])
+        + 1.5 * np.abs(X[:, 1])
+        + 3.0 * X[:, 2]
+        + rng.normal(scale=0.1, size=n)
+    )
+    return Dataset(id="S03", X=X, y=y)
+
+
+DATASET_MODES["S03"] = (*DEFAULT_DATASET_MODES, "matched_d1_linear")
+
+
+def _friedman1(X: np.ndarray) -> np.ndarray:
+    """Friedman's #1 function [F91 §8, "simulated data"], p >= 5: the first
+    5 covariates matter, the rest are noise by construction."""
+    return (
+        10 * np.sin(np.pi * X[:, 0] * X[:, 1])
+        + 20 * (X[:, 2] - 0.5) ** 2
+        + 10 * X[:, 3]
+        + 5 * X[:, 4]
+    )
+
+
+def _s04(p: int, n: int, seed: int) -> Dataset:
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(0, 1, size=(n, p))
+    y = _friedman1(X) + rng.normal(scale=1.0, size=n)
+    return Dataset(id=f"S04_p{p:02d}_n{n:04d}", X=X, y=y)
+
+
+@register
+def s04_p05_n0200() -> Dataset:
+    """S04: Friedman #1, 5 covariates, 200 cases. Interactions and
+    irrelevant covariates, degree 1 and 2."""
+    return _s04(5, 200, seed=4051)
+
+
+@register
+def s04_p05_n1000() -> Dataset:
+    """S04: Friedman #1, 5 covariates, 1,000 cases."""
+    return _s04(5, 1000, seed=4052)
+
+
+@register
+def s04_p10_n0200() -> Dataset:
+    """S04: Friedman #1, 10 covariates (5 irrelevant), 200 cases."""
+    return _s04(10, 200, seed=4101)
+
+
+@register
+def s04_p10_n1000() -> Dataset:
+    """S04: Friedman #1, 10 covariates (5 irrelevant), 1,000 cases."""
+    return _s04(10, 1000, seed=4102)
+
+
+_S04_MODES = ("defaults_d1", "defaults_d2", "matched_d1", "matched_d2")
+for _s04_id in ("S04_p05_n0200", "S04_p05_n1000", "S04_p10_n0200", "S04_p10_n1000"):
+    DATASET_MODES[_s04_id] = _S04_MODES
+
+
+@register
+def s05() -> Dataset:
+    """S05: a pure degree-2 hinge product, (x0 - 0.3)+ * (x1 - 0.6)+.
+    Interaction search; Adjust.endspan."""
+    rng = np.random.default_rng(5)
+    n = 300
+    X = rng.uniform(0, 1, size=(n, 2))
+    y = 3.0 * np.maximum(0, X[:, 0] - 0.3) * np.maximum(0, X[:, 1] - 0.6) + rng.normal(
+        scale=0.05, size=n
+    )
+    return Dataset(id="S05", X=X, y=y)
+
+
+DATASET_MODES["S05"] = ("defaults_d2", "matched_d2")
+
+
+@register
+def s06() -> Dataset:
+    """S06: a degree-3 product, (x0-0.3)+ * (x1-0.5)+ * (x2-0.7)+.
+    Degree 3."""
+    rng = np.random.default_rng(6)
+    n = 400
+    X = rng.uniform(0, 1, size=(n, 3))
+    y = 4.0 * np.maximum(0, X[:, 0] - 0.3) * np.maximum(0, X[:, 1] - 0.5) * np.maximum(
+        0, X[:, 2] - 0.7
+    ) + rng.normal(scale=0.05, size=n)
+    return Dataset(id="S06", X=X, y=y)
+
+
+DATASET_MODES["S06"] = ("defaults_d3", "matched_d3")
+
+
+@register
+def s07() -> Dataset:
+    """S07: a linear truth, y = 2*x0 - 1.5*x1 + noise, no true hinges.
+    Auto.linpreds against pymars' linear candidates."""
+    rng = np.random.default_rng(7)
+    n = 250
+    X = rng.uniform(-1, 1, size=(n, 2))
+    y = 2.0 * X[:, 0] - 1.5 * X[:, 1] + rng.normal(scale=0.1, size=n)
+    return Dataset(id="S07", X=X, y=y)
+
+
+DATASET_MODES["S07"] = ("defaults_d1", "matched_d1", "matched_d1_linear")
+
+
+@register
+def s08() -> Dataset:
+    """S08: an integer covariate with 10 levels (0 to 9), 150 cases, so
+    most values repeat many times. Repeated x values: distinct values
+    against cases."""
+    rng = np.random.default_rng(8)
+    n = 150
+    x0 = rng.integers(0, 10, size=n).astype(float)
+    y = 2.0 * np.maximum(0, x0 - 4.0) + rng.normal(scale=0.2, size=n)
+    return Dataset(id="S08", X=x0.reshape(-1, 1), y=y)
+
+
+# "Ties": with minspan = 1 the candidate knots at a distinct value are the
+# same in both programs; matched_d1_minspan5 (minspan = 5) is where they
+# differ by design, which is what S08 measures.
+DATASET_MODES["S08"] = ("defaults_d1", "matched_d1", "matched_d1_minspan5")
+
+
+@register
+def s09() -> Dataset:
+    """S09: a 0/1 covariate and a 4-level categorical covariate, given to
+    pymars 2.0 as one-hot dummies (OneHotEncoder(drop="first")): 3 dummy
+    columns, "a" the baseline level. Categorical coding through
+    OneHotEncoder."""
+    rng = np.random.default_rng(9)
+    n = 300
+    binary = rng.integers(0, 2, size=n).astype(float)
+    levels = np.array(["a", "b", "c", "d"])
+    category = rng.choice(levels, size=n)
+    dummy_b = (category == "b").astype(float)
+    dummy_c = (category == "c").astype(float)
+    dummy_d = (category == "d").astype(float)
+    level_effect = {"a": 0.0, "b": 1.0, "c": -1.5, "d": 2.5}
+    y = (
+        1.0 * binary
+        + np.array([level_effect[lvl] for lvl in category])
+        + rng.normal(scale=0.2, size=n)
+    )
+    X = np.column_stack([binary, dummy_b, dummy_c, dummy_d])
+    return Dataset(id="S09", X=X, y=y)
+
+
+DATASET_MODES["S09"] = DEFAULT_DATASET_MODES
+
+
+@register
+def s10() -> Dataset:
+    """S10: a duplicated column, a near-duplicate (x0 plus noise with
+    standard deviation 1e-9), and a constant column. Tie-breaks across
+    predictors; collinearity."""
+    rng = np.random.default_rng(10)
+    n = 200
+    x0 = rng.uniform(0, 1, size=n)
+    duplicate = x0.copy()
+    near_duplicate = x0 + rng.normal(scale=1e-9, size=n)
+    constant = np.full(n, 5.0)
+    y = 2.0 * np.maximum(0, x0 - 0.4) + rng.normal(scale=0.05, size=n)
+    X = np.column_stack([x0, duplicate, near_duplicate, constant])
+    return Dataset(id="S10", X=X, y=y)
+
+
+DATASET_MODES["S10"] = ("matched_d1", "defaults_d1")
+
+
+def _s11(n: int, seed: int) -> Dataset:
+    rng = np.random.default_rng(seed)
+    x0 = rng.uniform(0, 1, size=n)
+    y = 2.0 * np.maximum(0, x0 - 0.5) + rng.normal(scale=0.05, size=n)
+    return Dataset(id=f"S11_n{n:02d}", X=x0.reshape(-1, 1), y=y)
+
+
+@register
+def s11_n03() -> Dataset:
+    """S11: 3 cases. Degenerate sizes."""
+    return _s11(3, seed=1103)
+
+
+@register
+def s11_n05() -> Dataset:
+    """S11: 5 cases."""
+    return _s11(5, seed=1105)
+
+
+@register
+def s11_n08() -> Dataset:
+    """S11: 8 cases."""
+    return _s11(8, seed=1108)
+
+
+@register
+def s11_n12() -> Dataset:
+    """S11: 12 cases."""
+    return _s11(12, seed=1112)
+
+
+for _s11_id in ("S11_n03", "S11_n05", "S11_n08", "S11_n12"):
+    DATASET_MODES[_s11_id] = DEFAULT_DATASET_MODES
+
+
+def _s12_base() -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(12)
+    n = 150
+    x = rng.uniform(0, 1, size=n)
+    y = 2.0 * np.maximum(0, x - 0.4) + rng.normal(scale=0.05, size=n)
+    return x, y
+
+
+@register
+def s12_base() -> Dataset:
+    """S12: the un-scaled, un-shifted base case. Invariance to scale and
+    shift (earth is not scale invariant, bb14.4: this reference and its
+    variants below all fit raw_d1, earth's own defaults with no LA-7
+    rescaling, so their differences are earth's, not the harness's)."""
+    x, y = _s12_base()
+    return Dataset(id="S12_base", X=x.reshape(-1, 1), y=y)
+
+
+@register
+def s12_x_1e_minus8() -> Dataset:
+    """S12: x times 1e-8."""
+    x, y = _s12_base()
+    return Dataset(id="S12_x_1em8", X=(x * 1e-8).reshape(-1, 1), y=y)
+
+
+@register
+def s12_x_1e8() -> Dataset:
+    """S12: x times 1e8."""
+    x, y = _s12_base()
+    return Dataset(id="S12_x_1e8", X=(x * 1e8).reshape(-1, 1), y=y)
+
+
+@register
+def s12_x_plus_1e6() -> Dataset:
+    """S12: x plus 1e6."""
+    x, y = _s12_base()
+    return Dataset(id="S12_x_plus_1e6", X=(x + 1e6).reshape(-1, 1), y=y)
+
+
+@register
+def s12_y_1e_minus9() -> Dataset:
+    """S12: y times 1e-9."""
+    x, y = _s12_base()
+    return Dataset(id="S12_y_1em9", X=x.reshape(-1, 1), y=y * 1e-9)
+
+
+@register
+def s12_y_1e9() -> Dataset:
+    """S12: y times 1e9."""
+    x, y = _s12_base()
+    return Dataset(id="S12_y_1e9", X=x.reshape(-1, 1), y=y * 1e9)
+
+
+for _s12_id in (
+    "S12_base",
+    "S12_x_1em8",
+    "S12_x_1e8",
+    "S12_x_plus_1e6",
+    "S12_y_1em9",
+    "S12_y_1e9",
+):
+    DATASET_MODES[_s12_id] = ("raw_d1",)
+
+
+def _expand_by_weights(
+    X: np.ndarray, y: np.ndarray, w: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Repeat each row of (X, y) by its integer weight, dropping zero-
+    weight rows (W-1's frequency-weight definition, exactly): an
+    unweighted earth fit on the result is the reference for a pymars fit
+    on the original (X, y, w)."""
+    w_int = np.asarray(w).astype(int)
+    idx = np.repeat(np.arange(len(w_int)), w_int)
+    return X[idx], y[idx]
+
+
+def _s13_xy(seed: int, n: int = 120) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    x0 = rng.uniform(0, 1, size=n)
+    y = 2.0 * np.maximum(0, x0 - 0.4) + rng.normal(scale=0.1, size=n)
+    return x0.reshape(-1, 1), y
+
+
+@register
+def s13_int_zeros() -> Dataset:
+    """S13: integer weights with zeros. Weights: removal."""
+    X, y = _s13_xy(1301)
+    rng = np.random.default_rng(9001)
+    w = rng.integers(0, 4, size=len(y)).astype(float)  # 0 to 3, some zero
+    return Dataset(id="S13_int_zeros", X=X, y=y, weights=w)
+
+
+@register
+def s13_int_zeros_repeated() -> Dataset:
+    """S13: the unweighted reference for s13_int_zeros (repeated rows,
+    zero-weight rows dropped)."""
+    X, y = _s13_xy(1301)
+    rng = np.random.default_rng(9001)
+    w = rng.integers(0, 4, size=len(y)).astype(float)
+    X_rep, y_rep = _expand_by_weights(X, y, w)
+    return Dataset(id="S13_int_zeros_repeated", X=X_rep, y=y_rep)
+
+
+@register
+def s13_int_random() -> Dataset:
+    """S13: random positive integer weights. Weights: repetition."""
+    X, y = _s13_xy(1302)
+    rng = np.random.default_rng(9002)
+    w = rng.integers(1, 5, size=len(y)).astype(float)  # 1 to 4, never zero
+    return Dataset(id="S13_int_random", X=X, y=y, weights=w)
+
+
+@register
+def s13_int_random_repeated() -> Dataset:
+    """S13: the unweighted reference for s13_int_random (repeated rows)."""
+    X, y = _s13_xy(1302)
+    rng = np.random.default_rng(9002)
+    w = rng.integers(1, 5, size=len(y)).astype(float)
+    X_rep, y_rep = _expand_by_weights(X, y, w)
+    return Dataset(id="S13_int_random_repeated", X=X_rep, y=y_rep)
+
+
+@register
+def s13_unit() -> Dataset:
+    """S13: equal (unit) weights. Weights: unit weights are the same model
+    as no weights."""
+    X, y = _s13_xy(1303)
+    w = np.ones(len(y))
+    return Dataset(id="S13_unit", X=X, y=y, weights=w)
+
+
+@register
+def s13_unit_repeated() -> Dataset:
+    """S13: the unweighted reference for s13_unit (repeating every row
+    once changes nothing)."""
+    X, y = _s13_xy(1303)
+    return Dataset(id="S13_unit_repeated", X=X, y=y)
+
+
+@register
+def s13_nonint() -> Dataset:
+    """S13: non-integer weights, rescaled to sum to n (VALIDATION_PLAN.md,
+    "Sample weights"): compared only through the fixed-basis pruning path
+    and the coefficients, against weighted earth, since repeated rows do
+    not apply to a non-integer weight."""
+    X, y = _s13_xy(1304)
+    rng = np.random.default_rng(9004)
+    w = rng.uniform(0.2, 3.0, size=len(y))
+    w = w * (len(y) / w.sum())  # rescaled so that sum(w) == n
+    return Dataset(id="S13_nonint", X=X, y=y, weights=w)
+
+
+@register
+def s13_constant_y_weighted() -> Dataset:
+    """S13: a constant response with integer weights including zeros
+    (docs/algorithm.md bb10.9): earth may error on this input; the fixture
+    records whichever it is instead of dropping the case."""
+    rng = np.random.default_rng(9005)
+    n = 40
+    X = rng.uniform(0, 1, size=(n, 1))
+    y = np.full(n, 3.0)
+    w = rng.integers(0, 4, size=n).astype(float)
+    return Dataset(id="S13_constant_y_weighted", X=X, y=y, weights=w)
+
+
+@register
+def s13_constant_y_weighted_repeated() -> Dataset:
+    """S13: the unweighted reference for s13_constant_y_weighted."""
+    rng = np.random.default_rng(9005)
+    n = 40
+    X = rng.uniform(0, 1, size=(n, 1))
+    y = np.full(n, 3.0)
+    w = rng.integers(0, 4, size=n).astype(float)
+    X_rep, y_rep = _expand_by_weights(X, y, w)
+    return Dataset(id="S13_constant_y_weighted_repeated", X=X_rep, y=y_rep)
+
+
+for _s13_id in (
+    "S13_int_zeros",
+    "S13_int_zeros_repeated",
+    "S13_int_random",
+    "S13_int_random_repeated",
+    "S13_unit",
+    "S13_unit_repeated",
+    "S13_nonint",
+    "S13_constant_y_weighted",
+    "S13_constant_y_weighted_repeated",
+):
+    DATASET_MODES[_s13_id] = ("matched_d1",)
+
+
+@register
+def s14() -> Dataset:
+    """S14: a binary response from a logistic truth, 5 covariates, 500
+    cases. GLM refit."""
+    rng = np.random.default_rng(14)
+    n = 500
+    X = rng.uniform(-1, 1, size=(n, 5))
+    eta = (
+        1.5 * np.maximum(0, X[:, 0] - 0.2)
+        - 2.0 * np.maximum(0, -X[:, 1] - 0.1)
+        + 1.0 * X[:, 2]
+    )
+    p = 1.0 / (1.0 + np.exp(-eta))
+    y = (rng.uniform(size=n) < p).astype(float)
+    return Dataset(id="S14", X=X, y=y, glm_family="binomial")
+
+
+DATASET_MODES["S14"] = ("defaults_d2", "matched_d2")
+
+
+@register
+def s16_weighted() -> Dataset:
+    """S16: S04 (5 covariates, 200 cases) with integer weights from 0 to 4.
+    Frequency weights against repeated rows, compared with unweighted
+    earth."""
+    ds = s04_p05_n0200()
+    rng = np.random.default_rng(9016)
+    w = rng.integers(0, 5, size=len(ds.y)).astype(float)
+    return Dataset(id="S16_weighted", X=ds.X, y=ds.y, weights=w)
+
+
+@register
+def s16_weighted_repeated() -> Dataset:
+    """S16: the unweighted reference for s16_weighted (repeated rows, zero-
+    weight rows dropped)."""
+    ds = s04_p05_n0200()
+    rng = np.random.default_rng(9016)
+    w = rng.integers(0, 5, size=len(ds.y)).astype(float)
+    X_rep, y_rep = _expand_by_weights(ds.X, ds.y, w)
+    return Dataset(id="S16_weighted_repeated", X=X_rep, y=y_rep)
+
+
+DATASET_MODES["S16_weighted"] = ("matched_d1",)
+DATASET_MODES["S16_weighted_repeated"] = ("matched_d1",)
+
+
+@register
+def s17() -> Dataset:
+    """S17: three responses that share the covariates. Several responses
+    with a shared basis."""
+    rng = np.random.default_rng(17)
+    n = 300
+    X = rng.uniform(0, 1, size=(n, 3))
+    base = 2.0 * np.maximum(0, X[:, 0] - 0.3) + 1.5 * np.maximum(0, X[:, 1] - 0.5)
+    y1 = base + rng.normal(scale=0.1, size=n)
+    y2 = 0.5 * base - 1.0 * np.maximum(0, X[:, 2] - 0.4) + rng.normal(scale=0.1, size=n)
+    y3 = -0.8 * base + rng.normal(scale=0.1, size=n)
+    Y = np.column_stack([y1, y2, y3])
+    return Dataset(id="S17", X=X, y=Y)
+
+
+DATASET_MODES["S17"] = ("defaults_d1", "matched_d1")
+
+
+@register
+def s18() -> Dataset:
+    """S18: a three-class response. Multiclass terms, and probabilities
+    against nnet::multinom."""
+    rng = np.random.default_rng(18)
+    n = 400
+    X = rng.uniform(-1, 1, size=(n, 2))
+    score = (
+        1.2 * np.maximum(0, X[:, 0] - 0.2)
+        - 1.2 * np.maximum(0, -X[:, 0] - 0.2)
+        + 0.5 * X[:, 1]
+    )
+    labels = np.where(score > 0.3, "hi", np.where(score < -0.3, "lo", "mid"))
+    return Dataset(id="S18", X=X, y=labels, factor_response=True)
+
+
+DATASET_MODES["S18"] = ("defaults_d1", "matched_d1")
+
+
+def _s19_category_y() -> tuple[np.ndarray, np.ndarray]:
+    """S19's shared draw: category labels and y, coded two ways below (as
+    dummies, in ``s19_dummies``, and as a genuine R factor, in the extra
+    fixture ``s19_factor``) so "the same data, coded two ways" is literal,
+    not just the same distribution."""
+    rng = np.random.default_rng(19)
+    n = 250
+    levels = np.array(["a", "b", "c", "d"])
+    category = rng.choice(levels, size=n)
+    level_effect = {"a": 0.0, "b": 1.0, "c": -1.5, "d": 2.5}
+    y = np.array([level_effect[lvl] for lvl in category]) + rng.normal(
+        scale=0.1, size=n
+    )
+    return category, y
+
+
+@register
+def s19_dummies() -> Dataset:
+    """S19: a 4-level factor given to pymars 2.0 as OneHotEncoder(drop=
+    "first") dummies. The OneHotEncoder recipe (the "factor" side, which
+    earth must equal, is the extra fixture s19_factor below, since earth
+    needs a genuine R factor column that the CSV-based harness cannot
+    carry)."""
+    category, y = _s19_category_y()
+    dummy_b = (category == "b").astype(float)
+    dummy_c = (category == "c").astype(float)
+    dummy_d = (category == "d").astype(float)
+    X = np.column_stack([dummy_b, dummy_c, dummy_d])
+    return Dataset(id="S19_dummies", X=X, y=y)
+
+
+DATASET_MODES["S19_dummies"] = ("defaults_d1", "matched_d1")
+
+
+@register
+def s20() -> Dataset:
+    """S20: a separable binary response. Separation warnings and fitted
+    probabilities near 0 or 1."""
+    rng = np.random.default_rng(20)
+    n = 200
+    X = rng.uniform(-1, 1, size=(n, 2))
+    y = (X[:, 0] - 0.3 * X[:, 1] > 0).astype(float)  # a clean linear split
+    return Dataset(id="S20", X=X, y=y, glm_family="binomial")
+
+
+DATASET_MODES["S20"] = ("defaults_d1", "matched_d1")
+
+
+# "Extra" fixtures: bespoke, one-off earth calls that do not fit the
+# (dataset, mode) registry above, written straight to
+# validation/fixtures/<name>.json. Like register_component, this does not
+# call fn() at decoration time (a real earth call, run only when a fixture
+# is actually (re)generated).
+ExtraFn = Callable[[], dict[str, Any]]
+EXTRA_REGISTRY: dict[str, ExtraFn] = {}
+
+
+def register_extra(fn: ExtraFn) -> ExtraFn:
+    EXTRA_REGISTRY[fn.__name__] = fn
+    return fn
+
+
+@register_extra
+def s15_draws() -> dict[str, Any]:
+    """S15: 200 small draws from validation/sims/dgps.py (VALIDATION_PLAN.md,
+    "Data-generating processes"; T05 brief). Purpose: "Rates: the share of
+    fits that agree, the step of the first divergence, and its cause"
+    (T07, which reads this fixture's per-draw trace to find the best and
+    second-best candidate RSS at each forward step, "Ties"). Restricted to
+    the p = 10 DGPs (D1-D6, D8; D7's p = 50 would make every trace far
+    larger for no benefit here), a small n and a low term limit, so 200
+    earth calls with trace = 8 (which carries rss_before for near-tie
+    detection, unlike trace = 7; LA-5) still add up to a small fixture
+    (validation/README.md, "keep validation/fixtures/ small").
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from validation.sims import dgps, seeds
+
+    diagnostics = dgps.load_diagnostics()
+    dgp_names = [name for name in dgps.REGRESSION_DGPS if name != "D7"]
+    n = 20
+    # Automatic minspan/endspan (unlike matched_d1's minspan = endspan = 1):
+    # at trace = 8 only *evaluated* cases print (span-skipped ones do not,
+    # unlike trace = 9), so the automatic spans, not a dense minspan = 1
+    # scan, are what keeps 200 traces small. The new code's own matched
+    # mode does not need minspan/endspan forced to 1 either (its automatic
+    # formula already matches earth's, VALIDATION_PLAN.md, "Comparison
+    # modes": "the new code follows earth's conventions for ... the
+    # spans"), so this drops those two keys from matched_d1 rather than
+    # copying them.
+    earth_args = {
+        k: v for k, v in MODES["matched_d1"].items() if k not in ("minspan", "endspan")
+    }
+    earth_args.update(pmethod="none", nk=5)
+
+    jobs: list[driver.EarthJob] = []
+    metas: list[dict[str, Any]] = []
+    for rep in range(200):
+        dgp_name = dgp_names[rep % len(dgp_names)]
+        dgp = dgps.REGISTRY[dgp_name]
+        noise = dgp.levels[rep % len(dgp.levels)]
+        rng, _test_rng = seeds.train_test_rngs(f"S15_{dgp_name}_{noise}", rep)
+        X, y, _truth = dgps.generate(dgp, rng, n, noise, diagnostics)
+        X_scaled, scale = scaled_matrix(X)
+        job_id = f"draw{rep:03d}"
+        jobs.append(
+            driver.EarthJob(
+                id=job_id,
+                X=X_scaled,
+                y=y,
+                earth_args=earth_args,
+                trace=8,
+                include_forward_path=False,
+            )
+        )
+        metas.append(
+            {"rep": rep, "dgp": dgp_name, "noise": noise, "scale": scale.tolist()}
+        )
+
+    draws = []
+    with tempfile.TemporaryDirectory(prefix="pymars-s15-") as tmp:
+        workdir = Path(tmp)
+        results = driver.run_earth(jobs, workdir=workdir)
+        for meta, job in zip(metas, jobs, strict=True):
+            result = results[job.id]
+            trace_path = workdir / f"{job.id}_trace.txt"
+            trace_text = trace_path.read_text(encoding="utf-8")
+            trace_parse.parse_trace(trace_path)  # fail loudly here, not in T07
+            draws.append(
+                {
+                    **meta,
+                    "X": job.X.tolist(),
+                    "y": job.y.tolist(),
+                    "dirs": result["dirs"],
+                    "cuts": result["cuts"],
+                    "selected_terms": result["selected_terms"],
+                    "trace_text": trace_text,
+                }
+            )
+    return {"earth_args": earth_args, "draws": draws}
+
+
+@register_extra
+def s18_multinom() -> dict[str, Any]:
+    """S18's multiclass probability reference: nnet::multinom fitted on
+    earth's own selected basis (VALIDATION_PLAN.md, "Binary outcomes": for
+    three or more classes, pymars refits one multinomial model where earth
+    fits one binomial model per class, so multinom on earth's selected
+    basis is the probability reference, not earth's own glm.coefficients).
+    """
+    ds = s18()
+    labels = np.asarray(ds.y)
+    levels = sorted(set(labels.tolist()))
+    Y_indicator = np.column_stack([(labels == lvl).astype(float) for lvl in levels])
+    earth_args = {**MODES["matched_d1"]}
+    basis = blackbox.fit_bx_dirs(ds.X, Y_indicator, earth_args)
+    multinom = blackbox.multinom_fit(basis["bx"], labels)
+    return {
+        "levels": levels,
+        "earth_args": earth_args,
+        "dirs": basis["dirs"].tolist(),
+        "cuts": basis["cuts"].tolist(),
+        "selected_terms": basis["selected_terms"].tolist(),
+        "multinom_coefficients": multinom["coefficients"].tolist(),
+        "multinom_levels": multinom["levels"],
+        "multinom_fitted": multinom["fitted"].tolist(),
+    }
+
+
+@register_extra
+def s19_factor() -> dict[str, Any]:
+    """S19's "factor" side: earth fit with the category as a genuine R
+    factor column, for comparison with s19_dummies's earth-on-dummies fit
+    (VALIDATION_PLAN.md, "Categorical inputs": "earth on the factor must
+    equal earth on the dummies"). Both sides share one (labels, y) draw, so
+    "the same data, coded two ways" is literal, not just same distribution.
+    """
+    category, y = _s19_category_y()
+    dummy_b = (category == "b").astype(float)
+    dummy_c = (category == "c").astype(float)
+    dummy_d = (category == "d").astype(float)
+    earth_args = {"degree": 1, "nk": 11}
+    dummies = np.column_stack([dummy_b, dummy_c, dummy_d])
+    factor_result = blackbox.earth_factor_fit(category, y, earth_args)
+    dummy_result = blackbox.earth_factor_fit(None, y, earth_args, other_x=dummies)
+    return {
+        "labels": category.tolist(),
+        "y": y.tolist(),
+        "earth_args": earth_args,
+        "factor": {
+            "fitted": factor_result["fitted"].tolist(),
+            "gcv": factor_result["gcv"],
+            "rsq": factor_result["rsq"],
+            "nterms": factor_result["nterms"],
+        },
+        "dummies": {
+            "fitted": dummy_result["fitted"].tolist(),
+            "gcv": dummy_result["gcv"],
+            "rsq": dummy_result["rsq"],
+            "nterms": dummy_result["nterms"],
+        },
+    }
 
 
 # Component fixtures (VALIDATION_PLAN.md, "Component tests"; T05 brief,
@@ -763,24 +1551,42 @@ def _sanitize_versions(versions: dict[str, Any]) -> dict[str, Any]:
 def _fixture_payload(dataset_id: str, mode: str) -> dict[str, Any]:
     ds = REGISTRY[dataset_id]()
     earth_args = MODES[mode]
+    X, X_test = ds.X, ds.X_test
+    scale = None
+    if mode not in RAW_MODES:
+        # LA-7's harness step: the same scaled matrix goes to both programs
+        # (S12's raw_d1 fits are the one deliberate exception, above).
+        X, scale = scaled_matrix(ds.X, ds.weights)
+        if X_test is not None:
+            X_test = X_test / scale
     job = driver.EarthJob(
         id=f"{dataset_id}_{mode}",
-        X=ds.X,
+        X=X,
         y=ds.y,
-        X_test=ds.X_test,
+        X_test=X_test,
         earth_args=earth_args,
         factor_response=ds.factor_response,
+        weights=ds.weights,
+        glm_family=ds.glm_family,
     )
     with tempfile.TemporaryDirectory(prefix="pymars-fixture-") as tmp:
-        result = driver.run_earth([job], workdir=Path(tmp))[job.id]
+        # A fixture records what earth does with an input, including an
+        # input earth itself rejects (VALIDATION_PLAN.md, "Test datasets":
+        # "Where earth errors on an input ... record the error in the
+        # fixture instead of dropping the case"), so this never raises.
+        result = driver.run_earth([job], workdir=Path(tmp), raise_on_error=False)[
+            job.id
+        ]
     return {
         "dataset": dataset_id,
         "mode": mode,
         "inputs": {
-            "X": ds.X.tolist(),
+            "X": X.tolist(),
             "y": ds.y.tolist(),
-            "X_test": ds.X_test.tolist() if ds.X_test is not None else None,
+            "X_test": X_test.tolist() if X_test is not None else None,
+            "weights": ds.weights.tolist() if ds.weights is not None else None,
         },
+        "scale": scale.tolist() if scale is not None else None,
         "earth_args": earth_args,
         "result": result,
         "versions": _sanitize_versions(driver.versions(result)),
@@ -824,6 +1630,31 @@ def make_all_components(*, fixtures_dir: Path | None = None) -> list[Path]:
     return [_write_component(name, components_dir) for name in COMPONENT_REGISTRY]
 
 
+def _extra_payload(name: str) -> dict[str, Any]:
+    payload = EXTRA_REGISTRY[name]()
+    versions = driver.versions()
+    versions.update(blackbox.versions())
+    return {"extra": name, **payload, "versions": _sanitize_versions(versions)}
+
+
+def _write_extra(name: str, fixtures_dir: Path) -> Path:
+    payload = _extra_payload(name)
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+    path = fixtures_dir / f"{name}.json"
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return path
+
+
+def make_all_extras(*, fixtures_dir: Path | None = None) -> list[Path]:
+    """Write every registered "extra" fixture (``validation/fixtures/
+    <name>.json``, alongside the dataset fixtures) and return their paths,
+    in registration order."""
+    fixtures_dir = fixtures_dir if fixtures_dir is not None else FIXTURES_DIR
+    return [_write_extra(name, fixtures_dir) for name in EXTRA_REGISTRY]
+
+
 def _write_fixture(dataset_id: str, mode: str, fixtures_dir: Path) -> Path:
     payload = _fixture_payload(dataset_id, mode)
     fixtures_dir.mkdir(parents=True, exist_ok=True)
@@ -836,8 +1667,9 @@ def _write_fixture(dataset_id: str, mode: str, fixtures_dir: Path) -> Path:
 
 
 def make_all(*, fixtures_dir: Path | None = None) -> list[Path]:
-    """Write every registered (dataset, mode) fixture and return their
-    paths, in registration order.
+    """Write every registered dataset's fixtures, under the modes it opts
+    into (``DATASET_MODES``, or ``DEFAULT_DATASET_MODES`` when it names
+    none), and return their paths, in registration order.
 
     ``fixtures_dir`` defaults to the module-level ``FIXTURES_DIR``, read
     inside this function (not bound as a default parameter value), so
@@ -848,15 +1680,15 @@ def make_all(*, fixtures_dir: Path | None = None) -> list[Path]:
     return [
         _write_fixture(dataset_id, mode, fixtures_dir)
         for dataset_id in REGISTRY
-        for mode in MODES
+        for mode in DATASET_MODES.get(dataset_id, DEFAULT_DATASET_MODES)
     ]
 
 
 def check(*, fixtures_dir: Path | None = None) -> CheckResult:
-    """Regenerate every dataset and component fixture into a temporary
-    folder and compare each one against ``fixtures_dir`` (default: the
-    module-level ``FIXTURES_DIR``, read dynamically the same way
-    ``make_all`` does).
+    """Regenerate every dataset, component and extra fixture into a
+    temporary folder and compare each one against ``fixtures_dir``
+    (default: the module-level ``FIXTURES_DIR``, read dynamically the same
+    way ``make_all`` does).
 
     Every key but ``versions`` (what a fixture claims about earth: for a
     dataset, ``dataset``, ``mode``, ``inputs``, ``earth_args`` and
@@ -882,7 +1714,11 @@ def check(*, fixtures_dir: Path | None = None) -> CheckResult:
     fresh_relative: set[Path] = set()
     with tempfile.TemporaryDirectory(prefix="pymars-fixture-check-") as tmp:
         tmp = Path(tmp)
-        fresh_paths = make_all(fixtures_dir=tmp) + make_all_components(fixtures_dir=tmp)
+        fresh_paths = (
+            make_all(fixtures_dir=tmp)
+            + make_all_components(fixtures_dir=tmp)
+            + make_all_extras(fixtures_dir=tmp)
+        )
         for fresh in fresh_paths:
             relative = fresh.relative_to(tmp)
             fresh_relative.add(relative)
@@ -940,7 +1776,7 @@ def main(argv: list[str] | None = None) -> int:
         print("every fixture reproduced exactly")
         return 0
 
-    paths = make_all() + make_all_components()
+    paths = make_all() + make_all_components() + make_all_extras()
     for path in paths:
         print(path)
     return 0

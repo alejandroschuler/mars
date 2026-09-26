@@ -45,15 +45,135 @@ class TestRegistry:
         assert mode["minspan"] == 1
         assert mode["endspan"] == 1
 
+    def test_s02_through_s20_are_registered(self):
+        # Every dataset id gen_fixtures.py registers for S02 to S20 (T05,
+        # issue #7); a dataset with several sizes or variants is several
+        # ids (validation/README.md, "Dataset fixtures").
+        expected = {
+            "S02_n020",
+            "S02_n050",
+            "S03",
+            "S04_p05_n0200",
+            "S04_p05_n1000",
+            "S04_p10_n0200",
+            "S04_p10_n1000",
+            "S05",
+            "S06",
+            "S07",
+            "S08",
+            "S09",
+            "S10",
+            "S11_n03",
+            "S11_n05",
+            "S11_n08",
+            "S11_n12",
+            "S12_base",
+            "S12_x_1em8",
+            "S12_x_1e8",
+            "S12_x_plus_1e6",
+            "S12_y_1em9",
+            "S12_y_1e9",
+            "S13_int_zeros",
+            "S13_int_zeros_repeated",
+            "S13_int_random",
+            "S13_int_random_repeated",
+            "S13_unit",
+            "S13_unit_repeated",
+            "S13_nonint",
+            "S13_constant_y_weighted",
+            "S13_constant_y_weighted_repeated",
+            "S14",
+            "S16_weighted",
+            "S16_weighted_repeated",
+            "S17",
+            "S18",
+            "S19_dummies",
+            "S20",
+        }
+        assert expected <= set(gen_fixtures.REGISTRY)
+
+    def test_every_registered_dataset_has_a_unique_deterministic_id(self):
+        seen = set()
+        for dataset_id, fn in gen_fixtures.REGISTRY.items():
+            ds_a, ds_b = fn(), fn()
+            assert ds_a.id == dataset_id, f"{dataset_id}: registered under another id"
+            assert ds_a.id not in seen, f"{dataset_id}: id collides with another one"
+            seen.add(ds_a.id)
+            assert np.array_equal(ds_a.X, ds_b.X), f"{dataset_id}: X not deterministic"
+            assert np.array_equal(ds_a.y, ds_b.y), f"{dataset_id}: y not deterministic"
+
+    def test_every_dataset_mode_is_a_registered_mode(self):
+        for dataset_id, modes in gen_fixtures.DATASET_MODES.items():
+            assert dataset_id in gen_fixtures.REGISTRY, f"{dataset_id} not registered"
+            for mode in modes:
+                assert mode in gen_fixtures.MODES, f"{mode!r} unknown ({dataset_id})"
+
+    def test_extras_are_registered(self):
+        assert {"s15_draws", "s18_multinom", "s19_factor"} <= set(
+            gen_fixtures.EXTRA_REGISTRY
+        )
+
+
+class TestScaledMatrix:
+    def test_constant_column_is_left_as_is(self):
+        X = np.array([[1.0, 5.0], [2.0, 5.0], [3.0, 5.0]])
+        X_scaled, scale = gen_fixtures.scaled_matrix(X)
+        assert np.array_equal(X_scaled[:, 1], X[:, 1])
+        assert scale[1] == 1.0
+
+    def test_non_constant_column_gets_unit_population_variance(self):
+        X = np.array([[1.0], [2.0], [3.0], [4.0]])
+        X_scaled, scale = gen_fixtures.scaled_matrix(X)
+        assert np.var(X_scaled[:, 0]) == pytest.approx(1.0)
+        assert scale[0] == pytest.approx(np.std(X[:, 0]))
+
+    def test_is_not_centered(self):
+        X = np.array([[10.0], [11.0], [12.0]])
+        X_scaled, _ = gen_fixtures.scaled_matrix(X)
+        assert np.mean(X_scaled[:, 0]) != pytest.approx(0.0)
+
+    def test_weighted_variance_uses_divisor_n_not_n_minus_1(self):
+        X = np.array([[1.0], [2.0], [3.0]])
+        w = np.array([2.0, 1.0, 1.0])
+        _, scale = gen_fixtures.scaled_matrix(X, w)
+        mean = np.average(X[:, 0], weights=w)
+        expected = np.sqrt(np.average((X[:, 0] - mean) ** 2, weights=w))
+        assert scale[0] == pytest.approx(expected)
+
+    def test_integer_weights_match_the_repeated_row_expansion(self):
+        # W-1: an integer weight must give the same fit as repeated rows;
+        # scaled_matrix is the harness step both take, so the two must
+        # agree here too.
+        X = np.array([[1.0], [2.0], [5.0]])
+        w = np.array([2, 1, 3])
+        _, scale_w = gen_fixtures.scaled_matrix(X, w.astype(float))
+        X_rep = np.repeat(X, w, axis=0)
+        _, scale_rep = gen_fixtures.scaled_matrix(X_rep)
+        assert scale_w == pytest.approx(scale_rep)
+
+
+class TestRawModes:
+    def test_s12_datasets_use_only_raw_modes(self):
+        for dataset_id in gen_fixtures.REGISTRY:
+            if dataset_id.startswith("S12_"):
+                modes = gen_fixtures.DATASET_MODES[dataset_id]
+                assert set(modes) <= gen_fixtures.RAW_MODES, (
+                    f"{dataset_id}: uses a non-raw mode, so the LA-7 "
+                    "rescaling would hide the scale/shift effect S12 exists "
+                    "to show"
+                )
+
 
 @pytest.mark.external
 class TestMakeAllAndCheck:
-    def test_make_all_writes_one_file_per_dataset_and_mode(self, tmp_path):
+    def test_make_all_writes_one_file_per_dataset_and_its_own_modes(self, tmp_path):
         paths = gen_fixtures.make_all(fixtures_dir=tmp_path)
         expected = {
             f"{dataset_id}_{mode}.json"
             for dataset_id in gen_fixtures.REGISTRY
-            for mode in gen_fixtures.MODES
+            for mode in gen_fixtures.DATASET_MODES.get(
+                dataset_id, gen_fixtures.DEFAULT_DATASET_MODES
+            )
         }
         assert {p.name for p in paths} == expected
         for p in paths:
@@ -77,6 +197,7 @@ class TestMakeAllAndCheck:
     def test_check_reports_nothing_when_fixtures_match(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
         gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         result = gen_fixtures.check(fixtures_dir=tmp_path)
         assert result.problems == []
         assert result.notes == []
@@ -103,6 +224,7 @@ class TestMakeAllAndCheck:
     ):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
         gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         target = tmp_path / "S01_matched_d1.json"
         payload = json.loads(target.read_text())
         payload["versions"]["python"] = "9.9.9"  # a plausible future version
@@ -147,6 +269,7 @@ class TestMakeAllAndCheck:
     def test_main_check_exits_zero_when_everything_matches(self, tmp_path, monkeypatch):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
         gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         monkeypatch.setattr(gen_fixtures, "FIXTURES_DIR", tmp_path)
         assert gen_fixtures.main(["--check"]) == 0
 
@@ -198,6 +321,7 @@ class TestMakeAllComponentsAndCheck:
 
     def test_make_all_components_writes_one_file_per_component(self, tmp_path):
         paths = gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         expected = {f"{name}.json" for name in gen_fixtures.COMPONENT_REGISTRY}
         assert {p.name for p in paths} == expected
         for p in paths:
@@ -331,12 +455,14 @@ class TestMakeAllComponentsAndCheck:
     def test_check_reports_nothing_when_components_match(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
         gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         result = gen_fixtures.check(fixtures_dir=tmp_path)
         assert result.problems == []
 
     def test_check_reports_a_modified_component_fixture(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
         gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_extras(fixtures_dir=tmp_path)
         target = tmp_path / "components" / "gcv_grid.json"
         payload = json.loads(target.read_text())
         payload["grid"][0]["gcv"][0] = (payload["grid"][0]["gcv"][0] or 0.0) + 1.0

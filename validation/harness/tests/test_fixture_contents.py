@@ -39,6 +39,7 @@ _STRING_ONLY_KEYS = frozenset(
         "dataset",
         "mode",
         "component",
+        "extra",
         "label",
     }
 )
@@ -85,8 +86,24 @@ _REQUIRED_VERSION_FIELDS = (
 _MAY_BE_NONFINITE_KEYS = frozenset({"gcv", "grsq", "rsq", "gcv_per_subset"})
 
 
-def _dataset_fixture_paths() -> list[Path]:
+def _load(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _top_level_fixture_paths() -> list[Path]:
+    """Every ``validation/fixtures/*.json`` file: a (dataset, mode) fixture
+    (a ``"dataset"`` key) or a bespoke "extra" one (an ``"extra"`` key,
+    gen_fixtures.py's ``EXTRA_REGISTRY``, for example S15's 200 draws);
+    which is which is decided by content, not by a filename guess."""
     return sorted(p for p in FIXTURES_DIR.glob("*.json") if p.is_file())
+
+
+def _dataset_fixture_paths() -> list[Path]:
+    return [p for p in _top_level_fixture_paths() if "dataset" in _load(p)]
+
+
+def _extra_fixture_paths() -> list[Path]:
+    return [p for p in _top_level_fixture_paths() if "extra" in _load(p)]
 
 
 def _component_fixture_paths() -> list[Path]:
@@ -95,11 +112,7 @@ def _component_fixture_paths() -> list[Path]:
 
 
 def _all_fixture_paths() -> list[Path]:
-    return _dataset_fixture_paths() + _component_fixture_paths()
-
-
-def _load(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return _top_level_fixture_paths() + _component_fixture_paths()
 
 
 def _walk_leaves(value: Any, under_string_only_key: bool) -> Iterator[tuple[Any, bool]]:
@@ -138,6 +151,7 @@ def test_at_least_one_dataset_and_one_component_fixture_are_committed():
     assert _component_fixture_paths(), (
         f"no component fixtures committed in {FIXTURES_DIR / 'components'}"
     )
+    assert _extra_fixture_paths(), f"no extra fixtures committed in {FIXTURES_DIR}"
 
 
 def test_every_fixture_is_valid_json():
@@ -209,5 +223,14 @@ def test_every_component_fixture_names_itself():
         payload = _load(path)
         assert payload.get("component") == path.stem, (
             f"{path.name}: payload['component'] is {payload.get('component')!r}, "
+            "not this file's own name"
+        )
+
+
+def test_every_extra_fixture_names_itself():
+    for path in _extra_fixture_paths():
+        payload = _load(path)
+        assert payload.get("extra") == path.stem, (
+            f"{path.name}: payload['extra'] is {payload.get('extra')!r}, "
             "not this file's own name"
         )

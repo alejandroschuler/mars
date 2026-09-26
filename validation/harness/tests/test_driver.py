@@ -499,3 +499,15 @@ def test_run_earth_reports_the_r_error(tmp_path):
     job = EarthJob(id="bad", X=X, y=y, earth_args={"not_a_real_argument": 1})
     with pytest.raises(RuntimeError, match="earth failed for job 'bad'"):
         run_earth([job], workdir=tmp_path)
+
+
+@pytest.mark.external
+def test_run_earth_with_raise_on_error_false_returns_the_error_instead(tmp_path):
+    rng = np.random.default_rng(0)
+    X = rng.uniform(size=(20, 1))
+    y = X[:, 0]
+    job = EarthJob(id="bad", X=X, y=y, earth_args={"not_a_real_argument": 1})
+    results = run_earth([job], workdir=tmp_path, raise_on_error=False)
+    assert results["bad"]["error"]
+    assert results["bad"]["r_version"]
+    assert results["bad"]["earth_version"]

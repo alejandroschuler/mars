@@ -190,6 +190,46 @@ def lm_fit(
     }
 
 
+def earth_factor_fit(
+    labels: np.ndarray | None,
+    y: np.ndarray,
+    earth_args: dict[str, Any],
+    *,
+    other_x: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """Fit earth with ``labels`` as one genuine R factor column (plus
+    ``other_x``'s numeric columns, if any), and return a summary: fitted
+    values, ``gcv``, ``rsq`` and the term count.
+
+    The "factor" side of S19's comparison (VALIDATION_PLAN.md, "Categorical
+    inputs"); ``labels=None`` (with ``other_x`` given, for example the
+    OneHotEncoder-style dummy columns) is the "dummies" side, which could
+    also go through ``driver.run_earth``, but sharing this call keeps both
+    sides' fitted-value scale (a plain numeric fit, no CSV round trip)
+    identical for the comparison. Only a summary comes back because a
+    factor fit's ``dirs``/``cuts``/``bx`` are not comparable in shape with
+    the dummy-encoded fit's.
+    """
+    label_list = (
+        None if labels is None else [str(v) for v in np.asarray(labels).tolist()]
+    )
+    result = _run(
+        {
+            "call": "earth_factor_fit",
+            "labels": label_list,
+            "y": list(np.asarray(y, dtype=float)),
+            "other_x": _rows(other_x),
+            "earth_args": earth_args,
+        }
+    )
+    return {
+        "fitted": np.asarray(result["fitted"], dtype=float),
+        "gcv": float(result["gcv"]),
+        "rsq": float(result["rsq"]),
+        "nterms": int(result["nterms"]),
+    }
+
+
 def predict_earth(
     x: np.ndarray,
     y: np.ndarray,

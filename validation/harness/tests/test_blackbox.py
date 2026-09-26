@@ -176,6 +176,28 @@ class TestLmFit:
         assert not any(np.isnan(c) for c in estimated)
 
 
+class TestEarthFactorFit:
+    def test_factor_and_dummy_encodings_agree(self):
+        rng = np.random.default_rng(5)
+        n = 100
+        labels = rng.choice(["a", "b", "c", "d"], size=n)
+        effect = {"a": 0.0, "b": 1.0, "c": -0.5, "d": 2.0}
+        y = np.array([effect[lbl] for lbl in labels]) + rng.normal(scale=0.1, size=n)
+        earth_args = {"degree": 1, "nk": 11}
+        factor_result = bb.earth_factor_fit(labels, y, earth_args)
+        # drop="first" dummies (OneHotEncoder's recipe): one indicator per
+        # non-baseline level.
+        dummies = np.column_stack(
+            [(labels == level).astype(float) for level in ("b", "c", "d")]
+        )
+        dummy_result = bb.earth_factor_fit(None, y, earth_args, other_x=dummies)
+        assert factor_result["nterms"] == dummy_result["nterms"]
+        assert factor_result["gcv"] == pytest.approx(dummy_result["gcv"], rel=1e-8)
+        assert factor_result["fitted"] == pytest.approx(
+            dummy_result["fitted"], rel=1e-6
+        )
+
+
 class TestPredictEarth:
     def test_predicts_outside_the_training_range(self, hinge_data):
         x, y = hinge_data
