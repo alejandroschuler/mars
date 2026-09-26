@@ -87,6 +87,18 @@ def _run(request: dict[str, Any], *, rscript: str = "Rscript") -> dict[str, Any]
         return _desanitize(json.loads(out_path.read_text(encoding="utf-8")))
 
 
+def versions(*, rscript: str = "Rscript") -> dict[str, str]:
+    """The R and earth versions this process's ``Rscript`` would fit with.
+
+    Every ``blackbox.R`` call's result already carries ``r_version`` and
+    ``earth_version`` (so a component fixture has them without a
+    ``driver.run_earth`` result to copy them from, the way ``fit_earth.R``'s
+    callers do); this call needs no other request field.
+    """
+    result = _run({"call": "versions"}, rscript=rscript)
+    return {"r_version": result["r_version"], "earth_version": result["earth_version"]}
+
+
 def get_gcv(
     rss_per_subset: np.ndarray, nterms: np.ndarray, penalty: float, ncases: float
 ) -> np.ndarray:
@@ -152,14 +164,25 @@ def pruning_pass(
     }
 
 
-def lm_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
-    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal).
+def lm_fit(
+    x: np.ndarray, y: np.ndarray, *, w: np.ndarray | None = None
+) -> dict[str, Any]:
+    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal),
+    or ``lm.wfit(x, y, w)`` when ``w`` is given (LA-4/PRUNE-8's weighted
+    coefficients; review round 1, #42 finding 5).
 
     ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
     deficient (for example two identical columns): R gives the aliased
     coefficient as NA, which comes back here as ``None``, not ``nan``.
     """
-    result = _run({"call": "lm_fit", "x": _rows(x), "y": _rows(y)})
+    result = _run(
+        {
+            "call": "lm_fit",
+            "x": _rows(x),
+            "y": _rows(y),
+            "w": None if w is None else list(np.asarray(w, dtype=float)),
+        }
+    )
     return {
         "coefficients": _float_array(result["coefficients"]),
         "residuals": np.asarray(result["residuals"], dtype=float),
@@ -174,9 +197,16 @@ def predict_earth(
     earth_args: dict[str, Any],
     *,
     type: str = "link",
-) -> np.ndarray:
-    """Fit earth on (x, y) and predict at ``newx`` (which may lie outside the
-    training range), for the prediction-at-new-points component test."""
+) -> dict[str, Any]:
+    """Fit earth on (x, y), predict at ``newx`` (which may lie outside the
+    training range), and return the model alongside the prediction: ``pred``,
+    ``dirs``, ``cuts``, ``selected_terms`` (1-based) and ``coefficients``.
+
+    For the prediction-at-new-points component test (review round 1, #42
+    finding 2): without the model, matching ``pred`` needs a whole forward-
+    pass refit that also depends on the forward pass and LA-7, not TERM-3
+    (the basis evaluated at new points) in isolation.
+    """
     result = _run(
         {
             "call": "predict_earth",
@@ -187,7 +217,13 @@ def predict_earth(
             "type": type,
         }
     )
-    return np.asarray(result["pred"], dtype=float)
+    return {
+        "pred": np.asarray(result["pred"], dtype=float),
+        "dirs": np.asarray(result["dirs"], dtype=float),
+        "cuts": np.asarray(result["cuts"], dtype=float),
+        "selected_terms": np.asarray(result["selected_terms"], dtype=int),
+        "coefficients": np.asarray(result["coefficients"], dtype=float),
+    }
 
 
 def glm_fit(
@@ -196,7 +232,11 @@ def glm_fit(
     """R's ``glm.fit(x, y, family = <family>)``, unpenalized.
 
     ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
-    deficient: see ``lm_fit``, the same aliasing.
+    deficient: see ``lm_fit``, the same aliasing. ``converged`` and
+    ``warnings`` (review round 1, #42 finding 6) let a caller tell a valid
+    GLM-3 reference from one earth itself would warn on (a quasi-separated
+    fit, for example), since GLM-3 only promises agreement "where glm
+    converges without a warning".
     """
     result = _run(
         {
@@ -209,10 +249,57 @@ def glm_fit(
     return {
         "coefficients": _float_array(result["coefficients"]),
         "fitted_values": np.asarray(result["fitted_values"], dtype=float),
+        "converged": bool(result["converged"]),
+        "warnings": list(result["warnings"] or []),
     }
 
 
-def multinom_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
+def fit_bx_dirs(
+    x: np.ndarray, y: np.ndarray, earth_args: dict[str, Any]
+) -> dict[str, Any]:
+    """Fit earth on (x, y) and return its basis: ``bx`` (the design matrix),
+    ``dirs``, ``cuts`` and ``selected_terms`` (1-based, as earth returns
+    them).
+
+    Review round 2 (#42 spec, non-blocking): ``fit$dirs``/``fit$cuts`` hold
+    every *forward* term earth ever added, selected or not (for example,
+    ``s18_multinom``'s basis has 13 ``dirs`` rows but only 3
+    ``selected_terms``); ``fit$bx`` holds only the *selected* columns,
+    except with ``pmethod = "none"`` (no ``nprune``), which
+    ``pruning_fixed_basis`` passes so that its own backward pass has
+    something left to prune, and which leaves every forward term selected.
+    A caller that wants the terms ``dirs``/``cuts`` describe restricted to
+    the ones actually in the model takes ``dirs[selected_terms - 1]`` (and
+    ``cuts[selected_terms - 1]``), 0-indexing the 1-based ``selected_terms``
+    this call returns.
+
+    For the pruning-of-a-fixed-basis and the classifier-refit component
+    tests, which need a real ``bx``/``dirs`` pair to hand to
+    ``pruning_pass``, ``lm_fit`` or ``multinom_fit``. ``bx`` is not part of
+    ``driver.run_earth``'s result schema (it would duplicate earth's own
+    forward-pass output in every dataset fixture), so this reaches past it
+    with its own black-box call, the same way ``test_blackbox.py``'s
+    ``_fixed_basis`` helper already does.
+    """
+    result = _run(
+        {
+            "call": "fit_bx_dirs",
+            "x": _rows(x),
+            "y": _rows(y),
+            "earth_args": earth_args,
+        }
+    )
+    return {
+        "bx": np.asarray(result["bx"], dtype=float),
+        "dirs": np.asarray(result["dirs"], dtype=float),
+        "cuts": np.asarray(result["cuts"], dtype=float),
+        "selected_terms": np.asarray(result["selected_terms"], dtype=int),
+    }
+
+
+def multinom_fit(
+    x: np.ndarray, y: np.ndarray, *, maxit: int = 10000, reltol: float = 1e-15
+) -> dict[str, Any]:
     """``nnet::multinom`` on fixed columns (earth's selected basis, including
     its intercept column).
 
@@ -221,13 +308,38 @@ def multinom_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
     Returns 0-based ``coefficients`` (one row per non-baseline level, in
     ``levels`` order after the first) and ``fitted`` probabilities (one
     column per level, in ``levels`` order).
+
+    ``maxit`` raises nnet's default cap of 100 iterations when a caller's
+    design needs more; ``convergence`` (nnet's own code; 0 is converged)
+    and ``warnings`` let a caller require convergence rather than silently
+    keeping an unconverged iterate (review round 1, #42/#43 finding
+    1/3/5). Separable labels never converge whatever ``maxit`` is: the fix
+    there is a non-separable design, not a larger cap.
+
+    ``reltol`` (review round 2, #42/#43 blocking finding 1): convergence
+    code 0 only means the objective changed by less than ``reltol``
+    between iterations, not that the fit reached GLM-2's actual minimum.
+    nnet's own default (1e-8) can stop far enough short of the minimum
+    that GLM-3's tolerance (1e-5 relative, 1e-7 absolute) fails a solver
+    that reaches it, so this defaults far tighter. A caller should still
+    check stability (``_assert_multinom_is_stable`` in gen_fixtures.py)
+    before writing a fixture, since a tight ``reltol`` alone is not proof
+    of convergence to the minimum, only evidence for it.
     """
     y = np.asarray(y)
     result = _run(
-        {"call": "multinom_fit", "x": _rows(x), "y": [str(v) for v in y.tolist()]}
+        {
+            "call": "multinom_fit",
+            "x": _rows(x),
+            "y": [str(v) for v in y.tolist()],
+            "maxit": maxit,
+            "reltol": reltol,
+        }
     )
     return {
         "coefficients": np.asarray(result["coefficients"], dtype=float),
         "levels": list(result["levels"]),
         "fitted": np.asarray(result["fitted"], dtype=float),
+        "convergence": int(result["convergence"]),
+        "warnings": list(result["warnings"] or []),
     }

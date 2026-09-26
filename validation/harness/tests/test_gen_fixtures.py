@@ -76,6 +76,7 @@ class TestMakeAllAndCheck:
 
     def test_check_reports_nothing_when_fixtures_match(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_components(fixtures_dir=tmp_path)
         result = gen_fixtures.check(fixtures_dir=tmp_path)
         assert result.problems == []
         assert result.notes == []
@@ -101,6 +102,7 @@ class TestMakeAllAndCheck:
         self, tmp_path
     ):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_components(fixtures_dir=tmp_path)
         target = tmp_path / "S01_matched_d1.json"
         payload = json.loads(target.read_text())
         payload["versions"]["python"] = "9.9.9"  # a plausible future version
@@ -144,14 +146,200 @@ class TestMakeAllAndCheck:
 
     def test_main_check_exits_zero_when_everything_matches(self, tmp_path, monkeypatch):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_components(fixtures_dir=tmp_path)
         monkeypatch.setattr(gen_fixtures, "FIXTURES_DIR", tmp_path)
         assert gen_fixtures.main(["--check"]) == 0
 
-    def test_the_committed_s01_fixtures_reproduce_exactly(self):
-        # The actual check the brief asks for: the committed fixtures under
-        # validation/fixtures/ regenerate with no diff.
+    def test_the_committed_fixtures_reproduce_exactly(self):
+        # The actual check the brief asks for: every committed fixture under
+        # validation/fixtures/ (datasets and components) regenerates with no
+        # diff; check() covers both (its own docstring).
         repo_fixtures = Path(gen_fixtures.FIXTURES_DIR)
         assert list(repo_fixtures.glob("S01_*.json")), (
             f"no committed S01 fixtures in {repo_fixtures}"
         )
+        assert list((repo_fixtures / "components").glob("*.json")), (
+            f"no committed component fixtures in {repo_fixtures / 'components'}"
+        )
         assert gen_fixtures.check(fixtures_dir=repo_fixtures).problems == []
+
+
+class TestComponentRegistry:
+    def test_expected_components_are_registered(self):
+        assert {
+            "gcv_grid",
+            "pruning_fixed_basis",
+            "lm_fit_coefficients",
+            "predict_new_points",
+            "classifier_refit",
+            "knot_candidates",
+        } <= set(gen_fixtures.COMPONENT_REGISTRY)
+
+    def test_a_registered_component_is_a_callable_not_its_payload(self):
+        # Unlike register (datasets), register_component must not call fn()
+        # at decoration time: a component payload runs a real earth call, so
+        # merely importing gen_fixtures must never touch Rscript.
+        assert callable(gen_fixtures.COMPONENT_REGISTRY["gcv_grid"])
+
+
+@pytest.mark.external
+class TestMakeAllComponentsAndCheck:
+    @pytest.fixture(scope="class")
+    def component_fixtures(self, tmp_path_factory):
+        # Module truly means "class" here: one real regeneration of every
+        # component, reused read-only by every shape test below, instead of
+        # each test paying its own Rscript cost.
+        tmp = tmp_path_factory.mktemp("components")
+        gen_fixtures.make_all_components(fixtures_dir=tmp)
+        return {
+            p.stem: json.loads(p.read_text())
+            for p in (tmp / "components").glob("*.json")
+        }
+
+    def test_make_all_components_writes_one_file_per_component(self, tmp_path):
+        paths = gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        expected = {f"{name}.json" for name in gen_fixtures.COMPONENT_REGISTRY}
+        assert {p.name for p in paths} == expected
+        for p in paths:
+            assert p.is_file()
+            assert p.parent.name == "components"
+
+    def test_every_component_fixture_has_a_component_key_and_versions(
+        self, component_fixtures
+    ):
+        # Review round 1 (#42 finding, adversarial, non-blocking): a
+        # component fixture's versions block used to lack r_blas although
+        # the dataset fixtures always have it.
+        for name, payload in component_fixtures.items():
+            assert payload["component"] == name
+            assert payload["versions"]["earth_version"]
+            assert payload["versions"]["r_version"]
+            assert payload["versions"]["r_blas"]
+
+    def test_gcv_grid_covers_the_documented_penalties_and_case_counts(
+        self, component_fixtures
+    ):
+        payload = component_fixtures["gcv_grid"]
+        penalties = {cell["penalty"] for cell in payload["grid"]}
+        assert {-1, 0, 1, 2, 3, 4, 5, 6} <= penalties
+        assert len(payload["nterms"]) == 41
+        assert min(c["ncases"] for c in payload["grid"]) <= 10
+        assert max(c["ncases"] for c in payload["grid"]) >= 100_000
+        assert any(
+            v is not None and np.isinf(v)
+            for cell in payload["grid"]
+            for v in cell["gcv"]
+        )
+
+    def test_pruning_fixed_basis_has_one_and_several_response_cases(
+        self, component_fixtures
+    ):
+        payload = component_fixtures["pruning_fixed_basis"]
+        assert len(payload["one_response"]["selected_terms"]) >= 1
+        assert np.array(payload["several_responses"]["y"]).ndim == 2
+        # rss.per.subset is indexed by subset size, worst (1 term) to best.
+        assert (
+            payload["one_response"]["rss_per_subset"][0]
+            >= payload["one_response"]["rss_per_subset"][-1]
+        )
+        # Review round 1, #42 adversarial finding 3 (several responses) and
+        # round 2, #42/#43 blocking finding 2 (one response, a regression):
+        # both cases must actually separate PRUNE-3's K = 1 rule from its
+        # K >= 2 rule, not just happen to agree with either.
+        assert payload["one_response"]["k1_vs_k2_diverge_at_sizes"]
+        assert payload["several_responses"]["k1_vs_k2_diverge_at_sizes"]
+
+    def test_lm_fit_coefficients_has_a_rank_deficient_case(self, component_fixtures):
+        payload = component_fixtures["lm_fit_coefficients"]
+        by_label = {c["label"]: c for c in payload["cases"]}
+        assert by_label["full_rank"]["rank"] == 3
+        assert by_label["duplicated_column"]["coefficients"].count(None) == 1
+        # Review round 1, #42 finding 5: near-duplicate columns on each
+        # side of LA-4's 1e-7 threshold, and the centered/uncentered norm
+        # case (bb09.9), and a weighted case (PRUNE-8's lm.wfit path).
+        assert by_label["near_duplicate_above_1e-7"]["rank"] == 4
+        assert by_label["near_duplicate_below_1e-7"]["coefficients"].count(None) == 1
+        assert by_label["centered_vs_uncentered_norm"]["coefficients"].count(None) == 1
+        assert by_label["weighted_full_rank"]["weights"] is not None
+        assert by_label["weighted_full_rank"]["coefficients"].count(None) == 0
+
+    def test_predict_new_points_covers_outside_the_training_range(
+        self, component_fixtures
+    ):
+        payload = component_fixtures["predict_new_points"]
+        for case in (payload["degree1"], payload["degree2"]):
+            x = np.array(case["x"])
+            newx = np.array(case["newx"])
+            assert newx.min() < x.min()
+            assert newx.max() > x.max()
+            assert np.all(np.isfinite(case["pred"]))
+            # Review round 1, #42 finding 2: the model, not only pred.
+            assert len(case["dirs"]) == len(case["cuts"])
+            assert len(case["coefficients"]) == len(case["selected_terms"])
+
+    def test_predict_new_points_linear_factor_diverges_below_the_minimum(
+        self, component_fixtures
+    ):
+        # FWD-6: a linear term (Auto.linpreds = TRUE) extrapolates as a
+        # straight line; a hinge at the training minimum (Auto.linpreds =
+        # FALSE) extrapolates as a constant below it. The two must agree
+        # inside the training range and diverge below the minimum.
+        payload = component_fixtures["predict_new_points"]
+        linear = np.array(payload["linear_auto"]["pred"]).ravel()
+        hinge = np.array(payload["linear_hinge"]["pred"]).ravel()
+        newx = np.array(payload["linear_auto"]["newx"]).ravel()
+        x_min = np.array(payload["linear_auto"]["x"]).min()
+        below = newx < x_min
+        above = ~below
+        assert below.any() and above.any()
+        assert np.allclose(linear[above], hinge[above])
+        assert not np.allclose(linear[below], hinge[below])
+
+    def test_classifier_refit_has_binomial_and_multinomial_cases(
+        self, component_fixtures
+    ):
+        payload = component_fixtures["classifier_refit"]
+        fitted = np.array(payload["binomial"]["fitted_values"])
+        assert np.all((fitted > 0) & (fitted < 1))
+        probs = np.array(payload["multinomial"]["fitted"])
+        assert probs.shape[1] == len(payload["multinomial"]["levels"]) == 3
+        assert np.allclose(probs.sum(axis=1), 1.0)
+        # Review round 1, #42/#43 finding 1: both references must have
+        # actually converged (GLM-3/GLM-4).
+        assert payload["binomial"]["converged"] is True
+        assert payload["multinomial"]["convergence"] == 0
+
+    def test_knot_candidates_grid_covers_the_documented_axes(self, component_fixtures):
+        cases = component_fixtures["knot_candidates"]["cases"]
+        assert {c["degree"] for c in cases} == {1, 2}
+        assert {c["minspan"] for c in cases} == {None, 1, 3, 10}
+        assert {c["endspan"] for c in cases} == {None, 1, 5}
+        assert {c["n"] for c in cases} >= {20, 200, 2000}
+        assert all("FindKnotBegin" in c["trace_text"] for c in cases)
+        # Review round 1, #42 finding 4: endspan = 5 at n = 200 (SPAN-5's
+        # cap does not hide Adjust.endspan there), for both its values.
+        endspan5_at_200 = {
+            c["adjust_endspan"] for c in cases if c["endspan"] == 5 and c["n"] == 200
+        }
+        assert endspan5_at_200 == {1.0, 2.0}
+        # A degree-2, negative-x case exists (KNOT-1's negative-linear-
+        # parent rule), whatever term structure earth actually picked.
+        assert any(
+            c["degree"] == 2 and min(min(row) for row in c["X"]) < 0 for c in cases
+        )
+
+    def test_check_reports_nothing_when_components_match(self, tmp_path):
+        gen_fixtures.make_all(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert result.problems == []
+
+    def test_check_reports_a_modified_component_fixture(self, tmp_path):
+        gen_fixtures.make_all(fixtures_dir=tmp_path)
+        gen_fixtures.make_all_components(fixtures_dir=tmp_path)
+        target = tmp_path / "components" / "gcv_grid.json"
+        payload = json.loads(target.read_text())
+        payload["grid"][0]["gcv"][0] = (payload["grid"][0]["gcv"][0] or 0.0) + 1.0
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert any("gcv_grid.json" in p and "differs" in p for p in result.problems)

@@ -13,11 +13,16 @@ JSON (see that script's docstring for the exact fields: ``dirs``, ``cuts``,
 ``term_names``, ``selected_terms``, ``prune_terms``, ``rss_per_subset``,
 ``gcv_per_subset``, ``coef``, ``glm_coef``, ``rss``, ``rsq``, ``gcv``,
 ``grsq``, ``termcond``, ``levels``, ``fitted``, ``pred_train``, ``pred_test``,
-``fwd_rss``, ``r_version``, ``earth_version``). ``dirs``, ``cuts``, ``coef``,
-``glm_coef``, ``fitted``, ``pred_train``, ``pred_test`` and ``prune_terms``
-are always nested (2-D) lists, never collapsed to a bare number or a flat
-list when one dimension is 1; ``compare.py``, ``legacy_adapter.py`` and
-``new_adapter.py`` share this schema (a later task adds the last two).
+``fwd_rss``, ``warnings``, ``glm_converged``, ``r_version``,
+``earth_version``). ``dirs``, ``cuts``, ``coef``, ``glm_coef``, ``fitted``,
+``pred_train``, ``pred_test`` and ``prune_terms`` are always nested (2-D)
+lists, never collapsed to a bare number or a flat list when one dimension is
+1; ``warnings`` is every warning ``earth()`` itself raised, as text (empty
+when it raised none), and ``glm_converged`` is one bool per class's glm fit
+when ``glm_family`` was given (``null`` otherwise); GLM-3/GLM-4 promise
+agreement only where earth's glm converged without a warning. ``compare.py``,
+``legacy_adapter.py`` and ``new_adapter.py`` share this schema (a later task
+adds the last two).
 """
 
 from __future__ import annotations
@@ -47,7 +52,16 @@ _R_JSON_SENTINELS = {"Inf": float("inf"), "-Inf": float("-inf"), "NaN": float("n
 # of the four sentinel tokens (a term name, or a factor level actually named
 # "NA"). Shared by fit_earth.R's and blackbox.R's result shapes.
 _STRING_ONLY_KEYS = frozenset(
-    {"id", "term_names", "levels", "r_version", "earth_version", "error", "call"}
+    {
+        "id",
+        "term_names",
+        "levels",
+        "r_version",
+        "earth_version",
+        "error",
+        "call",
+        "warnings",
+    }
 )
 
 
