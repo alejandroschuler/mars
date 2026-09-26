@@ -38,6 +38,22 @@ to_matrix <- function(rows) {
   do.call(rbind, lapply(rows, function(row) as.numeric(unlist(row))))
 }
 
+# Run expr, collecting every warning's message instead of letting it print
+# (review round 1, #42 findings 4/6): GLM-3/GLM-4 and the multinom
+# reference are only valid "where glm converges without a warning", so a
+# caller needs the warnings, not just the fitted object.
+with_warnings <- function(expr) {
+  messages <- character(0)
+  value <- withCallingHandlers(
+    expr,
+    warning = function(w) {
+      messages <<- c(messages, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(value = value, warnings = messages)
+}
+
 calls <- list(
   # No request fields; every call's result already carries r_version and
   # earth_version (below), so this just reads them off with nothing else in
@@ -75,15 +91,18 @@ calls <- list(
     )
   },
 
-  # Plain least squares on fixed columns (base R's lm.fit, not earth's; the
-  # coefficients-of-fixed-terms component test compares pymars against this).
+  # Plain least squares on fixed columns (base R's lm.fit/lm.wfit, not
+  # earth's; the coefficients-of-fixed-terms component test compares
+  # pymars against this). w (optional) routes to lm.wfit, the weighted
+  # variant LA-4/PRUNE-8 need (review round 1, #42 finding 5).
   lm_fit = function(req) {
     x <- to_matrix(req$x)
     y <- to_matrix(req$y)
     if (ncol(y) == 1) {
       y <- y[, 1]
     }
-    fit <- lm.fit(x, y)
+    w <- req$w
+    fit <- if (is.null(w)) lm.fit(x, y) else lm.wfit(x, y, unlist(w))
     list(
       coefficients = mat_json(as.matrix(fit$coefficients)),
       residuals = mat_json(as.matrix(fit$residuals)),
@@ -93,6 +112,9 @@ calls <- list(
 
   # A fresh earth fit on (x, y), predicted at newx; the prediction-at-new-
   # points component test compares this with pymars' basis_matrix()/predict.
+  # Returns the model (dirs, cuts, selected_terms, coefficients) alongside
+  # pred (review round 1, #42 finding 2): without them, matching pred alone
+  # needs a whole forward-pass refit, not TERM-3 in isolation.
   predict_earth = function(req) {
     x <- to_matrix(req$x)
     y <- to_matrix(req$y)
@@ -102,20 +124,31 @@ calls <- list(
     args <- c(list(x = x, y = y), req$earth_args)
     fit <- do.call(earth, args)
     newx <- to_matrix(req$newx)
-    list(pred = mat_json(predict(fit, newx, type = req$type %||% "link")))
+    list(
+      pred = mat_json(predict(fit, newx, type = req$type %||% "link")),
+      dirs = mat_json(fit$dirs),
+      cuts = mat_json(fit$cuts),
+      selected_terms = vec_json(as.integer(fit$selected.terms)),
+      coefficients = mat_json(fit$coefficients)
+    )
   },
 
   # R's own glm() (or glm.fit()) on fixed columns, unpenalized: the reference
-  # for the binomial refit's coefficients and fitted probabilities.
+  # for the binomial refit's coefficients and fitted probabilities. Returns
+  # converged and warnings too (review round 1, #42 finding 6): GLM-3
+  # compares coefficients only "where glm converges without a warning".
   glm_fit = function(req) {
     x <- to_matrix(req$x)
     y <- as.numeric(unlist(req$y))
     fam <- get(req$family %||% "binomial")()  # glm.fit needs a family object,
                                                # not the bare family function
-    fit <- glm.fit(x, y, family = fam)
+    run <- with_warnings(glm.fit(x, y, family = fam))
+    fit <- run$value
     list(
       coefficients = vec_json(as.numeric(fit$coefficients)),
-      fitted_values = vec_json(as.numeric(fit$fitted.values))
+      fitted_values = vec_json(as.numeric(fit$fitted.values)),
+      converged = fit$converged,
+      warnings = vec_json(run$warnings)
     )
   },
 
@@ -145,17 +178,28 @@ calls <- list(
   # its intercept column, so "- 1" does not add a second one): the reference
   # for multiclass probabilities, which earth's one-binomial-glm-per-class
   # convention does not give directly (VALIDATION_PLAN.md, "Binary outcomes").
+  # maxit raises nnet's default cap of 100 iterations when the caller's
+  # design needs more (review round 1, #42/#43 finding 1/3/5: separable
+  # labels never converge at all, whatever maxit is, so the fix is a
+  # non-separable design plus checking convergence, not just a larger cap).
+  # Returns convergence (nnet's own code; 0 is converged) and warnings.
   multinom_fit = function(req) {
     suppressMessages(library(nnet))
     x <- to_matrix(req$x)
     y <- factor(unlist(req$y))
     df <- as.data.frame(x)
     df$.y <- y
-    fit <- nnet::multinom(.y ~ . - 1, data = df, trace = FALSE)
+    maxit <- req$maxit %||% 100
+    run <- with_warnings(
+      nnet::multinom(.y ~ . - 1, data = df, trace = FALSE, maxit = maxit)
+    )
+    fit <- run$value
     list(
       coefficients = mat_json(coef(fit)),
       levels = vec_json(levels(y)),
-      fitted = mat_json(predict(fit, newdata = df, type = "probs"))
+      fitted = mat_json(predict(fit, newdata = df, type = "probs")),
+      convergence = fit$convergence,
+      warnings = vec_json(run$warnings)
     )
   }
 )

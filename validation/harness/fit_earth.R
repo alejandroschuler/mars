@@ -52,6 +52,25 @@ suppressMessages({
 r_version <- R.version.string
 earth_version <- as.character(utils::packageVersion("earth"))
 
+# Run expr, collecting every warning's message instead of letting it print
+# (review round 1, #42/#43 finding 6): GLM-3/GLM-4 only promise agreement
+# "where glm converges without a warning", so a caller needs to know
+# whether earth's own glm.fit call warned (for example "fitted
+# probabilities numerically 0 or 1 occurred"), not just the fitted object.
+# The same helper is in blackbox.R; both scripts are standalone (no shared
+# module), so it is duplicated rather than introducing one.
+with_warnings <- function(expr) {
+  messages <- character(0)
+  value <- withCallingHandlers(
+    expr,
+    warning = function(w) {
+      messages <<- c(messages, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(value = value, warnings = messages)
+}
+
 write_result <- function(x, path) {
   # na = "string" writes Inf/-Inf/NaN/NA as those exact strings rather than
   # collapsing all of them to JSON null (jsonlite's default): a GCV of Inf
@@ -147,13 +166,14 @@ fit_one <- function(job) {
   if (trace > 0 && !is.null(job$trace_file)) {
     con <- file(job$trace_file, "wt")
     sink(con)
-    fit <- tryCatch(do.call(earth, args), finally = {
+    run <- tryCatch(with_warnings(do.call(earth, args)), finally = {
       sink()
       close(con)
     })
   } else {
-    fit <- do.call(earth, args)
+    run <- with_warnings(do.call(earth, args))
   }
+  fit <- run$value
 
   fwd_rss <- NULL
   if ((job$include_forward_path %||% TRUE) && !isTRUE(job$factor_response)) {
@@ -190,6 +210,10 @@ fit_one <- function(job) {
     pred_train = mat_json(pred_train),
     pred_test = mat_json(pred_test),
     fwd_rss = vec_json(fwd_rss),
+    warnings = vec_json(run$warnings),
+    glm_converged = vec_json(
+      if (is.null(fit$glm.list)) NULL else vapply(fit$glm.list, function(g) g$converged, logical(1))
+    ),
     r_version = r_version,
     earth_version = earth_version
   )

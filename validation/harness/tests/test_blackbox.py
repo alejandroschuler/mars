@@ -180,9 +180,18 @@ class TestPredictEarth:
     def test_predicts_outside_the_training_range(self, hinge_data):
         x, y = hinge_data
         newx = np.array([[-1.0], [0.5], [2.0]])
-        pred = bb.predict_earth(x, y, newx, earth_args={"degree": 1, "nk": 11})
-        assert pred.shape == (3, 1)
-        assert np.all(np.isfinite(pred))
+        result = bb.predict_earth(x, y, newx, earth_args={"degree": 1, "nk": 11})
+        assert result["pred"].shape == (3, 1)
+        assert np.all(np.isfinite(result["pred"]))
+
+    def test_returns_the_model_alongside_the_prediction(self, hinge_data):
+        x, y = hinge_data
+        newx = np.array([[-1.0], [0.5], [2.0]])
+        result = bb.predict_earth(x, y, newx, earth_args={"degree": 1, "nk": 11})
+        n_terms = result["dirs"].shape[0]
+        assert result["cuts"].shape == (n_terms, 1)
+        assert result["coefficients"].shape[0] == len(result["selected_terms"])
+        assert 1 <= len(result["selected_terms"]) <= n_terms
 
 
 class TestGlmFit:
@@ -205,6 +214,21 @@ class TestGlmFit:
         ll_model = -np.mean(y * np.log(fitted) + (1 - y) * np.log1p(-fitted))
         ll_base = -np.mean(y * np.log(base_rate) + (1 - y) * np.log1p(-base_rate))
         assert ll_model < ll_base
+        assert result["converged"] is True
+        assert result["warnings"] == []
+
+    def test_a_separable_response_does_not_converge_and_warns(self):
+        # GLM-3/GLM-4 (review round 1, #42/#43 finding 6): a caller must be
+        # able to tell a valid reference ("glm converges without a
+        # warning") from an invalid one.
+        rng = np.random.default_rng(9)
+        n = 100
+        x = rng.uniform(-1, 1, size=n)
+        X = np.column_stack([np.ones(n), x])
+        y = (x > 0).astype(float)  # a clean linear split: perfectly separable
+        result = bb.glm_fit(X, y)
+        assert result["converged"] is False
+        assert any("did not converge" in w for w in result["warnings"])
 
 
 class TestMultinomFit:
@@ -236,3 +260,36 @@ class TestMultinomFit:
         result = bb.multinom_fit(X, y)
         assert set(result["levels"]) == {"hi", "NA", "mid"}
         assert all(level is not None for level in result["levels"])
+
+    def test_a_non_separable_response_converges(self):
+        # review round 1, #42/#43 finding 1/3/5: a caller must be able to
+        # require convergence rather than silently keep an unconverged
+        # iterate. A softmax draw (not a threshold rule) keeps the classes
+        # overlapping, so a finite MLE exists.
+        rng = np.random.default_rng(11)
+        n = 300
+        x = rng.uniform(-2, 2, size=n)
+        X = np.column_stack([np.ones(n), x])
+        scores = np.column_stack([np.zeros(n), x, -x])  # baseline, hi, lo
+        probs = np.exp(scores) / np.exp(scores).sum(axis=1, keepdims=True)
+        levels = np.array(["mid", "hi", "lo"])
+        y = np.array([levels[rng.choice(3, p=probs[i])] for i in range(n)])
+        result = bb.multinom_fit(X, y)
+        assert result["convergence"] == 0
+        assert result["warnings"] == []
+
+    def test_a_separable_response_does_not_converge_even_with_more_iterations(self):
+        rng = np.random.default_rng(12)
+        n = 150
+        x = rng.uniform(-3, 3, size=n)
+        X = np.column_stack([np.ones(n), x])
+        y = np.where(x < -1, "lo", np.where(x > 1, "hi", "mid"))  # separable
+        default_maxit = bb.multinom_fit(X, y)
+        more_maxit = bb.multinom_fit(X, y, maxit=1000)
+        assert default_maxit["convergence"] != 0
+        assert more_maxit["convergence"] != 0
+        # More iterations still move the fit (it has no finite optimum),
+        # confirming this is genuine non-convergence, not an early exit.
+        assert not np.allclose(
+            default_maxit["coefficients"], more_maxit["coefficients"], rtol=1e-3
+        )

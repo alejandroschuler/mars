@@ -164,14 +164,25 @@ def pruning_pass(
     }
 
 
-def lm_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
-    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal).
+def lm_fit(
+    x: np.ndarray, y: np.ndarray, *, w: np.ndarray | None = None
+) -> dict[str, Any]:
+    """Base R's ``lm.fit(x, y)`` on fixed columns (not an earth internal),
+    or ``lm.wfit(x, y, w)`` when ``w`` is given (LA-4/PRUNE-8's weighted
+    coefficients; review round 1, #42 finding 5).
 
     ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
     deficient (for example two identical columns): R gives the aliased
     coefficient as NA, which comes back here as ``None``, not ``nan``.
     """
-    result = _run({"call": "lm_fit", "x": _rows(x), "y": _rows(y)})
+    result = _run(
+        {
+            "call": "lm_fit",
+            "x": _rows(x),
+            "y": _rows(y),
+            "w": None if w is None else list(np.asarray(w, dtype=float)),
+        }
+    )
     return {
         "coefficients": _float_array(result["coefficients"]),
         "residuals": np.asarray(result["residuals"], dtype=float),
@@ -186,9 +197,16 @@ def predict_earth(
     earth_args: dict[str, Any],
     *,
     type: str = "link",
-) -> np.ndarray:
-    """Fit earth on (x, y) and predict at ``newx`` (which may lie outside the
-    training range), for the prediction-at-new-points component test."""
+) -> dict[str, Any]:
+    """Fit earth on (x, y), predict at ``newx`` (which may lie outside the
+    training range), and return the model alongside the prediction: ``pred``,
+    ``dirs``, ``cuts``, ``selected_terms`` (1-based) and ``coefficients``.
+
+    For the prediction-at-new-points component test (review round 1, #42
+    finding 2): without the model, matching ``pred`` needs a whole forward-
+    pass refit that also depends on the forward pass and LA-7, not TERM-3
+    (the basis evaluated at new points) in isolation.
+    """
     result = _run(
         {
             "call": "predict_earth",
@@ -199,7 +217,13 @@ def predict_earth(
             "type": type,
         }
     )
-    return np.asarray(result["pred"], dtype=float)
+    return {
+        "pred": np.asarray(result["pred"], dtype=float),
+        "dirs": np.asarray(result["dirs"], dtype=float),
+        "cuts": np.asarray(result["cuts"], dtype=float),
+        "selected_terms": np.asarray(result["selected_terms"], dtype=int),
+        "coefficients": np.asarray(result["coefficients"], dtype=float),
+    }
 
 
 def glm_fit(
@@ -208,7 +232,11 @@ def glm_fit(
     """R's ``glm.fit(x, y, family = <family>)``, unpenalized.
 
     ``coefficients`` is ``dtype=object`` (not ``float``) when ``x`` is rank
-    deficient: see ``lm_fit``, the same aliasing.
+    deficient: see ``lm_fit``, the same aliasing. ``converged`` and
+    ``warnings`` (review round 1, #42 finding 6) let a caller tell a valid
+    GLM-3 reference from one earth itself would warn on (a quasi-separated
+    fit, for example), since GLM-3 only promises agreement "where glm
+    converges without a warning".
     """
     result = _run(
         {
@@ -221,15 +249,24 @@ def glm_fit(
     return {
         "coefficients": _float_array(result["coefficients"]),
         "fitted_values": np.asarray(result["fitted_values"], dtype=float),
+        "converged": bool(result["converged"]),
+        "warnings": list(result["warnings"] or []),
     }
 
 
 def fit_bx_dirs(
     x: np.ndarray, y: np.ndarray, earth_args: dict[str, Any]
 ) -> dict[str, Any]:
-    """Fit earth on (x, y) and return its forward basis: ``bx`` (the design
-    matrix), ``dirs``, ``cuts`` and ``selected_terms`` (1-based, as earth
-    returns them).
+    """Fit earth on (x, y) and return its basis: ``bx`` (the design matrix),
+    ``dirs``, ``cuts`` and ``selected_terms`` (1-based, as earth returns
+    them).
+
+    ``fit$bx``/``fit$dirs`` hold only the *selected* terms in general; they
+    are the full *forward* basis only with ``pmethod = "none"`` (no
+    ``nprune``), which ``pruning_fixed_basis`` passes so that its own
+    backward pass has something left to prune. A caller after the selected
+    basis (``s18_multinom``, for example) passes earth's own pruning
+    default instead.
 
     For the pruning-of-a-fixed-basis and the classifier-refit component
     tests, which need a real ``bx``/``dirs`` pair to hand to
@@ -255,7 +292,7 @@ def fit_bx_dirs(
     }
 
 
-def multinom_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
+def multinom_fit(x: np.ndarray, y: np.ndarray, *, maxit: int = 100) -> dict[str, Any]:
     """``nnet::multinom`` on fixed columns (earth's selected basis, including
     its intercept column).
 
@@ -264,13 +301,27 @@ def multinom_fit(x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
     Returns 0-based ``coefficients`` (one row per non-baseline level, in
     ``levels`` order after the first) and ``fitted`` probabilities (one
     column per level, in ``levels`` order).
+
+    ``maxit`` raises nnet's default cap of 100 iterations when a caller's
+    design needs more; ``convergence`` (nnet's own code; 0 is converged)
+    and ``warnings`` let a caller require convergence rather than silently
+    keeping an unconverged iterate (review round 1, #42/#43 finding
+    1/3/5). Separable labels never converge whatever ``maxit`` is: the fix
+    there is a non-separable design, not a larger cap.
     """
     y = np.asarray(y)
     result = _run(
-        {"call": "multinom_fit", "x": _rows(x), "y": [str(v) for v in y.tolist()]}
+        {
+            "call": "multinom_fit",
+            "x": _rows(x),
+            "y": [str(v) for v in y.tolist()],
+            "maxit": maxit,
+        }
     )
     return {
         "coefficients": np.asarray(result["coefficients"], dtype=float),
         "levels": list(result["levels"]),
         "fitted": np.asarray(result["fitted"], dtype=float),
+        "convergence": int(result["convergence"]),
+        "warnings": list(result["warnings"] or []),
     }
