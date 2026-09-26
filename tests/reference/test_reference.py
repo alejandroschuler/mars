@@ -982,6 +982,48 @@ def noisy_data(seed, n=60, p=2):
 
 
 class TestForwardPass:
+    def test_every_candidate_rss_is_a_fresh_least_squares_fit(self):
+        # [LA-2] with numpy's SVD solve on [B, b x, h], [B, b x] or [B, h]
+        X, y = noisy_data(10, n=50)
+        w = np.random.default_rng(10).uniform(0.5, 2.0, size=50)
+        t0 = float(np.median(X[:, 0]))
+        B = np.column_stack(
+            [np.ones(50), np.maximum(X[:, 0] - t0, 0), np.maximum(t0 - X[:, 0], 0)]
+        )
+        rows = np.array([[0, 0], [1, 0], [-1, 0]], dtype=np.int8)
+        N = ref.weight_sum(w)
+        tau = ref.weight_tol(N)
+        P_B = ref.Projector(B, w)
+        sigma2 = [ref.weighted_variance(X[:, j], w, N) for j in range(2)]
+        kinds = set()
+        for k in range(3):
+            cands, _ = ref._parent_candidates(
+                k,
+                rows[k],
+                X,
+                y[:, None],
+                w,
+                B,
+                P_B,
+                P_B.residual(y[:, None]),
+                sigma2,
+                N,
+                tau,
+                ref.Params(),
+                0.01,
+            )
+            for c in cands:
+                b, x = B[:, k], X[:, c.variable]
+                cols = [B]
+                if c.kind in (ref.PAIR, ref.LINEAR):
+                    cols.append(b * x)
+                if c.kind != ref.LINEAR:
+                    cols.append(b * np.maximum(x - c.knot, 0))
+                expected = lstsq_rss(np.column_stack(cols), y, w)
+                assert c.rss == pytest.approx(expected, rel=1e-10)
+                kinds.add(c.kind)
+        assert kinds == {ref.PAIR, ref.SINGLE, ref.LINEAR}
+
     def test_a_single_true_knot(self):
         x = np.arange(21.0) / 20
         rec = run_forward(x[:, None], 2 * np.maximum(x - 0.5, 0), minspan=1, endspan=1)
