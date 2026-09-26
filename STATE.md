@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-26 11:27 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-26 11:34 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,16 +15,16 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RESUMED at 10:12 Saturday 2026-09-26: the user allowed weekly usage up to 99 % (start new work up to about 96 %; at about 98 % authors checkpoint and stop). Weekly reset 2026-09-27 17:00 PDT. P1 and P2 in progress.
+PAUSED again at 11:55 Saturday 2026-09-26: weekly usage 96 % (the user allowed up to 99 %; the rest is the reserve for heartbeat wakes and watchdog runs). Weekly reset 2026-09-27 17:00 PDT. Only the detached legacy run and the heartbeat wakes continue.
 
-main: a8dd024 (spec v1 complete: PR #34 and #37), d4f74f4 (T02 earth harness, #38), 8760cee (T03 part 2, #40), b0d642d, dbe5794 (T03 part 1, #35), 31e6c13 (bootstrap, #1). CI runs on the fork.
+main: d6cac73 (#43 T05 datasets), 288d93c (#42 T05 components), a8dd024 (#37 spec part 2), b0d642d (#34 spec part 1), d4f74f4 (#38 T02), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
+Done: T00 (#2), T01 v1 (#3; v2 is #44), T02 (#4), T03 (#5), T05 (#7).
 
-Done: T00 (#2), T01 v1 (#3; v2 is #44), T02 (#4), T03 (#5).
-Open pull requests:
-- #42 T05 component fixtures, head a8bf2e8, round-1 fixes done; needs round 2 of the dual review (roles `spec` and `adversarial`; reuse tools/dual_review.js with both PRs, as in run wf_a0b1ef34-9d5).
-- #43 T05 datasets S02 to S20, head 359fe5c, base main (stacked on #42's branch); same review. Merge #42 first, then rebase #43 and a rebase-only re-approval by a small checker (as for #40), then merge #43.
-- #41 T04 draft (run configuration); ready when the legacy run ends and results are collected.
-Board: T00 #2 (closed), T01 #3 (closed), T01 v2 #44, T02 #4 (closed), T03 #5 (closed), T04 #6, T05 #7, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 #15, T14 #16, T15 #17, T16 #18, T17 #19, T18 #20, T19 #21, T20 #22, T21 #23, T22 #24, T23 #25, T24 #26; later #27 to #33.
+Open pull requests, all waiting for reviews after the reset:
+- #45 T09 `_linalg.py` (head 4958fd0; gate B passed; 100 % coverage; 35 of 35 mutants caught). First: `t09-linalg` adds the lm_fit_coefficients fixture test (its code is in PR comment 5848489320) and rebases on main; then the dual review (spec, adversarial).
+- #46 to #49 T06 reference, stacked: #46 part 1 (4c6f6e2, base main), #47 part 2 (3868316), #48 part 3 (403ed6a), #49 part 4 (4080a44, Closes #8). `t06-reference` rebases after each merge and adds a committed test on the component fixtures (now on main). Dual review each; before merging a part, retarget the next part to main.
+- #41 T04 draft: the run configuration and `pilot_legacy.md` (head 9855f80). Ready when the legacy run ends and the results are collected (T04 step 6).
+Board: T04 #6, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 #15, T14 #16, T15 #17, T16 #18, T17 #19, T18 #20, T19 #21, T20 #22, T21 #23, T22 #24, T23 #25, T24 #26, T01 v2 #44; later #27 to #33.
 
 ## Done in P0
 
@@ -38,22 +38,19 @@ Board: T00 #2 (closed), T01 #3 (closed), T01 v2 #44, T02 #4 (closed), T03 #5 (cl
 
 ## Next actions
 
-Until the reset: wake every 50 minutes; refresh the heartbeat; check the legacy run; start no agents.
-After the reset (Sunday 17:00 PDT), in this order, at most 4 authors and 3 reviewers:
-1. Round 2 of the dual review of #42 and #43; merge #42, then #43 (rebase-only re-approval), closing T05 (#7).
-2. T08 and T09 (opus authors, brief `briefs/T08-T10-components.md`), T06 (opus, `briefs/T06-reference.md`; its first part can start before T05 merges), and T04 step 4 (the pilot analysis, sonnet, cheap).
-3. When the legacy run ends: T04 step 6 (collect, summarize, mark #41 ready; sonnet); one reviewer.
-4. T10 after T08 and T09; T18 (legacy description; brief not written; sonnet) after T05; T07 after T06's first parts; T01 v2 (#44) after T07.
-5. One small tooling PR: merge_pr.sh refuses while another open PR uses the head branch as its base, and accepts a rebase-only re-approval by range-diff; the sims README pgrep pattern and stale run.lock steps; a DECISIONS.md line for rebase-only re-approvals.
-Pacing next week: bootstrap-to-now cost about 45 weekly points for T00 to T03, T01 v1 and T05's first round. Use sonnet for mechanical work, opus for the reference, the core modules and the reviews that decide correctness.
+Until the reset: a wake every 50 minutes to refresh the heartbeat and check the legacy run; no agents.
+After the reset (Sunday 17:00 PDT), at most 4 authors and 3 reviewers:
+1. `t09-linalg`: add the fixture test to #45, rebase; then the dual review of #45; merge.
+2. Dual review of #46 (T06 part 1); merge (retarget #47 to main first); then #47, #48, #49 in order, each after `t06-reference` rebases it.
+3. T08 (opus, `briefs/T08-T10-components.md`, issue #10) at once; T10 when T08 and T09 are merged.
+4. When the legacy run ends: T04 step 6 (sonnet): collect, summarize, mark #41 ready; one reviewer.
+5. T07 conformance (brief not written; needs T06 and T05, both near): write the brief after #46 merges. T18 legacy description (brief not written; sonnet). T01 v2 (#44) after T07.
+6. Small follow-up PRs: T05 notes (X_test outside the training range; the missing-file skip in the pair test; the multinom stability bar and docstring; a README sentence that T10 compares rss_per_subset, gcv_per_subset and prune_terms at every size); tooling (merge_pr.sh refuses while another open PR uses the head branch as its base; accepts a rebase-only re-approval by range-diff; the sims README pgrep pattern and stale run.lock steps; a DECISIONS.md line for rebase-only re-approvals).
+Pacing: this week (bootstrap to now) cost about 51 weekly points for T00 to T03, T05, spec v1, T06 and T09 authoring. Keep sonnet for mechanical work.
 
 ## Running agents
 
-- Workflow run wf_7ce0e408-2a3: round 2 of the dual review of #42 and #43 (T05). Started 10:13 Saturday.
-- `t06-reference` (opus): T06 reference, issue #8, branches `t06-reference-part1` and later parts. Started 10:13.
-- `t09-linalg` (opus): T09 `_linalg.py`, issue #11, branch `t09-linalg`. Started 10:13.
-- `t04-pilot` (sonnet): T04 step 4, the pilot report `validation/sims/pilot_legacy.md` on branch `t04-legacy-runs` (draft PR #41). Started 10:14.
-- Resumable later: `t05-fixtures` (for round-2 fixes), `t01-spec` (spec v2).
+None at work. Resumable: `t06-reference` (opus; knows the reference), `t09-linalg` (opus), `t05-fixtures` (sonnet; for the T05 follow-up PR), `t01-spec` (opus; spec v2 on #44), `t04-legacy` and `t04-pilot` (sonnet), `rev-t02-harness`, `rev-pr35-sims1` (opus reviewers). The dual-review workflow script is `tools/dual_review.js`; for a rebase-only re-approval use a small sonnet checker as for #40 and #43.
 
 ## Running jobs
 
