@@ -37,6 +37,8 @@ This file states the rules of the fitting algorithm, each with its source. Two i
 | C | The effective number of parameters of a model, used in the GCV |
 | r | The rank of B (the number of linearly independent columns) |
 | S | The number of steps that the forward pass took |
+| κ | The term number of a forward step: κ = 2(s + 1) for step s + 1 ([FWD-9](#forward-pass)) |
+| Q | The number of classes of the classifier |
 | α | The probability in Friedman's span formulas, fixed at 0.05 |
 | σ_v² | The weighted variance of covariate v over the n cases: Σ w_i (x_iv − x̄_v)² / N, with x̄_v the weighted mean |
 | τ_N | The tolerance 1e-8·N for sums of weights ([W-4](#weights)) |
@@ -300,7 +302,7 @@ With M_f = 1, `removed` is empty, `rss_per_size` is [TSS], and `subsets` is [[Tr
 
 ## Forward pass
 
-The forward pass adds terms one step at a time. Step s + 1 follows s completed steps; its term number is K = 2(s + 1), and its terms go into the slots K and K + 1 ([FWD-9](#forward-pass)). RSS_s is the RSS after s steps, and Δ_s = RSS_{s−1} − RSS_s the reduction that step s achieved.
+The forward pass adds terms one step at a time. Step s + 1 follows s completed steps; its term number is κ = 2(s + 1), and its terms go into the slots κ and κ + 1 ([FWD-9](#forward-pass)). RSS_s is the RSS after s steps, and Δ_s = RSS_{s−1} − RSS_s the reduction that step s achieved.
 
 **FWD-1** The pass starts from the intercept alone: B holds the column of ones, RSS_0 = TSS, and s = 0. A degenerate fit does not run the pass ([EDGE-1](#degenerate-inputs)). [F91 Algorithm 2]
 
@@ -324,7 +326,7 @@ For b·x and b·(x − m)₊ the fitted values and the RSS are the same; they di
 
 **FWD-8** The forward pass records, for each step s, RSS_s in `forward.rss[s]`, and for each new term its parent and step ([TERM-6](#terms)). With `record_candidates=True` it records the candidate log of [CORE-3](#core-api). The second-best candidate of a step is the legal candidate with the largest RSS reduction among those that differ from the chosen one in the parent, the covariate, the kind or the knot value.
 
-**FWD-9** Step s + 1 fills slot K with its first term and slot K + 1 with its second term, if any; a step that adds one term leaves slot K + 1 empty. Slot 1 holds the intercept. The queue of [Fast MARS](#fast-mars) addresses parents by slot. [bb16.13, bb16.14; bb11.5]
+**FWD-9** Step s + 1 fills slot κ with its first term and slot κ + 1 with its second term, if any; a step that adds one term leaves slot κ + 1 empty. Slot 1 holds the intercept. The queue of [Fast MARS](#fast-mars) addresses parents by slot. [bb16.13, bb16.14; bb11.5]
 
 **FWD-10** Where an implementation scales Y inside the pass ([LA-6](#linear-algebra-contract)), it may, with one response, subtract the weighted mean and divide by any positive constant; with several responses it may subtract each response's weighted mean and divide all responses by one common constant. It must not scale the responses by different constants, because the summed RSS weighs each response by its own units. [bb17.1, bb17.2 (earth scales one response to unit standard deviation), bb17.3a, bb17.4b (with several responses earth does not scale by default, and multiplying one response by 1000 changes its terms)] earth's `Scale.y = TRUE`, which scales each response to unit variance, is not offered.
 
@@ -348,17 +350,17 @@ The rules apply in this order at each step. RSq_s = 1 − RSS_s/TSS, and for the
 
 The queue decides which parents a step searches. It follows Friedman (1993) with earth's details. [F93 §3.0, §3.1]
 
-**FAST-1** The queue has one entry for each term: entries 1 to T, where T is the number of terms after the last step (entry 1 is the intercept). Entry c holds a value R_c and a term number K_c. When a step adds a terms, it appends the entries T + 1 to T + a with R = +∞ and K_c = K, the step's term number. Entries are never removed. [bb16.1, bb16.17]
+**FAST-1** The queue has one entry for each term: entries 1 to M, where M is the number of terms after the last step (entry 1 is the intercept). Entry e holds a value λ_e and a term number κ_e. When a step adds one or two terms, it appends one or two entries after M with λ = +∞ and κ_e = κ, the step's term number. Entries are never removed. [bb16.1, bb16.17]
 
-**FAST-2** Before a step, with K_prev the term number of the step just done: rank_c is the 0-based place of entry c when the entries are sorted by R_c, largest first, equal values in increasing entry number; AgedRank_c = rank_c + `fast_beta`·(K_prev − K_c); the table is the entries sorted by AgedRank, smallest first, equal values in increasing rank. Before the first step the table holds the intercept alone. Since K grows by 2 per step, `fast_beta` = 1 adds 2 per step that an entry waits. [bb16.2, bb16.4, bb16.7, bb16.9; bb16.3, bb16.5, bb16.6 and bb16.8 refute other orders]
+**FAST-2** Before a step, with κ_prev the term number of the step just done: rank_e is the 0-based place of entry e when the entries are sorted by λ_e, largest first, equal values in increasing entry number; AgedRank_e = rank_e + `fast_beta`·(κ_prev − κ_e); the table is the entries sorted by AgedRank, smallest first, equal values in increasing rank. Before the first step the table holds the intercept alone. Since κ grows by 2 per step, `fast_beta` = 1 adds 2 per step that an entry waits. [bb16.2, bb16.4, bb16.7, bb16.9; bb16.3, bb16.5, bb16.6 and bb16.8 refute other orders]
 
-**FAST-3** The step visits the first k rows of the table, where k = max(3, `fast_k`) when `fast_k` ≥ 1, and every row when `fast_k` = 0 or k ≥ T. So `fast_k` = 1 or 2 acts as 3; this is a quirk that pymars copies. [bb16.10, bb16.11, bb16.16]
+**FAST-3** The step visits the first ν rows of the table, where ν = max(3, `fast_k`) when `fast_k` ≥ 1, and every row when `fast_k` = 0 or ν ≥ M. So `fast_k` = 1 or 2 acts as 3; this is a quirk that pymars copies. [bb16.10, bb16.11, bb16.16]
 
-**FAST-4** A visited entry c stands for slot c ([FWD-9](#forward-pass)), not for the c-th term. It is skipped when slot c is empty or when its term's degree equals `max_degree`; a skipped entry keeps its row among the k visited ones. Otherwise the term in slot c is searched as a parent. After a step that adds one term, the slots run ahead of T, so the newest terms, in slots above T, are not searched until T reaches their slot; this holds also with `fast_k` = 0. [bb16.13; bb16.12 refutes the reading by term, and bb16.15 refutes that `fast.k = 0` searches every eligible term: in 121 cases it did not] This is a quirk. pymars copies it, so that its fits match earth's; OQ-4 records the choice.
+**FAST-4** A visited entry e stands for slot e ([FWD-9](#forward-pass)), not for the e-th term. It is skipped when slot e is empty or when its term's degree equals `max_degree`; a skipped entry keeps its row among the ν visited ones. Otherwise the term in slot e is searched as a parent. After a step that adds one term, the slots run ahead of M, so the newest terms, in slots above M, are not searched until M reaches their slot; this holds also with `fast_k` = 0. [bb16.13; bb16.12 refutes the reading by term, and bb16.15 refutes that `fast.k = 0` searches every eligible term: in 121 cases it did not] This is a quirk. pymars copies it, so that its fits match earth's; OQ-4 records the choice.
 
-**FAST-5** Each searched entry gets K_c = K and R_c = the largest legal RSS reduction ([FWD-4](#forward-pass)) among its candidates in the step, or 0 when it has none, or −1 when no covariate could be searched for it. The chosen parent is updated too. Entries that were not visited or were skipped keep their values. [bb16.17, bb16.18, bb16.19, bb16.24] Only the order of the values R matters, so the scale of Y does not.
+**FAST-5** Each searched entry gets κ_e = κ and λ_e = the largest legal RSS reduction ([FWD-4](#forward-pass)) among its candidates in the step, or 0 when it has none, or −1 when no covariate could be searched for it. The chosen parent is updated too. Entries that were not visited or were skipped keep their values. [bb16.17, bb16.18, bb16.19, bb16.24] Only the order of the values λ matters, so the scale of Y does not.
 
-**FAST-6** A term whose degree equals `max_degree` is never searched, so its entry keeps R = +∞ and ranks near the top of the table, where it takes a row of the window ([FAST-4](#fast-mars)). At degree 1 only the intercept is ever searched; once the other entries fill the window, the step searches nothing and the pass ends with code 6 ([STOP-2](#stopping-rules)), whatever `max_terms` is: at 5 terms with `fast_k` = 3 and at 18 with `fast_k` = 20 in bb16.22. The defaults are `fast_k` = 20 and `fast_beta` = 1.0. [bb16.21, bb16.22, bb16.23, bb16.26]
+**FAST-6** A term whose degree equals `max_degree` is never searched, so its entry keeps λ = +∞ and ranks near the top of the table, where it takes a row of the window ([FAST-4](#fast-mars)). At degree 1 only the intercept is ever searched; once the other entries fill the window, the step searches nothing and the pass ends with code 6 ([STOP-2](#stopping-rules)), whatever `max_terms` is: at 5 terms with `fast_k` = 3 and at 18 with `fast_k` = 20 in bb16.22. The defaults are `fast_k` = 20 and `fast_beta` = 1.0. [bb16.21, bb16.22, bb16.23, bb16.26]
 
 ## Weights
 
@@ -392,9 +394,9 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 `EarthClassifier` fits the terms by the least-squares passes and then refits a logistic model on the selected basis. `classes_` are the sorted unique labels of y.
 
-**GLM-1** With two classes, the passes run on one 0/1 response, 1 for `classes_[1]` (K = 1). With C ≥ 3 classes, they run on C indicator responses, one per class in the order of `classes_` (K = C). [plan: Behavior target, "Multiclass outcomes"; bb21.4, bb15.6]
+**GLM-1** With two classes, the passes run on one 0/1 response, 1 for `classes_[1]` (K = 1). With Q ≥ 3 classes, they run on Q indicator responses, one per class in the order of `classes_` (K = Q). [plan: Behavior target, "Multiclass outcomes"; bb21.4, bb15.6]
 
-**GLM-2** The refit uses the selected columns B_S. With two classes it is a binomial GLM with the logit link; with C ≥ 3 classes it is one multinomial logistic model in the reference-class form: `classes_[0]` has coefficients 0, and each other class has its own vector, as in `nnet::multinom`. The coefficients minimize Σ_i w_i·ℓ_i + (`glm_alpha`/2)·Σ_j γ_j², where ℓ_i is the negative log-likelihood of case i, and γ_j are the coefficients of the non-intercept columns after each is standardized to weighted mean 0 and weighted standard deviation 1 (for the multinomial model, the sum runs over the classes other than `classes_[0]`). The intercept is not penalized. With `glm_alpha` = 0 (the default) the fit is unpenalized. pymars departure for C ≥ 3: earth fits one binomial GLM per class, whose probabilities need not sum to 1. [plan: Behavior target, "GLM penalty and separation"]
+**GLM-2** The refit uses the selected columns B_S. With two classes it is a binomial GLM with the logit link; with Q ≥ 3 classes it is one multinomial logistic model in the reference-class form: `classes_[0]` has coefficients 0, and each other class has its own vector, as in `nnet::multinom`. The coefficients minimize Σ_i w_i·ℓ_i + (`glm_alpha`/2)·Σ_j γ_j², where ℓ_i is the negative log-likelihood of case i, and γ_j are the coefficients of the non-intercept columns after each is standardized to weighted mean 0 and weighted standard deviation 1 (for the multinomial model, the sum runs over the classes other than `classes_[0]`). The intercept is not penalized. With `glm_alpha` = 0 (the default) the fit is unpenalized. pymars departure for Q ≥ 3: earth fits one binomial GLM per class, whose probabilities need not sum to 1. [plan: Behavior target, "GLM penalty and separation"]
 
 **GLM-3** The solver must reach the minimum of GLM-2: with `glm_alpha` = 0 and two classes, its coefficients agree with R's `glm` on the same columns to a relative 1e-5 where `glm` converges without a warning. A column of B_S that is linearly dependent on earlier ones ([LA-4](#linear-algebra-contract)) gets coefficient 0. [plan: Binary outcomes]
 
@@ -402,7 +404,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 **GLM-5** If B_S is the intercept alone, the refit is not run: the probabilities are the weighted class frequencies. [plan: Behavior target]
 
-**GLM-6** `predict_proba` returns, with two classes, the columns 1 − p and p, and with C ≥ 3 classes the softmax of the C linear predictors; each row sums to 1. `decision_function` returns the linear predictor of `classes_[1]` with two classes, shape (n,), and the C linear predictors otherwise, shape (n, C), whose first column is 0. `predict` returns the class of the largest probability, the first such class on a tie. [plan: Behavior target, scikit-learn's classifier contract]
+**GLM-6** `predict_proba` returns, with two classes, the columns 1 − p and p, and with Q ≥ 3 classes the softmax of the Q linear predictors; each row sums to 1. `decision_function` returns the linear predictor of `classes_[1]` with two classes, shape (n,), and the Q linear predictors otherwise, shape (n, Q), whose first column is 0. `predict` returns the class of the largest probability, the first such class on a tie. [plan: Behavior target, scikit-learn's classifier contract]
 
 **GLM-7** If fewer than 2 classes have positive weight, `fit` raises ValueError with a message that contains "class". [plan: Behavior target, "Degenerate inputs"]
 
@@ -434,7 +436,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 **API-2** `EarthClassifier` takes the same parameters and `glm_alpha=0.0`, a float ≥ 0 ([GLM-2](#glm-refit-for-the-classifier)). `Earth` is the same class object as `EarthRegressor`, so `import pymars as earth; earth.Earth()` works. [plan: Public API]
 
-**API-3** Fitted attributes: `n_features_in_`; `feature_names_in_` (only after a fit on a table with string column names); `dirs_`, `cuts_`, `gcv_`, `rss_`, `rsq_`, `grsq_` (from `MarsFit`); `max_terms_` and `penalty_`, the resolved values; `mars_`, the whole `MarsFit`; `term_coef_`, of shape (M,) for a 1-D y and (M, K) for a 2-D y. The classifier also has `classes_` and `glm_`, the refit's coefficients: shape (M,) with two classes and (M, C) otherwise, with a first column of 0. The classifier takes a 1-D y; a column vector is raveled with scikit-learn's DataConversionWarning, and multi-output classification is not supported. [plan: Public API]
+**API-3** Fitted attributes: `n_features_in_`; `feature_names_in_` (only after a fit on a table with string column names); `dirs_`, `cuts_`, `gcv_`, `rss_`, `rsq_`, `grsq_` (from `MarsFit`); `max_terms_` and `penalty_`, the resolved values; `mars_`, the whole `MarsFit`; `term_coef_`, of shape (M,) for a 1-D y and (M, K) for a 2-D y. The classifier also has `classes_` and `glm_`, the refit's coefficients: shape (M,) with two classes and (M, Q) otherwise, with a first column of 0. The classifier takes a 1-D y; a column vector is raveled with scikit-learn's DataConversionWarning, and multi-output classification is not supported. [plan: Public API]
 
 **API-4** Methods: `fit(X, y, sample_weight=None)` returns self; `predict(X)` returns shape (n,) for a 1-D y and (n, K) for a 2-D y, K = 1 included; the classifier's `predict_proba` and `decision_function` follow [GLM-6](#glm-refit-for-the-classifier); `score` comes from the scikit-learn mixins; `basis_matrix(X)` returns the (n, M) matrix of the selected terms by [TERM-3](#terms); `summary()` returns a string with one line per selected term (its label, [TERM-5](#terms), and its coefficients) and the values of `rss_`, `gcv_`, `rsq_`, `grsq_` and the termination. `sample_weight` also reaches `fit` through metadata routing. [plan: Public API, scikit-learn compatibility]
 
@@ -459,7 +461,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 | `pmethod` | `pmethod` | `"backward"` or `"none"`; other values are not offered (issue #32) |
 | `nprune` | `nprune` | None: NULL |
 | `sample_weight` | `weights` | the meaning differs ([W-2](#weights)); compare through repeated rows |
-| `glm_alpha` = 0 | `glm = list(family = binomial)` | earth has no penalty; C ≥ 3 classes differ ([GLM-2](#glm-refit-for-the-classifier)) |
+| `glm_alpha` = 0 | `glm = list(family = binomial)` | earth has no penalty; Q ≥ 3 classes differ ([GLM-2](#glm-refit-for-the-classifier)) |
 | `allow_missing` | none | earth has only `na.action = na.fail` |
 | none | `Scale.y` | pymars does not scale responses separately ([FWD-10](#forward-pass)) |
 | none | `linpreds`, `allowed`, `newvar.penalty`, `nfold` | not offered (issues #30, #31, #29, #32) |
@@ -487,7 +489,7 @@ Each row names the rule where pymars 2.0 does not do what earth 5.3.4 does.
 | [SPAN-3](#spans) | minspan 0 or endspan 0 means automatic; a negative minspan asks for evenly spaced knots | None means automatic; negative values are not supported (a `later` issue) | scikit-learn style (plan) |
 | [PRUNE-1](#pruning-pass) | `pmethod` also `"exhaustive"`, `"forward"`, `"seqrep"`, `"cv"` | `"backward"` and `"none"` only | plan (`later` issues) |
 | [FWD-5](#forward-pass) | rounding decides exact ties between candidates, unless their columns are bitwise equal | a fixed order: queue, covariate index, linear candidate, larger knot | a fixed tie rule |
-| [GLM-2](#glm-refit-for-the-classifier) | C ≥ 3 classes: one binomial GLM per class, whose probabilities need not sum to 1 | one multinomial refit | `predict_proba` rows must sum to 1 (plan) |
+| [GLM-2](#glm-refit-for-the-classifier) | Q ≥ 3 classes: one binomial GLM per class, whose probabilities need not sum to 1 | one multinomial refit | `predict_proba` rows must sum to 1 (plan) |
 | [EDGE-1](#degenerate-inputs) | one case stops with an error | the intercept alone, gcv +∞ | scikit-learn's one-sample check (plan) |
 | [ERR-2](#errors) | factors are expanded to dummies | a non-numeric column is an error that names OneHotEncoder | plan: Behavior target, "Categorical inputs" |
 | [TERM-2](#terms) | a linear factor stores the smallest x value in `cuts` | 0.0 | representation only; the basis is the same |
