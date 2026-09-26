@@ -26,6 +26,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:34 T01 part 1 ready: PR #34 at 252082c (gate B passed). Started the dual-review workflow (spec + adversarial), run wf_cbba59e1-bd2; the script is saved as tools/dual_review.js (args: pr, title, head, brief, roles, focus). Spec findings: leaps-style pruning (PRUNE-3), interaction endspan E + round(a*E) capped, exact knot scan, row-order departure within ties, tolerance 1e-2 then 1e-5 from step 8.
 - 19:41 19:41 wake: 5-hour 75 % (reset 20:00), weekly 54 %. PR #36 (T02 part 1, 52b01e0) is ready; its review waits until after the 20:00 reset (pacing rule near 80 %). Drafts: #37 (T01 part 2), #38 (T02 part 2).
 - 19:54 T02 author done: PR #36 (part 1, 962f6a1) and PR #38 (part 2, stacked on t02-harness-r, 6d9bd30), gate B and CI passed, 128 harness tests (R tests marked external). earth-conformance.yml belongs to T05. new_adapter.py's record shape is a guess until T12. T03 part 1 fixed at 96a3d2f; re-review by rev-pr35-sims1 running. Reviewer for #36 and #38 starts after the 20:00 reset.
+- 20:02 T03 author done: PR #35 (96a3d2f) and PR #39 (part 2, stacked on t03-sims, 8857358); smoke run 172 results, 0 failures; P-cur/P-ear 16 to 25 s per fit at n = 200; lambda D3-bin 1.6005, D4-bin 0.2772; D8 correlation 0.5823. P-fix raises NotImplementedError until the estimators exist. Prediction cache at validation/runs/.cache/. D7 needs its own run without the legacy arms.
 
 ## Core-hour ledger
 
