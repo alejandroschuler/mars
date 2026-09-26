@@ -239,3 +239,59 @@ def test_every_extra_fixture_names_itself():
             f"{path.name}: payload['extra'] is {payload.get('extra')!r}, "
             "not this file's own name"
         )
+
+
+# Review round 2 (#43 adversarial, non-blocking): "_fixture_payload ignores
+# scale_override" and the several other ways a weighted/repeated pair could
+# quietly drift apart "survive every test outside gate C" (which needs R).
+# This one reads the committed JSON directly, so it runs in gate A, gate B
+# and CI too, not only a `gen_fixtures.py --check` on a machine with R.
+_WEIGHTED_REPEATED_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("S13_int_zeros", "S13_int_zeros_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_int_random", "S13_int_random_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_unit", "S13_unit_repeated", ("matched_d1", "defaults_d1")),
+    ("S13_equal2", "S13_equal2_repeated", ("matched_d1", "defaults_d1")),
+    (
+        "S13_constant_y_weighted",
+        "S13_constant_y_weighted_repeated",
+        ("matched_d1", "defaults_d1"),
+    ),
+    (
+        "S16_weighted",
+        "S16_weighted_repeated",
+        ("matched_d1", "defaults_d1", "defaults_d2", "matched_d2"),
+    ),
+)
+
+
+def test_committed_weighted_and_repeated_pairs_are_bit_identical():
+    for weighted_id, repeated_id, modes in _WEIGHTED_REPEATED_PAIRS:
+        for mode in modes:
+            w_path = FIXTURES_DIR / f"{weighted_id}_{mode}.json"
+            r_path = FIXTURES_DIR / f"{repeated_id}_{mode}.json"
+            if not w_path.is_file() or not r_path.is_file():
+                continue  # a constant-y case may hold an earth error instead
+            w_payload, r_payload = _load(w_path), _load(r_path)
+            w_in, r_in = w_payload["inputs"], r_payload["inputs"]
+            label = f"{weighted_id}/{repeated_id} ({mode})"
+
+            assert w_payload["scale"] == r_payload["scale"], (
+                f"{label}: scale is not shared exactly"
+            )
+
+            weights = [int(x) for x in w_in["weights"]]
+            rows = zip(w_in["X"], weights, strict=True)
+            expanded_X = [row for row, w in rows if w for _ in range(w)]
+            assert expanded_X == r_in["X"], (
+                f"{label}: repeating the weighted X by its weights does not "
+                "give the repeated fixture's X exactly"
+            )
+            ys = zip(w_in["y"], weights, strict=True)
+            expanded_y = [y for y, w in ys if w for _ in range(w)]
+            assert expanded_y == r_in["y"], (
+                f"{label}: repeating the weighted y by its weights does not "
+                "give the repeated fixture's y exactly"
+            )
+            assert w_in["X_test"] == r_in["X_test"], (
+                f"{label}: X_test is not shared exactly"
+            )

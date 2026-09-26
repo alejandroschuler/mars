@@ -1017,6 +1017,15 @@ def s15_draws() -> dict[str, Any]:
     module's own seeds.train_test_rngs/dgps.generate reconstruct it
     exactly. Restricted to the p = 10 DGPs (D1-D6, D8; D7's p = 50 would
     cost far more compute for no benefit here).
+
+    Review round 2 (#43 spec, non-blocking): each step's ``best_rss``,
+    ``second_best_rss`` and ``rss_before`` are ``trace = 8`` values, so at
+    most 5 significant digits, and on the scale of y standardized to
+    variance 1 (step 1's ``rss_before`` is n - 1 = 199), not y's own scale
+    the way ``rss_per_subset`` in the same record is. A 1e-7 near-tie
+    cannot be judged from 5-digit text, so T07 should take the near-tie
+    decision from pymars's own candidate log, not from these fields; see
+    ``steps_rss_precision_note`` below and ``validation/README.md``.
     """
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
@@ -1111,7 +1120,16 @@ def s15_draws() -> dict[str, Any]:
                     "rank_fix": "Fixed rank deficient" in trace_text,
                 }
             )
-    return {"draws": draws}
+    return {
+        "draws": draws,
+        "steps_rss_precision_note": (
+            "best_rss, second_best_rss and rss_before are trace=8 text: at "
+            "most 5 significant digits, on the scale of y standardized to "
+            "variance 1 (unlike rss_per_subset, which is on y's own scale "
+            "in the same record). Not enough precision for a 1e-7 near-tie "
+            "decision; take that from pymars's own candidate log instead."
+        ),
+    }
 
 
 @register_extra
@@ -1142,6 +1160,9 @@ def s18_multinom() -> dict[str, Any]:
             f"convergence={multinom['convergence']}, "
             f"warnings={multinom['warnings']}"
         )
+    # Review round 2 (#43 blocking finding 1, same as #42's finding 1):
+    # convergence code 0 alone does not mean nnet reached GLM-2's minimum.
+    _assert_multinom_is_stable(basis["bx"], labels, multinom, label="s18_multinom")
     return {
         "x": X_scaled.tolist(),
         "scale": scale.tolist(),
@@ -1936,6 +1957,9 @@ def _extra_payload(name: str) -> dict[str, Any]:
     payload = EXTRA_REGISTRY[name]()
     versions = driver.versions()
     versions.update(blackbox.versions())
+    # Same gap as _component_payload had (round 1, #42): no earth_result
+    # here either, so driver.versions() alone leaves out r_blas.
+    versions["r_blas"] = driver._r_blas()
     return {"extra": name, **payload, "versions": _sanitize_versions(versions)}
 
 
@@ -1943,8 +1967,11 @@ def _write_extra(name: str, fixtures_dir: Path) -> Path:
     payload = _extra_payload(name)
     fixtures_dir.mkdir(parents=True, exist_ok=True)
     path = fixtures_dir / f"{name}.json"
+    # Review round 2 (#43 adversarial, non-blocking): compact separators,
+    # like _write_fixture/_write_component already use.
     path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
     )
     return path
 
