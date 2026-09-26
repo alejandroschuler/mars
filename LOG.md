@@ -22,6 +22,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:40 Merged PR #1 (bootstrap) as 31e6c13 with merge_pr.sh after review round 2 APPROVE. Issues on; 14 labels; 32 issues (#2 to #33). Synced <main> and <S> to main. Closed #2. Started t01-spec (opus), t02-harness (sonnet), t03-sims (sonnet). Drill: started and stopped drill-helper.
 - 18:45 Recovery drill, helper part: passed. drill-helper was stopped with TaskStop before it wrote anything; on the next wake SendMessage resumed it with its context, and it wrote env/versions.json (R 4.4.3, earth 5.3.4, plotmo 3.6.4, nnet 7.3.20, macOS 15.7.4). Both parts of the P0 recovery drill are done.
 - 19:11 19:10 wake: 5-hour 53 % (reset 20:00), weekly 51 %. PR #35 (T03 part 1, 57f4f87, gate B and CI passed) ready; started reviewer rev-pr35-sims1 (opus, single). PR #34 (T01 part 1) is a draft.
+- 19:32 PR #35 review round 1 (rev-pr35-sims1): REQUEST_CHANGES at 57f4f87: weak formula tests (24 of 34 one-token mutations passed), validation tests not in any gate or CI, shape broadcasting in metrics. Decision: validation test folders go in testpaths; marker 'external' for tests that need R or the legacy venv; gate A runs -m 'not slow and not external', gate B and CI -m 'not external', gate C runs external. Sent to t03-sims and t02-harness.
 
 ## Core-hour ledger
 
