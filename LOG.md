@@ -71,6 +71,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 06:05 06:05 wake: 5-hour reset (0 %), weekly 89 %. Legacy run: the 200-case regression block done; binary block D3-bin, D4-bin started 12:55Z; 10,394 result files. t05-fixtures running (t05-fixtures branch at 131b015). A peer desktop session 'Investigate matplotlib >=3.9 pin scope' exists (idle); not started by this executor.
 - 06:30 T05 round-1 fixes done: #42 a8bf2e8, #43 359fe5c (gate B, --check and CI passed; per-finding replies posted). Entering the pause for the weekly limit (89 %); the re-review waits for the reset.
 - 10:12 10:12 Saturday: the user said in the session 'you can resume, go ahead and send weekly usage to 99%'. New pacing rule for this week: start new work up to about 96 % weekly; at about 98 %, authors push a checkpoint and stop; never pass 99 %. Resuming: round-2 dual review of #42 and #43, T06 reference (opus), T09 _linalg (opus), T04 pilot analysis (sonnet); T08 if the burn rate allows.
+- 10:13 Started: round-2 dual review of #42 and #43 (wf_7ce0e408-2a3), t06-reference (opus), t09-linalg (opus), t04-pilot (sonnet). T08 waits for the burn rate.
 
 ## Core-hour ledger
 

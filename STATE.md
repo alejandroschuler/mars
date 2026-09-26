@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-26 10:12 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-26 10:13 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED for the weekly usage limit (89 % at 06:05 Saturday 2026-09-26; reset 2026-09-27 17:00 PDT). Only the detached legacy run and the executor's heartbeat wakes continue. P1 and P2 in progress.
+RESUMED at 10:12 Saturday 2026-09-26: the user allowed weekly usage up to 99 % (start new work up to about 96 %; at about 98 % authors checkpoint and stop). Weekly reset 2026-09-27 17:00 PDT. P1 and P2 in progress.
 
 main: a8dd024 (spec v1 complete: PR #34 and #37), d4f74f4 (T02 earth harness, #38), 8760cee (T03 part 2, #40), b0d642d, dbe5794 (T03 part 1, #35), 31e6c13 (bootstrap, #1). CI runs on the fork.
 
@@ -49,7 +49,11 @@ Pacing next week: bootstrap-to-now cost about 45 weekly points for T00 to T03, T
 
 ## Running agents
 
-None at work (paused). Resumable agents, if their context is still useful: `t05-fixtures` (sonnet; T05 fixes), `t01-spec` (opus; spec v2 later), `t02-harness`, `t03-sims`, `t04-legacy` (sonnet), `rev-t02-harness`, `rev-pr35-sims1` (opus reviewers). New agents are fine too: every brief is in `briefs/`.
+- Workflow run wf_7ce0e408-2a3: round 2 of the dual review of #42 and #43 (T05). Started 10:13 Saturday.
+- `t06-reference` (opus): T06 reference, issue #8, branches `t06-reference-part1` and later parts. Started 10:13.
+- `t09-linalg` (opus): T09 `_linalg.py`, issue #11, branch `t09-linalg`. Started 10:13.
+- `t04-pilot` (sonnet): T04 step 4, the pilot report `validation/sims/pilot_legacy.md` on branch `t04-legacy-runs` (draft PR #41). Started 10:14.
+- Resumable later: `t05-fixtures` (for round-2 fixes), `t01-spec` (spec v2).
 
 ## Running jobs
 
