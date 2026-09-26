@@ -76,13 +76,15 @@ class TestMakeAllAndCheck:
 
     def test_check_reports_nothing_when_fixtures_match(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
-        assert gen_fixtures.check(fixtures_dir=tmp_path) == []
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert result.problems == []
+        assert result.notes == []
 
     def test_check_reports_a_missing_fixture(self, tmp_path):
         paths = gen_fixtures.make_all(fixtures_dir=tmp_path)
         paths[0].unlink()
-        problems = gen_fixtures.check(fixtures_dir=tmp_path)
-        assert any("missing" in p for p in problems)
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert any("missing" in p for p in result.problems)
 
     def test_check_reports_a_modified_fixture(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
@@ -90,8 +92,46 @@ class TestMakeAllAndCheck:
         payload = json.loads(target.read_text())
         payload["result"]["gcv"] = payload["result"]["gcv"] + 1.0  # corrupt it
         target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-        problems = gen_fixtures.check(fixtures_dir=tmp_path)
-        assert any("S01_matched_d1.json" in p and "differs" in p for p in problems)
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert any(
+            "S01_matched_d1.json" in p and "differs" in p for p in result.problems
+        )
+
+    def test_check_reports_a_versions_difference_as_a_note_not_a_problem(
+        self, tmp_path
+    ):
+        gen_fixtures.make_all(fixtures_dir=tmp_path)
+        target = tmp_path / "S01_matched_d1.json"
+        payload = json.loads(target.read_text())
+        payload["versions"]["python"] = "9.9.9"  # a plausible future version
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        result = gen_fixtures.check(fixtures_dir=tmp_path)
+        assert result.problems == []
+        assert any(
+            "S01_matched_d1.json" in n and "versions differ" in n for n in result.notes
+        )
+
+    def test_sanitize_versions_drops_the_commit_and_shortens_paths(self):
+        raw = {
+            "pymars_commit": "abc123",
+            "blas": [
+                {
+                    "internal_api": "openblas",
+                    "filepath": "/home/alice/.venv/lib/libopenblas.so",
+                }
+            ],
+            "r_blas": {
+                "la_library": "/Users/alice/R/lib/libRlapack.dylib",
+                "blas": "/Users/alice/R/lib/libRblas.0.dylib",
+            },
+        }
+        out = gen_fixtures._sanitize_versions(raw)
+        assert "pymars_commit" not in out
+        assert out["blas"][0]["filepath"] == "libopenblas.so"
+        assert out["r_blas"]["la_library"] == "libRlapack.dylib"
+        assert out["r_blas"]["blas"] == "libRblas.0.dylib"
+        assert "/home/alice" not in json.dumps(out)
+        assert "/Users/alice" not in json.dumps(out)
 
     def test_main_check_exits_nonzero_on_a_difference(
         self, tmp_path, monkeypatch, capsys
@@ -114,4 +154,4 @@ class TestMakeAllAndCheck:
         assert list(repo_fixtures.glob("S01_*.json")), (
             f"no committed S01 fixtures in {repo_fixtures}"
         )
-        assert gen_fixtures.check(fixtures_dir=repo_fixtures) == []
+        assert gen_fixtures.check(fixtures_dir=repo_fixtures).problems == []

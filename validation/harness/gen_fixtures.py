@@ -34,6 +34,21 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 
 
 @dataclass
+class CheckResult:
+    """``check()``'s outcome: ``problems`` (a difference in what a fixture
+    claims about earth: its inputs, earth arguments or result, or a
+    fixture missing outright) fail the check; ``notes`` (a ``versions``
+    difference: this machine's R, earth, numpy, scikit-learn or BLAS is not
+    the one that made the committed fixture) do not, since nothing about
+    earth conformance follows from running the generator on different
+    software versions.
+    """
+
+    problems: list[str]
+    notes: list[str]
+
+
+@dataclass
 class Dataset:
     """One registered dataset: everything `driver.EarthJob` needs besides
     the earth arguments (which a mode supplies)."""
@@ -91,6 +106,34 @@ def s01() -> Dataset:
     return Dataset(id="S01", X=x, y=y, X_test=x_test)
 
 
+def _sanitize_versions(versions: dict[str, Any]) -> dict[str, Any]:
+    """Drop the parts of ``driver.versions()`` that vary by machine or by
+    commit without saying anything about earth conformance: an absolute
+    path (threadpoolctl's and R's BLAS ``filepath``/``la_library`` include
+    the machine's home folder, which also does not belong in a public
+    repository) becomes just its basename, and ``pymars_commit`` is left
+    out of the fixture entirely (``check()`` reports it separately; a
+    fixture regenerated on a later commit always differs there, by
+    design).
+    """
+    out = dict(versions)
+    out.pop("pymars_commit", None)
+    if out.get("blas"):
+        out["blas"] = [
+            {
+                **lib,
+                "filepath": Path(lib["filepath"]).name if lib.get("filepath") else None,
+            }
+            for lib in out["blas"]
+        ]
+    if out.get("r_blas"):
+        out["r_blas"] = {
+            key: (Path(value).name if value else None)
+            for key, value in out["r_blas"].items()
+        }
+    return out
+
+
 def _fixture_payload(dataset_id: str, mode: str) -> dict[str, Any]:
     ds = REGISTRY[dataset_id]()
     earth_args = MODES[mode]
@@ -114,7 +157,7 @@ def _fixture_payload(dataset_id: str, mode: str) -> dict[str, Any]:
         },
         "earth_args": earth_args,
         "result": result,
-        "versions": driver.versions(result),
+        "versions": _sanitize_versions(driver.versions(result)),
     }
 
 
@@ -145,20 +188,23 @@ def make_all(*, fixtures_dir: Path | None = None) -> list[Path]:
     ]
 
 
-def check(*, fixtures_dir: Path | None = None) -> list[str]:
-    """Regenerate every fixture into a temporary folder and diff each one
+def check(*, fixtures_dir: Path | None = None) -> CheckResult:
+    """Regenerate every fixture into a temporary folder and compare each one
     against ``fixtures_dir`` (default: the module-level ``FIXTURES_DIR``,
-    read dynamically the same way ``make_all`` does); return one message
-    per difference (empty means every fixture reproduced exactly).
+    read dynamically the same way ``make_all`` does).
 
-    The comparison is exact, including each fixture's ``versions`` block,
-    so running this from a different commit than the one that made the
-    committed fixture reports a difference in ``versions.pymars_commit``
-    even when every earth-derived field is identical; that is expected,
-    not a regression.
+    Only ``inputs``, ``earth_args`` and ``result`` (what a fixture claims
+    about earth) or a fixture missing outright can add to ``.problems``; a
+    ``versions`` difference (this machine's R, earth, numpy, scikit-learn
+    or BLAS is not the one that made the committed fixture) instead adds to
+    ``.notes``, since ``_sanitize_versions`` already drops the one field
+    (``pymars_commit``) that would differ on every run from a different
+    commit by construction, and nothing about earth conformance follows
+    from the rest of ``versions`` differing.
     """
     fixtures_dir = fixtures_dir if fixtures_dir is not None else FIXTURES_DIR
     problems: list[str] = []
+    notes: list[str] = []
     with tempfile.TemporaryDirectory(prefix="pymars-fixture-check-") as tmp:
         fresh_paths = make_all(fixtures_dir=Path(tmp))
         for fresh in fresh_paths:
@@ -166,11 +212,16 @@ def check(*, fixtures_dir: Path | None = None) -> list[str]:
             if not committed.is_file():
                 problems.append(f"{fresh.name}: missing from {fixtures_dir}")
                 continue
-            if fresh.read_text(encoding="utf-8") != committed.read_text(
-                encoding="utf-8"
-            ):
+            fresh_payload = json.loads(fresh.read_text(encoding="utf-8"))
+            committed_payload = json.loads(committed.read_text(encoding="utf-8"))
+            checked = ("dataset", "mode", "inputs", "earth_args", "result")
+            if {k: fresh_payload.get(k) for k in checked} != {
+                k: committed_payload.get(k) for k in checked
+            }:
                 problems.append(f"{fresh.name}: differs from the committed fixture")
-    return problems
+            elif fresh_payload.get("versions") != committed_payload.get("versions"):
+                notes.append(f"{fresh.name}: versions differ")
+    return CheckResult(problems=problems, notes=notes)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -183,12 +234,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.check:
-        problems = check()
-        for message in problems:
+        result = check()
+        for message in result.notes:
             print(message, file=sys.stderr)
-        if problems:
+        for message in result.problems:
+            print(message, file=sys.stderr)
+        if result.problems:
             print(
-                f"{len(problems)} fixture(s) did not reproduce exactly", file=sys.stderr
+                f"{len(result.problems)} fixture(s) did not reproduce exactly",
+                file=sys.stderr,
             )
             return 1
         print("every fixture reproduced exactly")
