@@ -48,9 +48,106 @@ part C: nine variables, pairs on new variables
       21          9           18        1      0        7 8.377e-06 1.160e-05
       22         10           20        9      9       77 9.961e-06 1.017e-05
       24         11           21        9      9       83 9.902e-06 1.016e-05
+part D: degree 2, searches whose parent is not the intercept
+ iNewCol steps_done single parent cuts rejected   max_rej   min_acc
+       4          1   TRUE      2    5        0        NA 1.071e-01
+       4          1   TRUE      2    5        0        NA 4.694e-01
+       5          1  FALSE      3  292       51 9.943e-03 1.149e-02
+       5          1  FALSE      3  292       58 9.578e-03 1.039e-02
+       7          2  FALSE      4  233       46 9.625e-03 1.004e-02
+       7          2  FALSE      4  233       49 9.715e-03 1.005e-02
+       7          2  FALSE      5   64        8 9.308e-03 1.034e-02
+       7          2  FALSE      5   64       15 6.466e-03 1.300e-02
+       7          2  FALSE      3  292       74 9.706e-03 1.148e-02
+       7          2  FALSE      3  292       58 9.515e-03 1.033e-02
+       6          2   TRUE      2    5        0        NA 1.056e-01
+       6          2   TRUE      2    5        0        NA 4.666e-01
+       8          3   TRUE      4  233       47 9.604e-03 1.002e-02
+       9          3  FALSE      4  233       49 9.707e-03 1.004e-02
+       9          3  FALSE      3  292      101 9.482e-03 1.020e-02
+       9          3  FALSE      3  292       58 9.514e-03 1.033e-02
+       9          3  FALSE      5   64        8 9.306e-03 1.034e-02
+       9          3  FALSE      5   64       15 6.456e-03 1.297e-02
+       8          3   TRUE      2    5        0        NA 8.881e-02
+       8          3   TRUE      2    5        0        NA 4.165e-01
+      11          4  FALSE      5   64        8 9.274e-03 1.029e-02
+      10          4   TRUE      5   64       16 6.392e-03 1.278e-02
+      11          4  FALSE      3  292      102 9.993e-03 1.065e-02
+      11          4  FALSE      3  292       58 9.478e-03 1.029e-02
+      10          4   TRUE      4  233       47 9.604e-03 1.002e-02
+      11          4  FALSE      4  233       49 9.707e-03 1.004e-02
+      10          4   TRUE      2    5        0        NA 8.865e-02
+      10          4   TRUE      2    5        0        NA 4.163e-01
+      12          5   TRUE     10    1        1 3.340e-31        NA
+      12          5   TRUE     10    1        1 1.467e-30        NA
+      13          5  FALSE     11  296       93 7.974e-03 1.067e-02
+      13          5  FALSE     11  296       52 9.963e-03 1.027e-02
+      13          5  FALSE      3  292      102 9.896e-03 1.053e-02
+      13          5  FALSE      3  292       59 9.438e-03 1.024e-02
+      12          5   TRUE      4  233       49 9.871e-03 1.121e-02
+      13          5  FALSE      4  233       50 9.666e-03 1.000e-02
+      13          5  FALSE      5   64        8 9.271e-03 1.029e-02
+      12          5   TRUE      5   64       16 6.390e-03 1.277e-02
+      12          5   TRUE      2    5        0        NA 8.838e-02
+      12          5   TRUE      2    5        0        NA 4.138e-01
+      14          6   TRUE     11  296      138 9.934e-03 1.073e-02
+      15          6  FALSE     11  296       52 9.849e-03 1.016e-02
+      14          6   TRUE      4  233       49 9.714e-03 1.104e-02
+      14          6   TRUE      4  233       51 9.996e-03 1.014e-02
+      15          6  FALSE      3  292      115 9.443e-03 1.071e-02
+      15          6  FALSE      3  292       59 9.368e-03 1.017e-02
+      15          6  FALSE      5   64        8 9.265e-03 1.028e-02
+      14          6   TRUE      5   64       16 6.379e-03 1.277e-02
+      14          6   TRUE      2    5        0        NA 8.778e-02
+      14          6   TRUE      2    5        0        NA 4.100e-01
+      14          6   TRUE     10    1        1 3.333e-31        NA
+      14          6   TRUE     10    1        1 1.462e-30        NA
+      17          7  FALSE     14  173        3 4.877e-06 2.011e-05
+      16          7   TRUE     14  174        0        NA 1.121e-03
+      17          7  FALSE      3  292        4 8.649e-06 1.450e-05
+      17          7  FALSE      3  292        6 9.101e-06 1.369e-05
+      17          7  FALSE      5   64        3 2.524e-08 2.629e-04
+      16          7   TRUE      5   64        2 1.894e-08 1.579e-05
+      16          7   TRUE      4  233        4 6.460e-06 2.663e-05
+      16          7   TRUE      4  233        7 6.432e-06 2.253e-05
+      16          7   TRUE     11  296        7 8.897e-06 1.646e-05
+      17          7  FALSE     11  296        3 1.499e-06 1.434e-05
+      16          7   TRUE      2    5        0        NA 8.778e-02
+      16          7   TRUE      2    5        0        NA 4.092e-01
+      16          7   TRUE     10    1        1 3.329e-31        NA
+      16          7   TRUE     10    1        1 1.460e-30        NA
+      19          8  FALSE      5   64        3 2.524e-08 2.629e-04
+      18          8   TRUE      5   64        3 1.858e-08 1.078e-05
+      18          8   TRUE     11  296        7 8.889e-06 1.645e-05
+      19          8  FALSE     11  296        3 1.499e-06 1.434e-05
+      19          8  FALSE      3  292        4 8.627e-06 1.446e-05
+      19          8  FALSE      3  292        6 9.100e-06 1.369e-05
+      19          8  FALSE     14  173        3 4.877e-06 2.011e-05
+      18          8   TRUE     14  174        0        NA 1.121e-03
+      18          8   TRUE      4  233        4 6.460e-06 2.663e-05
+      18          8   TRUE      4  233        7 6.432e-06 2.253e-05
+      18          8   TRUE      2    5        0        NA 8.778e-02
+      18          8   TRUE      2    5        0        NA 4.092e-01
+      18          8   TRUE     10    1        1 3.310e-31        NA
+      18          8   TRUE     10    1        1 1.453e-30        NA
+      20          9   TRUE     11  296       11 9.877e-06 1.277e-05
+      21          9  FALSE     11  296        3 1.499e-06 1.433e-05
+      21          9  FALSE     14  173        3 4.877e-06 2.011e-05
+      20          9   TRUE     14  174        0        NA 9.018e-04
+      21          9  FALSE      3  292        5 8.874e-06 1.051e-05
+      21          9  FALSE      3  292        6 9.095e-06 1.368e-05
+      20          9   TRUE      4  233        4 6.460e-06 2.662e-05
+      20          9   TRUE      4  233        7 6.426e-06 2.250e-05
+      21          9  FALSE      5   64        3 2.524e-08 2.629e-04
+      20          9   TRUE      5   64        3 1.858e-08 1.077e-05
+      20          9   TRUE      2    5        0        NA 8.750e-02
+      20          9   TRUE      2    5        0        NA 4.090e-01
+      20          9   TRUE     10    1        1 3.297e-31        NA
+      20          9   TRUE     10    1        1 1.448e-30        NA
 CHECK bb11.1 TRUE at the first step the knot is rejected exactly when 1 - R^2 of (x - t)+ on {1, x} is below 0.01 (bracket 0.00996351, 0.010021)
 CHECK bb11.2 TRUE a rejected knot keeps the RSS of the linear part alone (its RSS reduction is that of b*x)
 CHECK bb11.3 TRUE while iNewCol <= 15, every rejected ratio is below 0.01 and every accepted one at least 0.01
 CHECK bb11.4 TRUE once iNewCol >= 16, every rejected ratio is below 1e-5 and every accepted one at least 1e-5
 CHECK bb11.5 TRUE iNewCol is K for a single-hinge search and K + 1 for a pair search, K the term number searched (2, 4, 6, ...)
 CHECK bb11.6 TRUE the tolerance is 0.01 in the first 7 forward steps and 1e-5 from the 8th, for pairs and single hinges alike (steps_done <= 6 vs >= 7)
+CHECK bb11.7 TRUE for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = existing columns plus b*x (94 searches, 1968 rejected knots)

@@ -107,6 +107,41 @@ y <- rowSums(sapply(1:9, function(j) (10 - j) * pmax(X[, j] - 0.3 - 0.04 * j, 0)
 tabC <- follow(X, y, 25)
 cat("part C: nine variables, pairs on new variables\n"); print(agg(tabC), digits = 4, row.names = FALSE)
 
+# Part D: a hinge parent at degree 2. For each search with a parent other
+# than the intercept, the ratio uses h = b*(x - t)+ and E = the existing
+# columns plus b*x for a pair search.
+follow2 <- function(X, y, nk) {
+  out <- capture.output(f <- quiet(earth(X, y, degree = 2, trace = 9, nk = nk, minspan = 1, endspan = 1,
+    Adjust.endspan = 0, Auto.linpreds = FALSE, pmethod = "none", thresh = 0, fast.k = 0)))
+  B <- basis(f, X); ys <- (y - mean(y)) / sd(y)
+  rss_m <- sapply(1:ncol(B), function(m) sum(qr.resid(qr(B[, 1:m, drop = FALSE]), ys)^2))
+  tab <- NULL
+  for (s in scans(out)) {
+    if (s$parent < 2 || length(s$cut) == 0) next
+    before <- as.numeric(sub(".*RssBeforeAddingHinge ([-0-9.e]+).*", "\\1", out[s$line]))
+    m <- which(abs(rss_m - before) <= 1e-4 * before)[1]
+    if (is.na(m) || s$parent > m) next
+    j <- as.integer(sub(".*iPred ([0-9]+).*", "\\1", out[s$line]))
+    b <- B[, s$parent]
+    E <- B[, seq_len(m), drop = FALSE][, -1, drop = FALSE]
+    if (!s$single) E <- cbind(E, b * X[, j])
+    r <- sapply(s$cut, function(t) ratio(b * pmax(X[, j] - t, 0), E))
+    tab <- rbind(tab, data.frame(iNewCol = s$newcol, steps_done = s$steps_done, single = s$single, parent = s$parent,
+      cuts = length(r), rejected = sum(s$tolg == 0),
+      max_rej = if (any(s$tolg == 0)) max(r[s$tolg == 0]) else NA,
+      min_acc = if (any(s$tolg == 1)) min(r[s$tolg == 1]) else NA))
+  }
+  tab
+}
+n <- 300; set.seed(7); X <- matrix(runif(n * 3), n, 3); colnames(X) <- paste0("x", 1:3)
+y <- 6 * pmax(X[, 1] - 0.3, 0) * X[, 2] + 3 * pmax(0.6 - X[, 1], 0) * pmax(X[, 3] - 0.2, 0) + 2 * X[, 2] + 0.05 * rnorm(n)
+tabD <- follow2(X, y, 21)
+cat("part D: degree 2, searches whose parent is not the intercept\n")
+print(tabD[, c("iNewCol", "steps_done", "single", "parent", "cuts", "rejected", "max_rej", "min_acc")], digits = 4, row.names = FALSE)
+okD <- nrow(tabD) > 0 && sum(tabD$rejected) > 0 &&
+  all(ifelse(tabD$iNewCol <= 15, tabD$max_rej < 0.01, tabD$max_rej < 1e-5), na.rm = TRUE) &&
+  all(ifelse(tabD$iNewCol <= 15, tabD$min_acc >= 0.01, tabD$min_acc >= 1e-5), na.rm = TRUE)
+
 tab <- rbind(tabB, tabC)
 early <- tab[tab$iNewCol <= 15, ]; late <- tab[tab$iNewCol >= 16, ]
 by_steps <- all(tab$steps_done[tab$iNewCol <= 15] <= 6) && all(tab$steps_done[tab$iNewCol >= 16] >= 7)
@@ -122,3 +157,5 @@ cat(sprintf("CHECK bb11.5 %s iNewCol is K for a single-hinge search and K + 1 fo
   all((tab$iNewCol - 2 * (tab$steps_done + 1)) %in% c(0, 1))))
 cat(sprintf("CHECK bb11.6 %s the tolerance is 0.01 in the first 7 forward steps and 1e-5 from the 8th, for pairs and single hinges alike (steps_done <= 6 vs >= 7)\n",
   by_steps))
+cat(sprintf("CHECK bb11.7 %s for a hinge parent at degree 2 the same test holds with h = b*(x - t)+ and E = existing columns plus b*x (%d searches, %d rejected knots)\n",
+  okD, nrow(tabD), sum(tabD$rejected)))
