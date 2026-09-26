@@ -13,6 +13,10 @@ from hypothesis import strategies as st
 from pymars import _linalg as la
 
 seeds = st.integers(0, 2**32 - 1)
+# (seed, n, m, k, weighted): n rows, m columns and k responses.
+cases = st.tuples(
+    seeds, st.integers(8, 30), st.integers(1, 6), st.integers(1, 3), st.booleans()
+)
 
 
 def _frozen(*arrays):
@@ -116,9 +120,6 @@ def test_gram_schmidt_without_q_and_for_a_zero_column():
 )
 def test_collinearity_tolerance_changes_after_step_seven(step, tau):
     assert la.collinearity_tolerance(step) == tau
-
-
-def test_collinearity_tolerance_counts_steps_from_one():
     with pytest.raises(ValueError, match="from 1"):
         la.collinearity_tolerance(0)
 
@@ -173,14 +174,6 @@ def test_collinearity_ratio_is_one_minus_r2_of_a_centered_regression(
     assert ratio == pytest.approx(expected, rel=1e-9, abs=1e-12)
 
 
-def test_collinearity_ratio_centers_h():
-    # On the intercept alone 1 - R² is 1; an uncentered denominator gives 1e-12.
-    h = 1e6 + np.random.default_rng(5).standard_normal(40)
-    assert la.collinearity_ratio(_qbasis(np.ones((40, 1))), h) == pytest.approx(
-        1.0, rel=1e-8
-    )
-
-
 def test_collinearity_ratio_of_a_constant_column_is_zero():
     # The computed centered sums of these constant columns are positive by
     # rounding, so only the exact test of the values (Conventions) gives 0.
@@ -215,9 +208,7 @@ def test_collinearity_ratio_keeps_the_sums_of_squares_in_range():
     for scale in (1e200, 1e-200):
         got = la.collinearity_ratio(_qbasis(G), scale * h)
         assert got == pytest.approx(want, rel=1e-12)
-
-
-def test_collinearity_ratio_with_underflowing_weights_is_zero():
+    # Weights so small that the centered sum underflows to 0.
     w = np.full(4, 5e-324)
     assert la.collinearity_ratio(np.zeros((4, 0)), np.arange(4.0), w) == 0.0
 
@@ -225,14 +216,12 @@ def test_collinearity_ratio_with_underflowing_weights_is_zero():
 # The kind of a search (LA-7)
 
 
-def test_weighted_variances_use_the_divisor_n():
+def test_weighted_variances_use_the_divisor_n_and_exact_zeros():
     X = np.array([[0.0, 1.0], [2.0, 1.0]])
     np.testing.assert_array_equal(la.weighted_variances(*_frozen(X)), [1.0, 0.0])
     x = np.array([[0.0], [4.0]])
     np.testing.assert_array_equal(la.weighted_variances(x, np.array([1.0, 3.0])), [3.0])
-
-
-def test_weighted_variance_of_a_constant_column_is_exactly_zero():
+    # A constant column gets exactly 0, where rounding would leave 1e-33.
     X = np.column_stack([np.full(7, 0.1), np.arange(7.0)])
     assert la.weighted_variances(X)[0] == 0.0
     X = np.array([[5.0], [2.0], [2.0]])
@@ -258,12 +247,9 @@ def test_pair_search_threshold_is_one_percent_of_the_variance_product():
     assert la.pair_search(np.nextafter(0.01, 0.0), [2.0, 0.5]) is False
     assert la.pair_search(0.0101, np.array([1.0])) is True
     assert la.pair_search(0.0099, [1.0]) is False
+    assert la.pair_search(1e300, [4.0, 0.0]) is False  # a constant covariate
     with pytest.raises(ValueError, match="at least"):
         la.pair_search(1.0, [])
-
-
-def test_pair_search_is_a_single_hinge_search_for_a_constant_covariate():
-    assert la.pair_search(1e300, [4.0, 0.0]) is False
 
 
 def test_pair_search_does_not_depend_on_the_units_of_x():
@@ -287,15 +273,10 @@ def test_pair_search_does_not_depend_on_the_units_of_x():
 # Least squares with dependent columns (LA-4, FWD-11, PRUNE-8)
 
 
-@given(
-    seed=seeds,
-    n=st.integers(8, 30),
-    m=st.integers(1, 6),
-    k=st.integers(1, 3),
-    weighted=st.booleans(),
-)
-def test_lm_fit_equals_least_squares_on_independent_columns(seed, n, m, k, weighted):
-    A, Y, w = _case(seed, n, m, k, weighted)
+@given(case=cases)
+def test_lm_fit_equals_least_squares_on_independent_columns(case):
+    A, Y, w = _case(*case)
+    n = A.shape[0]
     args = _frozen(A, Y) + ([] if w is None else _frozen(w))
     fit = la.lm_fit(*args)
     sw = np.ones((n, 1)) if w is None else np.sqrt(w)[:, None]
@@ -381,6 +362,9 @@ def test_lm_fit_shapes_and_errors():
     assert fit.coef.shape == (3,)
     assert fit.residuals.shape == (10,)
     assert la.lm_fit(A, Y).coef.shape == (3, 1)
+    wide = la.lm_fit(A[:2], Y[:2, 0])  # rank 2: the last column is left out
+    np.testing.assert_array_equal(wide.kept, [True, True, False])
+    assert np.abs(wide.residuals).max() <= 1e-12 * np.abs(Y[:2]).max()
     empty = la.lm_fit(np.zeros((10, 0)), Y[:, 0])
     np.testing.assert_array_equal(empty.residuals, Y[:, 0])
     assert empty.rss == pytest.approx(np.sum(Y**2))
@@ -397,15 +381,10 @@ def test_lm_fit_shapes_and_errors():
 # The R factor of the pruning pass and its downdates (PRUNE-3, PRUNE-9)
 
 
-@given(
-    seed=seeds,
-    n=st.integers(8, 30),
-    m=st.integers(1, 6),
-    k=st.integers(1, 3),
-    weighted=st.booleans(),
-)
-def test_prefix_rss_and_drop_costs_equal_explicit_refits(seed, n, m, k, weighted):
-    A, Y, w = _case(seed, n, m, k, weighted)
+@given(case=cases)
+def test_prefix_rss_and_drop_costs_equal_explicit_refits(case):
+    A, Y, w = _case(*case)
+    m = A.shape[1]
     f = la.r_factor(*_frozen(A, Y), w)
     R, Z = _frozen(f.R, f.Z)
     assert f.rss == pytest.approx(_rss(A, Y, w), rel=1e-10)

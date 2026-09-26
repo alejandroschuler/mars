@@ -21,7 +21,7 @@ Y enters only through products and sums, so multiplying Y by a power of 2, as
 EDGE-6 does, changes no bit of a result beyond that factor. Memory is
 O(n·(M + K)) for n rows, M columns and K responses.
 
-Public functions:
+Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
 
 - ``orthogonalize``, ``gram_schmidt``: Gram-Schmidt applied twice (LA-1).
 - ``collinearity_tolerance``, ``collinearity_ratio``, ``knot_rejected``: the
@@ -42,30 +42,6 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 import scipy.linalg
-
-__all__ = [
-    "COLLINEARITY_LAST_EARLY_STEP",
-    "COLLINEARITY_TOL_EARLY",
-    "COLLINEARITY_TOL_LATE",
-    "LM_TOL",
-    "PAIR_SEARCH_FACTOR",
-    "GramSchmidt",
-    "LmFit",
-    "RFactor",
-    "collinearity_ratio",
-    "collinearity_tolerance",
-    "drop_costs",
-    "gram_schmidt",
-    "independent_columns",
-    "knot_rejected",
-    "lm_fit",
-    "move_column",
-    "orthogonalize",
-    "pair_search",
-    "prefix_rss",
-    "r_factor",
-    "weighted_variances",
-]
 
 FloatArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]
