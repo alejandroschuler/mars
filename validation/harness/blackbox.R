@@ -137,12 +137,19 @@ calls <- list(
   # for the binomial refit's coefficients and fitted probabilities. Returns
   # converged and warnings too (review round 1, #42 finding 6): GLM-3
   # compares coefficients only "where glm converges without a warning".
+  # Review round 2 checked glm.fit's default control (epsilon = 1e-8,
+  # maxit = 25) directly: tightening epsilon to 1e-15 moves the binomial
+  # reference's coefficients by only 2e-8 to 3e-10, well inside GLM-3's
+  # tolerance, so it was not the multinom bug's cause. Tightened here
+  # anyway (defensive, same reasoning as multinom_fit's reltol) since it
+  # costs nothing on a well-posed IRLS fit.
   glm_fit = function(req) {
     x <- to_matrix(req$x)
     y <- as.numeric(unlist(req$y))
     fam <- get(req$family %||% "binomial")()  # glm.fit needs a family object,
                                                # not the bare family function
-    run <- with_warnings(glm.fit(x, y, family = fam))
+    ctrl <- glm.control(epsilon = 1e-12, maxit = 100)
+    run <- with_warnings(glm.fit(x, y, family = fam, control = ctrl))
     fit <- run$value
     list(
       coefficients = vec_json(as.numeric(fit$coefficients)),
@@ -182,6 +189,13 @@ calls <- list(
   # design needs more (review round 1, #42/#43 finding 1/3/5: separable
   # labels never converge at all, whatever maxit is, so the fix is a
   # non-separable design plus checking convergence, not just a larger cap).
+  # reltol (review round 2, #42/#43 blocking finding 1): convergence code 0
+  # only means the objective stopped changing by more than reltol, and
+  # nnet's own default (1e-8) is loose enough that the stopping point can
+  # be off from GLM-2's actual minimum by more than GLM-3's tolerance, so
+  # this defaults to something far tighter; a caller doing its own
+  # stability check (gen_fixtures.py's _assert_multinom_is_stable) passes
+  # a distinctly different reltol for the second fit.
   # Returns convergence (nnet's own code; 0 is converged) and warnings.
   multinom_fit = function(req) {
     suppressMessages(library(nnet))
@@ -189,9 +203,16 @@ calls <- list(
     y <- factor(unlist(req$y))
     df <- as.data.frame(x)
     df$.y <- y
-    maxit <- req$maxit %||% 100
+    maxit <- req$maxit %||% 10000
+    reltol <- req$reltol %||% 1e-15
     run <- with_warnings(
-      nnet::multinom(.y ~ . - 1, data = df, trace = FALSE, maxit = maxit)
+      nnet::multinom(
+        .y ~ . - 1,
+        data = df,
+        trace = FALSE,
+        maxit = maxit,
+        reltol = reltol
+      )
     )
     fit <- run$value
     list(

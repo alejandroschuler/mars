@@ -242,9 +242,11 @@ class TestMakeAllComponentsAndCheck:
             payload["one_response"]["rss_per_subset"][0]
             >= payload["one_response"]["rss_per_subset"][-1]
         )
-        # Review round 1, #42 adversarial finding 3: the several-responses
-        # case must actually separate PRUNE-3's K = 1 rule from its K >= 2
-        # rule, not just happen to agree with either.
+        # Review round 1, #42 adversarial finding 3 (several responses) and
+        # round 2, #42/#43 blocking finding 2 (one response, a regression):
+        # both cases must actually separate PRUNE-3's K = 1 rule from its
+        # K >= 2 rule, not just happen to agree with either.
+        assert payload["one_response"]["k1_vs_k2_diverge_at_sizes"]
         assert payload["several_responses"]["k1_vs_k2_diverge_at_sizes"]
 
     def test_lm_fit_coefficients_has_a_rank_deficient_case(self, component_fixtures):

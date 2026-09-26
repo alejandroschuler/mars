@@ -261,12 +261,17 @@ def pruning_fixed_basis() -> dict[str, Any]:
     Review round 1 (#42, adversarial finding 3): the original design (rng
     seed 11, y2/y3 noise sd 0.05) gave the same T[m] under PRUNE-3's K = 1
     and K >= 2 rules, so it could not catch an implementation that used the
-    K = 1 rule for every K. Noise sd 0.3 on y2/y3, at seed 102, is one of
-    20 (of 30 tried, seeds 100 to 129) that separates them; the assertion
-    below re-derives both rules from the spec (`_prune_k1`/`_prune_k2`) and
-    fails loudly if a future change stops separating them.
+    K = 1 rule for every K. Noise sd 0.3 on y2/y3 was the fix, but seed 102
+    (round 1's choice) separates only the several-responses case; the
+    one-response case's T[m] turned out nested there too (round 2,
+    #42/#43 blocking finding 2, a regression from round 1's own fix for
+    the other case). Seed 138 separates both: one response at sizes 5 to
+    7 (RSS gap up to 1.9%) and three responses at sizes 5 to 7 (up to
+    1.6%). The assertions below re-derive both rules from the spec
+    (`_prune_k1`/`_prune_k2`) for *each* case and fail loudly if a future
+    change stops separating either one.
     """
-    rng = np.random.default_rng(102)
+    rng = np.random.default_rng(138)
     n = 120
     X = np.column_stack([rng.uniform(0, 1, size=n), rng.uniform(0, 1, size=n)])
     y1 = (
@@ -290,25 +295,41 @@ def pruning_fixed_basis() -> dict[str, Any]:
     }
     penalty = 2.0
 
+    def _diverge_at_sizes(
+        bx: np.ndarray, Y: np.ndarray, *, case_label: str
+    ) -> list[int]:
+        t_k1 = _prune_k1(bx, Y)
+        t_k2 = _prune_k2(bx, Y)
+        diverges_at = sorted(m for m in t_k1 if t_k1[m] != t_k2[m])
+        if not diverges_at:
+            raise AssertionError(
+                f"pruning_fixed_basis's {case_label} case no longer "
+                "separates PRUNE-3's K=1 rule from its K>=2 rule (T[m] "
+                "agree at every size); pick a different seed or noise level"
+            )
+        return diverges_at
+
+    basis_one = blackbox.fit_bx_dirs(X, y1, earth_args)
+    one_diverges_at = _diverge_at_sizes(
+        basis_one["bx"], y1.reshape(-1, 1), case_label="one-response"
+    )
+
     basis_multi = blackbox.fit_bx_dirs(X, y_multi, earth_args)
-    t_k1 = _prune_k1(basis_multi["bx"], y_multi)
-    t_k2 = _prune_k2(basis_multi["bx"], y_multi)
-    diverges_at = sorted(m for m in t_k1 if t_k1[m] != t_k2[m])
-    if not diverges_at:
-        raise AssertionError(
-            "pruning_fixed_basis's several-responses case no longer "
-            "separates PRUNE-3's K=1 rule from its K>=2 rule (T[m] agree "
-            "at every size); pick a different seed or noise level"
-        )
+    multi_diverges_at = _diverge_at_sizes(
+        basis_multi["bx"], y_multi, case_label="several-responses"
+    )
 
     return {
         "X": X.tolist(),
         "earth_args": earth_args,
         "penalty": penalty,
-        "one_response": _pruning_case(X, y1, earth_args, penalty),
+        "one_response": {
+            **_pruning_case(X, y1, earth_args, penalty),
+            "k1_vs_k2_diverge_at_sizes": one_diverges_at,
+        },
         "several_responses": {
             **_pruning_case(X, y_multi, earth_args, penalty),
-            "k1_vs_k2_diverge_at_sizes": diverges_at,
+            "k1_vs_k2_diverge_at_sizes": multi_diverges_at,
         },
     }
 
@@ -451,6 +472,36 @@ def predict_new_points() -> dict[str, Any]:
     }
 
 
+def _assert_multinom_is_stable(
+    X: np.ndarray, y: np.ndarray, fit: dict[str, Any], *, label: str
+) -> None:
+    """Review round 2 (#42/#43 blocking finding 1): nnet's convergence code
+    is 0 whenever the objective stopped changing by more than ``reltol``
+    between iterations, which is not the same claim as "reached GLM-2's
+    minimum" -- at nnet's own default reltol (1e-8) the stored coefficients
+    were off by up to 8.7e-4 relative, which GLM-3's tolerance (1e-5
+    relative, 1e-7 absolute) cannot absorb. ``multinom_fit``'s new default
+    (reltol = 1e-15) is tight, but tight is not proof by itself: refit once
+    more at a distinctly different reltol and require the two fits to
+    already agree well inside GLM-3's tolerance. If they don't, the first
+    fit was not close enough to the minimum to be a valid reference.
+    """
+    check = blackbox.multinom_fit(X, y, maxit=20000, reltol=1e-12)
+    if check["convergence"] != 0:
+        raise AssertionError(f"{label}: the stability refit did not converge")
+    coef_rel = np.max(
+        np.abs(fit["coefficients"] - check["coefficients"])
+        / (np.abs(check["coefficients"]) + 1e-300)
+    )
+    prob_abs = np.max(np.abs(fit["fitted"] - check["fitted"]))
+    if coef_rel > 1e-8 or prob_abs > 1e-9:
+        raise AssertionError(
+            f"{label}: multinom fit is not stable enough to be a GLM-3 "
+            f"reference (coefficients differ by {coef_rel:.2e} relative, "
+            f"probabilities by {prob_abs:.2e})"
+        )
+
+
 @register_component
 def classifier_refit() -> dict[str, Any]:
     """VALIDATION_PLAN.md, "Binary outcomes": R's glm (binomial) and
@@ -497,6 +548,7 @@ def classifier_refit() -> dict[str, Any]:
             f"convergence={multinom['convergence']}, "
             f"warnings={multinom['warnings']}"
         )
+    _assert_multinom_is_stable(Xm, y3, multinom, label="classifier_refit")
 
     return {
         "binomial": {

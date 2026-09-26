@@ -124,6 +124,17 @@ with no change to the harness or the datasets. Exact reproduction is
 reliable only on the machine that made the fixtures; a failure elsewhere
 needs a by-hand look at which bits differ before it counts as a regression.
 
+The fixtures are Python-only JSON, not strict RFC 8259: a field in
+`test_fixture_contents.py`'s `_MAY_BE_NONFINITE_KEYS` (`gcv`, `grsq`,
+`rsq`, `gcv_per_subset`, and `gcv_grid.json`'s own per-cell `gcv` list)
+may hold a bare `Infinity`/`-Infinity`/`NaN` token where GCV-2 gives one
+(a case count at or below the effective number of parameters). Python's
+`json.loads` reads these back exactly; a strict reader (R's
+`jsonlite::fromJSON` included) does not, and needs a sentinel pass or a
+preprocessing step first (review round 2, #42 spec finding 4; this note
+was in #43's README only, since #43 has more of these fields, but
+`gcv_grid.json` needs it here too).
+
 ### Dataset fixtures
 
 `VALIDATION_PLAN.md`, "Test datasets", defines S01 to S20 and what each is
@@ -142,8 +153,8 @@ as the dataset fixtures above.
 |---|---|---|
 | `gcv_grid.json` | `earth:::get.gcv` (`blackbox.get_gcv`) over a grid of penalties (0 to 6, -1) and case counts (10 to 100,000), 1 to 41 terms | The GCV function (GCV-1, GCV-2) |
 | `pruning_fixed_basis.json` | `earth:::pruning.pass` (`blackbox.pruning_pass`) on a real forward basis (`blackbox.fit_bx_dirs`, degree 2), for one response and for several | Pruning of a fixed basis (PRUNE-1 to PRUNE-9) |
-| `lm_fit_coefficients.json` | R's `lm.fit` (`blackbox.lm_fit`), full rank and a duplicated (rank-deficient) column | Coefficients of fixed terms (LA-4) |
-| `predict_new_points.json` | `predict.earth` (`blackbox.predict_earth`) at points inside and outside the training range, degree 1 and 2 | Prediction at new points (TERM-3) |
+| `lm_fit_coefficients.json` | R's `lm.fit`/`lm.wfit` (`blackbox.lm_fit`), full rank, a duplicated (rank-deficient) column, near-duplicate columns on each side of LA-4's 1e-7 threshold, a centered-vs-uncentered-norm case (bb09.9), and a weighted case | Coefficients of fixed terms (LA-4, PRUNE-8) |
+| `predict_new_points.json` | `predict.earth` (`blackbox.predict_earth`) at points inside and outside the training range, degree 1 and 2, plus a linear-factor case (`Auto.linpreds = TRUE`) and a hinge-at-the-minimum case, each with new points below the training minimum (FWD-6); every case stores earth's `dirs`/`cuts`/`selected_terms`/coefficients alongside `pred` | Prediction at new points (TERM-3) |
 | `classifier_refit.json` | R's `glm.fit` (binomial) and `nnet::multinom` (`blackbox.glm_fit`/`blackbox.multinom_fit`) on fixed columns | The GLM refit's coefficients and fitted probabilities ("Binary outcomes") |
 | `knot_candidates.json` | earth's `trace = 9` case-by-case knot scan (`driver.run_earth`, trace text embedded per case), over the minspan/endspan/degree/`Adjust.endspan`/case-count grid | Candidate knot sets (KNOT-1 to KNOT-7); the comparison and the interpretation are T08's, not this fixture's (clean room) |
 

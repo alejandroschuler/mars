@@ -261,12 +261,17 @@ def fit_bx_dirs(
     ``dirs``, ``cuts`` and ``selected_terms`` (1-based, as earth returns
     them).
 
-    ``fit$bx``/``fit$dirs`` hold only the *selected* terms in general; they
-    are the full *forward* basis only with ``pmethod = "none"`` (no
-    ``nprune``), which ``pruning_fixed_basis`` passes so that its own
-    backward pass has something left to prune. A caller after the selected
-    basis (``s18_multinom``, for example) passes earth's own pruning
-    default instead.
+    Review round 2 (#42 spec, non-blocking): ``fit$dirs``/``fit$cuts`` hold
+    every *forward* term earth ever added, selected or not (for example,
+    ``s18_multinom``'s basis has 13 ``dirs`` rows but only 3
+    ``selected_terms``); ``fit$bx`` holds only the *selected* columns,
+    except with ``pmethod = "none"`` (no ``nprune``), which
+    ``pruning_fixed_basis`` passes so that its own backward pass has
+    something left to prune, and which leaves every forward term selected.
+    A caller that wants the terms ``dirs``/``cuts`` describe restricted to
+    the ones actually in the model takes ``dirs[selected_terms - 1]`` (and
+    ``cuts[selected_terms - 1]``), 0-indexing the 1-based ``selected_terms``
+    this call returns.
 
     For the pruning-of-a-fixed-basis and the classifier-refit component
     tests, which need a real ``bx``/``dirs`` pair to hand to
@@ -292,7 +297,9 @@ def fit_bx_dirs(
     }
 
 
-def multinom_fit(x: np.ndarray, y: np.ndarray, *, maxit: int = 100) -> dict[str, Any]:
+def multinom_fit(
+    x: np.ndarray, y: np.ndarray, *, maxit: int = 10000, reltol: float = 1e-15
+) -> dict[str, Any]:
     """``nnet::multinom`` on fixed columns (earth's selected basis, including
     its intercept column).
 
@@ -308,6 +315,16 @@ def multinom_fit(x: np.ndarray, y: np.ndarray, *, maxit: int = 100) -> dict[str,
     keeping an unconverged iterate (review round 1, #42/#43 finding
     1/3/5). Separable labels never converge whatever ``maxit`` is: the fix
     there is a non-separable design, not a larger cap.
+
+    ``reltol`` (review round 2, #42/#43 blocking finding 1): convergence
+    code 0 only means the objective changed by less than ``reltol``
+    between iterations, not that the fit reached GLM-2's actual minimum.
+    nnet's own default (1e-8) can stop far enough short of the minimum
+    that GLM-3's tolerance (1e-5 relative, 1e-7 absolute) fails a solver
+    that reaches it, so this defaults far tighter. A caller should still
+    check stability (``_assert_multinom_is_stable`` in gen_fixtures.py)
+    before writing a fixture, since a tight ``reltol`` alone is not proof
+    of convergence to the minimum, only evidence for it.
     """
     y = np.asarray(y)
     result = _run(
@@ -316,6 +333,7 @@ def multinom_fit(x: np.ndarray, y: np.ndarray, *, maxit: int = 100) -> dict[str,
             "x": _rows(x),
             "y": [str(v) for v in y.tolist()],
             "maxit": maxit,
+            "reltol": reltol,
         }
     )
     return {
