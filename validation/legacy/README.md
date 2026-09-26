@@ -4,6 +4,7 @@ These scripts produced the preliminary findings in `VALIDATION_PLAN.md` (F1 to F
 
 | File | Purpose |
 |---|---|
+| `make_venv.sh` | Makes the ignored venv `.venv-legacy` at the repository root with the mars-earth 1.0.4 wheel from PyPI; run the scripts here with its Python |
 | `fit_earth.R` | Fits R earth on a CSV train and test pair with arguments from a JSON config and writes the fit as JSON |
 | `compare_earth.py` | Fits pymars and earth on the same data in the matched and defaults modes; writes `data/` and `out/` |
 | `probe_bugs.py`, `probe_bugs2.py` | Probes of the legacy behavior; each prints `PROBE <name>: <finding>` |
