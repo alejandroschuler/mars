@@ -1,0 +1,78 @@
+Call: earth(x=c(0.0856,0.2368...), y=c(0.0246,-0.081...), pmethod="none",
+            trace=7, degree=1, penalty=2, nk=11, thresh=0, minspan=1,
+            endspan=1, fast.k=0, Auto.linpreds=FALSE)
+
+maxmem 0.0 GB
+earth.c version 5.3.4
+BetaCache 968 Bytes
+Forward pass: minspan 1 endspan 1   x[60,1] 480 Bytes   bx[60,11] 5.16 kB
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 2    RssDelta 0 MaxLegalRssDelta 59.59
+|Parent 1  Pred 1  Case   45 Cut       0.7222  Rss 6.4439       RssDelta 52.556          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+2      0.8743 0.8908       0.8908    1           x0     0.72216  2   3         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 4    RssDelta 0 MaxLegalRssDelta 6.50831
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  Case   17 Cut       0.2927  Rss 1.7434       RssDelta 4.7005          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+4      0.9634 0.9705      0.07967    1           x0     0.29272  4             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 6    RssDelta 0 MaxLegalRssDelta 1.7608
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  Case   49 Cut       0.7587  Rss 1.3897       RssDelta 0.35364         best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+6      0.9685 0.9764     0.005994    1           x0     0.75871  5             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 8    RssDelta 0 MaxLegalRssDelta 1.40363
+|Parent 5                                                       skip (degree of term would be 102)
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 1  Pred 1  Case   22 Cut       0.3912  Rss 1.3578       RssDelta 0.031946        best for term
+|Parent 3                                                       skip (degree of term would be 2)
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+8      0.9666 0.9770    0.0005415    1           x0     0.39123  6             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 10   RssDelta 0 MaxLegalRssDelta 0.319463
+|Parent 6                                                       skip (degree of term would be 2)
+|Parent 5                                                       skip (degree of term would be 102)
+|Parent 1  Pred 1  Case   31 Cut       0.5167  Rss 1.302        RssDelta 0.055746        best for term
+|Parent 2                                                       skip (degree of term would be 2)
+|Parent 4                                                       skip (degree of term would be 2)
+|Parent 3                                                       skip (degree of term would be 2)
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+10     0.9652 0.9779    0.0009449    1           x0     0.51674  7             1 final (reached nk 11)
+
+-----------------------------------------------------------------------------
+
+Reached nk 11
+After forward pass GRSq 0.965 RSq 0.978
+Forward pass complete: 11 terms, 7 terms used
+
+Subset size        GRSq     RSq  DeltaGRSq nPreds  Terms (col nbr in bx)
+          1      0.0000  0.0000     0.0000      0  1
+          2      0.7830  0.7975     0.7830      1  1 4
+          3      0.9659  0.9704     0.1829      1  1 2 4
+          4      0.9704  0.9761     0.0045      1  1 2 4 5
+          5      0.9692  0.9770    -0.0013      1  1 2 4 5 6
+          6      0.9680  0.9779    -0.0012      1  1 2 4 5 6 7
+chosen    7      0.9652  0.9779    -0.0028      1  1 2 3 4 5 6 7
+
+Prune none penalty 2 nprune null: selected 7 of 7 terms, and 1 of 1 preds
+After pruning pass GRSq 0.965 RSq 0.978

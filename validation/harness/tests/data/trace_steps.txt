@@ -1,0 +1,2868 @@
+Call: earth(x=matrix[120,2], y=c(0.6148,-0.088...), pmethod="none", trace=9,
+            degree=2, penalty=2, nk=15)
+
+maxmem 0.0 GB
+earth.c version 5.3.4
+BetaCache 3.52 kB
+Forward pass: minspan 4 endspan 8   x[120,2] 1.88 kB   bx[120,15] 14.1 kB
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 2    RssDelta 0 MaxLegalRssDelta 120.19
+
+
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 74.885       RssDeltaLin 44.115       best for term (lin pred)
+--FindKnotBegin-- iPred 1 iNewCol 3 RssBeforeAddingHinge 119 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       73.884 RssDelta       45.116 Cut       0.9291 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       73.144 RssDelta       45.856 Cut      0.91262 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       72.146 RssDelta       46.854 Cut       0.8801 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       71.542 RssDelta       47.458 Cut      0.86478 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot         70.5 RssDelta         48.5 Cut      0.84829 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       68.156 RssDelta       50.844 Cut      0.81327 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       66.771 RssDelta       52.229 Cut      0.77569 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       65.322 RssDelta       53.678 Cut      0.71922 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       64.876 RssDelta       54.124 Cut      0.68845 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       64.754 RssDelta       54.246 Cut      0.67062 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       65.422 RssDelta       53.578 Cut      0.62021 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       66.251 RssDelta       52.749 Cut       0.5943 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       67.047 RssDelta       51.953 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       67.864 RssDelta       51.136 Cut      0.52535 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       68.417 RssDelta       50.583 Cut       0.4999 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       68.695 RssDelta       50.305 Cut      0.48584 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       70.145 RssDelta       48.855 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       71.668 RssDelta       47.332 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       73.222 RssDelta       45.778 Cut      0.36511 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       74.363 RssDelta       44.637 Cut      0.31968 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       74.692 RssDelta       44.308 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       74.822 RssDelta       44.178 Cut      0.25886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       74.881 RssDelta       44.119 Cut      0.19723 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       74.885 RssDelta       44.115 Cut      0.14125 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       74.885 RssDelta       44.115 Cut     0.092745 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       74.885 RssDelta       44.115 Cut      0.07863 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   74 Cut       0.6706  Rss 64.754       RssDelta 54.246          best for term
+
+
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 84.834       RssDeltaLin 34.166      
+--FindKnotBegin-- iPred 2 iNewCol 3 RssBeforeAddingHinge 119 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       80.736 RssDelta       38.264 Cut      0.94211 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       79.809 RssDelta       39.191 Cut      0.92715 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       77.148 RssDelta       41.852 Cut      0.90996 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       72.449 RssDelta       46.551 Cut      0.86312 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       71.965 RssDelta       47.035 Cut      0.82237 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       71.653 RssDelta       47.347 Cut      0.78967 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       70.852 RssDelta       48.148 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       70.349 RssDelta       48.651 Cut       0.7295 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       70.174 RssDelta       48.826 Cut      0.70265 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       71.285 RssDelta       47.715 Cut      0.65046 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       71.727 RssDelta       47.273 Cut      0.62319 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       72.368 RssDelta       46.632 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       72.736 RssDelta       46.264 Cut      0.56223 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       72.848 RssDelta       46.152 Cut      0.53893 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot        73.41 RssDelta        45.59 Cut      0.49742 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       73.511 RssDelta       45.489 Cut       0.4303 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot        73.78 RssDelta        45.22 Cut       0.4129 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       74.756 RssDelta       44.244 Cut      0.38368 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       76.312 RssDelta       42.688 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       77.189 RssDelta       41.811 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       78.451 RssDelta       40.549 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       79.207 RssDelta       39.793 Cut      0.19851 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       79.743 RssDelta       39.257 Cut      0.17566 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       84.834 RssDelta       34.166 Cut      0.14547 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       84.834 RssDelta       34.166 Cut       0.1055 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       84.834 RssDelta       34.166 Cut      0.06669 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 84.834       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+2      0.4173 0.4558       0.4558    1           x0     0.67062  2   3         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 4    RssDelta 0 MaxLegalRssDelta 65.4016
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 53.582       RssDeltaLin 11.173       best for term (lin pred)
+--FindKnotBegin-- iPred 2 iNewCol 5 RssBeforeAddingHinge 64.7541 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 25 bx1   0.3266
+--FindKnot--Case  115 iSpan 25 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.0000
+--FindKnot--Case  113 iSpan 24 bx1   0.2568
+--FindKnot--Case  112 iSpan 24 bx1   0.0000
+--FindKnot--Case  111 iSpan 23 bx1   0.3106
+--FindKnot--Case  110 iSpan 23 bx1   0.0000
+--FindKnot--Case  109 iSpan 23 bx1   0.0000
+--FindKnot--Case  108 iSpan 23 bx1   0.0000
+--FindKnot--Case  107 iSpan 22 bx1   0.0405
+--FindKnot--Case  106 iSpan 22 bx1   0.0000
+--FindKnot--Case  105 iSpan 22 bx1   0.0000
+--FindKnot--Case  104 iSpan 21 bx1   0.1313
+--FindKnot--Case  103 iSpan 20 bx1   0.1426
+--FindKnot--Case  102 iSpan 20 bx1   0.0000
+--FindKnot--Case  101 iSpan 20 bx1   0.0000
+--FindKnot--Case  100 iSpan 20 bx1   0.0000
+--FindKnot--Case   99 iSpan 20 bx1   0.0000
+--FindKnot--Case   98 iSpan 20 bx1   0.0000
+--FindKnot--Case   97 iSpan 20 bx1   0.0000
+--FindKnot--Case   96 iSpan 20 bx1   0.0000
+--FindKnot--Case   95 iSpan 20 bx1   0.0000
+--FindKnot--Case   94 iSpan 20 bx1   0.0000
+--FindKnot--Case   93 iSpan 19 bx1   0.2193
+--FindKnot--Case   92 iSpan 18 bx1   0.2095
+--FindKnot--Case   91 iSpan 18 bx1   0.0000
+--FindKnot--Case   90 iSpan 18 bx1   0.0000
+--FindKnot--Case   89 iSpan 18 bx1   0.0000
+--FindKnot--Case   88 iSpan 18 bx1   0.0000
+--FindKnot--Case   87 iSpan 18 bx1   0.0000
+--FindKnot--Case   86 iSpan 17 bx1   0.2420
+--FindKnot--Case   85 iSpan 16 bx1   0.2551
+--FindKnot--Case   84 iSpan 16 bx1   0.0000
+--FindKnot--Case   83 iSpan 16 bx1   0.0000
+--FindKnot--Case   82 iSpan 16 bx1   0.0000
+--FindKnot--Case   81 iSpan 16 bx1   0.0000
+--FindKnot--Case   80 iSpan 16 bx1   0.0000
+--FindKnot--Case   79 iSpan 16 bx1   0.0000
+--FindKnot--Case   78 iSpan 16 bx1   0.0000
+--FindKnot--Case   77 iSpan 16 bx1   0.0000
+--FindKnot--Case   76 iSpan 16 bx1   0.0000
+--FindKnot--Case   75 iSpan 16 bx1   0.0000
+--FindKnot--Case   74 iSpan 16 bx1   0.0000
+--FindKnot--Case   73 iSpan 15 bx1   0.0149
+--FindKnot--Case   72 iSpan 15 bx1   0.0000
+--FindKnot--Case   71 iSpan 14 bx1   0.1982
+--FindKnot--Case   70 iSpan 13 bx1   0.1475
+--FindKnot--Case   69 iSpan 13 bx1   0.0000
+--FindKnot--Case   68 iSpan 13 bx1   0.0000
+--FindKnot--Case   67 iSpan 13 bx1   0.0000
+--FindKnot--Case   66 iSpan 12 bx1   0.3076
+--FindKnot--Case   65 iSpan 12 bx1   0.0000
+--FindKnot--Case   64 iSpan 12 bx1   0.0000
+--FindKnot--Case   63 iSpan 12 bx1   0.0000
+--FindKnot--Case   62 iSpan 11 bx1   0.3113
+--FindKnot--Case   61 iSpan 10 bx1   0.2954
+--FindKnot--Case   60 iSpan 9 bx1   0.1391
+--FindKnot--Case   59 iSpan 9 bx1   0.0000
+--FindKnot--Case   58 iSpan 8 bx1   0.1926
+--FindKnot--Case   57 iSpan 8 bx1   0.0000
+--FindKnot--Case   56 iSpan 8 bx1   0.0000
+--FindKnot--Case   55 iSpan 7 bx1   0.0873
+--FindKnot--Case   54 iSpan 6 bx1   0.2107
+--FindKnot--Case   53 iSpan 5 bx1   0.0871
+--FindKnot--Case   52 iSpan 4 bx1   0.2029
+--FindKnot--Case   51 iSpan 3 bx1   0.0403
+--FindKnot--Case   50 iSpan 2 bx1   0.2783
+--FindKnot--Case   49 iSpan 2 bx1   0.0000
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 2 bx1   0.0000
+--FindKnot--Case   46 iSpan 2 bx1   0.0000
+--FindKnot--Case   45 iSpan 2 bx1   0.0000
+--FindKnot--Case   44 iSpan 2 bx1   0.0000
+--FindKnot--Case   43 iSpan 1 bx1   0.0178
+--FindKnot--Case   42 iSpan 1 bx1   0.0000
+--FindKnot--Case   41 iSpan 1 bx1   0.0000
+--FindKnot--Case   40 RssWithKnot       50.976 RssDelta       13.778 Cut      0.36505 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   39 iSpan 4 bx1   0.0000
+--FindKnot--Case   38 iSpan 3 bx1   0.2634
+--FindKnot--Case   37 iSpan 3 bx1   0.0000
+--FindKnot--Case   36 iSpan 3 bx1   0.0000
+--FindKnot--Case   35 iSpan 2 bx1   0.0031
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.1051
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       51.229 RssDelta       13.525 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.1165
+--FindKnot--Case   27 iSpan 3 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.2175
+--FindKnot--Case   25 iSpan 2 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   40 Cut        0.365  Rss 50.976       RssDelta 13.778          best for term
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 41.932       RssDeltaLin 22.822       best for term (lin pred)
+--FindKnotBegin-- iPred 2 iNewCol 5 RssBeforeAddingHinge 64.7541 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.0504
+--FindKnot--Case  118 iSpan 24 bx1   0.3263
+--FindKnot--Case  117 iSpan 23 bx1   0.1818
+--FindKnot--Case  116 iSpan 23 bx1   0.0000
+--FindKnot--Case  115 iSpan 22 bx1   0.1818
+--FindKnot--Case  114 iSpan 21 bx1   0.5219
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 20 bx1   0.0027
+--FindKnot--Case  111 iSpan 20 bx1   0.0000
+--FindKnot--Case  110 iSpan 19 bx1   0.2302
+--FindKnot--Case  109 iSpan 18 bx1   0.4711
+--FindKnot--Case  108 iSpan 17 bx1   0.1270
+--FindKnot--Case  107 iSpan 17 bx1   0.0000
+--FindKnot--Case  106 iSpan 16 bx1   0.2279
+--FindKnot--Case  105 iSpan 15 bx1   0.0415
+--FindKnot--Case  104 iSpan 15 bx1   0.0000
+--FindKnot--Case  103 iSpan 15 bx1   0.0000
+--FindKnot--Case  102 iSpan 14 bx1   0.2751
+--FindKnot--Case  101 iSpan 13 bx1   0.2641
+--FindKnot--Case  100 iSpan 12 bx1   0.2790
+--FindKnot--Case   99 iSpan 11 bx1   0.1848
+--FindKnot--Case   98 iSpan 10 bx1   0.6559
+--FindKnot--Case   97 iSpan 9 bx1   0.4008
+--FindKnot--Case   96 iSpan 8 bx1   0.5866
+--FindKnot--Case   95 iSpan 7 bx1   0.2552
+--FindKnot--Case   94 iSpan 6 bx1   0.6276
+--FindKnot--Case   93 iSpan 6 bx1   0.0000
+--FindKnot--Case   92 iSpan 6 bx1   0.0000
+--FindKnot--Case   91 iSpan 5 bx1   0.4734
+--FindKnot--Case   90 iSpan 4 bx1   0.2203
+--FindKnot--Case   89 iSpan 3 bx1   0.1632
+--FindKnot--Case   88 iSpan 2 bx1   0.1413
+--FindKnot--Case   87 iSpan 1 bx1   0.6642
+--FindKnot--Case   86 iSpan 1 bx1   0.0000
+--FindKnot--Case   85 iSpan 1 bx1   0.0000
+--FindKnot--Case   84 RssWithKnot       38.773 RssDelta       25.981 Cut      0.73448 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   83 iSpan 3 bx1   0.2560
+--FindKnot--Case   82 iSpan 2 bx1   0.6301
+--FindKnot--Case   81 iSpan 1 bx1   0.0640
+--FindKnot--Case   80 RssWithKnot       38.657 RssDelta       26.097 Cut      0.72588 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   79 iSpan 3 bx1   0.6077
+--FindKnot--Case   78 iSpan 2 bx1   0.5355
+--FindKnot--Case   77 iSpan 1 bx1   0.3968
+--FindKnot--Case   76 RssWithKnot       37.518 RssDelta       27.236 Cut      0.67006 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   75 iSpan 3 bx1   0.5294
+--FindKnot--Case   74 iSpan 2 bx1   0.5920
+--FindKnot--Case   73 iSpan 2 bx1   0.0000
+--FindKnot--Case   72 iSpan 2 bx1   0.0000
+--FindKnot--Case   71 iSpan 2 bx1   0.0000
+--FindKnot--Case   70 iSpan 2 bx1   0.0000
+--FindKnot--Case   69 iSpan 1 bx1   0.4435
+--FindKnot--Case   68 RssWithKnot       36.556 RssDelta       28.198 Cut      0.59392 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   67 iSpan 3 bx1   0.1180
+--FindKnot--Case   66 iSpan 3 bx1   0.0000
+--FindKnot--Case   65 iSpan 2 bx1   0.5799
+--FindKnot--Case   64 iSpan 1 bx1   0.5779
+--FindKnot--Case   63 RssWithKnot       36.374 RssDelta       28.381 Cut       0.5714 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   62 iSpan 4 bx1   0.0000
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 3 bx1   0.0845
+--FindKnot--Case   58 iSpan 3 bx1   0.0000
+--FindKnot--Case   57 iSpan 2 bx1   0.4045
+--FindKnot--Case   56 iSpan 1 bx1   0.4765
+--FindKnot--Case   55 iSpan 1 bx1   0.0000
+--FindKnot--Case   54 iSpan 1 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 iSpan 1 bx1   0.0000
+--FindKnot--Case   50 iSpan 1 bx1   0.0000
+--FindKnot--Case   49 RssWithKnot       36.161 RssDelta       28.593 Cut      0.42977 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   48 iSpan 3 bx1   0.2899
+--FindKnot--Case   47 iSpan 2 bx1   0.1707
+--FindKnot--Case   46 iSpan 1 bx1   0.3709
+--FindKnot--Case   45 RssWithKnot       36.818 RssDelta       27.936 Cut      0.39509 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   44 iSpan 3 bx1   0.5829
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 2 bx1   0.4934
+--FindKnot--Case   41 iSpan 1 bx1   0.0552
+--FindKnot--Case   40 iSpan 1 bx1   0.0000
+--FindKnot--Case   39 RssWithKnot       37.155 RssDelta       27.599 Cut       0.3578 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   38 iSpan 4 bx1   0.0000
+--FindKnot--Case   37 iSpan 3 bx1   0.0763
+--FindKnot--Case   36 iSpan 2 bx1   0.0991
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 1 bx1   0.1453
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 RssWithKnot       37.108 RssDelta       27.646 Cut      0.26979 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 iSpan 3 bx1   0.0337
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.4118
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 1 bx1   0.1906
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 RssWithKnot       41.932 RssDelta       22.822 Cut      0.19511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   49 Cut       0.4298  Rss 36.161       RssDelta 28.593          best for term
+
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 4 RssBeforeAddingHinge 64.7541 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       64.151 RssDelta      0.60317 Cut       0.9291 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       64.248 RssDelta        0.506 Cut      0.91262 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       64.272 RssDelta      0.48163 Cut       0.8801 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       64.261 RssDelta      0.49324 Cut      0.86478 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       64.341 RssDelta      0.41301 Cut      0.84829 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       64.642 RssDelta      0.11176 Cut      0.81327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot        64.63 RssDelta      0.12433 Cut      0.77569 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       64.688 RssDelta      0.06608 Cut      0.71922 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       64.754 RssDelta            0 Cut      0.68845 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       64.754 RssDelta            0 Cut      0.67062 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       64.754 RssDelta            0 Cut      0.62021 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       64.398 RssDelta      0.35607 Cut       0.5943 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot        64.36 RssDelta      0.39447 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       64.377 RssDelta      0.37746 Cut      0.52535 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       64.389 RssDelta       0.3651 Cut       0.4999 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot        64.39 RssDelta      0.36368 Cut      0.48584 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       64.061 RssDelta      0.69357 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       63.372 RssDelta       1.3821 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       62.029 RssDelta       2.7255 Cut      0.36511 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       60.449 RssDelta       4.3048 Cut      0.31968 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       59.909 RssDelta       4.8448 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot        59.76 RssDelta       4.9939 Cut      0.25886 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       60.587 RssDelta       4.1672 Cut      0.19723 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       64.754 RssDelta            0 Cut      0.14125 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       64.754 RssDelta            0 Cut     0.092745 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       64.754 RssDelta            0 Cut      0.07863 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 64.754       RssDelta 0           
+
+
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 19.344       RssDeltaLin 45.41        best for term (lin pred)
+--FindKnotBegin-- iPred 2 iNewCol 5 RssBeforeAddingHinge 64.7541 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       17.974 RssDelta        46.78 Cut      0.94211 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       17.622 RssDelta       47.132 Cut      0.92715 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       16.852 RssDelta       47.902 Cut      0.90996 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       15.612 RssDelta       49.142 Cut      0.86312 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       14.987 RssDelta       49.767 Cut      0.82237 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       14.297 RssDelta       50.457 Cut      0.78967 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       13.349 RssDelta       51.405 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       12.939 RssDelta       51.815 Cut       0.7295 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       12.116 RssDelta       52.638 Cut      0.70265 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       11.031 RssDelta       53.723 Cut      0.65046 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       10.467 RssDelta       54.287 Cut      0.62319 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       9.9453 RssDelta       54.809 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       9.7534 RssDelta       55.001 Cut      0.56223 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       9.5184 RssDelta       55.236 Cut      0.53893 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       9.4318 RssDelta       55.322 Cut      0.49742 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       9.6729 RssDelta       55.081 Cut       0.4303 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       9.9709 RssDelta       54.783 Cut       0.4129 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot        10.65 RssDelta       54.104 Cut      0.38368 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       11.401 RssDelta       53.353 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       11.896 RssDelta       52.858 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot        12.78 RssDelta       51.974 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       13.501 RssDelta       51.253 Cut      0.19851 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       14.045 RssDelta       50.709 Cut      0.17566 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       19.344 RssDelta        45.41 Cut      0.14547 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       19.344 RssDelta        45.41 Cut       0.1055 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       19.344 RssDelta        45.41 Cut      0.06669 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   54 Cut       0.4974  Rss 9.4318       RssDelta 55.322          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+4      0.9089 0.9207       0.4649    2           x1     0.49742  4   5         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 6    RssDelta 0 MaxLegalRssDelta 9.52613
+
+
+|Parent 4  Pred 1  Case   -1 Cut     0.006409< Rss 9.3011       RssDeltaLin 0.13076      best for term (lin pred)
+--FindKnotBegin-- iPred 1 iNewCol 7 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.4834
+--FindKnot--Case  118 iSpan 24 bx1   0.0740
+--FindKnot--Case  117 iSpan 23 bx1   0.4598
+--FindKnot--Case  116 iSpan 22 bx1   0.0924
+--FindKnot--Case  115 iSpan 21 bx1   0.0648
+--FindKnot--Case  114 iSpan 21 bx1   0.0000
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 21 bx1   0.0000
+--FindKnot--Case  111 iSpan 21 bx1   0.0000
+--FindKnot--Case  110 iSpan 21 bx1   0.0000
+--FindKnot--Case  109 iSpan 21 bx1   0.0000
+--FindKnot--Case  108 iSpan 20 bx1   0.4705
+--FindKnot--Case  107 iSpan 19 bx1   0.2508
+--FindKnot--Case  106 iSpan 19 bx1   0.0000
+--FindKnot--Case  105 iSpan 18 bx1   0.2685
+--FindKnot--Case  104 iSpan 17 bx1   0.3250
+--FindKnot--Case  103 iSpan 17 bx1   0.0000
+--FindKnot--Case  102 iSpan 16 bx1   0.0133
+--FindKnot--Case  101 iSpan 15 bx1   0.3149
+--FindKnot--Case  100 iSpan 15 bx1   0.0000
+--FindKnot--Case   99 iSpan 15 bx1   0.0000
+--FindKnot--Case   98 iSpan 14 bx1   0.1366
+--FindKnot--Case   97 iSpan 14 bx1   0.0000
+--FindKnot--Case   96 iSpan 13 bx1   0.0440
+--FindKnot--Case   95 iSpan 13 bx1   0.0000
+--FindKnot--Case   94 iSpan 13 bx1   0.0000
+--FindKnot--Case   93 iSpan 13 bx1   0.0000
+--FindKnot--Case   92 iSpan 13 bx1   0.0000
+--FindKnot--Case   91 iSpan 12 bx1   0.1291
+--FindKnot--Case   90 iSpan 12 bx1   0.0000
+--FindKnot--Case   89 iSpan 11 bx1   0.4153
+--FindKnot--Case   88 iSpan 10 bx1   0.0631
+--FindKnot--Case   87 iSpan 9 bx1   0.4261
+--FindKnot--Case   86 iSpan 9 bx1   0.0000
+--FindKnot--Case   85 iSpan 9 bx1   0.0000
+--FindKnot--Case   84 iSpan 8 bx1   0.0153
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 8 bx1   0.0000
+--FindKnot--Case   81 iSpan 8 bx1   0.0000
+--FindKnot--Case   80 iSpan 8 bx1   0.0000
+--FindKnot--Case   79 iSpan 7 bx1   0.4346
+--FindKnot--Case   78 iSpan 7 bx1   0.0000
+--FindKnot--Case   77 iSpan 7 bx1   0.0000
+--FindKnot--Case   76 iSpan 6 bx1   0.1530
+--FindKnot--Case   75 iSpan 6 bx1   0.0000
+--FindKnot--Case   74 iSpan 6 bx1   0.0000
+--FindKnot--Case   73 iSpan 5 bx1   0.1498
+--FindKnot--Case   72 iSpan 4 bx1   0.4610
+--FindKnot--Case   71 iSpan 4 bx1   0.0000
+--FindKnot--Case   70 iSpan 3 bx1   0.4297
+--FindKnot--Case   69 iSpan 2 bx1   0.4977
+--FindKnot--Case   68 iSpan 2 bx1   0.0000
+--FindKnot--Case   67 iSpan 2 bx1   0.0000
+--FindKnot--Case   66 iSpan 1 bx1   0.2321
+--FindKnot--Case   65 iSpan 1 bx1   0.0000
+--FindKnot--Case   64 RssWithKnot       8.8769 RssDelta      0.55491 Cut      0.57769 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   63 iSpan 3 bx1   0.1048
+--FindKnot--Case   62 iSpan 3 bx1   0.0000
+--FindKnot--Case   61 iSpan 2 bx1   0.0809
+--FindKnot--Case   60 iSpan 1 bx1   0.0965
+--FindKnot--Case   59 RssWithKnot       8.6107 RssDelta      0.82116 Cut      0.52931 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   58 iSpan 3 bx1   0.2884
+--FindKnot--Case   57 iSpan 3 bx1   0.0000
+--FindKnot--Case   56 iSpan 3 bx1   0.0000
+--FindKnot--Case   55 iSpan 2 bx1   0.2922
+--FindKnot--Case   54 iSpan 1 bx1   0.2467
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 RssWithKnot       8.3812 RssDelta       1.0506 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   50 iSpan 3 bx1   0.4913
+--FindKnot--Case   49 iSpan 2 bx1   0.3921
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 1 bx1   0.2989
+--FindKnot--Case   46 RssWithKnot       8.0112 RssDelta       1.4206 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   45 iSpan 3 bx1   0.4572
+--FindKnot--Case   44 iSpan 2 bx1   0.3324
+--FindKnot--Case   43 iSpan 1 bx1   0.2371
+--FindKnot--Case   42 RssWithKnot        7.722 RssDelta       1.7098 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   41 iSpan 4 bx1   0.0000
+--FindKnot--Case   40 iSpan 3 bx1   0.4128
+--FindKnot--Case   39 iSpan 2 bx1   0.3929
+--FindKnot--Case   38 iSpan 2 bx1   0.0000
+--FindKnot--Case   37 iSpan 2 bx1   0.0000
+--FindKnot--Case   36 iSpan 2 bx1   0.0000
+--FindKnot--Case   35 iSpan 1 bx1   0.4975
+--FindKnot--Case   34 iSpan 1 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       6.8651 RssDelta       2.5668 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.2052
+--FindKnot--Case   27 iSpan 2 bx1   0.3657
+--FindKnot--Case   26 iSpan 1 bx1   0.0415
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 4  Pred 1  Case   30 Cut       0.2884  Rss 6.8651       RssDelta 2.5668          best for term
+
+|Parent 4  Pred 2                                               skip (pred is in parent)
+
+
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 9.324        RssDeltaLin 0.10778     
+--FindKnotBegin-- iPred 1 iNewCol 7 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 26 bx1   0.0000
+--FindKnot--Case  115 iSpan 26 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.4252
+--FindKnot--Case  113 iSpan 24 bx1   0.1280
+--FindKnot--Case  112 iSpan 23 bx1   0.0374
+--FindKnot--Case  111 iSpan 22 bx1   0.3706
+--FindKnot--Case  110 iSpan 21 bx1   0.1396
+--FindKnot--Case  109 iSpan 20 bx1   0.4313
+--FindKnot--Case  108 iSpan 20 bx1   0.0000
+--FindKnot--Case  107 iSpan 20 bx1   0.0000
+--FindKnot--Case  106 iSpan 19 bx1   0.3700
+--FindKnot--Case  105 iSpan 19 bx1   0.0000
+--FindKnot--Case  104 iSpan 19 bx1   0.0000
+--FindKnot--Case  103 iSpan 18 bx1   0.2716
+--FindKnot--Case  102 iSpan 18 bx1   0.0000
+--FindKnot--Case  101 iSpan 18 bx1   0.0000
+--FindKnot--Case  100 iSpan 17 bx1   0.4389
+--FindKnot--Case   99 iSpan 16 bx1   0.0251
+--FindKnot--Case   98 iSpan 16 bx1   0.0000
+--FindKnot--Case   97 iSpan 15 bx1   0.4380
+--FindKnot--Case   96 iSpan 15 bx1   0.0000
+--FindKnot--Case   95 iSpan 14 bx1   0.2503
+--FindKnot--Case   94 iSpan 13 bx1   0.4638
+--FindKnot--Case   93 iSpan 12 bx1   0.3519
+--FindKnot--Case   92 iSpan 11 bx1   0.4307
+--FindKnot--Case   91 iSpan 11 bx1   0.0000
+--FindKnot--Case   90 iSpan 10 bx1   0.4947
+--FindKnot--Case   89 iSpan 10 bx1   0.0000
+--FindKnot--Case   88 iSpan 10 bx1   0.0000
+--FindKnot--Case   87 iSpan 10 bx1   0.0000
+--FindKnot--Case   86 iSpan 9 bx1   0.2581
+--FindKnot--Case   85 iSpan 8 bx1   0.1886
+--FindKnot--Case   84 iSpan 8 bx1   0.0000
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 7 bx1   0.3218
+--FindKnot--Case   81 iSpan 6 bx1   0.4814
+--FindKnot--Case   80 iSpan 5 bx1   0.3304
+--FindKnot--Case   79 iSpan 5 bx1   0.0000
+--FindKnot--Case   78 iSpan 4 bx1   0.0371
+--FindKnot--Case   77 iSpan 3 bx1   0.1085
+--FindKnot--Case   76 iSpan 3 bx1   0.0000
+--FindKnot--Case   75 iSpan 2 bx1   0.1794
+--FindKnot--Case   74 iSpan 1 bx1   0.3023
+--FindKnot--Case   73 iSpan 1 bx1   0.0000
+--FindKnot--Case   72 iSpan 1 bx1   0.0000
+--FindKnot--Case   71 RssWithKnot       9.3121 RssDelta       0.1197 Cut      0.62911 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   70 iSpan 4 bx1   0.0000
+--FindKnot--Case   69 iSpan 4 bx1   0.0000
+--FindKnot--Case   68 iSpan 3 bx1   0.1137
+--FindKnot--Case   67 iSpan 2 bx1   0.4691
+--FindKnot--Case   66 iSpan 2 bx1   0.0000
+--FindKnot--Case   65 iSpan 1 bx1   0.1595
+--FindKnot--Case   64 iSpan 1 bx1   0.0000
+--FindKnot--Case   63 iSpan 1 bx1   0.0000
+--FindKnot--Case   62 RssWithKnot       9.1626 RssDelta      0.26921 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 4 bx1   0.0000
+--FindKnot--Case   58 iSpan 4 bx1   0.0000
+--FindKnot--Case   57 iSpan 3 bx1   0.1872
+--FindKnot--Case   56 iSpan 2 bx1   0.4085
+--FindKnot--Case   55 iSpan 2 bx1   0.0000
+--FindKnot--Case   54 iSpan 2 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0722
+--FindKnot--Case   52 RssWithKnot       8.8621 RssDelta      0.56975 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   51 iSpan 4 bx1   0.0000
+--FindKnot--Case   50 iSpan 4 bx1   0.0000
+--FindKnot--Case   49 iSpan 4 bx1   0.0000
+--FindKnot--Case   48 iSpan 3 bx1   0.2650
+--FindKnot--Case   47 iSpan 3 bx1   0.0000
+--FindKnot--Case   46 iSpan 3 bx1   0.0000
+--FindKnot--Case   45 iSpan 3 bx1   0.0000
+--FindKnot--Case   44 iSpan 3 bx1   0.0000
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 3 bx1   0.0000
+--FindKnot--Case   41 iSpan 2 bx1   0.2989
+--FindKnot--Case   40 iSpan 2 bx1   0.0000
+--FindKnot--Case   39 iSpan 2 bx1   0.0000
+--FindKnot--Case   38 iSpan 1 bx1   0.0676
+--FindKnot--Case   37 RssWithKnot       7.8725 RssDelta       1.5594 Cut      0.34431 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   36 iSpan 3 bx1   0.0671
+--FindKnot--Case   35 iSpan 3 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.3471
+--FindKnot--Case   33 iSpan 1 bx1   0.3099
+--FindKnot--Case   32 RssWithKnot       7.7122 RssDelta       1.7196 Cut      0.29971 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 iSpan 3 bx1   0.0747
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.0845
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 2 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.2557
+--FindKnotEnd--
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 9.324        RssDelta 0           
+
+|Parent 5  Pred 2                                               skip (pred is in parent)
+
+
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 9.4318       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 6 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       9.2788 RssDelta      0.15298 Cut       0.9291 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       9.2561 RssDelta      0.17567 Cut      0.91262 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       9.1784 RssDelta      0.25337 Cut       0.8801 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       9.1063 RssDelta      0.32547 Cut      0.86478 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       9.0325 RssDelta      0.39928 Cut      0.84829 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       8.8599 RssDelta      0.57194 Cut      0.81327 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       8.5854 RssDelta      0.84645 Cut      0.77569 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       8.1401 RssDelta       1.2917 Cut      0.71922 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       9.4318 RssDelta            0 Cut      0.68845 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       9.4318 RssDelta            0 Cut      0.67062 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       9.4318 RssDelta            0 Cut      0.62021 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot         6.53 RssDelta       2.9018 Cut       0.5943 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       6.0464 RssDelta       3.3854 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       5.5746 RssDelta       3.8572 Cut      0.52535 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       5.2165 RssDelta       4.2153 Cut       0.4999 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       4.9508 RssDelta        4.481 Cut      0.48584 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       4.0642 RssDelta       5.3676 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       3.5253 RssDelta       5.9065 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       2.9256 RssDelta       6.5062 Cut      0.36511 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       2.5274 RssDelta       6.9044 Cut      0.31968 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       2.5176 RssDelta       6.9142 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       2.6423 RssDelta       6.7895 Cut      0.25886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot        3.499 RssDelta       5.9328 Cut      0.19723 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       9.4318 RssDelta            0 Cut      0.14125 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       9.4318 RssDelta            0 Cut     0.092745 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       9.4318 RssDelta            0 Cut      0.07863 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   30 Cut       0.2884  Rss 2.5176       RssDelta 6.9142          best for term
+
+
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 9.4318       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 6 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       9.4214 RssDelta     0.010408 Cut      0.94211 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       9.4179 RssDelta     0.013865 Cut      0.92715 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       9.4292 RssDelta     0.002589 Cut      0.90996 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       9.4225 RssDelta    0.0092969 Cut      0.86312 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       9.4155 RssDelta     0.016305 Cut      0.82237 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       9.4146 RssDelta     0.017246 Cut      0.78967 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       9.4183 RssDelta      0.01348 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot         9.42 RssDelta     0.011793 Cut       0.7295 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot        9.428 RssDelta    0.0037706 Cut      0.70265 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       9.4317 RssDelta     0.000157 Cut      0.65046 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       9.4296 RssDelta    0.0022421 Cut      0.62319 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       9.4301 RssDelta    0.0016625 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       9.4318 RssDelta            0 Cut      0.56223 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       9.4318 RssDelta            0 Cut      0.53893 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       9.4318 RssDelta            0 Cut      0.49742 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       9.4318 RssDelta            0 Cut       0.4303 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       9.4318 RssDelta            0 Cut       0.4129 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       9.4233 RssDelta    0.0085526 Cut      0.38368 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       9.4221 RssDelta     0.009727 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       9.4264 RssDelta    0.0053949 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       9.4146 RssDelta     0.017252 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       9.4318 RssDelta            0 Cut      0.19851 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       9.4318 RssDelta            0 Cut      0.17566 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       9.4318 RssDelta            0 Cut      0.14547 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       9.4318 RssDelta            0 Cut       0.1055 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       9.4318 RssDelta            0 Cut      0.06669 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 9.4318       RssDelta 0           
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 9.2538       RssDeltaLin 0.17805     
+--FindKnotBegin-- iPred 2 iNewCol 7 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.0504
+--FindKnot--Case  118 iSpan 24 bx1   0.3263
+--FindKnot--Case  117 iSpan 23 bx1   0.1818
+--FindKnot--Case  116 iSpan 23 bx1   0.0000
+--FindKnot--Case  115 iSpan 22 bx1   0.1818
+--FindKnot--Case  114 iSpan 21 bx1   0.5219
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 20 bx1   0.0027
+--FindKnot--Case  111 iSpan 20 bx1   0.0000
+--FindKnot--Case  110 iSpan 19 bx1   0.2302
+--FindKnot--Case  109 iSpan 18 bx1   0.4711
+--FindKnot--Case  108 iSpan 17 bx1   0.1270
+--FindKnot--Case  107 iSpan 17 bx1   0.0000
+--FindKnot--Case  106 iSpan 16 bx1   0.2279
+--FindKnot--Case  105 iSpan 15 bx1   0.0415
+--FindKnot--Case  104 iSpan 15 bx1   0.0000
+--FindKnot--Case  103 iSpan 15 bx1   0.0000
+--FindKnot--Case  102 iSpan 14 bx1   0.2751
+--FindKnot--Case  101 iSpan 13 bx1   0.2641
+--FindKnot--Case  100 iSpan 12 bx1   0.2790
+--FindKnot--Case   99 iSpan 11 bx1   0.1848
+--FindKnot--Case   98 iSpan 10 bx1   0.6559
+--FindKnot--Case   97 iSpan 9 bx1   0.4008
+--FindKnot--Case   96 iSpan 8 bx1   0.5866
+--FindKnot--Case   95 iSpan 7 bx1   0.2552
+--FindKnot--Case   94 iSpan 6 bx1   0.6276
+--FindKnot--Case   93 iSpan 6 bx1   0.0000
+--FindKnot--Case   92 iSpan 6 bx1   0.0000
+--FindKnot--Case   91 iSpan 5 bx1   0.4734
+--FindKnot--Case   90 iSpan 4 bx1   0.2203
+--FindKnot--Case   89 iSpan 3 bx1   0.1632
+--FindKnot--Case   88 iSpan 2 bx1   0.1413
+--FindKnot--Case   87 iSpan 1 bx1   0.6642
+--FindKnot--Case   86 iSpan 1 bx1   0.0000
+--FindKnot--Case   85 iSpan 1 bx1   0.0000
+--FindKnot--Case   84 RssWithKnot       9.0396 RssDelta      0.39225 Cut      0.73448 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   83 iSpan 3 bx1   0.2560
+--FindKnot--Case   82 iSpan 2 bx1   0.6301
+--FindKnot--Case   81 iSpan 1 bx1   0.0640
+--FindKnot--Case   80 RssWithKnot       9.0615 RssDelta      0.37028 Cut      0.72588 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   79 iSpan 3 bx1   0.6077
+--FindKnot--Case   78 iSpan 2 bx1   0.5355
+--FindKnot--Case   77 iSpan 1 bx1   0.3968
+--FindKnot--Case   76 RssWithKnot       9.2046 RssDelta      0.22719 Cut      0.67006 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   75 iSpan 3 bx1   0.5294
+--FindKnot--Case   74 iSpan 2 bx1   0.5920
+--FindKnot--Case   73 iSpan 2 bx1   0.0000
+--FindKnot--Case   72 iSpan 2 bx1   0.0000
+--FindKnot--Case   71 iSpan 2 bx1   0.0000
+--FindKnot--Case   70 iSpan 2 bx1   0.0000
+--FindKnot--Case   69 iSpan 1 bx1   0.4435
+--FindKnot--Case   68 RssWithKnot        9.251 RssDelta      0.18082 Cut      0.59392 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   67 iSpan 3 bx1   0.1180
+--FindKnot--Case   66 iSpan 3 bx1   0.0000
+--FindKnot--Case   65 iSpan 2 bx1   0.5799
+--FindKnot--Case   64 iSpan 1 bx1   0.5779
+--FindKnot--Case   63 RssWithKnot       9.2536 RssDelta      0.17819 Cut       0.5714 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   62 iSpan 4 bx1   0.0000
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 3 bx1   0.0845
+--FindKnot--Case   58 iSpan 3 bx1   0.0000
+--FindKnot--Case   57 iSpan 2 bx1   0.4045
+--FindKnot--Case   56 iSpan 1 bx1   0.4765
+--FindKnot--Case   55 iSpan 1 bx1   0.0000
+--FindKnot--Case   54 iSpan 1 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 iSpan 1 bx1   0.0000
+--FindKnot--Case   50 iSpan 1 bx1   0.0000
+--FindKnot--Case   49 RssWithKnot       9.2303 RssDelta      0.20148 Cut      0.42977 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   48 iSpan 3 bx1   0.2899
+--FindKnot--Case   47 iSpan 2 bx1   0.1707
+--FindKnot--Case   46 iSpan 1 bx1   0.3709
+--FindKnot--Case   45 RssWithKnot       9.2444 RssDelta      0.18745 Cut      0.39509 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   44 iSpan 3 bx1   0.5829
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 2 bx1   0.4934
+--FindKnot--Case   41 iSpan 1 bx1   0.0552
+--FindKnot--Case   40 iSpan 1 bx1   0.0000
+--FindKnot--Case   39 RssWithKnot       9.2483 RssDelta      0.18348 Cut       0.3578 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   38 iSpan 4 bx1   0.0000
+--FindKnot--Case   37 iSpan 3 bx1   0.0763
+--FindKnot--Case   36 iSpan 2 bx1   0.0991
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 1 bx1   0.1453
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 RssWithKnot       9.2133 RssDelta      0.21852 Cut      0.26979 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 iSpan 3 bx1   0.0337
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.4118
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 1 bx1   0.1906
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 RssWithKnot       9.2538 RssDelta      0.17805 Cut      0.19511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 9.2538       RssDelta 0           
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 9.3928       RssDeltaLin 0.038977    
+--FindKnotBegin-- iPred 2 iNewCol 7 RssBeforeAddingHinge 9.43181 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 25 bx1   0.3266
+--FindKnot--Case  115 iSpan 25 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.0000
+--FindKnot--Case  113 iSpan 24 bx1   0.2568
+--FindKnot--Case  112 iSpan 24 bx1   0.0000
+--FindKnot--Case  111 iSpan 23 bx1   0.3106
+--FindKnot--Case  110 iSpan 23 bx1   0.0000
+--FindKnot--Case  109 iSpan 23 bx1   0.0000
+--FindKnot--Case  108 iSpan 23 bx1   0.0000
+--FindKnot--Case  107 iSpan 22 bx1   0.0405
+--FindKnot--Case  106 iSpan 22 bx1   0.0000
+--FindKnot--Case  105 iSpan 22 bx1   0.0000
+--FindKnot--Case  104 iSpan 21 bx1   0.1313
+--FindKnot--Case  103 iSpan 20 bx1   0.1426
+--FindKnot--Case  102 iSpan 20 bx1   0.0000
+--FindKnot--Case  101 iSpan 20 bx1   0.0000
+--FindKnot--Case  100 iSpan 20 bx1   0.0000
+--FindKnot--Case   99 iSpan 20 bx1   0.0000
+--FindKnot--Case   98 iSpan 20 bx1   0.0000
+--FindKnot--Case   97 iSpan 20 bx1   0.0000
+--FindKnot--Case   96 iSpan 20 bx1   0.0000
+--FindKnot--Case   95 iSpan 20 bx1   0.0000
+--FindKnot--Case   94 iSpan 20 bx1   0.0000
+--FindKnot--Case   93 iSpan 19 bx1   0.2193
+--FindKnot--Case   92 iSpan 18 bx1   0.2095
+--FindKnot--Case   91 iSpan 18 bx1   0.0000
+--FindKnot--Case   90 iSpan 18 bx1   0.0000
+--FindKnot--Case   89 iSpan 18 bx1   0.0000
+--FindKnot--Case   88 iSpan 18 bx1   0.0000
+--FindKnot--Case   87 iSpan 18 bx1   0.0000
+--FindKnot--Case   86 iSpan 17 bx1   0.2420
+--FindKnot--Case   85 iSpan 16 bx1   0.2551
+--FindKnot--Case   84 iSpan 16 bx1   0.0000
+--FindKnot--Case   83 iSpan 16 bx1   0.0000
+--FindKnot--Case   82 iSpan 16 bx1   0.0000
+--FindKnot--Case   81 iSpan 16 bx1   0.0000
+--FindKnot--Case   80 iSpan 16 bx1   0.0000
+--FindKnot--Case   79 iSpan 16 bx1   0.0000
+--FindKnot--Case   78 iSpan 16 bx1   0.0000
+--FindKnot--Case   77 iSpan 16 bx1   0.0000
+--FindKnot--Case   76 iSpan 16 bx1   0.0000
+--FindKnot--Case   75 iSpan 16 bx1   0.0000
+--FindKnot--Case   74 iSpan 16 bx1   0.0000
+--FindKnot--Case   73 iSpan 15 bx1   0.0149
+--FindKnot--Case   72 iSpan 15 bx1   0.0000
+--FindKnot--Case   71 iSpan 14 bx1   0.1982
+--FindKnot--Case   70 iSpan 13 bx1   0.1475
+--FindKnot--Case   69 iSpan 13 bx1   0.0000
+--FindKnot--Case   68 iSpan 13 bx1   0.0000
+--FindKnot--Case   67 iSpan 13 bx1   0.0000
+--FindKnot--Case   66 iSpan 12 bx1   0.3076
+--FindKnot--Case   65 iSpan 12 bx1   0.0000
+--FindKnot--Case   64 iSpan 12 bx1   0.0000
+--FindKnot--Case   63 iSpan 12 bx1   0.0000
+--FindKnot--Case   62 iSpan 11 bx1   0.3113
+--FindKnot--Case   61 iSpan 10 bx1   0.2954
+--FindKnot--Case   60 iSpan 9 bx1   0.1391
+--FindKnot--Case   59 iSpan 9 bx1   0.0000
+--FindKnot--Case   58 iSpan 8 bx1   0.1926
+--FindKnot--Case   57 iSpan 8 bx1   0.0000
+--FindKnot--Case   56 iSpan 8 bx1   0.0000
+--FindKnot--Case   55 iSpan 7 bx1   0.0873
+--FindKnot--Case   54 iSpan 6 bx1   0.2107
+--FindKnot--Case   53 iSpan 5 bx1   0.0871
+--FindKnot--Case   52 iSpan 4 bx1   0.2029
+--FindKnot--Case   51 iSpan 3 bx1   0.0403
+--FindKnot--Case   50 iSpan 2 bx1   0.2783
+--FindKnot--Case   49 iSpan 2 bx1   0.0000
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 2 bx1   0.0000
+--FindKnot--Case   46 iSpan 2 bx1   0.0000
+--FindKnot--Case   45 iSpan 2 bx1   0.0000
+--FindKnot--Case   44 iSpan 2 bx1   0.0000
+--FindKnot--Case   43 iSpan 1 bx1   0.0178
+--FindKnot--Case   42 iSpan 1 bx1   0.0000
+--FindKnot--Case   41 iSpan 1 bx1   0.0000
+--FindKnot--Case   40 RssWithKnot        9.378 RssDelta     0.053789 Cut      0.36505 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   39 iSpan 4 bx1   0.0000
+--FindKnot--Case   38 iSpan 3 bx1   0.2634
+--FindKnot--Case   37 iSpan 3 bx1   0.0000
+--FindKnot--Case   36 iSpan 3 bx1   0.0000
+--FindKnot--Case   35 iSpan 2 bx1   0.0031
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.1051
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       9.3699 RssDelta     0.061906 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.1165
+--FindKnot--Case   27 iSpan 3 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.2175
+--FindKnot--Case   25 iSpan 2 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 9.3928       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+6      0.9748 0.9788       0.0581    1           x0     0.28842  6             1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 8    RssDelta 0 MaxLegalRssDelta 2.54279
+
+|Parent 6  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 6  Pred 2  Case   -1 Cut     0.002739< Rss 2.4658       RssDeltaLin 0.05184      best for term (lin pred)
+--FindKnotBegin-- iPred 2 iNewCol 9 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.3318
+--FindKnot--Case  118 iSpan 24 bx1   0.0559
+--FindKnot--Case  117 iSpan 23 bx1   0.2004
+--FindKnot--Case  116 iSpan 22 bx1   0.7088
+--FindKnot--Case  115 iSpan 21 bx1   0.2004
+--FindKnot--Case  114 iSpan 21 bx1   0.0000
+--FindKnot--Case  113 iSpan 20 bx1   0.6390
+--FindKnot--Case  112 iSpan 19 bx1   0.3795
+--FindKnot--Case  111 iSpan 18 bx1   0.6928
+--FindKnot--Case  110 iSpan 17 bx1   0.1520
+--FindKnot--Case  109 iSpan 17 bx1   0.0000
+--FindKnot--Case  108 iSpan 16 bx1   0.2552
+--FindKnot--Case  107 iSpan 15 bx1   0.4227
+--FindKnot--Case  106 iSpan 14 bx1   0.1543
+--FindKnot--Case  105 iSpan 13 bx1   0.3407
+--FindKnot--Case  104 iSpan 12 bx1   0.5135
+--FindKnot--Case  103 iSpan 11 bx1   0.5248
+--FindKnot--Case  102 iSpan 10 bx1   0.1071
+--FindKnot--Case  101 iSpan 9 bx1   0.1181
+--FindKnot--Case  100 iSpan 8 bx1   0.1032
+--FindKnot--Case   99 iSpan 7 bx1   0.1974
+--FindKnot--Case   98 iSpan 7 bx1   0.0000
+--FindKnot--Case   97 iSpan 7 bx1   0.0000
+--FindKnot--Case   96 iSpan 7 bx1   0.0000
+--FindKnot--Case   95 iSpan 6 bx1   0.1270
+--FindKnot--Case   94 iSpan 6 bx1   0.0000
+--FindKnot--Case   93 iSpan 5 bx1   0.6015
+--FindKnot--Case   92 iSpan 4 bx1   0.5917
+--FindKnot--Case   91 iSpan 4 bx1   0.0000
+--FindKnot--Case   90 iSpan 3 bx1   0.1619
+--FindKnot--Case   89 iSpan 2 bx1   0.2190
+--FindKnot--Case   88 iSpan 1 bx1   0.2409
+--FindKnot--Case   87 iSpan 1 bx1   0.0000
+--FindKnot--Case   86 RssWithKnot       2.3812 RssDelta       0.1364 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   0.6373
+--FindKnot--Case   84 iSpan 2 bx1   0.2116
+--FindKnot--Case   83 iSpan 1 bx1   0.1262
+--FindKnot--Case   82 iSpan 1 bx1   0.0000
+--FindKnot--Case   81 RssWithKnot       2.3712 RssDelta      0.14642 Cut      0.72902 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   80 iSpan 4 bx1   0.0000
+--FindKnot--Case   79 iSpan 4 bx1   0.0000
+--FindKnot--Case   78 iSpan 4 bx1   0.0000
+--FindKnot--Case   77 iSpan 4 bx1   0.0000
+--FindKnot--Case   76 iSpan 3 bx1   0.0103
+--FindKnot--Case   75 iSpan 3 bx1   0.0000
+--FindKnot--Case   74 iSpan 3 bx1   0.0000
+--FindKnot--Case   73 iSpan 2 bx1   0.3971
+--FindKnot--Case   72 iSpan 1 bx1   0.3822
+--FindKnot--Case   71 RssWithKnot       2.3938 RssDelta      0.12384 Cut      0.62651 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   70 iSpan 3 bx1   0.5297
+--FindKnot--Case   69 iSpan 3 bx1   0.0000
+--FindKnot--Case   68 iSpan 2 bx1   0.2893
+--FindKnot--Case   67 iSpan 1 bx1   0.2642
+--FindKnot--Case   66 RssWithKnot       2.4267 RssDelta     0.090922 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 4 bx1   0.0000
+--FindKnot--Case   64 iSpan 4 bx1   0.0000
+--FindKnot--Case   63 iSpan 3 bx1   0.2730
+--FindKnot--Case   62 iSpan 2 bx1   0.6935
+--FindKnot--Case   61 iSpan 1 bx1   0.6776
+--FindKnot--Case   60 RssWithKnot       2.4402 RssDelta     0.077452 Cut      0.55409 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   59 iSpan 3 bx1   0.2977
+--FindKnot--Case   58 iSpan 2 bx1   0.5748
+--FindKnot--Case   57 iSpan 2 bx1   0.0000
+--FindKnot--Case   56 iSpan 2 bx1   0.0000
+--FindKnot--Case   55 iSpan 1 bx1   0.4695
+--FindKnot--Case   54 RssWithKnot        2.454 RssDelta     0.063618 Cut      0.49742 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   0.4693
+--FindKnot--Case   52 iSpan 2 bx1   0.5851
+--FindKnot--Case   51 iSpan 1 bx1   0.4225
+--FindKnot--Case   50 RssWithKnot       2.4583 RssDelta     0.059281 Cut       0.4303 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   0.0559
+--FindKnot--Case   48 iSpan 2 bx1   0.0923
+--FindKnot--Case   47 iSpan 1 bx1   0.2115
+--FindKnot--Case   46 RssWithKnot       2.4606 RssDelta     0.057045 Cut       0.4129 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 4 bx1   0.0000
+--FindKnot--Case   44 iSpan 4 bx1   0.0000
+--FindKnot--Case   43 iSpan 3 bx1   0.4000
+--FindKnot--Case   42 iSpan 3 bx1   0.0000
+--FindKnot--Case   41 iSpan 2 bx1   0.3270
+--FindKnot--Case   40 iSpan 1 bx1   0.6707
+--FindKnot--Case   39 iSpan 1 bx1   0.0000
+--FindKnot--Case   38 RssWithKnot       2.4636 RssDelta     0.054017 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   0.3059
+--FindKnot--Case   36 iSpan 2 bx1   0.2831
+--FindKnot--Case   35 iSpan 1 bx1   0.3853
+--FindKnot--Case   34 RssWithKnot       2.4635 RssDelta     0.054135 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   0.4873
+--FindKnot--Case   32 iSpan 3 bx1   0.0000
+--FindKnot--Case   31 iSpan 2 bx1   0.3485
+--FindKnot--Case   30 iSpan 1 bx1   0.5723
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 RssWithKnot       2.4594 RssDelta     0.058175 Cut      0.23237 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 iSpan 3 bx1   0.1916
+--FindKnot--Case   26 iSpan 2 bx1   0.5997
+--FindKnot--Case   25 iSpan 1 bx1   0.1161
+--FindKnotEnd--
+|Parent 6  Pred 2  Case   81 Cut        0.729  Rss 2.3712       RssDelta 0.14642         best for term
+
+
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 2.5176       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 8 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot        2.514 RssDelta     0.003649 Cut       0.9291 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       2.5165 RssDelta    0.0011547 Cut      0.91262 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       2.5148 RssDelta    0.0028009 Cut       0.8801 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot         2.51 RssDelta    0.0075662 Cut      0.86478 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       2.5071 RssDelta      0.01054 Cut      0.84829 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       2.4969 RssDelta     0.020725 Cut      0.81327 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       2.4705 RssDelta      0.04711 Cut      0.77569 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       2.4388 RssDelta       0.0788 Cut      0.71922 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       2.5176 RssDelta            0 Cut      0.68845 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       2.5176 RssDelta            0 Cut      0.67062 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       2.5176 RssDelta            0 Cut      0.62021 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       2.4459 RssDelta     0.071754 Cut       0.5943 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       2.4643 RssDelta     0.053293 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       2.4831 RssDelta     0.034517 Cut      0.52535 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       2.4927 RssDelta     0.024908 Cut       0.4999 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       2.4961 RssDelta     0.021546 Cut      0.48584 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       2.5019 RssDelta      0.01576 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       2.5176 RssDelta            0 Cut      0.40455 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       2.5176 RssDelta            0 Cut      0.36511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       2.5176 RssDelta            0 Cut      0.31968 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       2.5176 RssDelta            0 Cut      0.28842 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       2.5176 RssDelta            0 Cut      0.25886 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       2.5176 RssDelta            0 Cut      0.19723 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       2.5176 RssDelta            0 Cut      0.14125 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       2.5176 RssDelta            0 Cut     0.092745 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       2.5176 RssDelta            0 Cut      0.07863 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 2.5176       RssDelta 0           
+
+
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 2.5176       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 8 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       2.5094 RssDelta    0.0082396 Cut      0.94211 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       2.5098 RssDelta    0.0077858 Cut      0.92715 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       2.5023 RssDelta     0.015278 Cut      0.90996 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       2.4907 RssDelta     0.026956 Cut      0.86312 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       2.4853 RssDelta     0.032343 Cut      0.82237 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       2.4832 RssDelta     0.034417 Cut      0.78967 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       2.4689 RssDelta     0.048707 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       2.4623 RssDelta     0.055327 Cut       0.7295 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       2.4556 RssDelta     0.061994 Cut      0.70265 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       2.4111 RssDelta      0.10652 Cut      0.65046 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       2.3837 RssDelta      0.13393 Cut      0.62319 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       2.3905 RssDelta      0.12711 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       2.5176 RssDelta            0 Cut      0.56223 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       2.5176 RssDelta            0 Cut      0.53893 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       2.5176 RssDelta            0 Cut      0.49742 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       2.5176 RssDelta            0 Cut       0.4303 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       2.5176 RssDelta            0 Cut       0.4129 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       2.4651 RssDelta      0.05254 Cut      0.38368 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot        2.482 RssDelta     0.035575 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       2.4855 RssDelta     0.032128 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       2.5022 RssDelta     0.015375 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       2.5176 RssDelta            0 Cut      0.19851 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       2.5176 RssDelta            0 Cut      0.17566 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       2.5176 RssDelta            0 Cut      0.14547 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       2.5176 RssDelta            0 Cut       0.1055 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       2.5176 RssDelta            0 Cut      0.06669 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 2.5176       RssDelta 0           
+
+
+|Parent 4  Pred 1  Case   -1 Cut     0.006409< Rss 2.4885       RssDeltaLin 0.029081    
+--FindKnotBegin-- iPred 1 iNewCol 9 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.4834
+--FindKnot--Case  118 iSpan 24 bx1   0.0740
+--FindKnot--Case  117 iSpan 23 bx1   0.4598
+--FindKnot--Case  116 iSpan 22 bx1   0.0924
+--FindKnot--Case  115 iSpan 21 bx1   0.0648
+--FindKnot--Case  114 iSpan 21 bx1   0.0000
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 21 bx1   0.0000
+--FindKnot--Case  111 iSpan 21 bx1   0.0000
+--FindKnot--Case  110 iSpan 21 bx1   0.0000
+--FindKnot--Case  109 iSpan 21 bx1   0.0000
+--FindKnot--Case  108 iSpan 20 bx1   0.4705
+--FindKnot--Case  107 iSpan 19 bx1   0.2508
+--FindKnot--Case  106 iSpan 19 bx1   0.0000
+--FindKnot--Case  105 iSpan 18 bx1   0.2685
+--FindKnot--Case  104 iSpan 17 bx1   0.3250
+--FindKnot--Case  103 iSpan 17 bx1   0.0000
+--FindKnot--Case  102 iSpan 16 bx1   0.0133
+--FindKnot--Case  101 iSpan 15 bx1   0.3149
+--FindKnot--Case  100 iSpan 15 bx1   0.0000
+--FindKnot--Case   99 iSpan 15 bx1   0.0000
+--FindKnot--Case   98 iSpan 14 bx1   0.1366
+--FindKnot--Case   97 iSpan 14 bx1   0.0000
+--FindKnot--Case   96 iSpan 13 bx1   0.0440
+--FindKnot--Case   95 iSpan 13 bx1   0.0000
+--FindKnot--Case   94 iSpan 13 bx1   0.0000
+--FindKnot--Case   93 iSpan 13 bx1   0.0000
+--FindKnot--Case   92 iSpan 13 bx1   0.0000
+--FindKnot--Case   91 iSpan 12 bx1   0.1291
+--FindKnot--Case   90 iSpan 12 bx1   0.0000
+--FindKnot--Case   89 iSpan 11 bx1   0.4153
+--FindKnot--Case   88 iSpan 10 bx1   0.0631
+--FindKnot--Case   87 iSpan 9 bx1   0.4261
+--FindKnot--Case   86 iSpan 9 bx1   0.0000
+--FindKnot--Case   85 iSpan 9 bx1   0.0000
+--FindKnot--Case   84 iSpan 8 bx1   0.0153
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 8 bx1   0.0000
+--FindKnot--Case   81 iSpan 8 bx1   0.0000
+--FindKnot--Case   80 iSpan 8 bx1   0.0000
+--FindKnot--Case   79 iSpan 7 bx1   0.4346
+--FindKnot--Case   78 iSpan 7 bx1   0.0000
+--FindKnot--Case   77 iSpan 7 bx1   0.0000
+--FindKnot--Case   76 iSpan 6 bx1   0.1530
+--FindKnot--Case   75 iSpan 6 bx1   0.0000
+--FindKnot--Case   74 iSpan 6 bx1   0.0000
+--FindKnot--Case   73 iSpan 5 bx1   0.1498
+--FindKnot--Case   72 iSpan 4 bx1   0.4610
+--FindKnot--Case   71 iSpan 4 bx1   0.0000
+--FindKnot--Case   70 iSpan 3 bx1   0.4297
+--FindKnot--Case   69 iSpan 2 bx1   0.4977
+--FindKnot--Case   68 iSpan 2 bx1   0.0000
+--FindKnot--Case   67 iSpan 2 bx1   0.0000
+--FindKnot--Case   66 iSpan 1 bx1   0.2321
+--FindKnot--Case   65 iSpan 1 bx1   0.0000
+--FindKnot--Case   64 RssWithKnot       2.4826 RssDelta     0.034971 Cut      0.57769 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   63 iSpan 3 bx1   0.1048
+--FindKnot--Case   62 iSpan 3 bx1   0.0000
+--FindKnot--Case   61 iSpan 2 bx1   0.0809
+--FindKnot--Case   60 iSpan 1 bx1   0.0965
+--FindKnot--Case   59 RssWithKnot       2.4843 RssDelta     0.033276 Cut      0.52931 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   58 iSpan 3 bx1   0.2884
+--FindKnot--Case   57 iSpan 3 bx1   0.0000
+--FindKnot--Case   56 iSpan 3 bx1   0.0000
+--FindKnot--Case   55 iSpan 2 bx1   0.2922
+--FindKnot--Case   54 iSpan 1 bx1   0.2467
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 RssWithKnot       2.4861 RssDelta     0.031493 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   50 iSpan 3 bx1   0.4913
+--FindKnot--Case   49 iSpan 2 bx1   0.3921
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 1 bx1   0.2989
+--FindKnot--Case   46 RssWithKnot       2.4868 RssDelta      0.03079 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   0.4572
+--FindKnot--Case   44 iSpan 2 bx1   0.3324
+--FindKnot--Case   43 iSpan 1 bx1   0.2371
+--FindKnot--Case   42 RssWithKnot       2.4867 RssDelta     0.030891 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   41 iSpan 4 bx1   0.0000
+--FindKnot--Case   40 iSpan 3 bx1   0.4128
+--FindKnot--Case   39 iSpan 2 bx1   0.3929
+--FindKnot--Case   38 iSpan 2 bx1   0.0000
+--FindKnot--Case   37 iSpan 2 bx1   0.0000
+--FindKnot--Case   36 iSpan 2 bx1   0.0000
+--FindKnot--Case   35 iSpan 1 bx1   0.4975
+--FindKnot--Case   34 iSpan 1 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       2.4857 RssDelta     0.031905 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.2052
+--FindKnot--Case   27 iSpan 2 bx1   0.3657
+--FindKnot--Case   26 iSpan 1 bx1   0.0415
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 4  Pred 1  Case   -1 Cut     0.006409< Rss 2.4885       RssDelta 0           
+
+|Parent 4  Pred 2                                               skip (pred is in parent)
+
+
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 2.4504       RssDeltaLin 0.06722     
+--FindKnotBegin-- iPred 1 iNewCol 9 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 26 bx1   0.0000
+--FindKnot--Case  115 iSpan 26 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.4252
+--FindKnot--Case  113 iSpan 24 bx1   0.1280
+--FindKnot--Case  112 iSpan 23 bx1   0.0374
+--FindKnot--Case  111 iSpan 22 bx1   0.3706
+--FindKnot--Case  110 iSpan 21 bx1   0.1396
+--FindKnot--Case  109 iSpan 20 bx1   0.4313
+--FindKnot--Case  108 iSpan 20 bx1   0.0000
+--FindKnot--Case  107 iSpan 20 bx1   0.0000
+--FindKnot--Case  106 iSpan 19 bx1   0.3700
+--FindKnot--Case  105 iSpan 19 bx1   0.0000
+--FindKnot--Case  104 iSpan 19 bx1   0.0000
+--FindKnot--Case  103 iSpan 18 bx1   0.2716
+--FindKnot--Case  102 iSpan 18 bx1   0.0000
+--FindKnot--Case  101 iSpan 18 bx1   0.0000
+--FindKnot--Case  100 iSpan 17 bx1   0.4389
+--FindKnot--Case   99 iSpan 16 bx1   0.0251
+--FindKnot--Case   98 iSpan 16 bx1   0.0000
+--FindKnot--Case   97 iSpan 15 bx1   0.4380
+--FindKnot--Case   96 iSpan 15 bx1   0.0000
+--FindKnot--Case   95 iSpan 14 bx1   0.2503
+--FindKnot--Case   94 iSpan 13 bx1   0.4638
+--FindKnot--Case   93 iSpan 12 bx1   0.3519
+--FindKnot--Case   92 iSpan 11 bx1   0.4307
+--FindKnot--Case   91 iSpan 11 bx1   0.0000
+--FindKnot--Case   90 iSpan 10 bx1   0.4947
+--FindKnot--Case   89 iSpan 10 bx1   0.0000
+--FindKnot--Case   88 iSpan 10 bx1   0.0000
+--FindKnot--Case   87 iSpan 10 bx1   0.0000
+--FindKnot--Case   86 iSpan 9 bx1   0.2581
+--FindKnot--Case   85 iSpan 8 bx1   0.1886
+--FindKnot--Case   84 iSpan 8 bx1   0.0000
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 7 bx1   0.3218
+--FindKnot--Case   81 iSpan 6 bx1   0.4814
+--FindKnot--Case   80 iSpan 5 bx1   0.3304
+--FindKnot--Case   79 iSpan 5 bx1   0.0000
+--FindKnot--Case   78 iSpan 4 bx1   0.0371
+--FindKnot--Case   77 iSpan 3 bx1   0.1085
+--FindKnot--Case   76 iSpan 3 bx1   0.0000
+--FindKnot--Case   75 iSpan 2 bx1   0.1794
+--FindKnot--Case   74 iSpan 1 bx1   0.3023
+--FindKnot--Case   73 iSpan 1 bx1   0.0000
+--FindKnot--Case   72 iSpan 1 bx1   0.0000
+--FindKnot--Case   71 RssWithKnot       2.4504 RssDelta      0.06723 Cut      0.62911 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   70 iSpan 4 bx1   0.0000
+--FindKnot--Case   69 iSpan 4 bx1   0.0000
+--FindKnot--Case   68 iSpan 3 bx1   0.1137
+--FindKnot--Case   67 iSpan 2 bx1   0.4691
+--FindKnot--Case   66 iSpan 2 bx1   0.0000
+--FindKnot--Case   65 iSpan 1 bx1   0.1595
+--FindKnot--Case   64 iSpan 1 bx1   0.0000
+--FindKnot--Case   63 iSpan 1 bx1   0.0000
+--FindKnot--Case   62 RssWithKnot       2.4501 RssDelta     0.067553 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 4 bx1   0.0000
+--FindKnot--Case   58 iSpan 4 bx1   0.0000
+--FindKnot--Case   57 iSpan 3 bx1   0.1872
+--FindKnot--Case   56 iSpan 2 bx1   0.4085
+--FindKnot--Case   55 iSpan 2 bx1   0.0000
+--FindKnot--Case   54 iSpan 2 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0722
+--FindKnot--Case   52 RssWithKnot       2.4503 RssDelta     0.067332 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   51 iSpan 4 bx1   0.0000
+--FindKnot--Case   50 iSpan 4 bx1   0.0000
+--FindKnot--Case   49 iSpan 4 bx1   0.0000
+--FindKnot--Case   48 iSpan 3 bx1   0.2650
+--FindKnot--Case   47 iSpan 3 bx1   0.0000
+--FindKnot--Case   46 iSpan 3 bx1   0.0000
+--FindKnot--Case   45 iSpan 3 bx1   0.0000
+--FindKnot--Case   44 iSpan 3 bx1   0.0000
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 3 bx1   0.0000
+--FindKnot--Case   41 iSpan 2 bx1   0.2989
+--FindKnot--Case   40 iSpan 2 bx1   0.0000
+--FindKnot--Case   39 iSpan 2 bx1   0.0000
+--FindKnot--Case   38 iSpan 1 bx1   0.0676
+--FindKnot--Case   37 RssWithKnot       2.4497 RssDelta     0.067866 Cut      0.34431 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   36 iSpan 3 bx1   0.0671
+--FindKnot--Case   35 iSpan 3 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.3471
+--FindKnot--Case   33 iSpan 1 bx1   0.3099
+--FindKnot--Case   32 RssWithKnot       2.4504 RssDelta     0.067226 Cut      0.29971 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 iSpan 3 bx1   0.0747
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.0845
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 2 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.2557
+--FindKnotEnd--
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 2.4504       RssDelta 0           
+
+|Parent 5  Pred 2                                               skip (pred is in parent)
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 2.4578       RssDeltaLin 0.059838    
+--FindKnotBegin-- iPred 2 iNewCol 9 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.0504
+--FindKnot--Case  118 iSpan 24 bx1   0.3263
+--FindKnot--Case  117 iSpan 23 bx1   0.1818
+--FindKnot--Case  116 iSpan 23 bx1   0.0000
+--FindKnot--Case  115 iSpan 22 bx1   0.1818
+--FindKnot--Case  114 iSpan 21 bx1   0.5219
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 20 bx1   0.0027
+--FindKnot--Case  111 iSpan 20 bx1   0.0000
+--FindKnot--Case  110 iSpan 19 bx1   0.2302
+--FindKnot--Case  109 iSpan 18 bx1   0.4711
+--FindKnot--Case  108 iSpan 17 bx1   0.1270
+--FindKnot--Case  107 iSpan 17 bx1   0.0000
+--FindKnot--Case  106 iSpan 16 bx1   0.2279
+--FindKnot--Case  105 iSpan 15 bx1   0.0415
+--FindKnot--Case  104 iSpan 15 bx1   0.0000
+--FindKnot--Case  103 iSpan 15 bx1   0.0000
+--FindKnot--Case  102 iSpan 14 bx1   0.2751
+--FindKnot--Case  101 iSpan 13 bx1   0.2641
+--FindKnot--Case  100 iSpan 12 bx1   0.2790
+--FindKnot--Case   99 iSpan 11 bx1   0.1848
+--FindKnot--Case   98 iSpan 10 bx1   0.6559
+--FindKnot--Case   97 iSpan 9 bx1   0.4008
+--FindKnot--Case   96 iSpan 8 bx1   0.5866
+--FindKnot--Case   95 iSpan 7 bx1   0.2552
+--FindKnot--Case   94 iSpan 6 bx1   0.6276
+--FindKnot--Case   93 iSpan 6 bx1   0.0000
+--FindKnot--Case   92 iSpan 6 bx1   0.0000
+--FindKnot--Case   91 iSpan 5 bx1   0.4734
+--FindKnot--Case   90 iSpan 4 bx1   0.2203
+--FindKnot--Case   89 iSpan 3 bx1   0.1632
+--FindKnot--Case   88 iSpan 2 bx1   0.1413
+--FindKnot--Case   87 iSpan 1 bx1   0.6642
+--FindKnot--Case   86 iSpan 1 bx1   0.0000
+--FindKnot--Case   85 iSpan 1 bx1   0.0000
+--FindKnot--Case   84 RssWithKnot       2.4547 RssDelta     0.062886 Cut      0.73448 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   83 iSpan 3 bx1   0.2560
+--FindKnot--Case   82 iSpan 2 bx1   0.6301
+--FindKnot--Case   81 iSpan 1 bx1   0.0640
+--FindKnot--Case   80 RssWithKnot       2.4545 RssDelta      0.06307 Cut      0.72588 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   79 iSpan 3 bx1   0.6077
+--FindKnot--Case   78 iSpan 2 bx1   0.5355
+--FindKnot--Case   77 iSpan 1 bx1   0.3968
+--FindKnot--Case   76 RssWithKnot       2.4565 RssDelta      0.06107 Cut      0.67006 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   75 iSpan 3 bx1   0.5294
+--FindKnot--Case   74 iSpan 2 bx1   0.5920
+--FindKnot--Case   73 iSpan 2 bx1   0.0000
+--FindKnot--Case   72 iSpan 2 bx1   0.0000
+--FindKnot--Case   71 iSpan 2 bx1   0.0000
+--FindKnot--Case   70 iSpan 2 bx1   0.0000
+--FindKnot--Case   69 iSpan 1 bx1   0.4435
+--FindKnot--Case   68 RssWithKnot       2.4575 RssDelta     0.060125 Cut      0.59392 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   67 iSpan 3 bx1   0.1180
+--FindKnot--Case   66 iSpan 3 bx1   0.0000
+--FindKnot--Case   65 iSpan 2 bx1   0.5799
+--FindKnot--Case   64 iSpan 1 bx1   0.5779
+--FindKnot--Case   63 RssWithKnot       2.4571 RssDelta     0.060478 Cut       0.5714 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   62 iSpan 4 bx1   0.0000
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 3 bx1   0.0845
+--FindKnot--Case   58 iSpan 3 bx1   0.0000
+--FindKnot--Case   57 iSpan 2 bx1   0.4045
+--FindKnot--Case   56 iSpan 1 bx1   0.4765
+--FindKnot--Case   55 iSpan 1 bx1   0.0000
+--FindKnot--Case   54 iSpan 1 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 iSpan 1 bx1   0.0000
+--FindKnot--Case   50 iSpan 1 bx1   0.0000
+--FindKnot--Case   49 RssWithKnot       2.4337 RssDelta     0.083887 Cut      0.42977 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   48 iSpan 3 bx1   0.2899
+--FindKnot--Case   47 iSpan 2 bx1   0.1707
+--FindKnot--Case   46 iSpan 1 bx1   0.3709
+--FindKnot--Case   45 RssWithKnot        2.429 RssDelta       0.0886 Cut      0.39509 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   44 iSpan 3 bx1   0.5829
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 2 bx1   0.4934
+--FindKnot--Case   41 iSpan 1 bx1   0.0552
+--FindKnot--Case   40 iSpan 1 bx1   0.0000
+--FindKnot--Case   39 RssWithKnot        2.428 RssDelta     0.089571 Cut       0.3578 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   38 iSpan 4 bx1   0.0000
+--FindKnot--Case   37 iSpan 3 bx1   0.0763
+--FindKnot--Case   36 iSpan 2 bx1   0.0991
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 1 bx1   0.1453
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 RssWithKnot       2.4143 RssDelta      0.10334 Cut      0.26979 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 iSpan 3 bx1   0.0337
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.4118
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 1 bx1   0.1906
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 RssWithKnot       2.4578 RssDelta     0.059838 Cut      0.19511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 2.4578       RssDelta 0           
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 2.4909       RssDeltaLin 0.026744    
+--FindKnotBegin-- iPred 2 iNewCol 9 RssBeforeAddingHinge 2.51761 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 25 bx1   0.3266
+--FindKnot--Case  115 iSpan 25 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.0000
+--FindKnot--Case  113 iSpan 24 bx1   0.2568
+--FindKnot--Case  112 iSpan 24 bx1   0.0000
+--FindKnot--Case  111 iSpan 23 bx1   0.3106
+--FindKnot--Case  110 iSpan 23 bx1   0.0000
+--FindKnot--Case  109 iSpan 23 bx1   0.0000
+--FindKnot--Case  108 iSpan 23 bx1   0.0000
+--FindKnot--Case  107 iSpan 22 bx1   0.0405
+--FindKnot--Case  106 iSpan 22 bx1   0.0000
+--FindKnot--Case  105 iSpan 22 bx1   0.0000
+--FindKnot--Case  104 iSpan 21 bx1   0.1313
+--FindKnot--Case  103 iSpan 20 bx1   0.1426
+--FindKnot--Case  102 iSpan 20 bx1   0.0000
+--FindKnot--Case  101 iSpan 20 bx1   0.0000
+--FindKnot--Case  100 iSpan 20 bx1   0.0000
+--FindKnot--Case   99 iSpan 20 bx1   0.0000
+--FindKnot--Case   98 iSpan 20 bx1   0.0000
+--FindKnot--Case   97 iSpan 20 bx1   0.0000
+--FindKnot--Case   96 iSpan 20 bx1   0.0000
+--FindKnot--Case   95 iSpan 20 bx1   0.0000
+--FindKnot--Case   94 iSpan 20 bx1   0.0000
+--FindKnot--Case   93 iSpan 19 bx1   0.2193
+--FindKnot--Case   92 iSpan 18 bx1   0.2095
+--FindKnot--Case   91 iSpan 18 bx1   0.0000
+--FindKnot--Case   90 iSpan 18 bx1   0.0000
+--FindKnot--Case   89 iSpan 18 bx1   0.0000
+--FindKnot--Case   88 iSpan 18 bx1   0.0000
+--FindKnot--Case   87 iSpan 18 bx1   0.0000
+--FindKnot--Case   86 iSpan 17 bx1   0.2420
+--FindKnot--Case   85 iSpan 16 bx1   0.2551
+--FindKnot--Case   84 iSpan 16 bx1   0.0000
+--FindKnot--Case   83 iSpan 16 bx1   0.0000
+--FindKnot--Case   82 iSpan 16 bx1   0.0000
+--FindKnot--Case   81 iSpan 16 bx1   0.0000
+--FindKnot--Case   80 iSpan 16 bx1   0.0000
+--FindKnot--Case   79 iSpan 16 bx1   0.0000
+--FindKnot--Case   78 iSpan 16 bx1   0.0000
+--FindKnot--Case   77 iSpan 16 bx1   0.0000
+--FindKnot--Case   76 iSpan 16 bx1   0.0000
+--FindKnot--Case   75 iSpan 16 bx1   0.0000
+--FindKnot--Case   74 iSpan 16 bx1   0.0000
+--FindKnot--Case   73 iSpan 15 bx1   0.0149
+--FindKnot--Case   72 iSpan 15 bx1   0.0000
+--FindKnot--Case   71 iSpan 14 bx1   0.1982
+--FindKnot--Case   70 iSpan 13 bx1   0.1475
+--FindKnot--Case   69 iSpan 13 bx1   0.0000
+--FindKnot--Case   68 iSpan 13 bx1   0.0000
+--FindKnot--Case   67 iSpan 13 bx1   0.0000
+--FindKnot--Case   66 iSpan 12 bx1   0.3076
+--FindKnot--Case   65 iSpan 12 bx1   0.0000
+--FindKnot--Case   64 iSpan 12 bx1   0.0000
+--FindKnot--Case   63 iSpan 12 bx1   0.0000
+--FindKnot--Case   62 iSpan 11 bx1   0.3113
+--FindKnot--Case   61 iSpan 10 bx1   0.2954
+--FindKnot--Case   60 iSpan 9 bx1   0.1391
+--FindKnot--Case   59 iSpan 9 bx1   0.0000
+--FindKnot--Case   58 iSpan 8 bx1   0.1926
+--FindKnot--Case   57 iSpan 8 bx1   0.0000
+--FindKnot--Case   56 iSpan 8 bx1   0.0000
+--FindKnot--Case   55 iSpan 7 bx1   0.0873
+--FindKnot--Case   54 iSpan 6 bx1   0.2107
+--FindKnot--Case   53 iSpan 5 bx1   0.0871
+--FindKnot--Case   52 iSpan 4 bx1   0.2029
+--FindKnot--Case   51 iSpan 3 bx1   0.0403
+--FindKnot--Case   50 iSpan 2 bx1   0.2783
+--FindKnot--Case   49 iSpan 2 bx1   0.0000
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 2 bx1   0.0000
+--FindKnot--Case   46 iSpan 2 bx1   0.0000
+--FindKnot--Case   45 iSpan 2 bx1   0.0000
+--FindKnot--Case   44 iSpan 2 bx1   0.0000
+--FindKnot--Case   43 iSpan 1 bx1   0.0178
+--FindKnot--Case   42 iSpan 1 bx1   0.0000
+--FindKnot--Case   41 iSpan 1 bx1   0.0000
+--FindKnot--Case   40 RssWithKnot       2.4805 RssDelta     0.037129 Cut      0.36505 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   39 iSpan 4 bx1   0.0000
+--FindKnot--Case   38 iSpan 3 bx1   0.2634
+--FindKnot--Case   37 iSpan 3 bx1   0.0000
+--FindKnot--Case   36 iSpan 3 bx1   0.0000
+--FindKnot--Case   35 iSpan 2 bx1   0.0031
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.1051
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       2.4638 RssDelta     0.053824 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.1165
+--FindKnot--Case   27 iSpan 3 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.2175
+--FindKnot--Case   25 iSpan 2 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 2.4909       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+8      0.9744 0.9801      0.00123    2           x1     0.72902  7   8     6   2 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 10   RssDelta 0 MaxLegalRssDelta 1.46422
+|Parent 7                                                       skip (degree of term would be 102)
+|Parent 8                                                       skip (degree of term would be 3)
+
+|Parent 6  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 6  Pred 2  Case   -1 Cut     0.002739< Rss 2.3712       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 10 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.3318
+--FindKnot--Case  118 iSpan 24 bx1   0.0559
+--FindKnot--Case  117 iSpan 23 bx1   0.2004
+--FindKnot--Case  116 iSpan 22 bx1   0.7088
+--FindKnot--Case  115 iSpan 21 bx1   0.2004
+--FindKnot--Case  114 iSpan 21 bx1   0.0000
+--FindKnot--Case  113 iSpan 20 bx1   0.6390
+--FindKnot--Case  112 iSpan 19 bx1   0.3795
+--FindKnot--Case  111 iSpan 18 bx1   0.6928
+--FindKnot--Case  110 iSpan 17 bx1   0.1520
+--FindKnot--Case  109 iSpan 17 bx1   0.0000
+--FindKnot--Case  108 iSpan 16 bx1   0.2552
+--FindKnot--Case  107 iSpan 15 bx1   0.4227
+--FindKnot--Case  106 iSpan 14 bx1   0.1543
+--FindKnot--Case  105 iSpan 13 bx1   0.3407
+--FindKnot--Case  104 iSpan 12 bx1   0.5135
+--FindKnot--Case  103 iSpan 11 bx1   0.5248
+--FindKnot--Case  102 iSpan 10 bx1   0.1071
+--FindKnot--Case  101 iSpan 9 bx1   0.1181
+--FindKnot--Case  100 iSpan 8 bx1   0.1032
+--FindKnot--Case   99 iSpan 7 bx1   0.1974
+--FindKnot--Case   98 iSpan 7 bx1   0.0000
+--FindKnot--Case   97 iSpan 7 bx1   0.0000
+--FindKnot--Case   96 iSpan 7 bx1   0.0000
+--FindKnot--Case   95 iSpan 6 bx1   0.1270
+--FindKnot--Case   94 iSpan 6 bx1   0.0000
+--FindKnot--Case   93 iSpan 5 bx1   0.6015
+--FindKnot--Case   92 iSpan 4 bx1   0.5917
+--FindKnot--Case   91 iSpan 4 bx1   0.0000
+--FindKnot--Case   90 iSpan 3 bx1   0.1619
+--FindKnot--Case   89 iSpan 2 bx1   0.2190
+--FindKnot--Case   88 iSpan 1 bx1   0.2409
+--FindKnot--Case   87 iSpan 1 bx1   0.0000
+--FindKnot--Case   86 RssWithKnot       2.3712 RssDelta            0 Cut      0.74825 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   85 iSpan 3 bx1   0.6373
+--FindKnot--Case   84 iSpan 2 bx1   0.2116
+--FindKnot--Case   83 iSpan 1 bx1   0.1262
+--FindKnot--Case   82 iSpan 1 bx1   0.0000
+--FindKnot--Case   81 RssWithKnot       2.3712 RssDelta            0 Cut      0.72902 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   80 iSpan 4 bx1   0.0000
+--FindKnot--Case   79 iSpan 4 bx1   0.0000
+--FindKnot--Case   78 iSpan 4 bx1   0.0000
+--FindKnot--Case   77 iSpan 4 bx1   0.0000
+--FindKnot--Case   76 iSpan 3 bx1   0.0103
+--FindKnot--Case   75 iSpan 3 bx1   0.0000
+--FindKnot--Case   74 iSpan 3 bx1   0.0000
+--FindKnot--Case   73 iSpan 2 bx1   0.3971
+--FindKnot--Case   72 iSpan 1 bx1   0.3822
+--FindKnot--Case   71 RssWithKnot       2.3702 RssDelta   0.00095391 Cut      0.62651 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   70 iSpan 3 bx1   0.5297
+--FindKnot--Case   69 iSpan 3 bx1   0.0000
+--FindKnot--Case   68 iSpan 2 bx1   0.2893
+--FindKnot--Case   67 iSpan 1 bx1   0.2642
+--FindKnot--Case   66 RssWithKnot       2.3572 RssDelta     0.014004 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   65 iSpan 4 bx1   0.0000
+--FindKnot--Case   64 iSpan 4 bx1   0.0000
+--FindKnot--Case   63 iSpan 3 bx1   0.2730
+--FindKnot--Case   62 iSpan 2 bx1   0.6935
+--FindKnot--Case   61 iSpan 1 bx1   0.6776
+--FindKnot--Case   60 RssWithKnot       2.3488 RssDelta     0.022431 Cut      0.55409 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   59 iSpan 3 bx1   0.2977
+--FindKnot--Case   58 iSpan 2 bx1   0.5748
+--FindKnot--Case   57 iSpan 2 bx1   0.0000
+--FindKnot--Case   56 iSpan 2 bx1   0.0000
+--FindKnot--Case   55 iSpan 1 bx1   0.4695
+--FindKnot--Case   54 RssWithKnot       2.3467 RssDelta     0.024475 Cut      0.49742 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   53 iSpan 3 bx1   0.4693
+--FindKnot--Case   52 iSpan 2 bx1   0.5851
+--FindKnot--Case   51 iSpan 1 bx1   0.4225
+--FindKnot--Case   50 RssWithKnot       2.3574 RssDelta     0.013782 Cut       0.4303 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   0.0559
+--FindKnot--Case   48 iSpan 2 bx1   0.0923
+--FindKnot--Case   47 iSpan 1 bx1   0.2115
+--FindKnot--Case   46 RssWithKnot       2.3571 RssDelta     0.014056 Cut       0.4129 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 4 bx1   0.0000
+--FindKnot--Case   44 iSpan 4 bx1   0.0000
+--FindKnot--Case   43 iSpan 3 bx1   0.4000
+--FindKnot--Case   42 iSpan 3 bx1   0.0000
+--FindKnot--Case   41 iSpan 2 bx1   0.3270
+--FindKnot--Case   40 iSpan 1 bx1   0.6707
+--FindKnot--Case   39 iSpan 1 bx1   0.0000
+--FindKnot--Case   38 RssWithKnot       2.3633 RssDelta     0.007862 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   0.3059
+--FindKnot--Case   36 iSpan 2 bx1   0.2831
+--FindKnot--Case   35 iSpan 1 bx1   0.3853
+--FindKnot--Case   34 RssWithKnot        2.366 RssDelta    0.0051793 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   0.4873
+--FindKnot--Case   32 iSpan 3 bx1   0.0000
+--FindKnot--Case   31 iSpan 2 bx1   0.3485
+--FindKnot--Case   30 iSpan 1 bx1   0.5723
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 RssWithKnot       2.3712 RssDelta   2.4281e-05 Cut      0.23237 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 iSpan 3 bx1   0.1916
+--FindKnot--Case   26 iSpan 2 bx1   0.5997
+--FindKnot--Case   25 iSpan 1 bx1   0.1161
+--FindKnotEnd--
+|Parent 6  Pred 2  Case   54 Cut       0.4974  Rss 2.3467       RssDelta 0.024475        best for term
+
+
+|Parent 1  Pred 1  Case   -1 Cut     0.006409< Rss 2.3712       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 10 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       2.3669 RssDelta    0.0043154 Cut       0.9291 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       2.3692 RssDelta    0.0020332 Cut      0.91262 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       2.3684 RssDelta     0.002805 Cut       0.8801 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       2.3651 RssDelta    0.0060689 Cut      0.86478 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot       2.3637 RssDelta    0.0074427 Cut      0.84829 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot        2.355 RssDelta     0.016156 Cut      0.81327 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       2.3343 RssDelta     0.036863 Cut      0.77569 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot         2.31 RssDelta     0.061229 Cut      0.71922 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       2.3712 RssDelta            0 Cut      0.68845 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       2.3712 RssDelta            0 Cut      0.67062 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       2.3712 RssDelta            0 Cut      0.62021 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       2.3133 RssDelta     0.057926 Cut       0.5943 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       2.3306 RssDelta     0.040607 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       2.3481 RssDelta     0.023107 Cut      0.52535 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       2.3558 RssDelta     0.015407 Cut       0.4999 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       2.3583 RssDelta     0.012882 Cut      0.48584 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot        2.363 RssDelta    0.0081565 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       2.3712 RssDelta            0 Cut      0.40455 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       2.3712 RssDelta            0 Cut      0.36511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       2.3712 RssDelta            0 Cut      0.31968 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       2.3712 RssDelta            0 Cut      0.28842 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       2.3712 RssDelta            0 Cut      0.25886 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       2.3712 RssDelta            0 Cut      0.19723 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       2.3712 RssDelta            0 Cut      0.14125 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       2.3712 RssDelta            0 Cut     0.092745 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       2.3712 RssDelta            0 Cut      0.07863 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   82 Cut       0.7192  Rss 2.31         RssDelta 0.061229        best for term
+
+
+|Parent 1  Pred 2  Case   -1 Cut     0.002739< Rss 2.3712       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 10 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 8 nStartSpan 10
+--FindKnot--Case  119 iSpan 9 bx1   1.0000
+--FindKnot--Case  118 iSpan 8 bx1   1.0000
+--FindKnot--Case  117 iSpan 7 bx1   1.0000
+--FindKnot--Case  116 iSpan 6 bx1   1.0000
+--FindKnot--Case  115 iSpan 5 bx1   1.0000
+--FindKnot--Case  114 iSpan 4 bx1   1.0000
+--FindKnot--Case  113 iSpan 3 bx1   1.0000
+--FindKnot--Case  112 iSpan 2 bx1   1.0000
+--FindKnot--Case  111 iSpan 1 bx1   1.0000
+--FindKnot--Case  110 RssWithKnot       2.3703 RssDelta   0.00089831 Cut      0.94211 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  109 iSpan 3 bx1   1.0000
+--FindKnot--Case  108 iSpan 2 bx1   1.0000
+--FindKnot--Case  107 iSpan 1 bx1   1.0000
+--FindKnot--Case  106 RssWithKnot       2.3708 RssDelta   0.00039095 Cut      0.92715 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case  105 iSpan 3 bx1   1.0000
+--FindKnot--Case  104 iSpan 2 bx1   1.0000
+--FindKnot--Case  103 iSpan 1 bx1   1.0000
+--FindKnot--Case  102 RssWithKnot       2.3688 RssDelta    0.0024199 Cut      0.90996 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case  101 iSpan 3 bx1   1.0000
+--FindKnot--Case  100 iSpan 2 bx1   1.0000
+--FindKnot--Case   99 iSpan 1 bx1   1.0000
+--FindKnot--Case   98 RssWithKnot       2.3649 RssDelta    0.0062454 Cut      0.86312 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   97 iSpan 3 bx1   1.0000
+--FindKnot--Case   96 iSpan 2 bx1   1.0000
+--FindKnot--Case   95 iSpan 1 bx1   1.0000
+--FindKnot--Case   94 RssWithKnot        2.364 RssDelta    0.0071513 Cut      0.82237 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   93 iSpan 3 bx1   1.0000
+--FindKnot--Case   92 iSpan 2 bx1   1.0000
+--FindKnot--Case   91 iSpan 1 bx1   1.0000
+--FindKnot--Case   90 RssWithKnot       2.3637 RssDelta    0.0074796 Cut      0.78967 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   89 iSpan 3 bx1   1.0000
+--FindKnot--Case   88 iSpan 2 bx1   1.0000
+--FindKnot--Case   87 iSpan 1 bx1   1.0000
+--FindKnot--Case   86 RssWithKnot       2.3552 RssDelta     0.016016 Cut      0.74825 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   85 iSpan 3 bx1   1.0000
+--FindKnot--Case   84 iSpan 2 bx1   1.0000
+--FindKnot--Case   83 iSpan 1 bx1   1.0000
+--FindKnot--Case   82 RssWithKnot       2.3484 RssDelta     0.022759 Cut       0.7295 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   81 iSpan 3 bx1   1.0000
+--FindKnot--Case   80 iSpan 2 bx1   1.0000
+--FindKnot--Case   79 iSpan 1 bx1   1.0000
+--FindKnot--Case   78 RssWithKnot       2.3422 RssDelta     0.028948 Cut      0.70265 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   77 iSpan 3 bx1   1.0000
+--FindKnot--Case   76 iSpan 2 bx1   1.0000
+--FindKnot--Case   75 iSpan 1 bx1   1.0000
+--FindKnot--Case   74 RssWithKnot       2.3075 RssDelta      0.06371 Cut      0.65046 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   73 iSpan 3 bx1   1.0000
+--FindKnot--Case   72 iSpan 2 bx1   1.0000
+--FindKnot--Case   71 iSpan 1 bx1   1.0000
+--FindKnot--Case   70 RssWithKnot       2.2852 RssDelta     0.085969 Cut      0.62319 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   69 iSpan 3 bx1   1.0000
+--FindKnot--Case   68 iSpan 2 bx1   1.0000
+--FindKnot--Case   67 iSpan 1 bx1   1.0000
+--FindKnot--Case   66 RssWithKnot       2.2903 RssDelta     0.080929 Cut      0.58033 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   65 iSpan 3 bx1   1.0000
+--FindKnot--Case   64 iSpan 2 bx1   1.0000
+--FindKnot--Case   63 iSpan 1 bx1   1.0000
+--FindKnot--Case   62 RssWithKnot       2.3712 RssDelta            0 Cut      0.56223 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   61 iSpan 3 bx1   1.0000
+--FindKnot--Case   60 iSpan 2 bx1   1.0000
+--FindKnot--Case   59 iSpan 1 bx1   1.0000
+--FindKnot--Case   58 RssWithKnot       2.3712 RssDelta            0 Cut      0.53893 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   57 iSpan 3 bx1   1.0000
+--FindKnot--Case   56 iSpan 2 bx1   1.0000
+--FindKnot--Case   55 iSpan 1 bx1   1.0000
+--FindKnot--Case   54 RssWithKnot       2.3712 RssDelta            0 Cut      0.49742 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   53 iSpan 3 bx1   1.0000
+--FindKnot--Case   52 iSpan 2 bx1   1.0000
+--FindKnot--Case   51 iSpan 1 bx1   1.0000
+--FindKnot--Case   50 RssWithKnot       2.3712 RssDelta            0 Cut       0.4303 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   49 iSpan 3 bx1   1.0000
+--FindKnot--Case   48 iSpan 2 bx1   1.0000
+--FindKnot--Case   47 iSpan 1 bx1   1.0000
+--FindKnot--Case   46 RssWithKnot       2.3712 RssDelta            0 Cut       0.4129 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   45 iSpan 3 bx1   1.0000
+--FindKnot--Case   44 iSpan 2 bx1   1.0000
+--FindKnot--Case   43 iSpan 1 bx1   1.0000
+--FindKnot--Case   42 RssWithKnot       2.3712 RssDelta            0 Cut      0.38368 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   41 iSpan 3 bx1   1.0000
+--FindKnot--Case   40 iSpan 2 bx1   1.0000
+--FindKnot--Case   39 iSpan 1 bx1   1.0000
+--FindKnot--Case   38 RssWithKnot       2.3502 RssDelta     0.020954 Cut      0.33791 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   37 iSpan 3 bx1   1.0000
+--FindKnot--Case   36 iSpan 2 bx1   1.0000
+--FindKnot--Case   35 iSpan 1 bx1   1.0000
+--FindKnot--Case   34 RssWithKnot       2.3508 RssDelta     0.020426 Cut      0.30886 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 iSpan 3 bx1   1.0000
+--FindKnot--Case   32 iSpan 2 bx1   1.0000
+--FindKnot--Case   31 iSpan 1 bx1   1.0000
+--FindKnot--Case   30 RssWithKnot       2.3603 RssDelta     0.010885 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 3 bx1   1.0000
+--FindKnot--Case   28 iSpan 2 bx1   1.0000
+--FindKnot--Case   27 iSpan 1 bx1   1.0000
+--FindKnot--Case   26 RssWithKnot       2.3712 RssDelta            0 Cut      0.19851 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   25 iSpan 3 bx1   1.0000
+--FindKnot--Case   24 iSpan 2 bx1   1.0000
+--FindKnot--Case   23 iSpan 1 bx1   1.0000
+--FindKnot--Case   22 RssWithKnot       2.3712 RssDelta            0 Cut      0.17566 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   21 iSpan 3 bx1   1.0000
+--FindKnot--Case   20 iSpan 2 bx1   1.0000
+--FindKnot--Case   19 iSpan 1 bx1   1.0000
+--FindKnot--Case   18 RssWithKnot       2.3712 RssDelta            0 Cut      0.14547 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 iSpan 3 bx1   1.0000
+--FindKnot--Case   16 iSpan 2 bx1   1.0000
+--FindKnot--Case   15 iSpan 1 bx1   1.0000
+--FindKnot--Case   14 RssWithKnot       2.3712 RssDelta            0 Cut       0.1055 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 iSpan 3 bx1   1.0000
+--FindKnot--Case   12 iSpan 2 bx1   1.0000
+--FindKnot--Case   11 iSpan 1 bx1   1.0000
+--FindKnot--Case   10 RssWithKnot       2.3712 RssDelta            0 Cut      0.06669 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 iSpan 3 bx1   1.0000
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   70 Cut       0.6232  Rss 2.2852       RssDelta 0.085969        best for term
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 2.3682       RssDeltaLin 0.0030138   
+--FindKnotBegin-- iPred 2 iNewCol 11 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.0504
+--FindKnot--Case  118 iSpan 24 bx1   0.3263
+--FindKnot--Case  117 iSpan 23 bx1   0.1818
+--FindKnot--Case  116 iSpan 23 bx1   0.0000
+--FindKnot--Case  115 iSpan 22 bx1   0.1818
+--FindKnot--Case  114 iSpan 21 bx1   0.5219
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 20 bx1   0.0027
+--FindKnot--Case  111 iSpan 20 bx1   0.0000
+--FindKnot--Case  110 iSpan 19 bx1   0.2302
+--FindKnot--Case  109 iSpan 18 bx1   0.4711
+--FindKnot--Case  108 iSpan 17 bx1   0.1270
+--FindKnot--Case  107 iSpan 17 bx1   0.0000
+--FindKnot--Case  106 iSpan 16 bx1   0.2279
+--FindKnot--Case  105 iSpan 15 bx1   0.0415
+--FindKnot--Case  104 iSpan 15 bx1   0.0000
+--FindKnot--Case  103 iSpan 15 bx1   0.0000
+--FindKnot--Case  102 iSpan 14 bx1   0.2751
+--FindKnot--Case  101 iSpan 13 bx1   0.2641
+--FindKnot--Case  100 iSpan 12 bx1   0.2790
+--FindKnot--Case   99 iSpan 11 bx1   0.1848
+--FindKnot--Case   98 iSpan 10 bx1   0.6559
+--FindKnot--Case   97 iSpan 9 bx1   0.4008
+--FindKnot--Case   96 iSpan 8 bx1   0.5866
+--FindKnot--Case   95 iSpan 7 bx1   0.2552
+--FindKnot--Case   94 iSpan 6 bx1   0.6276
+--FindKnot--Case   93 iSpan 6 bx1   0.0000
+--FindKnot--Case   92 iSpan 6 bx1   0.0000
+--FindKnot--Case   91 iSpan 5 bx1   0.4734
+--FindKnot--Case   90 iSpan 4 bx1   0.2203
+--FindKnot--Case   89 iSpan 3 bx1   0.1632
+--FindKnot--Case   88 iSpan 2 bx1   0.1413
+--FindKnot--Case   87 iSpan 1 bx1   0.6642
+--FindKnot--Case   86 iSpan 1 bx1   0.0000
+--FindKnot--Case   85 iSpan 1 bx1   0.0000
+--FindKnot--Case   84 RssWithKnot       2.3645 RssDelta    0.0067328 Cut      0.73448 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   83 iSpan 3 bx1   0.2560
+--FindKnot--Case   82 iSpan 2 bx1   0.6301
+--FindKnot--Case   81 iSpan 1 bx1   0.0640
+--FindKnot--Case   80 RssWithKnot       2.3642 RssDelta     0.007031 Cut      0.72588 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   79 iSpan 3 bx1   0.6077
+--FindKnot--Case   78 iSpan 2 bx1   0.5355
+--FindKnot--Case   77 iSpan 1 bx1   0.3968
+--FindKnot--Case   76 RssWithKnot       2.3529 RssDelta     0.018298 Cut      0.67006 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   75 iSpan 3 bx1   0.5294
+--FindKnot--Case   74 iSpan 2 bx1   0.5920
+--FindKnot--Case   73 iSpan 2 bx1   0.0000
+--FindKnot--Case   72 iSpan 2 bx1   0.0000
+--FindKnot--Case   71 iSpan 2 bx1   0.0000
+--FindKnot--Case   70 iSpan 2 bx1   0.0000
+--FindKnot--Case   69 iSpan 1 bx1   0.4435
+--FindKnot--Case   68 RssWithKnot       2.3324 RssDelta     0.038757 Cut      0.59392 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   67 iSpan 3 bx1   0.1180
+--FindKnot--Case   66 iSpan 3 bx1   0.0000
+--FindKnot--Case   65 iSpan 2 bx1   0.5799
+--FindKnot--Case   64 iSpan 1 bx1   0.5779
+--FindKnot--Case   63 RssWithKnot       2.3325 RssDelta     0.038687 Cut       0.5714 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   62 iSpan 4 bx1   0.0000
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 3 bx1   0.0845
+--FindKnot--Case   58 iSpan 3 bx1   0.0000
+--FindKnot--Case   57 iSpan 2 bx1   0.4045
+--FindKnot--Case   56 iSpan 1 bx1   0.4765
+--FindKnot--Case   55 iSpan 1 bx1   0.0000
+--FindKnot--Case   54 iSpan 1 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 iSpan 1 bx1   0.0000
+--FindKnot--Case   50 iSpan 1 bx1   0.0000
+--FindKnot--Case   49 RssWithKnot       2.3668 RssDelta    0.0043691 Cut      0.42977 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   48 iSpan 3 bx1   0.2899
+--FindKnot--Case   47 iSpan 2 bx1   0.1707
+--FindKnot--Case   46 iSpan 1 bx1   0.3709
+--FindKnot--Case   45 RssWithKnot       2.3681 RssDelta    0.0030465 Cut      0.39509 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   44 iSpan 3 bx1   0.5829
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 2 bx1   0.4934
+--FindKnot--Case   41 iSpan 1 bx1   0.0552
+--FindKnot--Case   40 iSpan 1 bx1   0.0000
+--FindKnot--Case   39 RssWithKnot       2.3681 RssDelta    0.0030793 Cut       0.3578 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   38 iSpan 4 bx1   0.0000
+--FindKnot--Case   37 iSpan 3 bx1   0.0763
+--FindKnot--Case   36 iSpan 2 bx1   0.0991
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 1 bx1   0.1453
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 RssWithKnot       2.3624 RssDelta    0.0087573 Cut      0.26979 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 iSpan 3 bx1   0.0337
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.4118
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 1 bx1   0.1906
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 RssWithKnot       2.3682 RssDelta    0.0030138 Cut      0.19511 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   -1 Cut     0.002739< Rss 2.3682       RssDelta 0           
+
+
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 2.3608       RssDeltaLin 0.010361    
+--FindKnotBegin-- iPred 1 iNewCol 11 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 26 bx1   0.0000
+--FindKnot--Case  115 iSpan 26 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.4252
+--FindKnot--Case  113 iSpan 24 bx1   0.1280
+--FindKnot--Case  112 iSpan 23 bx1   0.0374
+--FindKnot--Case  111 iSpan 22 bx1   0.3706
+--FindKnot--Case  110 iSpan 21 bx1   0.1396
+--FindKnot--Case  109 iSpan 20 bx1   0.4313
+--FindKnot--Case  108 iSpan 20 bx1   0.0000
+--FindKnot--Case  107 iSpan 20 bx1   0.0000
+--FindKnot--Case  106 iSpan 19 bx1   0.3700
+--FindKnot--Case  105 iSpan 19 bx1   0.0000
+--FindKnot--Case  104 iSpan 19 bx1   0.0000
+--FindKnot--Case  103 iSpan 18 bx1   0.2716
+--FindKnot--Case  102 iSpan 18 bx1   0.0000
+--FindKnot--Case  101 iSpan 18 bx1   0.0000
+--FindKnot--Case  100 iSpan 17 bx1   0.4389
+--FindKnot--Case   99 iSpan 16 bx1   0.0251
+--FindKnot--Case   98 iSpan 16 bx1   0.0000
+--FindKnot--Case   97 iSpan 15 bx1   0.4380
+--FindKnot--Case   96 iSpan 15 bx1   0.0000
+--FindKnot--Case   95 iSpan 14 bx1   0.2503
+--FindKnot--Case   94 iSpan 13 bx1   0.4638
+--FindKnot--Case   93 iSpan 12 bx1   0.3519
+--FindKnot--Case   92 iSpan 11 bx1   0.4307
+--FindKnot--Case   91 iSpan 11 bx1   0.0000
+--FindKnot--Case   90 iSpan 10 bx1   0.4947
+--FindKnot--Case   89 iSpan 10 bx1   0.0000
+--FindKnot--Case   88 iSpan 10 bx1   0.0000
+--FindKnot--Case   87 iSpan 10 bx1   0.0000
+--FindKnot--Case   86 iSpan 9 bx1   0.2581
+--FindKnot--Case   85 iSpan 8 bx1   0.1886
+--FindKnot--Case   84 iSpan 8 bx1   0.0000
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 7 bx1   0.3218
+--FindKnot--Case   81 iSpan 6 bx1   0.4814
+--FindKnot--Case   80 iSpan 5 bx1   0.3304
+--FindKnot--Case   79 iSpan 5 bx1   0.0000
+--FindKnot--Case   78 iSpan 4 bx1   0.0371
+--FindKnot--Case   77 iSpan 3 bx1   0.1085
+--FindKnot--Case   76 iSpan 3 bx1   0.0000
+--FindKnot--Case   75 iSpan 2 bx1   0.1794
+--FindKnot--Case   74 iSpan 1 bx1   0.3023
+--FindKnot--Case   73 iSpan 1 bx1   0.0000
+--FindKnot--Case   72 iSpan 1 bx1   0.0000
+--FindKnot--Case   71 RssWithKnot       2.3561 RssDelta     0.015069 Cut      0.62911 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   70 iSpan 4 bx1   0.0000
+--FindKnot--Case   69 iSpan 4 bx1   0.0000
+--FindKnot--Case   68 iSpan 3 bx1   0.1137
+--FindKnot--Case   67 iSpan 2 bx1   0.4691
+--FindKnot--Case   66 iSpan 2 bx1   0.0000
+--FindKnot--Case   65 iSpan 1 bx1   0.1595
+--FindKnot--Case   64 iSpan 1 bx1   0.0000
+--FindKnot--Case   63 iSpan 1 bx1   0.0000
+--FindKnot--Case   62 RssWithKnot        2.357 RssDelta     0.014171 Cut       0.5614 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   61 iSpan 4 bx1   0.0000
+--FindKnot--Case   60 iSpan 4 bx1   0.0000
+--FindKnot--Case   59 iSpan 4 bx1   0.0000
+--FindKnot--Case   58 iSpan 4 bx1   0.0000
+--FindKnot--Case   57 iSpan 3 bx1   0.1872
+--FindKnot--Case   56 iSpan 2 bx1   0.4085
+--FindKnot--Case   55 iSpan 2 bx1   0.0000
+--FindKnot--Case   54 iSpan 2 bx1   0.0000
+--FindKnot--Case   53 iSpan 1 bx1   0.0722
+--FindKnot--Case   52 RssWithKnot       2.3544 RssDelta     0.016827 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   51 iSpan 4 bx1   0.0000
+--FindKnot--Case   50 iSpan 4 bx1   0.0000
+--FindKnot--Case   49 iSpan 4 bx1   0.0000
+--FindKnot--Case   48 iSpan 3 bx1   0.2650
+--FindKnot--Case   47 iSpan 3 bx1   0.0000
+--FindKnot--Case   46 iSpan 3 bx1   0.0000
+--FindKnot--Case   45 iSpan 3 bx1   0.0000
+--FindKnot--Case   44 iSpan 3 bx1   0.0000
+--FindKnot--Case   43 iSpan 3 bx1   0.0000
+--FindKnot--Case   42 iSpan 3 bx1   0.0000
+--FindKnot--Case   41 iSpan 2 bx1   0.2989
+--FindKnot--Case   40 iSpan 2 bx1   0.0000
+--FindKnot--Case   39 iSpan 2 bx1   0.0000
+--FindKnot--Case   38 iSpan 1 bx1   0.0676
+--FindKnot--Case   37 RssWithKnot       2.3531 RssDelta     0.018097 Cut      0.34431 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   36 iSpan 3 bx1   0.0671
+--FindKnot--Case   35 iSpan 3 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.3471
+--FindKnot--Case   33 iSpan 1 bx1   0.3099
+--FindKnot--Case   32 RssWithKnot       2.3608 RssDelta     0.010361 Cut      0.29971 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   31 iSpan 3 bx1   0.0747
+--FindKnot--Case   30 iSpan 3 bx1   0.0000
+--FindKnot--Case   29 iSpan 2 bx1   0.0845
+--FindKnot--Case   28 iSpan 2 bx1   0.0000
+--FindKnot--Case   27 iSpan 2 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.2557
+--FindKnotEnd--
+|Parent 5  Pred 1  Case   -1 Cut     0.006409< Rss 2.3608       RssDelta 0           
+
+|Parent 5  Pred 2                                               skip (pred is in parent)
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 2.369        RssDeltaLin 0.0022027   
+--FindKnotBegin-- iPred 2 iNewCol 11 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 26 bx1   0.0000
+--FindKnot--Case  118 iSpan 26 bx1   0.0000
+--FindKnot--Case  117 iSpan 26 bx1   0.0000
+--FindKnot--Case  116 iSpan 25 bx1   0.3266
+--FindKnot--Case  115 iSpan 25 bx1   0.0000
+--FindKnot--Case  114 iSpan 25 bx1   0.0000
+--FindKnot--Case  113 iSpan 24 bx1   0.2568
+--FindKnot--Case  112 iSpan 24 bx1   0.0000
+--FindKnot--Case  111 iSpan 23 bx1   0.3106
+--FindKnot--Case  110 iSpan 23 bx1   0.0000
+--FindKnot--Case  109 iSpan 23 bx1   0.0000
+--FindKnot--Case  108 iSpan 23 bx1   0.0000
+--FindKnot--Case  107 iSpan 22 bx1   0.0405
+--FindKnot--Case  106 iSpan 22 bx1   0.0000
+--FindKnot--Case  105 iSpan 22 bx1   0.0000
+--FindKnot--Case  104 iSpan 21 bx1   0.1313
+--FindKnot--Case  103 iSpan 20 bx1   0.1426
+--FindKnot--Case  102 iSpan 20 bx1   0.0000
+--FindKnot--Case  101 iSpan 20 bx1   0.0000
+--FindKnot--Case  100 iSpan 20 bx1   0.0000
+--FindKnot--Case   99 iSpan 20 bx1   0.0000
+--FindKnot--Case   98 iSpan 20 bx1   0.0000
+--FindKnot--Case   97 iSpan 20 bx1   0.0000
+--FindKnot--Case   96 iSpan 20 bx1   0.0000
+--FindKnot--Case   95 iSpan 20 bx1   0.0000
+--FindKnot--Case   94 iSpan 20 bx1   0.0000
+--FindKnot--Case   93 iSpan 19 bx1   0.2193
+--FindKnot--Case   92 iSpan 18 bx1   0.2095
+--FindKnot--Case   91 iSpan 18 bx1   0.0000
+--FindKnot--Case   90 iSpan 18 bx1   0.0000
+--FindKnot--Case   89 iSpan 18 bx1   0.0000
+--FindKnot--Case   88 iSpan 18 bx1   0.0000
+--FindKnot--Case   87 iSpan 18 bx1   0.0000
+--FindKnot--Case   86 iSpan 17 bx1   0.2420
+--FindKnot--Case   85 iSpan 16 bx1   0.2551
+--FindKnot--Case   84 iSpan 16 bx1   0.0000
+--FindKnot--Case   83 iSpan 16 bx1   0.0000
+--FindKnot--Case   82 iSpan 16 bx1   0.0000
+--FindKnot--Case   81 iSpan 16 bx1   0.0000
+--FindKnot--Case   80 iSpan 16 bx1   0.0000
+--FindKnot--Case   79 iSpan 16 bx1   0.0000
+--FindKnot--Case   78 iSpan 16 bx1   0.0000
+--FindKnot--Case   77 iSpan 16 bx1   0.0000
+--FindKnot--Case   76 iSpan 16 bx1   0.0000
+--FindKnot--Case   75 iSpan 16 bx1   0.0000
+--FindKnot--Case   74 iSpan 16 bx1   0.0000
+--FindKnot--Case   73 iSpan 15 bx1   0.0149
+--FindKnot--Case   72 iSpan 15 bx1   0.0000
+--FindKnot--Case   71 iSpan 14 bx1   0.1982
+--FindKnot--Case   70 iSpan 13 bx1   0.1475
+--FindKnot--Case   69 iSpan 13 bx1   0.0000
+--FindKnot--Case   68 iSpan 13 bx1   0.0000
+--FindKnot--Case   67 iSpan 13 bx1   0.0000
+--FindKnot--Case   66 iSpan 12 bx1   0.3076
+--FindKnot--Case   65 iSpan 12 bx1   0.0000
+--FindKnot--Case   64 iSpan 12 bx1   0.0000
+--FindKnot--Case   63 iSpan 12 bx1   0.0000
+--FindKnot--Case   62 iSpan 11 bx1   0.3113
+--FindKnot--Case   61 iSpan 10 bx1   0.2954
+--FindKnot--Case   60 iSpan 9 bx1   0.1391
+--FindKnot--Case   59 iSpan 9 bx1   0.0000
+--FindKnot--Case   58 iSpan 8 bx1   0.1926
+--FindKnot--Case   57 iSpan 8 bx1   0.0000
+--FindKnot--Case   56 iSpan 8 bx1   0.0000
+--FindKnot--Case   55 iSpan 7 bx1   0.0873
+--FindKnot--Case   54 iSpan 6 bx1   0.2107
+--FindKnot--Case   53 iSpan 5 bx1   0.0871
+--FindKnot--Case   52 iSpan 4 bx1   0.2029
+--FindKnot--Case   51 iSpan 3 bx1   0.0403
+--FindKnot--Case   50 iSpan 2 bx1   0.2783
+--FindKnot--Case   49 iSpan 2 bx1   0.0000
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 2 bx1   0.0000
+--FindKnot--Case   46 iSpan 2 bx1   0.0000
+--FindKnot--Case   45 iSpan 2 bx1   0.0000
+--FindKnot--Case   44 iSpan 2 bx1   0.0000
+--FindKnot--Case   43 iSpan 1 bx1   0.0178
+--FindKnot--Case   42 iSpan 1 bx1   0.0000
+--FindKnot--Case   41 iSpan 1 bx1   0.0000
+--FindKnot--Case   40 RssWithKnot       2.3648 RssDelta    0.0063725 Cut      0.36505 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   39 iSpan 4 bx1   0.0000
+--FindKnot--Case   38 iSpan 3 bx1   0.2634
+--FindKnot--Case   37 iSpan 3 bx1   0.0000
+--FindKnot--Case   36 iSpan 3 bx1   0.0000
+--FindKnot--Case   35 iSpan 2 bx1   0.0031
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.1051
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot        2.367 RssDelta    0.0042059 Cut      0.24168 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.1165
+--FindKnot--Case   27 iSpan 3 bx1   0.0000
+--FindKnot--Case   26 iSpan 2 bx1   0.2175
+--FindKnot--Case   25 iSpan 2 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   -1 Cut     0.002739< Rss 2.369        RssDelta 0           
+
+
+|Parent 4  Pred 1  Case   -1 Cut     0.006409< Rss 2.3452       RssDeltaLin 0.025951    
+--FindKnotBegin-- iPred 1 iNewCol 11 RssBeforeAddingHinge 2.37119 nMinSpan 4 nEndSpan 24 nStartSpan 26
+--FindKnot--Case  119 iSpan 25 bx1   0.4834
+--FindKnot--Case  118 iSpan 24 bx1   0.0740
+--FindKnot--Case  117 iSpan 23 bx1   0.4598
+--FindKnot--Case  116 iSpan 22 bx1   0.0924
+--FindKnot--Case  115 iSpan 21 bx1   0.0648
+--FindKnot--Case  114 iSpan 21 bx1   0.0000
+--FindKnot--Case  113 iSpan 21 bx1   0.0000
+--FindKnot--Case  112 iSpan 21 bx1   0.0000
+--FindKnot--Case  111 iSpan 21 bx1   0.0000
+--FindKnot--Case  110 iSpan 21 bx1   0.0000
+--FindKnot--Case  109 iSpan 21 bx1   0.0000
+--FindKnot--Case  108 iSpan 20 bx1   0.4705
+--FindKnot--Case  107 iSpan 19 bx1   0.2508
+--FindKnot--Case  106 iSpan 19 bx1   0.0000
+--FindKnot--Case  105 iSpan 18 bx1   0.2685
+--FindKnot--Case  104 iSpan 17 bx1   0.3250
+--FindKnot--Case  103 iSpan 17 bx1   0.0000
+--FindKnot--Case  102 iSpan 16 bx1   0.0133
+--FindKnot--Case  101 iSpan 15 bx1   0.3149
+--FindKnot--Case  100 iSpan 15 bx1   0.0000
+--FindKnot--Case   99 iSpan 15 bx1   0.0000
+--FindKnot--Case   98 iSpan 14 bx1   0.1366
+--FindKnot--Case   97 iSpan 14 bx1   0.0000
+--FindKnot--Case   96 iSpan 13 bx1   0.0440
+--FindKnot--Case   95 iSpan 13 bx1   0.0000
+--FindKnot--Case   94 iSpan 13 bx1   0.0000
+--FindKnot--Case   93 iSpan 13 bx1   0.0000
+--FindKnot--Case   92 iSpan 13 bx1   0.0000
+--FindKnot--Case   91 iSpan 12 bx1   0.1291
+--FindKnot--Case   90 iSpan 12 bx1   0.0000
+--FindKnot--Case   89 iSpan 11 bx1   0.4153
+--FindKnot--Case   88 iSpan 10 bx1   0.0631
+--FindKnot--Case   87 iSpan 9 bx1   0.4261
+--FindKnot--Case   86 iSpan 9 bx1   0.0000
+--FindKnot--Case   85 iSpan 9 bx1   0.0000
+--FindKnot--Case   84 iSpan 8 bx1   0.0153
+--FindKnot--Case   83 iSpan 8 bx1   0.0000
+--FindKnot--Case   82 iSpan 8 bx1   0.0000
+--FindKnot--Case   81 iSpan 8 bx1   0.0000
+--FindKnot--Case   80 iSpan 8 bx1   0.0000
+--FindKnot--Case   79 iSpan 7 bx1   0.4346
+--FindKnot--Case   78 iSpan 7 bx1   0.0000
+--FindKnot--Case   77 iSpan 7 bx1   0.0000
+--FindKnot--Case   76 iSpan 6 bx1   0.1530
+--FindKnot--Case   75 iSpan 6 bx1   0.0000
+--FindKnot--Case   74 iSpan 6 bx1   0.0000
+--FindKnot--Case   73 iSpan 5 bx1   0.1498
+--FindKnot--Case   72 iSpan 4 bx1   0.4610
+--FindKnot--Case   71 iSpan 4 bx1   0.0000
+--FindKnot--Case   70 iSpan 3 bx1   0.4297
+--FindKnot--Case   69 iSpan 2 bx1   0.4977
+--FindKnot--Case   68 iSpan 2 bx1   0.0000
+--FindKnot--Case   67 iSpan 2 bx1   0.0000
+--FindKnot--Case   66 iSpan 1 bx1   0.2321
+--FindKnot--Case   65 iSpan 1 bx1   0.0000
+--FindKnot--Case   64 RssWithKnot       2.3452 RssDelta     0.025956 Cut      0.57769 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   63 iSpan 3 bx1   0.1048
+--FindKnot--Case   62 iSpan 3 bx1   0.0000
+--FindKnot--Case   61 iSpan 2 bx1   0.0809
+--FindKnot--Case   60 iSpan 1 bx1   0.0965
+--FindKnot--Case   59 RssWithKnot       2.3448 RssDelta     0.026361 Cut      0.52931 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   58 iSpan 3 bx1   0.2884
+--FindKnot--Case   57 iSpan 3 bx1   0.0000
+--FindKnot--Case   56 iSpan 3 bx1   0.0000
+--FindKnot--Case   55 iSpan 2 bx1   0.2922
+--FindKnot--Case   54 iSpan 1 bx1   0.2467
+--FindKnot--Case   53 iSpan 1 bx1   0.0000
+--FindKnot--Case   52 iSpan 1 bx1   0.0000
+--FindKnot--Case   51 RssWithKnot       2.3438 RssDelta     0.027378 Cut      0.48885 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   50 iSpan 3 bx1   0.4913
+--FindKnot--Case   49 iSpan 2 bx1   0.3921
+--FindKnot--Case   48 iSpan 2 bx1   0.0000
+--FindKnot--Case   47 iSpan 1 bx1   0.2989
+--FindKnot--Case   46 RssWithKnot       2.3425 RssDelta     0.028642 Cut      0.44038 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   45 iSpan 3 bx1   0.4572
+--FindKnot--Case   44 iSpan 2 bx1   0.3324
+--FindKnot--Case   43 iSpan 1 bx1   0.2371
+--FindKnot--Case   42 RssWithKnot       2.3423 RssDelta     0.028923 Cut      0.40455 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   41 iSpan 4 bx1   0.0000
+--FindKnot--Case   40 iSpan 3 bx1   0.4128
+--FindKnot--Case   39 iSpan 2 bx1   0.3929
+--FindKnot--Case   38 iSpan 2 bx1   0.0000
+--FindKnot--Case   37 iSpan 2 bx1   0.0000
+--FindKnot--Case   36 iSpan 2 bx1   0.0000
+--FindKnot--Case   35 iSpan 1 bx1   0.4975
+--FindKnot--Case   34 iSpan 1 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 RssWithKnot       2.3432 RssDelta     0.027979 Cut      0.28842 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 4 bx1   0.0000
+--FindKnot--Case   28 iSpan 3 bx1   0.2052
+--FindKnot--Case   27 iSpan 2 bx1   0.3657
+--FindKnot--Case   26 iSpan 1 bx1   0.0415
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 4  Pred 1  Case   -1 Cut     0.006409< Rss 2.3452       RssDelta 0           
+
+|Parent 4  Pred 2                                               skip (pred is in parent)
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+10     0.9744 0.9808    0.0007224    2           x1     0.62319  9             1 reject (small DeltaRSq)
+
+-----------------------------------------------------------------------------
+
+RSq changed by less than 0.001 at 9 terms, 8 terms used (DeltaRSq 0.00072)
+After forward pass GRSq 0.974 RSq 0.981
+Forward pass complete: 9 terms, 8 terms used
+
+Prune none penalty 2 nprune null: selected 8 of 8 terms, and 2 of 2 preds
+After pruning pass GRSq 0.974 RSq 0.98
