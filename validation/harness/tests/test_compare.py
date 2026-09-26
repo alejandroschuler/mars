@@ -1,19 +1,24 @@
 """Pure-Python tests for compare.py; no R needed. Boundary values are exact
 (right at a documented tolerance), so a change to a tolerance constant or to
 a comparison operator (> vs >=, relative vs absolute) fails a test here.
-TestStepsFromTrace parses two stored trace logs (also used by
-test_trace_parse.py); it needs no R either, since these are committed
-files."""
+TestStepsFromTrace parses a stored trace log together with its fit's
+dirs/cuts (committed alongside it, tests/data/trace_steps_fit.json); it
+needs no R either, since these are committed files."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import numpy as np
 import pytest
 from compare import (
     COEF_NORMWISE_REL,
+    FWD_RSS_REL,
+    KAPPA_CAP,
     KAPPA_RSS_LIMIT,
     Difference,
+    Skip,
     compare_defaults,
     compare_fit,
     compare_forward_steps,
@@ -24,9 +29,9 @@ from compare import (
 )
 from trace_parse import parse_trace
 
-_HARNESS_DIR = Path(__file__).resolve().parents[1]
-TRACE9 = _HARNESS_DIR.parent / "legacy" / "out" / "trace9.txt"
-TRACE_DEGREE2 = Path(__file__).resolve().parent / "data" / "trace_degree2.txt"
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+TRACE_STEPS = _DATA_DIR / "trace_steps.txt"
+TRACE_STEPS_FIT = _DATA_DIR / "trace_steps_fit.json"
 
 
 class TestConditionNumber:
@@ -413,48 +418,138 @@ class TestCompareForwardSteps:
         assert result.first_mismatch == 0
 
 
+def _load_steps_fixture():
+    """The committed trace + dirs/cuts pair (a real, black-box fit_earth.R
+    run with trace = 9, degree = 2, pmethod = "none": one mirrored hinge
+    pair on x0, one on x1, then a single unpaired hinge on x0, then a
+    hinge pair on x1 nested under that single hinge -- both a pair and a
+    single, and a two-level parent chain, in one fit)."""
+    log = parse_trace(TRACE_STEPS, sample_var_y=None)
+    fit = json.loads(TRACE_STEPS_FIT.read_text())
+    return log, np.array(fit["dirs"]), np.array(fit["cuts"]), np.array(fit["x"])
+
+
 class TestStepsFromTrace:
-    """steps_from_trace against the two committed traces test_trace_parse.py
-    also uses; no R needed, since these are stored files."""
+    """steps_from_trace against the committed trace_steps.txt/
+    trace_steps_fit.json pair; no R needed, since these are stored files."""
 
-    def test_trace9_first_step_matches_the_summary_line(self):
-        log = parse_trace(TRACE9, sample_var_y=None)
-        steps = steps_from_trace(log)
-        assert len(steps) == len(log.steps)
+    def test_a_trailing_rejected_step_with_no_new_term_is_dropped(self):
+        # The fixture's trace has 5 FindTerm blocks, but the fit stopped at
+        # 4 term-groups (7 terms plus the intercept): the 5th block ends
+        # "reject (small DeltaRSq)" and added no row to dirs, so it has no
+        # group to align to and must not appear as a placeholder either.
+        log, dirs, cuts, _ = _load_steps_fixture()
+        assert len(log.steps) == 5
+        steps = steps_from_trace(log, dirs, cuts)
+        assert len(steps) == 4
+
+    def test_a_mirrored_pair_reports_both_signs(self):
+        log, dirs, cuts, x = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
         first = steps[0]
-        assert first["parent"] == 1 and first["pred"] == 1
+        assert first["parent"] == 0 and first["pred"] == 0  # the intercept, x0
         assert first["direction"] == HINGE_PAIR
-        assert first["knot"] == pytest.approx(0.77466, abs=1e-3)
-        assert first["best_rss"] is not None
-        assert first["rss_before"] == pytest.approx(199.0)
+        assert first["knot"] == cuts[1, 0]  # exact: row 1 (or 2)'s own cuts entry
+        assert np.any(x[:, 0] == first["knot"])  # bit-exact, an observed x
+        assert first["rss_before"] == pytest.approx(119.0)
 
-    def test_degree2_trace_direction_is_linear_or_a_hinge_pair(self):
-        log = parse_trace(TRACE_DEGREE2, sample_var_y=None)
-        steps = steps_from_trace(log)
+    def test_an_unpaired_single_hinge_is_not_reported_as_a_pair(self):
+        # Finding 2 (round-2 review): a single hinge earth did not mirror
+        # (here, at a step where the paired candidate lost to a boundary
+        # case) must not come out as {1, -1}; before this fix every hinge
+        # winner did, hiding exactly this case.
+        log, dirs, cuts, x = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
+        single = steps[2]
+        assert single["direction"] in (frozenset({1}), frozenset({-1}))
+        assert len(single["direction"]) == 1
+        assert single["parent"] == 0 and single["pred"] == 0
+        assert np.any(x[:, 0] == single["knot"])
+
+    def test_knot_is_the_exact_cuts_value_not_the_trace_rounded_cut(self):
+        # Finding 2: the trace's Cut has 5-6 significant digits; the knot
+        # here must be cuts's full-precision value (bit-exactly an
+        # observed x, per the harness's precision guarantee), not that
+        # rounded text -- the trace file never even contains that many
+        # digits, since it was printed by R at far lower precision.
+        log, dirs, cuts, x = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
+        trace_text = TRACE_STEPS.read_text()
+        for step in steps:
+            assert np.any(x[:, step["pred"]] == step["knot"])
+            assert repr(step["knot"]) not in trace_text
+
+    def test_a_later_terms_parent_is_the_earlier_single_hinges_row(self):
+        # Finding 2: parent/pred are 0-based dirs row/column indices (not
+        # the trace's own 1-based internal slot numbers, which count
+        # differently: trace_parse.py's docstring). The interaction term
+        # here is built on top of the single hinge from the previous
+        # (unpaired) step, at dirs row 5.
+        log, dirs, cuts, _ = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
+        interaction = steps[3]
+        assert interaction["parent"] == 5
+        assert interaction["pred"] == 1
+        assert interaction["direction"] == HINGE_PAIR
+
+    def test_best_and_second_best_rss_are_distinct_on_a_real_step(self):
+        # N06 (round-2 review): steps_from_trace setting second_best_rss
+        # equal to best_rss (as if every candidate tied) would still pass
+        # every test above; pin the actual, distinct values from a real
+        # step so that specific mutation fails here.
+        log, dirs, cuts, _ = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
+        first = steps[0]
+        assert first["best_rss"] == pytest.approx(64.754)
+        assert first["second_best_rss"] == pytest.approx(74.885)
+        assert first["best_rss"] != first["second_best_rss"]
+        assert first["best_rss"] < first["second_best_rss"]
+
+    def test_every_step_is_one_of_the_valid_directions(self):
+        log, dirs, cuts, _ = _load_steps_fixture()
+        steps = steps_from_trace(log, dirs, cuts)
         assert steps
         for step in steps:
-            assert step["direction"] in (HINGE_PAIR, LINEAR, frozenset())
+            assert step["direction"] in (
+                HINGE_PAIR,
+                frozenset({1}),
+                frozenset({-1}),
+                LINEAR,
+            )
 
-    def test_a_step_with_no_live_search_gives_an_empty_direction(self):
-        # A degenerate step (every search skipped) must not crash; it is
-        # simply unusable for a structural comparison at that index.
-        fake_step = SimpleNamespace(
-            searches=[SimpleNamespace(skipped_reason="x", pred=None)]
+    def test_more_dirs_groups_than_trace_steps_raises(self):
+        # A dirs/cuts that does not belong to this trace at all (more row
+        # groups than the trace has FindTerm blocks) must not silently
+        # align them positionally; that would compare the wrong terms.
+        dirs = np.array([[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]])
+        cuts = np.array([[0.0, 0.0], [0.5, 0.0], [0.5, 0.0], [0.0, 0.5], [0.0, 0.5]])
+        fake_log = SimpleNamespace(steps=[SimpleNamespace(searches=[], term=2)])
+        with pytest.raises(ValueError, match="row-groups"):
+            steps_from_trace(fake_log, dirs, cuts)
+
+    def test_a_parent_slot_not_mapping_to_an_earlier_row_raises(self):
+        # A trace whose reported parent slot does not resolve to a row
+        # earlier than this step's own group is not trustworthy input (the
+        # slot<->row mapping trace_parse.py warns about has broken down);
+        # raise rather than silently emit a nonsensical comparison.
+        dirs = np.array([[0, 0], [1, 0], [-1, 0]])
+        cuts = np.array([[0.0, 0.0], [0.5, 0.0], [0.5, 0.0]])
+        candidate = SimpleNamespace(rss=1.0, cut=0.5, best=True)
+        # parent = 5 does not exist (only rows 0-2 do): 5 - 1 = 4 is past
+        # this step's own group (row 1), so this must raise.
+        search = SimpleNamespace(
+            skipped_reason=None,
+            pred=1,
+            parent=5,
+            linear=None,
+            hinge=candidate,
+            cases=[],
+            rss_before=10.0,
         )
+        fake_step = SimpleNamespace(searches=[search], term=2)
         fake_log = SimpleNamespace(steps=[fake_step])
-        steps = steps_from_trace(fake_log)
-        assert steps == [
-            {
-                "parent": None,
-                "pred": None,
-                "direction": frozenset(),
-                "knot": None,
-                "best_rss": None,
-                "second_best_rss": None,
-                "rss_before": None,
-                "flags": None,
-            }
-        ]
+        with pytest.raises(ValueError, match="parent slot"):
+            steps_from_trace(fake_log, dirs, cuts)
 
 
 class TestRemovedSequence:
@@ -502,6 +597,69 @@ class TestCompareFitPruningRemoved:
         assert "length mismatch" in diffs[0].detail
 
 
+class TestCompareFitPruningNonNestedSubsets:
+    """Finding 4 (round-2 review): S01_matched_d1's own prune_terms rows are
+    not nested (the size-4 subset {1, 4, 5, 6} is not inside the size-5
+    subset {1, 4, 5, 10, 11}, spec PRUNE-3 for one response), so
+    removed_sequence returns None and the row was silently skipped. When
+    both sides give prune_terms directly, the comparison must work from
+    the per-size subsets themselves, nested or not."""
+
+    # The exact S01_matched_d1 shape the review names: sizes 1..5, the last
+    # two rows not nested in each other.
+    NON_NESTED_PRUNE_TERMS: ClassVar[list[list[int]]] = [
+        [1, 0, 0, 0, 0],
+        [1, 4, 0, 0, 0],
+        [1, 4, 5, 0, 0],
+        [1, 4, 5, 6, 0],
+        [1, 4, 5, 10, 11],
+    ]
+
+    def test_identical_non_nested_matrices_are_no_difference(self):
+        # gen_fixtures.py's own reproducibility check: the same earth run
+        # twice gives the same (non-nested) prune_terms both times.
+        a = {"prune_terms": self.NON_NESTED_PRUNE_TERMS}
+        b = {"prune_terms": [row[:] for row in self.NON_NESTED_PRUNE_TERMS]}
+        assert compare_fit(a, b) == []
+
+    def test_removed_sequence_cannot_derive_this_but_compare_fit_still_runs(self):
+        # Pinning that this exact matrix is the ambiguous case
+        # removed_sequence refuses to guess at (TestRemovedSequence covers
+        # the mechanism directly); compare_fit must not inherit that
+        # refusal now that it no longer routes through removed_sequence
+        # when both sides give prune_terms.
+        assert removed_sequence({"prune_terms": self.NON_NESTED_PRUNE_TERMS}) is None
+        a = {"prune_terms": self.NON_NESTED_PRUNE_TERMS}
+        b = {"prune_terms": [row[:] for row in self.NON_NESTED_PRUNE_TERMS]}
+        assert compare_fit(a, b) == []
+
+    def test_a_difference_at_a_non_nested_size_is_still_caught(self):
+        a = {"prune_terms": self.NON_NESTED_PRUNE_TERMS}
+        b_rows = [row[:] for row in self.NON_NESTED_PRUNE_TERMS]
+        b_rows[3] = [1, 4, 5, 7, 0]  # size-4 subset differs: 6 vs 7
+        b = {"prune_terms": b_rows}
+        diffs = compare_fit(a, b)
+        assert len(diffs) == 1
+        assert diffs[0].field == "pruning_removed"
+        assert diffs[0].step == 3
+        assert diffs[0].a == [1, 4, 5, 6]
+        assert diffs[0].b == [1, 4, 5, 7]
+
+    def test_a_row_count_mismatch_is_reported(self):
+        a = {"prune_terms": self.NON_NESTED_PRUNE_TERMS}
+        b = {"prune_terms": self.NON_NESTED_PRUNE_TERMS[:-1]}
+        diffs = compare_fit(a, b)
+        assert len(diffs) == 1
+        assert "length mismatch" in diffs[0].detail
+
+    def test_pruning_removed_direct_still_uses_the_nested_derivation(self):
+        # pymars's own schema (new_adapter.py) has no prune_terms at all,
+        # only pruning_removed directly; that path is unaffected.
+        a = {"pruning_removed": [2, 3]}
+        b = {"prune_terms": [[1, 0, 0], [1, 3, 0], [1, 2, 3]]}
+        assert compare_fit(a, b) == []
+
+
 class TestCompareFitForwardRssPath:
     def test_exactly_at_the_relative_tolerance_passes(self):
         b = [10.0, 5.0, 2.0]
@@ -522,8 +680,39 @@ class TestCompareFitForwardRssPath:
     def test_kappa_over_the_limit_scales_and_labels_numeric(self):
         b = [10.0, 5.0, 2.0]
         a = [v * (1 + 1e-3) for v in b]  # fails at the base tolerance
+        # KAPPA_CAP bounds the scale factor at KAPPA_CAP / KAPPA_RSS_LIMIT =
+        # 1e8 / 1e6 = 100, so the tolerance here is 1e-8 * 100 = 1e-6, well
+        # under 1e-3: this kappa, however huge, cannot make the gap pass.
         diffs = compare_fit({"fwd_rss": a}, {"fwd_rss": b}, kappa=KAPPA_RSS_LIMIT * 1e6)
-        assert diffs == []  # the huge kappa scales the tolerance well past 1e-3
+        assert len(diffs) == 1
+        assert diffs[0].label == "numeric"
+        expected_tol = FWD_RSS_REL * (KAPPA_CAP / KAPPA_RSS_LIMIT)
+        assert diffs[0].tolerance == pytest.approx(expected_tol)
+
+    def test_kappa_scaling_is_capped_so_a_small_gap_still_passes(self):
+        # The cap still lets a genuinely tiny gap through at a huge kappa,
+        # showing the cap bounds the tolerance rather than zeroing it out.
+        b = [10.0, 5.0, 2.0]
+        tol_at_cap = FWD_RSS_REL * (KAPPA_CAP / KAPPA_RSS_LIMIT)
+        a = [v * (1 + tol_at_cap * 0.5) for v in b]
+        diffs = compare_fit({"fwd_rss": a}, {"fwd_rss": b}, kappa=KAPPA_RSS_LIMIT * 1e6)
+        assert diffs == []
+
+    def test_infinite_kappa_still_reports_a_gcv_of_1_against_100(self):
+        # Round-2 review, PR #38 finding 1: a singular basis (for example
+        # the legacy code's left hinge at the smallest knot) gives kappa(B)
+        # = inf; without a cap, the scaled tolerance is also infinite, and
+        # a gcv of 1 against 100 (or rsq of 0 against 1, or fitted of 0
+        # against 9, or coef of 1 against 50) passes. It must not.
+        diffs = compare_fit({"gcv": 1.0}, {"gcv": 100.0}, kappa=float("inf"))
+        assert len(diffs) == 1
+        assert diffs[0].field == "gcv"
+        assert diffs[0].label == "numeric"
+
+    def test_nan_kappa_is_treated_the_same_as_infinite(self):
+        diffs = compare_fit({"gcv": 1.0}, {"gcv": 100.0}, kappa=float("nan"))
+        assert len(diffs) == 1
+        assert diffs[0].label == "numeric"
 
 
 class TestNeverHidesADifference:
@@ -577,6 +766,79 @@ class TestNeverHidesADifference:
         # tolerance exists without it).
         a, b = {"fitted": [1.0, 100.0]}, {"fitted": [1.0, 2.0]}
         assert compare_fit(a, b) == []
+
+    def test_na_on_one_side_against_a_real_number_is_a_difference(self):
+        a = {"gcv_per_subset": [1.0, None]}
+        b = {"gcv_per_subset": [1.0, 2.0]}
+        diffs = compare_fit(a, b)
+        assert len(diffs) == 1
+        assert "NA" in diffs[0].detail
+
+    def test_na_on_one_side_against_nan_on_the_other_is_a_difference(self):
+        # Finding 4 (round-2 review): np.asarray(..., dtype=float) turns
+        # None into nan, the same bit pattern a genuine NaN has, so an R
+        # NA (decoded to None by _desanitize) compared against an actual
+        # NaN at the same position must not read as "both NaN, matching".
+        a = {"gcv_per_subset": [1.0, None]}
+        b = {"gcv_per_subset": [1.0, float("nan")]}
+        diffs = compare_fit(a, b)
+        assert len(diffs) == 1
+        assert "NA" in diffs[0].detail
+
+    def test_na_at_the_same_position_on_both_sides_is_not_a_difference(self):
+        a = {"gcv_per_subset": [1.0, None]}
+        b = {"gcv_per_subset": [1.0, None]}
+        assert compare_fit(a, b) == []
+
+    def test_na_in_coefficients_is_also_kept_distinct_from_nan(self):
+        a = {"coef": [[1.0], [None]]}
+        b = {"coef": [[1.0], [float("nan")]]}
+        diffs = compare_fit(a, b)
+        assert len(diffs) == 1
+        assert diffs[0].field == "coef"
+        assert "NA" in diffs[0].detail
+
+
+class TestCompareFitSkips:
+    """Finding 4 (round-2 review): a comparison that does not run (a field
+    absent on one side, or one that needs sd_y when it was not given)
+    leaves no record in the returned Difference list (correctly: it is
+    not itself a disagreement), but must not vanish silently either -- the
+    caller's skipped list, when given, gets a Skip naming the field and
+    the reason."""
+
+    def test_a_field_absent_on_one_side_is_recorded(self):
+        skipped: list[Skip] = []
+        diffs = compare_fit({"gcv_per_subset": [1.0, 2.0]}, {}, skipped=skipped)
+        assert diffs == []
+        assert len(skipped) == 1
+        assert skipped[0].field == "gcv_per_subset"
+        assert skipped[0].reason
+
+    def test_a_field_absent_on_both_sides_is_not_recorded(self):
+        skipped: list[Skip] = []
+        diffs = compare_fit({}, {}, skipped=skipped)
+        assert diffs == []
+        assert skipped == []
+
+    def test_sd_y_not_given_is_recorded_once_per_field_present_on_both_sides(self):
+        skipped: list[Skip] = []
+        diffs = compare_fit(
+            {"fitted": [1.0, 2.0]}, {"fitted": [1.0, 2.0]}, skipped=skipped
+        )
+        assert diffs == []
+        assert {s.field for s in skipped} == {"fitted"}
+        assert "sd_y" in skipped[0].reason
+
+    def test_skipped_defaults_to_none_and_nothing_is_collected(self):
+        # The default call site (no skipped= argument) must behave exactly
+        # as before: no error, no change to the returned differences.
+        assert compare_fit({"fitted": [1.0, 2.0]}, {"fitted": [1.0, 2.0]}) == []
+
+    def test_dataset_is_carried_onto_the_skip(self):
+        skipped: list[Skip] = []
+        compare_fit({"coef": [[1.0]]}, {}, dataset="S07", skipped=skipped)
+        assert skipped[0].dataset == "S07"
 
 
 class TestCompareFitNormwiseVsElementwiseMutation:

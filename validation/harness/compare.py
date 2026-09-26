@@ -8,12 +8,25 @@ GCV/R2/GRSq, fitted values and predictions, and GLM coefficients and
 probabilities. Two quantities the schema does not carry are needed for some
 of these and are passed in explicitly rather than guessed at: kappa(B)
 (from ``condition_number`` on a basis matrix) scales the coefficient and
-GCV-family tolerances above the plan's limits (and labels the difference
-``numeric`` there, rather than skipping the comparison), and sd(y) scales
-the fitted-value tolerance. No comparison here is ever silently skipped
-without saying why in the returned list of ``Difference``s: a missing
-field, a shape or length mismatch, and a NaN or an infinity on only one
-side are themselves differences, not passes.
+GCV-family tolerances above the plan's limits, capped at its value for
+kappa(B) = ``KAPPA_CAP`` so a singular basis (kappa(B) = infinity, for
+example a left hinge whose knot sits at the smallest x) cannot scale a
+tolerance to infinity and swallow every difference; the difference is
+labeled ``numeric`` there, rather than the comparison being skipped. sd(y)
+scales the fitted-value tolerance. No comparison here is ever silently
+skipped without a trace of why: a shape or length mismatch, and an NA
+(R's, decoded to ``None``), a NaN or an infinity on only one side, are
+themselves differences, not passes; a comparison that genuinely cannot
+run (a field absent on one side, or one that needs ``sd_y`` when it was
+not given) is left out of the returned ``Difference`` list, since it is
+not itself a disagreement, but is still recorded, with its reason, in the
+caller's ``skipped`` list when it passes one. The pruning-path comparison
+compares the ``prune_terms`` subset at each size directly when both sides
+give it, which works even when earth's own rows are not nested (one
+response, ``VALIDATION_PLAN.md``, PRUNE-3); only when a side instead
+gives ``pruning_removed`` (``new_adapter.py``'s shape, no fixed-shape
+subset matrix) does it fall back to a removed-term sequence, which does
+assume nesting.
 
 ``compare_forward_steps`` compares two per-step candidate logs (a list of
 dicts, one per forward step, with ``parent``, ``pred``, ``knot``,
@@ -26,7 +39,8 @@ candidate RSS (from either side's own log) differ by less than 1e-7 times
 the RSS before the step, and the structural comparison stops there, because
 the two paths after two different choices cannot be compared.
 ``steps_from_trace`` builds this step-dict list from a
-``trace_parse.TraceLog``, for the earth side of that comparison.
+``trace_parse.TraceLog`` and the same fit's ``dirs``/``cuts``, for the
+earth side of that comparison.
 
 ``compare_defaults`` is the plan's "defaults mode" row: structures differ
 between the two sides, so it only reports R2, GCV, the number of terms and
@@ -43,6 +57,16 @@ import numpy as np
 NEAR_TIE_REL = 1e-7
 KAPPA_RSS_LIMIT = 1e6
 KAPPA_COEF_LIMIT = 1e5
+# The scaled tolerance's ceiling: its value at kappa = 1e8, about 1/sqrt(u)
+# for the unit roundoff u ~= 1.1e-16 (VALIDATION_PLAN.md, "What is compared,
+# and the tolerances"). Without a ceiling, a singular basis (kappa(B) = inf,
+# for example a left hinge whose knot sits at the smallest x, a zero column)
+# scales every tolerance to infinity, so any difference, however large,
+# reports as a pass; capped at kappa = 1e8, a difference such as a gcv of 1
+# against 100 still exceeds even the most generous tolerance this table
+# allows, and is reported (labeled "numeric", per VALIDATION_PLAN.md's
+# "numeric: a numerical difference, such as a rank-deficient solve").
+KAPPA_CAP = 1e8
 
 RSS_PER_SUBSET_REL = 1e-8
 GCV_PER_SUBSET_REL = 1e-8
@@ -84,28 +108,74 @@ class Difference:
     flags: dict[str, bool | None] | None = None
 
 
+@dataclass
+class Skip:
+    """One comparison ``compare_fit`` did not run, and why: a field present
+    on only one side, or one that needs ``sd_y``/``kappa`` (or the like)
+    that was not given. Not a ``Difference`` (a skip is not itself a
+    disagreement between pymars and earth, just information the harness
+    lacked), but also never silent: every skip a caller might want to see
+    is recorded here when it passes a ``skipped`` list to collect them.
+    """
+
+    field: str
+    dataset: str | None
+    reason: str
+
+
 def _kappa_scale(
     base_tol: float, kappa: float | None, limit: float
 ) -> tuple[float, bool]:
     """The tolerance to use, and whether to label a difference "numeric":
     the base tolerance unchanged while kappa is at or below its limit (or
     unknown), otherwise the base tolerance scaled up in proportion to how
-    far kappa is past the limit ("Above these kappa(B) limits, the harness
-    compares fitted values with a tolerance scaled by kappa(B), and labels
-    any difference numeric").
+    far kappa is past the limit, but never past its value at ``KAPPA_CAP``
+    ("Above these kappa(B) limits, the harness compares fitted values with
+    a tolerance scaled by kappa(B), and labels any difference numeric").
+
+    A non-finite kappa (inf, or nan from a degenerate basis) is treated as
+    ``KAPPA_CAP`` itself, the worst case this table still assigns a finite
+    tolerance to, not as license to accept anything: a singular basis is
+    still reported "numeric" whenever the difference exceeds that capped
+    tolerance, never silently passed because the scale factor ran away to
+    infinity.
     """
-    if kappa is None or kappa <= limit:
+    if kappa is None or (np.isfinite(kappa) and kappa <= limit):
         return base_tol, False
-    return base_tol * (kappa / limit), True
+    effective_kappa = kappa if np.isfinite(kappa) else KAPPA_CAP
+    return base_tol * (min(effective_kappa, KAPPA_CAP) / limit), True
 
 
-def _finite_mismatch(a: np.ndarray, b: np.ndarray) -> str | None:
-    """``None`` if every NaN and every signed infinity in ``a`` lines up
-    with one in ``b`` at the same position (so a plain numeric comparison
-    over the remaining finite entries is meaningful); otherwise a detail
-    string. A NaN or an infinity on only one side is always a difference,
-    never a pass and never silently ignored.
+def _none_mask(value: Any, shape: tuple[int, ...]) -> np.ndarray:
+    """A boolean array of ``shape``, True where ``value``'s raw entry (read
+    before any ``dtype=float`` cast) is ``None`` -- R's NA, as
+    ``driver._desanitize``/``blackbox._desanitize`` decode it. Plain
+    ``np.asarray(value, dtype=float)`` turns ``None`` into ``nan`` (the
+    same bit pattern a genuine NaN has), which would silently conflate the
+    two, so this is computed on an object array first.
     """
+    obj = np.asarray(value, dtype=object)
+    if obj.shape != shape:  # a shape mismatch is reported by the caller
+        return np.zeros(shape, dtype=bool)
+    return np.array([v is None for v in obj.ravel()], dtype=bool).reshape(shape)
+
+
+def _finite_mismatch(
+    a: np.ndarray, b: np.ndarray, a_none: np.ndarray, b_none: np.ndarray
+) -> str | None:
+    """``None`` if every NA, every NaN and every signed infinity in ``a``
+    lines up with one in ``b`` at the same position (so a plain numeric
+    comparison over the remaining finite entries is meaningful); otherwise
+    a detail string. An NA (R's NA, decoded to ``None``), a NaN or an
+    infinity on only one side is always a difference, never a pass and
+    never silently ignored; an NA on one side against a NaN (not an NA) on
+    the other at the same position is also always a difference, checked
+    before the NaN comparison below (which ``a``/``b`` alone cannot make,
+    since casting to ``dtype=float`` turns an NA into the same ``nan`` bit
+    pattern a real NaN has).
+    """
+    if not np.array_equal(a_none, b_none):
+        return "NA on only one side"
     a_nan, b_nan = np.isnan(a), np.isnan(b)
     if not np.array_equal(a_nan, b_nan):
         return "NaN on only one side"
@@ -127,11 +197,13 @@ def _elementwise(a: Any, b: Any, *, relative: bool) -> tuple[float | None, str |
     finite entries) is what the caller compares against its tolerance.
     Never a silent pass on a shape or a non-finite mismatch.
     """
+    a_none = _none_mask(a, np.shape(a))
+    b_none = _none_mask(b, np.shape(b))
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
     if a.shape != b.shape:
         return None, f"shape mismatch {a.shape} vs {b.shape}"
-    reason = _finite_mismatch(a, b)
+    reason = _finite_mismatch(a, b, a_none, b_none)
     if reason is not None:
         return None, reason
     finite = np.isfinite(a)  # same positions in a and b, by the check above
@@ -154,11 +226,13 @@ def _normwise(a: Any, b: Any) -> tuple[float | None, str | None]:
     mismatch either). Returns ``(metric, detail)``, the same contract as
     ``_elementwise``.
     """
+    a_none = _none_mask(a, np.shape(a))
+    b_none = _none_mask(b, np.shape(b))
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
     if a.shape != b.shape:
         return None, f"shape mismatch {a.shape} vs {b.shape}"
-    reason = _finite_mismatch(a, b)
+    reason = _finite_mismatch(a, b, a_none, b_none)
     if reason is not None:
         return None, reason
     finite = np.isfinite(a)
@@ -198,6 +272,34 @@ def removed_sequence(result: dict[str, Any]) -> list[int] | None:
     return removed
 
 
+def _record_skip(
+    skipped: list[Skip] | None, field: str, dataset: str | None, reason: str
+) -> None:
+    """Append a ``Skip`` when the caller asked to collect them (``skipped``
+    is not ``None``); a no-op otherwise, so a caller that does not want
+    them pays nothing and existing callers see no change of behavior."""
+    if skipped is not None:
+        skipped.append(Skip(field=field, dataset=dataset, reason=reason))
+
+
+def _prune_terms_size_sets(prune_terms: Any) -> list[frozenset[int]] | None:
+    """The set of term indices present at each pruned subset size (ascending
+    row order), directly from a ``prune_terms`` matrix (one row per size,
+    0-padded). Unlike ``removed_sequence``, this never assumes consecutive
+    rows are nested: earth's own ``prune.terms`` rows need not be, for one
+    response (``VALIDATION_PLAN.md``, PRUNE-3, leaps-style subsets), so
+    comparing the subset at each size directly is the comparison that
+    always applies when both sides give ``prune_terms``. ``None`` if
+    ``prune_terms`` is ``None`` or not a 2-D matrix.
+    """
+    if prune_terms is None:
+        return None
+    pt = np.asarray(prune_terms)
+    if pt.ndim != 2:
+        return None
+    return [frozenset(int(t) for t in row.tolist() if t != 0) for row in pt]
+
+
 def compare_fit(
     a: dict[str, Any],
     b: dict[str, Any],
@@ -206,23 +308,31 @@ def compare_fit(
     sd_y: float | None = None,
     glm: bool = False,
     dataset: str | None = None,
+    skipped: list[Skip] | None = None,
 ) -> list[Difference]:
-    """Compare two common-schema results; a field absent from either side is
-    skipped (documented as such is not the same as a silent pass on a field
-    both sides do carry, which never happens here).
+    """Compare two common-schema results; a field absent from one side (or a
+    comparison that needs ``sd_y`` when it was not given) is skipped, not
+    compared at its base tolerance and not treated as a difference, but
+    never silently: when the caller passes a list as ``skipped``, a
+    ``Skip`` naming the field and the reason is appended to it for every
+    such case (``skipped`` defaults to ``None``, so a caller that does not
+    ask for them is unaffected).
 
     ``kappa`` scales the coefficient (base limit 1e5) and GCV/R2/GRSq/
     fitted-value/forward-RSS-path (base limit 1e6) tolerances above the
-    plan's limits, labeling the difference ``numeric`` there, rather than
-    skipping the comparison; without ``kappa``, every comparison runs at
-    its base tolerance. ``sd_y`` is required for the fitted-value/
-    prediction comparison, which has no other way to know the response's
-    scale.
+    plan's limits, capped at ``KAPPA_CAP`` (``_kappa_scale``), labeling the
+    difference ``numeric`` there, rather than skipping the comparison;
+    without ``kappa``, every comparison runs at its base tolerance. ``sd_y``
+    is required for the fitted-value/prediction comparison, which has no
+    other way to know the response's scale.
     """
     diffs: list[Difference] = []
 
     a_sel, b_sel = a.get("selected_terms"), b.get("selected_terms")
-    if a_sel is not None and b_sel is not None and set(a_sel) != set(b_sel):
+    if a_sel is None or b_sel is None:
+        if a_sel is not None or b_sel is not None:
+            _record_skip(skipped, "selected_terms", dataset, "absent on one side")
+    elif set(a_sel) != set(b_sel):
         diffs.append(
             Difference(
                 field="selected_terms",
@@ -238,6 +348,8 @@ def compare_fit(
     ):
         av, bv = a.get(name), b.get(name)
         if av is None or bv is None:
+            if av is not None or bv is not None:
+                _record_skip(skipped, name, dataset, "absent on one side")
             continue
         metric, detail = _elementwise(av, bv, relative=True)
         if detail is not None:
@@ -257,9 +369,75 @@ def compare_fit(
                 )
             )
 
-    a_removed, b_removed = removed_sequence(a), removed_sequence(b)
-    if a_removed is not None and b_removed is not None:
-        if len(a_removed) != len(b_removed):
+    a_pt, b_pt = a.get("prune_terms"), b.get("prune_terms")
+    if a_pt is not None and b_pt is not None:
+        # Both sides give prune_terms directly (for example
+        # gen_fixtures.py's earth-vs-earth reproducibility check): compare
+        # the subset at each size, which works whether or not the rows
+        # happen to be nested.
+        a_sets, b_sets = _prune_terms_size_sets(a_pt), _prune_terms_size_sets(b_pt)
+        if a_sets is None or b_sets is None:
+            _record_skip(
+                skipped,
+                "pruning_removed",
+                dataset,
+                "prune_terms is not a 2-D matrix on at least one side",
+            )
+        elif len(a_sets) != len(b_sets):
+            diffs.append(
+                Difference(
+                    field="pruning_removed",
+                    a=len(a_sets),
+                    b=len(b_sets),
+                    dataset=dataset,
+                    detail=f"length mismatch {len(a_sets)} vs {len(b_sets)}",
+                )
+            )
+        else:
+            mismatch = next(
+                (
+                    i
+                    for i, (sa, sb) in enumerate(zip(a_sets, b_sets, strict=True))
+                    if sa != sb
+                ),
+                None,
+            )
+            if mismatch is not None:
+                diffs.append(
+                    Difference(
+                        field="pruning_removed",
+                        step=mismatch,
+                        a=sorted(a_sets[mismatch]),
+                        b=sorted(b_sets[mismatch]),
+                        dataset=dataset,
+                        detail="the subset at this size differs",
+                    )
+                )
+    else:
+        # At least one side has no prune_terms (for example pymars's own
+        # pruning_removed, new_adapter.py's shape, which has no fixed-shape
+        # subset matrix): fall back to the removed-term-sequence, which
+        # needs prune_terms's rows (when that is a side's source) to nest.
+        a_removed, b_removed = removed_sequence(a), removed_sequence(b)
+        if a_removed is None or b_removed is None:
+            has_something = any(
+                x is not None
+                for x in (
+                    a.get("pruning_removed"),
+                    a_pt,
+                    b.get("pruning_removed"),
+                    b_pt,
+                )
+            )
+            if has_something:
+                _record_skip(
+                    skipped,
+                    "pruning_removed",
+                    dataset,
+                    "not derivable on at least one side (prune_terms rows "
+                    "may not be nested, or both fields are absent there)",
+                )
+        elif len(a_removed) != len(b_removed):
             diffs.append(
                 Difference(
                     field="pruning_removed",
@@ -291,24 +469,24 @@ def compare_fit(
                 )
 
     coef_tol, coef_numeric = _kappa_scale(COEF_NORMWISE_REL, kappa, KAPPA_COEF_LIMIT)
-    if a.get("coef") is not None and b.get("coef") is not None:
-        metric, detail = _normwise(a["coef"], b["coef"])
+    a_coef, b_coef = a.get("coef"), b.get("coef")
+    if a_coef is None or b_coef is None:
+        if a_coef is not None or b_coef is not None:
+            _record_skip(skipped, "coef", dataset, "absent on one side")
+    else:
+        metric, detail = _normwise(a_coef, b_coef)
         if detail is not None:
             diffs.append(
                 Difference(
-                    field="coef",
-                    a=a["coef"],
-                    b=b["coef"],
-                    dataset=dataset,
-                    detail=detail,
+                    field="coef", a=a_coef, b=b_coef, dataset=dataset, detail=detail
                 )
             )
         elif metric > coef_tol:
             diffs.append(
                 Difference(
                     field="coef",
-                    a=a["coef"],
-                    b=b["coef"],
+                    a=a_coef,
+                    b=b_coef,
                     metric=metric,
                     tolerance=coef_tol,
                     dataset=dataset,
@@ -324,6 +502,8 @@ def compare_fit(
     ):
         av, bv = a.get(name), b.get(name)
         if av is None or bv is None:
+            if av is not None or bv is not None:
+                _record_skip(skipped, name, dataset, "absent on one side")
             continue
         tol, numeric = _kappa_scale(base_tol, kappa, KAPPA_RSS_LIMIT)
         metric, detail = _elementwise([av], [bv], relative=relative)
@@ -345,37 +525,44 @@ def compare_fit(
                 )
             )
 
+    fitted_tol = fitted_numeric = None
     if sd_y is not None:
         fitted_tol, fitted_numeric = _kappa_scale(
             FITTED_ABS_SD_MULT * sd_y, kappa, KAPPA_RSS_LIMIT
         )
-        for name in ("fitted", "pred_test"):
-            av, bv = a.get(name), b.get(name)
-            if av is None or bv is None:
-                continue
-            metric, detail = _elementwise(av, bv, relative=False)
-            if detail is not None:
-                diffs.append(
-                    Difference(
-                        field=name, a=None, b=None, dataset=dataset, detail=detail
-                    )
+    for name in ("fitted", "pred_test"):
+        av, bv = a.get(name), b.get(name)
+        if av is None or bv is None:
+            if av is not None or bv is not None:
+                _record_skip(skipped, name, dataset, "absent on one side")
+            continue
+        if sd_y is None:
+            _record_skip(skipped, name, dataset, "sd_y not given")
+            continue
+        metric, detail = _elementwise(av, bv, relative=False)
+        if detail is not None:
+            diffs.append(
+                Difference(field=name, a=None, b=None, dataset=dataset, detail=detail)
+            )
+        elif metric > fitted_tol:
+            diffs.append(
+                Difference(
+                    field=name,
+                    a=None,
+                    b=None,
+                    metric=metric,
+                    tolerance=fitted_tol,
+                    dataset=dataset,
+                    detail="absolute, scaled by sd(y)",
+                    label="numeric" if fitted_numeric else None,
                 )
-            elif metric > fitted_tol:
-                diffs.append(
-                    Difference(
-                        field=name,
-                        a=None,
-                        b=None,
-                        metric=metric,
-                        tolerance=fitted_tol,
-                        dataset=dataset,
-                        detail="absolute, scaled by sd(y)",
-                        label="numeric" if fitted_numeric else None,
-                    )
-                )
+            )
 
     fwd_a, fwd_b = a.get("fwd_rss"), b.get("fwd_rss")
-    if fwd_a is not None and fwd_b is not None:
+    if fwd_a is None or fwd_b is None:
+        if fwd_a is not None or fwd_b is not None:
+            _record_skip(skipped, "fwd_rss", dataset, "absent on one side")
+    else:
         tol, numeric = _kappa_scale(FWD_RSS_REL, kappa, KAPPA_RSS_LIMIT)
         metric, detail = _elementwise(fwd_a, fwd_b, relative=True)
         if detail is not None:
@@ -400,7 +587,10 @@ def compare_fit(
 
     if glm:
         av, bv = a.get("glm_coef"), b.get("glm_coef")
-        if av is not None and bv is not None:
+        if av is None or bv is None:
+            if av is not None or bv is not None:
+                _record_skip(skipped, "glm_coef", dataset, "absent on one side")
+        else:
             metric, detail = _elementwise(av, bv, relative=True)
             if detail is not None:
                 diffs.append(
@@ -423,6 +613,8 @@ def compare_fit(
         for name in ("pred_train", "pred_test"):
             av, bv = a.get(name), b.get(name)
             if av is None or bv is None:
+                if av is not None or bv is not None:
+                    _record_skip(skipped, f"{name}_prob", dataset, "absent on one side")
                 continue
             metric, detail = _elementwise(av, bv, relative=False)
             if detail is not None:
@@ -629,89 +821,175 @@ def compare_forward_steps(
     return result
 
 
-def steps_from_trace(trace_log: Any) -> list[dict[str, Any]]:
-    """Build ``compare_forward_steps``'s per-step dicts from a
-    ``trace_parse.TraceLog``: for each ``ForwardStep``, the winning
-    (parent, pred, direction, knot) (the last candidate tagged ``best`` in
-    file order, across every search in the step, linear and hinge alike;
-    ``trace_parse``'s own docstring explains why only the last tag is
-    authoritative), the best and second-best candidate RSS pooled across
-    every search (by resulting RSS, ascending), ``rss_before``, and the
-    winning candidate's flags when it came from an evaluated hinge case
-    with a matching cut.
-    """
-    steps = []
-    for step in trace_log.steps:
-        candidates: list[
-            tuple[float, int, int, frozenset[int], float, bool, dict | None]
-        ] = []
-        for search in step.searches:
-            if search.skipped_reason is not None or search.pred is None:
-                continue
-            if search.linear is not None:
-                candidates.append(
-                    (
-                        search.linear.rss,
-                        search.parent,
-                        search.pred,
-                        frozenset({2}),
-                        search.linear.cut,
-                        search.linear.best,
-                        None,
-                    )
-                )
-            if search.hinge is not None:
-                flags = None
-                for case in search.cases:
-                    if case.evaluated and case.cut == search.hinge.cut:
-                        flags = {
-                            "bx1g": case.bx1g,
-                            "cov_col_g": case.cov_col_g,
-                            "tol_g": case.tol_g,
-                            "max_g": case.max_g,
-                        }
-                        break
-                candidates.append(
-                    (
-                        search.hinge.rss,
-                        search.parent,
-                        search.pred,
-                        frozenset({1, -1}),
-                        search.hinge.cut,
-                        search.hinge.best,
-                        flags,
-                    )
-                )
-        if not candidates:
-            steps.append(
-                {
-                    "parent": None,
-                    "pred": None,
-                    "direction": frozenset(),
-                    "knot": None,
-                    "best_rss": None,
-                    "second_best_rss": None,
-                    "rss_before": None,
-                    "flags": None,
-                }
-            )
+def _is_mirror_pair(dirs: np.ndarray, cuts: np.ndarray, i: int, j: int) -> bool:
+    """Whether ``dirs``/``cuts`` rows ``i`` and ``j`` are a mirrored hinge
+    pair earth's forward pass adds in one step: identical at every
+    predictor column except one, where the codes are ``+1`` and ``-1``
+    (either order) and the cut is the same."""
+    di, dj = dirs[i], dirs[j]
+    diff = np.flatnonzero(di != dj)
+    if diff.size != 1:
+        return False
+    (k,) = diff
+    return {int(di[k]), int(dj[k])} == {1, -1} and cuts[i, k] == cuts[j, k]
+
+
+def _dirs_row_groups(dirs: np.ndarray, cuts: np.ndarray) -> list[list[int]]:
+    """Group ``dirs``/``cuts``'s rows after row 0 (the intercept) into the
+    term or term pair each forward step actually added, in forward
+    (row) order: a row joins the previous group when the two form a
+    mirrored hinge pair (``_is_mirror_pair``); otherwise it starts a new,
+    so far singleton, group (a linear term, or a hinge earth did not
+    mirror, for example a boundary knot). A group never grows past 2 rows,
+    since a step adds at most a pair."""
+    groups: list[list[int]] = []
+    for row in range(1, dirs.shape[0]):
+        if (
+            groups
+            and len(groups[-1]) == 1
+            and _is_mirror_pair(dirs, cuts, groups[-1][0], row)
+        ):
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    return groups
+
+
+def _step_candidates(
+    step: Any,
+) -> list[tuple[float, int, int, float, bool, dict | None]]:
+    """Every live (not skipped) candidate a ``ForwardStep`` considered, as
+    ``(rss, parent, pred, cut, best, flags)`` tuples: ``parent``/``pred``
+    are the trace's own 1-based slot/column numbers, ``cut`` is the
+    trace's rounded value (a sanity check only; the exact knot comes from
+    ``cuts``, not from here), and ``flags`` is the matching evaluated
+    hinge case's four flags, when there is one."""
+    candidates: list[tuple[float, int, int, float, bool, dict | None]] = []
+    for search in step.searches:
+        if search.skipped_reason is not None or search.pred is None:
             continue
-        tagged = [c for c in candidates if c[5]]
+        if search.linear is not None:
+            candidates.append(
+                (
+                    search.linear.rss,
+                    search.parent,
+                    search.pred,
+                    search.linear.cut,
+                    search.linear.best,
+                    None,
+                )
+            )
+        if search.hinge is not None:
+            flags = None
+            for case in search.cases:
+                if case.evaluated and case.cut == search.hinge.cut:
+                    flags = {
+                        "bx1g": case.bx1g,
+                        "cov_col_g": case.cov_col_g,
+                        "tol_g": case.tol_g,
+                        "max_g": case.max_g,
+                    }
+                    break
+            candidates.append(
+                (
+                    search.hinge.rss,
+                    search.parent,
+                    search.pred,
+                    search.hinge.cut,
+                    search.hinge.best,
+                    flags,
+                )
+            )
+    return candidates
+
+
+def steps_from_trace(trace_log: Any, dirs: Any, cuts: Any) -> list[dict[str, Any]]:
+    """Build ``compare_forward_steps``'s per-step dicts from a
+    ``trace_parse.TraceLog`` together with the same fit's ``dirs``/``cuts``
+    (a ``pmethod = "none"`` forward-order fit, ``driver.py``'s schema): the
+    trace alone cannot tell a single hinge from a mirrored pair (it prints
+    one line either way) and only carries the knot to 5-6 significant
+    digits, so ``direction`` and ``knot`` come from ``dirs``/``cuts``
+    instead, matched to the trace's ``ForwardStep``\\ s by forward order
+    (``_dirs_row_groups``). ``parent``/``pred`` are converted from the
+    trace's 1-based earth slot/column numbers (``trace_parse``'s own
+    docstring: ``parent`` counts internal slots, not ``dirs`` rows) to the
+    0-based ``dirs`` row/column indices ``new_adapter.py``'s pymars side
+    also uses, and checked against ``dirs`` itself: a step whose reported
+    parent slot is not an earlier row of its own group raises, rather than
+    silently comparing against the wrong term.
+
+    A trace step that added no term (earth's forward pass always stops on
+    one, for example a final "reject" line) has no matching row group and
+    is dropped, not padded with a placeholder; ``steps_from_trace``'s
+    output can accordingly be shorter than ``trace_log.steps``, which
+    ``compare_forward_steps`` (comparing step by step, index by index
+    against pymars's own log) treats the same as any other length
+    mismatch it is not otherwise explained by a tie.
+
+    ``best_rss``/``second_best_rss`` are pooled from every live candidate
+    the step considered (by resulting RSS, ascending); ``rss_before`` and
+    the winning candidate's flags (only for a hinge winner with a matching
+    evaluated case) come from the trace as before.
+    """
+    dirs = np.asarray(dirs)
+    cuts = np.asarray(cuts, dtype=float)
+    groups = _dirs_row_groups(dirs, cuts)
+    if len(groups) > len(trace_log.steps):
+        raise ValueError(
+            f"{len(groups)} dirs row-groups (after the intercept) but only "
+            f"{len(trace_log.steps)} trace steps; the trace does not match "
+            "this fit"
+        )
+    steps = []
+    for group, step in zip(groups, trace_log.steps, strict=False):
+        candidates = _step_candidates(step)
+        if not candidates:
+            raise ValueError(
+                f"trace step {step.term}: dirs has a row group {group} for "
+                "it, but every one of its searches was skipped or had no "
+                "candidate"
+            )
+        tagged = [c for c in candidates if c[4]]
         winner = tagged[-1] if tagged else candidates[-1]
+        _, parent_slot, pred_slot, winner_cut, _, flags = winner
+        parent_row, pred_col = parent_slot - 1, pred_slot - 1
+        if not (0 <= parent_row < group[0]):
+            raise ValueError(
+                f"trace step {step.term}: parent slot {parent_slot} is not "
+                f"an earlier dirs row than this step's own {group} "
+                f"(mapped to row {parent_row})"
+            )
+        knots = {float(cuts[r, pred_col]) for r in group}
+        if len(knots) != 1:
+            raise ValueError(
+                f"trace step {step.term}: rows {group} do not share one "
+                f"cut at predictor column {pred_col}: {sorted(knots)}"
+            )
+        (knot,) = knots
+        if not np.isnan(winner_cut) and abs(knot - winner_cut) > 1e-3 * max(
+            1.0, abs(knot)
+        ):
+            raise ValueError(
+                f"trace step {step.term}: the trace's rounded cut "
+                f"{winner_cut!r} does not match cuts's {knot!r} at row "
+                f"group {group}, predictor column {pred_col}"
+            )
+        direction = frozenset(int(dirs[r, pred_col]) for r in group)
         by_rss = sorted(candidates, key=lambda c: c[0])
         rss_before = next(
             (sr.rss_before for sr in step.searches if sr.rss_before is not None), None
         )
         steps.append(
             {
-                "parent": winner[1],
-                "pred": winner[2],
-                "direction": winner[3],
-                "knot": winner[4],
+                "parent": parent_row,
+                "pred": pred_col,
+                "direction": direction,
+                "knot": knot,
                 "best_rss": by_rss[0][0],
                 "second_best_rss": by_rss[1][0] if len(by_rss) > 1 else None,
                 "rss_before": rss_before,
-                "flags": winner[6],
+                "flags": flags,
             }
         )
     return steps
