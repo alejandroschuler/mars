@@ -16,17 +16,17 @@ You run the simulations of the legacy code (mars-earth 1.0.4) and of earth, with
 
 1. Claim the issue. Make both worktrees.
 2. Check run: 2 repetitions per cell for the arms E-def, E-pym, P-cur, P-ear, OLS and HGB at 200 cases on all regression cells except the D7 legacy arms, and the binary arms at 200 cases. Fix nothing in the harness yourself; if the harness has a bug, report it to the executor with a minimal reproduction and wait.
-3. The pilot for the gap claim: 100 repetitions at 200 cases on D4 and D5 at both noise levels, arms P-cur, P-ear and E-def, as a detached job on 4 workers. Wait for it with a background command that exits when the job's PID is gone (not a foreground sleep). Then run `pilot_check.py` for the contrasts P-cur/E-def, P-ear/E-def and E-pym/E-def (E-pym needs its own pilot fits on the same cells; add them, they are cheap). Write `validation/sims/pilot_legacy.md`: the pilot means, standard deviations, z statistics, `n_sim` and `n_sim_safe` per contrast and cell, and the repetitions chosen (capped at 300 at 200 cases and 200 at 1,000 cases, as the plan says; if the pilot asks for more, say so).
-4. The full legacy run as one or more detached jobs, in the plan's order of priority:
-   - 200 cases, regression: the 13 cells without D7, P-cur and P-ear, the chosen repetitions;
-   - 200 cases, binary: D3-bin and D4-bin, the 1.0.4 `EarthClassifier` and `GLMEarth`;
+3. Order of work, changed by the executor to save Claude usage (the weekly limit is near): do not wait for a separate pilot. Start the full legacy run at the plan's caps right after the check run passes, as detached jobs on 6 workers in total. Run the pilot cells first (D4 and D5 at 200 cases, both noise levels, arms P-cur, P-ear, E-def and E-pym), so that their first 100 repetitions finish early; seeds come from names, so these are the pilot repetitions. The other blocks follow in this order:
+   - 200 cases, regression: the other cells without D7, P-cur and P-ear, 300 repetitions;
+   - 200 cases, binary: D3-bin and D4-bin with the 1.0.4 `EarthClassifier` only (the reviewer found that `GLMEarth` gives bitwise-identical probabilities in 1.0.4; fit `GLMEarth` on 20 repetitions per cell to confirm, and say so in the report), 300 repetitions;
    - 1,000 cases: D3, D4, D5 and D8 at the low-noise level, 200 repetitions, P-cur and P-ear;
-   - the cheap arms: E-def with the same repetitions as the legacy arms on their cells (the parity run in T21 adds more E-def repetitions where P-fix needs them), E-pym on the gap cells only, and OLS and HGB on all 51 cells up to 300 repetitions per cell;
+   - the cheap arms: E-def with the same repetitions as the legacy arms on their cells, E-pym on the gap cells only, OLS and HGB on all 51 cells up to 300 repetitions per cell (the parity run in T21 adds E-def repetitions where P-fix needs them);
    - not now: the low-priority batch, and D7 for the legacy arms.
-   Use `--resume` so that a restart loses nothing. Record in the pull request the command lines, the PIDs, the logs and the expected core-hours per block.
-5. Open a draft pull request (`Part of #6`) with the configuration and the pilot report, as soon as the full run is started. Then reply to the executor and stop: the executor checks the jobs on each wake. Do not wait for the full run.
+   Use `--resume` so that a restart loses nothing. Record the command lines, the PIDs, the logs and the expected core-hours per block.
+4. Later (a later agent does this when the executor asks): `pilot_check.py` on the first 100 repetitions of the pilot cells for the contrasts P-cur/E-def, P-ear/E-def and E-pym/E-def, and `validation/sims/pilot_legacy.md` with the pilot means, standard deviations, z statistics, `n_sim` and `n_sim_safe` per contrast and cell, and whether the caps (300 at 200 cases, 200 at 1,000 cases) suffice.
+5. Open a draft pull request (`Part of #6`) with the run configuration, as soon as the full run is started. Then reply to the executor and stop: the executor checks the jobs on each wake. Do not wait for the full run.
 6. Later, when the executor restarts you (or a new T04 agent) after the full run: collect the per-repetition results into `validation/sims/results/legacy/` (compact CSV), run `summarize.py` for the displays that the legacy arms fill (the ratio table, the box plots for P-cur, P-ear and E-pym, the selection table for E-def and P-cur, the binary table for the 1.0.4 classifiers), report the failure counts and the core-hours, and mark the pull request ready (`Closes #6`).
 
 ## Report
 
-After step 5, in 30 lines or fewer: the runner SHA, the pilot results in one line per contrast and cell, the repetitions chosen, the jobs started (command, PID file, log, expected core-hours), and anything the executor must watch.
+After step 5, in 30 lines or fewer: the runner SHA, the check-run result, the jobs started (command, PID file, log, expected core-hours), and anything the executor must watch.
