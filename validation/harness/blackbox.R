@@ -18,8 +18,10 @@ suppressMessages({
 write_result <- function(x, path) {
   # See fit_earth.R's write_result: na = "string" keeps Inf/-Inf/NaN/NA
   # distinguishable from each other and from JSON null; blackbox.py's
-  # _desanitize() undoes it after json.loads().
-  write_json(x, path, digits = NA, auto_unbox = TRUE, null = "null", na = "string")
+  # _desanitize() undoes it after json.loads(). digits = I(17), not NA:
+  # jsonlite 2.0.0's NA rounds to 15 significant digits, which does not
+  # round-trip a double exactly.
+  write_json(x, path, digits = I(17), auto_unbox = TRUE, null = "null", na = "string")
 }
 mat_json <- function(x) if (is.null(x)) NULL else as.matrix(x)
 vec_json <- function(x) if (is.null(x)) NULL else I(unname(x))

@@ -11,8 +11,9 @@
 # The config is a JSON object {"jobs": [<job>, ...]}. Each <job> is an object:
 #   id                   a label, echoed back in the result
 #   train_csv            path to a CSV with columns x0, x1, ... and the
-#                        response column(s); read.csv() parses the %.17g
-#                        text driver.py writes at full double precision
+#                        response column(s); read.csv() parses the hex-float
+#                        text driver.py writes (Python's float.hex()) to the
+#                        identical double, exactly, unlike %.17g decimal text
 #   test_csv             optional CSV of the same shape, for predict()
 #   x_cols               optional array of column names; default: every
 #                        column of train_csv whose name starts with "x"
@@ -57,7 +58,13 @@ write_result <- function(x, path) {
   # (S11's edge case, effective parameters at or above n) must stay
   # distinguishable from a merely missing value. driver.py's _desanitize()
   # converts these four strings back to real floats after json.loads().
-  write_json(x, path, digits = NA, auto_unbox = TRUE, null = "null", na = "string")
+  #
+  # digits = I(17), not digits = NA: in jsonlite 2.0.0, NA rounds to 15
+  # significant digits, which does not round-trip a double exactly; I(17)
+  # (significant digits, not decimal places) does. Checked directly:
+  # toJSON(0.22733602246716966, digits = NA) gives 0.22733602246717 (changed);
+  # digits = I(17) gives back the exact value.
+  write_json(x, path, digits = I(17), auto_unbox = TRUE, null = "null", na = "string")
 }
 
 # jsonlite serializes a genuine R matrix as a nested array with a shape that
@@ -74,32 +81,48 @@ vec_json <- function(x) if (is.null(x)) NULL else I(unname(x))
 # The forward-pass RSS path: the RSS after each term is added, in the order
 # the forward pass added it. earth has no direct output for this (its own
 # rss.per.subset is indexed by *pruned* subset size, not by forward step), so
-# this refits the cumulative columns of a pmethod = "none" basis with
-# lm.fit(), exactly as the validation/legacy/ prototype did to produce the
-# F14 and F15 findings in VALIDATION_PLAN.md.
-forward_rss_path <- function(fit_args, y) {
+# this refits the cumulative columns of a pmethod = "none" basis, exactly as
+# the validation/legacy/ prototype did to produce the F14 and F15 findings in
+# VALIDATION_PLAN.md. With weights, lm.fit (which ignores them) understates
+# the RSS a weighted earth reports; lm.wfit and the weighted sum of squared
+# residuals is what matches earth's own weighted rss (checked directly: the
+# last path value equals earth's rss on a pmethod = "none" fit).
+forward_rss_path <- function(fit_args, y, w = NULL) {
   fwd_args <- fit_args
   fwd_args$pmethod <- "none"
   fwd_args$trace <- 0
   fwd_fit <- do.call(earth, fwd_args)
   bx <- fwd_fit$bx
   ymat <- as.matrix(y)
-  vapply(seq_len(ncol(bx)), function(j) {
-    sum(lm.fit(bx[, seq_len(j), drop = FALSE], ymat)$residuals^2)
-  }, numeric(1))
+  if (is.null(w)) {
+    vapply(seq_len(ncol(bx)), function(j) {
+      sum(lm.fit(bx[, seq_len(j), drop = FALSE], ymat)$residuals^2)
+    }, numeric(1))
+  } else {
+    vapply(seq_len(ncol(bx)), function(j) {
+      resid <- lm.wfit(bx[, seq_len(j), drop = FALSE], ymat, w)$residuals
+      sum(w * resid^2)
+    }, numeric(1))
+  }
 }
 
-read_xy <- function(csv_path, x_cols, y_cols, weight_col, factor_response) {
+# need_y = FALSE for a test CSV, which driver.py writes with x columns only
+# (no response): reading y_cols from it would fail with "undefined columns
+# selected".
+read_xy <- function(csv_path, x_cols, y_cols, weight_col, factor_response, need_y = TRUE) {
   d <- read.csv(csv_path)
   xcols <- x_cols %||% grep("^x", names(d), value = TRUE)
   x <- as.matrix(d[, xcols, drop = FALSE])
-  if (isTRUE(factor_response)) {
-    stopifnot("factor_response needs exactly one y column" = length(y_cols) == 1)
-    y <- factor(d[[y_cols[1]]])
-  } else if (length(y_cols) == 1) {
-    y <- d[[y_cols[1]]]
-  } else {
-    y <- as.matrix(d[, y_cols, drop = FALSE])
+  y <- NULL
+  if (need_y) {
+    if (isTRUE(factor_response)) {
+      stopifnot("factor_response needs exactly one y column" = length(y_cols) == 1)
+      y <- factor(d[[y_cols[1]]])
+    } else if (length(y_cols) == 1) {
+      y <- d[[y_cols[1]]]
+    } else {
+      y <- as.matrix(d[, y_cols, drop = FALSE])
+    }
   }
   w <- if (!is.null(weight_col) && weight_col %in% names(d)) d[[weight_col]] else NULL
   list(x = x, y = y, w = w, xcols = xcols)
@@ -134,14 +157,15 @@ fit_one <- function(job) {
 
   fwd_rss <- NULL
   if ((job$include_forward_path %||% TRUE) && !isTRUE(job$factor_response)) {
-    fwd_rss <- forward_rss_path(args, train$y)
+    fwd_rss <- forward_rss_path(args, train$y, train$w)
   }
 
   pred_type <- if (is.null(fam)) "link" else "response"
   pred_train <- predict(fit, train$x, type = pred_type)
   pred_test <- NULL
   if (!is.null(job$test_csv)) {
-    test <- read_xy(job$test_csv, train$xcols, ycols, job$weight_col, job$factor_response)
+    test <- read_xy(job$test_csv, train$xcols, ycols, job$weight_col, job$factor_response,
+                     need_y = FALSE)
     pred_test <- predict(fit, test$x, type = pred_type)
   }
 
