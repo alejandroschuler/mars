@@ -139,7 +139,16 @@ calls <- list(
       fitted = vec_json(as.numeric(fitted(fit))),
       gcv = fit$gcv,
       rsq = fit$rsq,
-      nterms = nrow(fit$dirs)
+      nterms = nrow(fit$dirs),
+      # dirs's own column names (review round 1, #43 adversarial finding
+      # 9): a genuine factor column ".f" expands to one name per non-
+      # baseline level (".fb", ".fc", ...); a mutation that instead passed
+      # the factor's numeric codes would leave a single column named
+      # ".f", which a fitted-values/gcv comparison alone cannot tell
+      # apart (with only as many distinct rows as there are levels, a
+      # hinge fit on the numeric codes can still match arbitrary level
+      # means exactly).
+      dirs_colnames = vec_json(colnames(fit$dirs))
     )
   },
 

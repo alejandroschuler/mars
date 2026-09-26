@@ -199,7 +199,8 @@ def earth_factor_fit(
 ) -> dict[str, Any]:
     """Fit earth with ``labels`` as one genuine R factor column (plus
     ``other_x``'s numeric columns, if any), and return a summary: fitted
-    values, ``gcv``, ``rsq`` and the term count.
+    values, ``gcv``, ``rsq``, the term count and ``dirs``' own column
+    names.
 
     The "factor" side of S19's comparison (VALIDATION_PLAN.md, "Categorical
     inputs"); ``labels=None`` (with ``other_x`` given, for example the
@@ -208,7 +209,11 @@ def earth_factor_fit(
     sides' fitted-value scale (a plain numeric fit, no CSV round trip)
     identical for the comparison. Only a summary comes back because a
     factor fit's ``dirs``/``cuts``/``bx`` are not comparable in shape with
-    the dummy-encoded fit's.
+    the dummy-encoded fit's; ``dirs_colnames`` is enough to tell a genuine
+    factor column (expanded to one name per non-baseline level, for
+    example ``.fb``, ``.fc``) from a mutation that passed its numeric
+    codes instead (a single column named ``.f``), which fitted values and
+    gcv alone cannot (review round 1, #43 adversarial finding 9).
     """
     label_list = (
         None if labels is None else [str(v) for v in np.asarray(labels).tolist()]
@@ -227,6 +232,7 @@ def earth_factor_fit(
         "gcv": float(result["gcv"]),
         "rsq": float(result["rsq"]),
         "nterms": int(result["nterms"]),
+        "dirs_colnames": list(result["dirs_colnames"] or []),
     }
 
 

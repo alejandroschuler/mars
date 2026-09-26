@@ -63,6 +63,14 @@ class Dataset:
     factor_response: bool = False
     weights: np.ndarray | None = None
     glm_family: str | None = None
+    scale_override: np.ndarray | None = None
+    """The LA-7 scale to use in place of ``scaled_matrix(X, weights)``'s
+    own (review round 1, #43 finding 5): an integer-weight dataset and its
+    repeated-row companion must divide by the *same* scale, computed once
+    from the repeated rows, or the weighted formula and the unweighted-
+    on-repeated-rows formula can differ in the last bit and move some of
+    earth's knots off the weighted fixture's own X values. Set by
+    `_shared_scale_from_repeated_rows` on both halves of such a pair."""
 
 
 DatasetFn = Callable[[], Dataset]
@@ -138,26 +146,75 @@ def scaled_matrix(
     """The LA-7 harness step (docs/algorithm.md, "Linear algebra contract";
     VALIDATION_PLAN.md, "Comparison modes"): each non-constant covariate
     divided by its weighted standard deviation (divisor N = sum(w), not
-    centered); a constant column (every value equal over the n cases, the
-    Conventions section's exact-equality test) stays as it is. Returns
-    ``(X_scaled, scale)``, where ``scale[j]`` is column j's divisor (1.0 for
-    a constant column), so a caller can apply the same divisors to a test
-    matrix (``X_test / scale``) instead of rescaling it independently.
+    centered); a constant column (every value equal over the CASES OF THE
+    FIT, W-3: the rows with positive weight, the Conventions section's
+    exact-equality test) stays as it is. Returns ``(X_scaled, scale)``,
+    where ``scale[j]`` is column j's divisor (1.0 for a constant column),
+    so a caller can apply the same divisors to a test matrix (``X_test /
+    scale``) instead of rescaling it independently.
+
+    Review round 1 (#43 adversarial finding 8): the constancy check now
+    looks only at the rows with positive weight; a column constant there
+    but not on a dropped zero-weight row no longer gets scale 0 (and the
+    column, inf).
     """
     X = np.asarray(X, dtype=float)
     n, p = X.shape
     w = np.ones(n) if w is None else np.asarray(w, dtype=float)
+    active = w > 0
     scale = np.ones(p)
     X_scaled = X.copy()
     for j in range(p):
         col = X[:, j]
-        if np.all(col == col[0]):
-            continue  # constant column: stays as it is
+        col_active = col[active]
+        if col_active.size == 0 or np.all(col_active == col_active[0]):
+            continue  # constant column (over the cases of the fit): stays as it is
         mean = np.average(col, weights=w)
         variance = np.average((col - mean) ** 2, weights=w)  # divisor N
         scale[j] = np.sqrt(variance)
         X_scaled[:, j] = col / scale[j]
     return X_scaled, scale
+
+
+def _shared_scale_from_repeated_rows(X: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """The LA-7 scale for an integer-weight dataset and its repeated-row
+    companion, computed once, from the repeated rows, and meant to be
+    used by both (review round 1, #43 finding 5: LA-7 says the scale for
+    such a pair comes "from the repeated rows", and computing it twice --
+    once by the weighted formula, once by np.repeat plus the unweighted
+    formula -- gives the same value in exact arithmetic but not always in
+    float64, which moves some of earth's knots off the weighted fixture's
+    own X values)."""
+    w_int = np.asarray(w).astype(int)
+    idx = np.repeat(np.arange(len(w_int)), w_int)
+    _, scale = scaled_matrix(X[idx])
+    return scale
+
+
+def _short_test_set(
+    X: np.ndarray, rng: np.random.Generator, n_test: int = 12
+) -> np.ndarray:
+    """A short, deterministic test set for a dataset's covariates (review
+    round 1, #43 finding 7: the harness collects "the predictions on a
+    test set", and the tolerance table compares predictions on new data,
+    for every dataset, not S01 alone): mostly fresh draws from the same
+    box as X (its own per-column min/max), plus a few points outside that
+    box on each side, so predictions can be compared there too (LA-7
+    scales a test matrix by the training scale, not its own)."""
+    lo = X.min(axis=0)
+    hi = X.max(axis=0)
+    span = hi - lo
+    n_in = max(n_test - 4, 1)
+    x_in = lo + rng.uniform(size=(n_in, X.shape[1])) * span
+    x_out = np.stack(
+        [
+            lo - 0.2 * span,
+            hi + 0.2 * span,
+            lo - 0.5 * span,
+            hi + 0.5 * span,
+        ]
+    )
+    return np.vstack([x_in, x_out])
 
 
 @register
@@ -186,7 +243,8 @@ def _s02(n: int, seed: int) -> Dataset:
     rng = np.random.default_rng(seed)
     x = rng.uniform(0, 1, size=(n, 1))
     y = _s01_f(x[:, 0]) + rng.normal(scale=0.1, size=n)
-    return Dataset(id=f"S02_n{n:03d}", X=x, y=y)
+    x_test = _short_test_set(x, rng)
+    return Dataset(id=f"S02_n{n:03d}", X=x, y=y, X_test=x_test)
 
 
 @register
@@ -218,7 +276,8 @@ def s03() -> Dataset:
         + 3.0 * X[:, 2]
         + rng.normal(scale=0.1, size=n)
     )
-    return Dataset(id="S03", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S03", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S03"] = (*DEFAULT_DATASET_MODES, "matched_d1_linear")
@@ -239,7 +298,8 @@ def _s04(p: int, n: int, seed: int) -> Dataset:
     rng = np.random.default_rng(seed)
     X = rng.uniform(0, 1, size=(n, p))
     y = _friedman1(X) + rng.normal(scale=1.0, size=n)
-    return Dataset(id=f"S04_p{p:02d}_n{n:04d}", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id=f"S04_p{p:02d}_n{n:04d}", X=X, y=y, X_test=X_test)
 
 
 @register
@@ -282,10 +342,15 @@ def s05() -> Dataset:
     y = 3.0 * np.maximum(0, X[:, 0] - 0.3) * np.maximum(0, X[:, 1] - 0.6) + rng.normal(
         scale=0.05, size=n
     )
-    return Dataset(id="S05", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S05", X=X, y=y, X_test=X_test)
 
 
-DATASET_MODES["S05"] = ("defaults_d2", "matched_d2")
+# Review round 1 (#43, adversarial finding 10, non-blocking): both of
+# S05's modes used the default Adjust.endspan (2); matched_d2_adjust1
+# tests SPAN-4 on a whole fit with a different value.
+MODES["matched_d2_adjust1"] = {**MODES["matched_d2"], "Adjust.endspan": 1}
+DATASET_MODES["S05"] = ("defaults_d2", "matched_d2", "matched_d2_adjust1")
 
 
 @register
@@ -298,7 +363,8 @@ def s06() -> Dataset:
     y = 4.0 * np.maximum(0, X[:, 0] - 0.3) * np.maximum(0, X[:, 1] - 0.5) * np.maximum(
         0, X[:, 2] - 0.7
     ) + rng.normal(scale=0.05, size=n)
-    return Dataset(id="S06", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S06", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S06"] = ("defaults_d3", "matched_d3")
@@ -312,7 +378,8 @@ def s07() -> Dataset:
     n = 250
     X = rng.uniform(-1, 1, size=(n, 2))
     y = 2.0 * X[:, 0] - 1.5 * X[:, 1] + rng.normal(scale=0.1, size=n)
-    return Dataset(id="S07", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S07", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S07"] = ("defaults_d1", "matched_d1", "matched_d1_linear")
@@ -327,7 +394,9 @@ def s08() -> Dataset:
     n = 150
     x0 = rng.integers(0, 10, size=n).astype(float)
     y = 2.0 * np.maximum(0, x0 - 4.0) + rng.normal(scale=0.2, size=n)
-    return Dataset(id="S08", X=x0.reshape(-1, 1), y=y)
+    X = x0.reshape(-1, 1)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S08", X=X, y=y, X_test=X_test)
 
 
 # "Ties": with minspan = 1 the candidate knots at a distinct value are the
@@ -357,7 +426,8 @@ def s09() -> Dataset:
         + rng.normal(scale=0.2, size=n)
     )
     X = np.column_stack([binary, dummy_b, dummy_c, dummy_d])
-    return Dataset(id="S09", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S09", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S09"] = DEFAULT_DATASET_MODES
@@ -376,7 +446,8 @@ def s10() -> Dataset:
     constant = np.full(n, 5.0)
     y = 2.0 * np.maximum(0, x0 - 0.4) + rng.normal(scale=0.05, size=n)
     X = np.column_stack([x0, duplicate, near_duplicate, constant])
-    return Dataset(id="S10", X=X, y=y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S10", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S10"] = ("matched_d1", "defaults_d1")
@@ -478,7 +549,13 @@ for _s12_id in (
     "S12_y_1em9",
     "S12_y_1e9",
 ):
-    DATASET_MODES[_s12_id] = ("raw_d1",)
+    # raw_d1 (earth's own defaults, no LA-7 rescaling) is the point of
+    # S12: earth's raw fits differ across these variants (bb14.4).
+    # defaults_d1/matched_d1 (review round 1, #43 finding 3/blocking) add
+    # the LA-7-scaled fits, without which no S12 fixture gives pymars and
+    # earth the same matrix, so T07 cannot compare a variant against the
+    # base at all.
+    DATASET_MODES[_s12_id] = ("raw_d1", "defaults_d1", "matched_d1")
 
 
 def _expand_by_weights(
@@ -506,7 +583,8 @@ def s13_int_zeros() -> Dataset:
     X, y = _s13_xy(1301)
     rng = np.random.default_rng(9001)
     w = rng.integers(0, 4, size=len(y)).astype(float)  # 0 to 3, some zero
-    return Dataset(id="S13_int_zeros", X=X, y=y, weights=w)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    return Dataset(id="S13_int_zeros", X=X, y=y, weights=w, scale_override=scale)
 
 
 @register
@@ -516,8 +594,9 @@ def s13_int_zeros_repeated() -> Dataset:
     X, y = _s13_xy(1301)
     rng = np.random.default_rng(9001)
     w = rng.integers(0, 4, size=len(y)).astype(float)
+    scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
-    return Dataset(id="S13_int_zeros_repeated", X=X_rep, y=y_rep)
+    return Dataset(id="S13_int_zeros_repeated", X=X_rep, y=y_rep, scale_override=scale)
 
 
 @register
@@ -526,7 +605,8 @@ def s13_int_random() -> Dataset:
     X, y = _s13_xy(1302)
     rng = np.random.default_rng(9002)
     w = rng.integers(1, 5, size=len(y)).astype(float)  # 1 to 4, never zero
-    return Dataset(id="S13_int_random", X=X, y=y, weights=w)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    return Dataset(id="S13_int_random", X=X, y=y, weights=w, scale_override=scale)
 
 
 @register
@@ -535,8 +615,9 @@ def s13_int_random_repeated() -> Dataset:
     X, y = _s13_xy(1302)
     rng = np.random.default_rng(9002)
     w = rng.integers(1, 5, size=len(y)).astype(float)
+    scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
-    return Dataset(id="S13_int_random_repeated", X=X_rep, y=y_rep)
+    return Dataset(id="S13_int_random_repeated", X=X_rep, y=y_rep, scale_override=scale)
 
 
 @register
@@ -545,7 +626,8 @@ def s13_unit() -> Dataset:
     as no weights."""
     X, y = _s13_xy(1303)
     w = np.ones(len(y))
-    return Dataset(id="S13_unit", X=X, y=y, weights=w)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    return Dataset(id="S13_unit", X=X, y=y, weights=w, scale_override=scale)
 
 
 @register
@@ -553,7 +635,8 @@ def s13_unit_repeated() -> Dataset:
     """S13: the unweighted reference for s13_unit (repeating every row
     once changes nothing)."""
     X, y = _s13_xy(1303)
-    return Dataset(id="S13_unit_repeated", X=X, y=y)
+    scale = _shared_scale_from_repeated_rows(X, np.ones(len(y)))
+    return Dataset(id="S13_unit_repeated", X=X, y=y, scale_override=scale)
 
 
 @register
@@ -579,7 +662,10 @@ def s13_constant_y_weighted() -> Dataset:
     X = rng.uniform(0, 1, size=(n, 1))
     y = np.full(n, 3.0)
     w = rng.integers(0, 4, size=n).astype(float)
-    return Dataset(id="S13_constant_y_weighted", X=X, y=y, weights=w)
+    scale = _shared_scale_from_repeated_rows(X, w)
+    return Dataset(
+        id="S13_constant_y_weighted", X=X, y=y, weights=w, scale_override=scale
+    )
 
 
 @register
@@ -590,8 +676,14 @@ def s13_constant_y_weighted_repeated() -> Dataset:
     X = rng.uniform(0, 1, size=(n, 1))
     y = np.full(n, 3.0)
     w = rng.integers(0, 4, size=n).astype(float)
+    scale = _shared_scale_from_repeated_rows(X, w)
     X_rep, y_rep = _expand_by_weights(X, y, w)
-    return Dataset(id="S13_constant_y_weighted_repeated", X=X_rep, y=y_rep)
+    return Dataset(
+        id="S13_constant_y_weighted_repeated",
+        X=X_rep,
+        y=y_rep,
+        scale_override=scale,
+    )
 
 
 for _s13_id in (
@@ -605,7 +697,12 @@ for _s13_id in (
     "S13_constant_y_weighted",
     "S13_constant_y_weighted_repeated",
 ):
-    DATASET_MODES[_s13_id] = ("matched_d1",)
+    # Review round 1 (#43 finding 2/blocking): matched_d1 alone (minspan =
+    # endspan = 1) makes almost every case a candidate knot regardless of
+    # weight, so it cannot catch an implementation that ignored the
+    # weights in the spans and knots (SPAN-1's N_b, SPAN-5's N, KNOT-6's
+    # cumulative-weight scan); defaults_d1 (automatic spans) exercises them.
+    DATASET_MODES[_s13_id] = ("matched_d1", "defaults_d1")
 
 
 @register
@@ -622,7 +719,8 @@ def s14() -> Dataset:
     )
     p = 1.0 / (1.0 + np.exp(-eta))
     y = (rng.uniform(size=n) < p).astype(float)
-    return Dataset(id="S14", X=X, y=y, glm_family="binomial")
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S14", X=X, y=y, glm_family="binomial", X_test=X_test)
 
 
 DATASET_MODES["S14"] = ("defaults_d2", "matched_d2")
@@ -636,7 +734,8 @@ def s16_weighted() -> Dataset:
     ds = s04_p05_n0200()
     rng = np.random.default_rng(9016)
     w = rng.integers(0, 5, size=len(ds.y)).astype(float)
-    return Dataset(id="S16_weighted", X=ds.X, y=ds.y, weights=w)
+    scale = _shared_scale_from_repeated_rows(ds.X, w)
+    return Dataset(id="S16_weighted", X=ds.X, y=ds.y, weights=w, scale_override=scale)
 
 
 @register
@@ -646,12 +745,22 @@ def s16_weighted_repeated() -> Dataset:
     ds = s04_p05_n0200()
     rng = np.random.default_rng(9016)
     w = rng.integers(0, 5, size=len(ds.y)).astype(float)
+    scale = _shared_scale_from_repeated_rows(ds.X, w)
     X_rep, y_rep = _expand_by_weights(ds.X, ds.y, w)
-    return Dataset(id="S16_weighted_repeated", X=X_rep, y=y_rep)
+    return Dataset(id="S16_weighted_repeated", X=X_rep, y=y_rep, scale_override=scale)
 
 
-DATASET_MODES["S16_weighted"] = ("matched_d1",)
-DATASET_MODES["S16_weighted_repeated"] = ("matched_d1",)
+# Review round 1 (#43 finding 2/blocking): defaults_d1 (automatic spans)
+# exercises the weighted spans and knots that matched_d1 (minspan =
+# endspan = 1) cannot; defaults_d2/matched_d2 exercise a hinge parent's
+# own active weight N_b (SPAN-1), which only a degree-2 fit can reach.
+DATASET_MODES["S16_weighted"] = (
+    "matched_d1",
+    "defaults_d1",
+    "defaults_d2",
+    "matched_d2",
+)
+DATASET_MODES["S16_weighted_repeated"] = DATASET_MODES["S16_weighted"]
 
 
 @register
@@ -666,10 +775,31 @@ def s17() -> Dataset:
     y2 = 0.5 * base - 1.0 * np.maximum(0, X[:, 2] - 0.4) + rng.normal(scale=0.1, size=n)
     y3 = -0.8 * base + rng.normal(scale=0.1, size=n)
     Y = np.column_stack([y1, y2, y3])
-    return Dataset(id="S17", X=X, y=Y)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S17", X=X, y=Y, X_test=X_test)
 
 
 DATASET_MODES["S17"] = ("defaults_d1", "matched_d1")
+
+
+def _s18_score(X: np.ndarray) -> np.ndarray:
+    return (
+        1.2 * np.maximum(0, X[:, 0] - 0.2)
+        - 1.2 * np.maximum(0, -X[:, 0] - 0.2)
+        + 0.5 * X[:, 1]
+    )
+
+
+def _s18_labels(score: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Labels drawn from the softmax of ``score`` (review round 1, #43
+    finding 5: a threshold rule instead let earth's basis separate the
+    classes, so nnet::multinom never converged; a probabilistic draw
+    keeps them overlapping)."""
+    n = len(score)
+    scores = np.column_stack([np.zeros(n), score, -score])  # mid, hi, lo
+    probs = np.exp(scores) / np.exp(scores).sum(axis=1, keepdims=True)
+    levels = np.array(["mid", "hi", "lo"])
+    return np.array([levels[rng.choice(3, p=probs[i])] for i in range(n)])
 
 
 @register
@@ -679,13 +809,9 @@ def s18() -> Dataset:
     rng = np.random.default_rng(18)
     n = 400
     X = rng.uniform(-1, 1, size=(n, 2))
-    score = (
-        1.2 * np.maximum(0, X[:, 0] - 0.2)
-        - 1.2 * np.maximum(0, -X[:, 0] - 0.2)
-        + 0.5 * X[:, 1]
-    )
-    labels = np.where(score > 0.3, "hi", np.where(score < -0.3, "lo", "mid"))
-    return Dataset(id="S18", X=X, y=labels, factor_response=True)
+    labels = _s18_labels(_s18_score(X), rng)
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S18", X=X, y=labels, factor_response=True, X_test=X_test)
 
 
 DATASET_MODES["S18"] = ("defaults_d1", "matched_d1")
@@ -719,7 +845,8 @@ def s19_dummies() -> Dataset:
     dummy_c = (category == "c").astype(float)
     dummy_d = (category == "d").astype(float)
     X = np.column_stack([dummy_b, dummy_c, dummy_d])
-    return Dataset(id="S19_dummies", X=X, y=y)
+    X_test = _short_test_set(X, np.random.default_rng(1900))
+    return Dataset(id="S19_dummies", X=X, y=y, X_test=X_test)
 
 
 DATASET_MODES["S19_dummies"] = ("defaults_d1", "matched_d1")
@@ -733,7 +860,8 @@ def s20() -> Dataset:
     n = 200
     X = rng.uniform(-1, 1, size=(n, 2))
     y = (X[:, 0] - 0.3 * X[:, 1] > 0).astype(float)  # a clean linear split
-    return Dataset(id="S20", X=X, y=y, glm_family="binomial")
+    X_test = _short_test_set(X, rng)
+    return Dataset(id="S20", X=X, y=y, glm_family="binomial", X_test=X_test)
 
 
 DATASET_MODES["S20"] = ("defaults_d1", "matched_d1")
@@ -842,15 +970,30 @@ def s18_multinom() -> dict[str, Any]:
     three or more classes, pymars refits one multinomial model where earth
     fits one binomial model per class, so multinom on earth's selected
     basis is the probability reference, not earth's own glm.coefficients).
+
+    Review round 1 (#43 finding 5): the basis now comes from S18's own
+    LA-7-scaled matrix (the same one ``S18_matched_d1`` fits on, stored
+    here too), not a fresh fit on the raw X, whose selected terms could
+    agree with the matched fixture's only by chance; and nnet's
+    convergence code is checked (0 required) and stored.
     """
     ds = s18()
+    X_scaled, scale = scaled_matrix(ds.X)
     labels = np.asarray(ds.y)
     levels = sorted(set(labels.tolist()))
     Y_indicator = np.column_stack([(labels == lvl).astype(float) for lvl in levels])
     earth_args = {**MODES["matched_d1"]}
-    basis = blackbox.fit_bx_dirs(ds.X, Y_indicator, earth_args)
+    basis = blackbox.fit_bx_dirs(X_scaled, Y_indicator, earth_args)
     multinom = blackbox.multinom_fit(basis["bx"], labels)
+    if multinom["convergence"] != 0 or multinom["warnings"]:
+        raise AssertionError(
+            f"s18_multinom did not converge: "
+            f"convergence={multinom['convergence']}, "
+            f"warnings={multinom['warnings']}"
+        )
     return {
+        "x": X_scaled.tolist(),
+        "scale": scale.tolist(),
         "levels": levels,
         "earth_args": earth_args,
         "dirs": basis["dirs"].tolist(),
@@ -859,6 +1002,7 @@ def s18_multinom() -> dict[str, Any]:
         "multinom_coefficients": multinom["coefficients"].tolist(),
         "multinom_levels": multinom["levels"],
         "multinom_fitted": multinom["fitted"].tolist(),
+        "multinom_convergence": multinom["convergence"],
     }
 
 
@@ -1556,7 +1700,14 @@ def _fixture_payload(dataset_id: str, mode: str) -> dict[str, Any]:
     if mode not in RAW_MODES:
         # LA-7's harness step: the same scaled matrix goes to both programs
         # (S12's raw_d1 fits are the one deliberate exception, above).
-        X, scale = scaled_matrix(ds.X, ds.weights)
+        # scale_override (review round 1, #43 finding 5) takes precedence
+        # over computing it fresh, for a dataset that must share its exact
+        # scale with a sibling (an integer-weight/repeated-row pair).
+        if ds.scale_override is not None:
+            scale = ds.scale_override
+            X = ds.X / scale
+        else:
+            X, scale = scaled_matrix(ds.X, ds.weights)
         if X_test is not None:
             X_test = X_test / scale
     job = driver.EarthJob(

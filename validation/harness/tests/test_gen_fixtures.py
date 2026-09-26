@@ -153,14 +153,20 @@ class TestScaledMatrix:
 
 
 class TestRawModes:
-    def test_s12_datasets_use_only_raw_modes(self):
+    def test_s12_datasets_include_a_raw_mode(self):
+        # Review round 1, #43 finding 3: S12 also needs the LA-7-scaled
+        # modes (without them, no S12 fixture gives pymars and earth the
+        # same matrix), so this no longer requires *only* raw modes, just
+        # that raw_d1 (earth's own defaults, unscaled) is still one of
+        # them -- the one exception to LA-7 rescaling, since scaling away
+        # S12's whole point (earth's raw scale/shift dependence) would
+        # defeat it.
         for dataset_id in gen_fixtures.REGISTRY:
             if dataset_id.startswith("S12_"):
                 modes = gen_fixtures.DATASET_MODES[dataset_id]
-                assert set(modes) <= gen_fixtures.RAW_MODES, (
-                    f"{dataset_id}: uses a non-raw mode, so the LA-7 "
-                    "rescaling would hide the scale/shift effect S12 exists "
-                    "to show"
+                assert set(modes) & gen_fixtures.RAW_MODES, (
+                    f"{dataset_id}: has no raw mode left, so nothing shows "
+                    "earth's own raw scale/shift dependence (bb14.4)"
                 )
 
 
