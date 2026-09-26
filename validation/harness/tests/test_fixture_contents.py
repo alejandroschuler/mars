@@ -12,6 +12,7 @@ CI, the same as trace_parse.py's and names_map.py's own tests.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,16 @@ _REQUIRED_VERSION_FIELDS = (
     "earth_version",
 )
 
+# Keys whose numeric value may legitimately be non-finite (review round 1,
+# #42 adversarial finding 7): GCV-2 gives +inf where the effective number
+# of parameters is at or above N (gcv, and any per-size entry of
+# gcv_per_subset, including gcv_grid's own per-cell "gcv" list); GCV-7 and
+# earth's own departure from it (docs/algorithm.md, "Departures from
+# earth") give NaN rsq/grsq for a degenerate or near-degenerate fit.
+# Everything else (inputs, weights, scale, coefficients, fitted values,
+# predictions, rss) must be finite.
+_MAY_BE_NONFINITE_KEYS = frozenset({"gcv", "grsq", "rsq", "gcv_per_subset"})
+
 
 def _dataset_fixture_paths() -> list[Path]:
     return sorted(p for p in FIXTURES_DIR.glob("*.json") if p.is_file())
@@ -106,6 +117,22 @@ def _walk_leaves(value: Any, under_string_only_key: bool) -> Iterator[tuple[Any,
         yield value, under_string_only_key
 
 
+def _walk_numeric_leaves(
+    value: Any, enclosing_key: str | None
+) -> Iterator[tuple[float, str | None]]:
+    """Every numeric (int or float, not bool) leaf, paired with the
+    nearest enclosing dict key (a list item inherits its own key, so
+    gcv_per_subset's entries all carry "gcv_per_subset")."""
+    if isinstance(value, dict):
+        for key, v in value.items():
+            yield from _walk_numeric_leaves(v, key)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _walk_numeric_leaves(v, enclosing_key)
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        yield value, enclosing_key
+
+
 def test_at_least_one_dataset_and_one_component_fixture_are_committed():
     assert _dataset_fixture_paths(), f"no dataset fixtures committed in {FIXTURES_DIR}"
     assert _component_fixture_paths(), (
@@ -135,6 +162,22 @@ def test_no_undesanitized_sentinel_strings_leak_through():
                 f"{path.name}: an un-desanitized {leaf!r} leaked through as a "
                 "bare value (driver.py's/blackbox.py's _desanitize should "
                 "have turned this into a real float already)"
+            )
+
+
+def test_every_numeric_value_is_finite_or_explicitly_marked():
+    # Review round 1 (#42 adversarial finding 7): T05 brief, deliverable 5,
+    # "finite or explicitly marked values" -- checked directly on the
+    # numbers, not just on sentinel-string decoding (which a NaN or an
+    # unmarked Infinity never touches in the first place).
+    for path in _all_fixture_paths():
+        for value, key in _walk_numeric_leaves(_load(path), None):
+            if key in _MAY_BE_NONFINITE_KEYS:
+                continue
+            assert math.isfinite(value), (
+                f"{path.name}: {key!r} holds the non-finite value {value!r}, "
+                "not one of the fields explicitly allowed to "
+                f"({sorted(_MAY_BE_NONFINITE_KEYS)})"
             )
 
 

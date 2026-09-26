@@ -173,6 +173,82 @@ def _pruning_case(
     }
 
 
+def _rss_of_subset(B: np.ndarray, Y: np.ndarray, cols: list[int]) -> float:
+    """The weighted (here, unweighted) RSS of Y on B[:, cols] (LA-1),
+    summed over Y's columns (GCV-3): the one primitive both self-check
+    rules below share."""
+    sub = B[:, cols]
+    coef, *_ = np.linalg.lstsq(sub, Y, rcond=None)
+    resid = Y - sub @ coef
+    return float(np.sum(resid**2))
+
+
+def _prune_k1(B: np.ndarray, Y: np.ndarray) -> dict[int, frozenset[int]]:
+    """PRUNE-3's K = 1 rule (the leaps-style ordered swap), applied here to
+    a possibly multi-column Y by summing RSS over its columns: what an
+    implementation would give if it (wrongly) ran the K = 1 algorithm for
+    K >= 2 too. Returns T[m], the lowest-RSS set of terms found at each
+    size over every order offered (PRUNE-2), not just the final swap
+    order, since T[m] need not be nested and a later, worse-looking swap
+    can still offer a better T[m] at a smaller size than the current
+    order's own prefix. This is a from-spec self-check inside the fixture
+    generator (verifying that pruning_fixed_basis's several-responses case
+    actually separates PRUNE-3's two rules), not part of the fixture or of
+    any T08 test."""
+    m_f = B.shape[1]
+    order = list(range(m_f))
+    best_rss: dict[int, float] = {}
+    best_set: dict[int, frozenset[int]] = {}
+
+    def offer(ord_list: list[int]) -> None:
+        for m in range(1, m_f + 1):
+            u = frozenset(ord_list[:m])
+            rss = _rss_of_subset(B, Y, sorted(u))
+            if m not in best_rss or rss < best_rss[m]:
+                best_rss[m] = rss
+                best_set[m] = u
+
+    offer(order)
+    for pos in range(m_f, 1, -1):
+        best_idx, best_pos_rss = None, None
+        for idx in range(1, pos):
+            cols = [order[j] for j in range(pos) if j != idx]
+            rss = _rss_of_subset(B, Y, cols)
+            if (
+                best_pos_rss is None
+                or rss < best_pos_rss
+                or (rss == best_pos_rss and order[idx] > order[best_idx])
+            ):
+                best_idx, best_pos_rss = idx, rss
+        removed_term = order[best_idx]
+        order = (
+            order[:best_idx] + order[best_idx + 1 : pos] + [removed_term] + order[pos:]
+        )
+        offer(order)
+    return best_set
+
+
+def _prune_k2(B: np.ndarray, Y: np.ndarray) -> dict[int, frozenset[int]]:
+    """PRUNE-3's K >= 2 rule (plain backward elimination): at each stage,
+    remove the non-intercept term whose removal gives the lowest RSS, ties
+    to the largest index. Self-check only, as `_prune_k1` above."""
+    m_f = B.shape[1]
+    kept = list(range(m_f))
+    t: dict[int, frozenset[int]] = {m_f: frozenset(kept)}
+    while len(kept) > 1:
+        best_j, best_rss = None, None
+        for j in kept:
+            if j == 0:
+                continue
+            cols = [c for c in kept if c != j]
+            rss = _rss_of_subset(B, Y, cols)
+            if best_rss is None or rss < best_rss or (rss == best_rss and j > best_j):
+                best_j, best_rss = j, rss
+        kept.remove(best_j)
+        t[len(kept)] = frozenset(kept)
+    return t
+
+
 @register_component
 def pruning_fixed_basis() -> dict[str, Any]:
     """VALIDATION_PLAN.md, "Component tests" > "Pruning of a fixed basis":
@@ -180,8 +256,17 @@ def pruning_fixed_basis() -> dict[str, Any]:
     pmethod = "none", so there is no earth-side pruning to undo first), for
     one response and for several. T08 builds the same terms in pymars
     (from ``dirs``/``cuts``, TERM-3) and runs ``_pruning.py`` on them, so
-    ``bx`` itself does not need to be in the fixture."""
-    rng = np.random.default_rng(11)
+    ``bx`` itself does not need to be in the fixture.
+
+    Review round 1 (#42, adversarial finding 3): the original design (rng
+    seed 11, y2/y3 noise sd 0.05) gave the same T[m] under PRUNE-3's K = 1
+    and K >= 2 rules, so it could not catch an implementation that used the
+    K = 1 rule for every K. Noise sd 0.3 on y2/y3, at seed 102, is one of
+    20 (of 30 tried, seeds 100 to 129) that separates them; the assertion
+    below re-derives both rules from the spec (`_prune_k1`/`_prune_k2`) and
+    fails loudly if a future change stops separating them.
+    """
+    rng = np.random.default_rng(102)
     n = 120
     X = np.column_stack([rng.uniform(0, 1, size=n), rng.uniform(0, 1, size=n)])
     y1 = (
@@ -190,8 +275,8 @@ def pruning_fixed_basis() -> dict[str, Any]:
         + 1.2 * np.maximum(0, X[:, 0] - 0.5) * np.maximum(0, X[:, 1] - 0.4)
         + rng.normal(scale=0.05, size=n)
     )
-    y2 = 0.5 * y1 + rng.normal(scale=0.05, size=n)
-    y3 = -0.3 * y1 + rng.normal(scale=0.05, size=n)
+    y2 = 0.5 * y1 + rng.normal(scale=0.3, size=n)
+    y3 = -0.3 * y1 + rng.normal(scale=0.3, size=n)
     y_multi = np.column_stack([y1, y2, y3])
     earth_args = {
         "degree": 2,
@@ -204,33 +289,60 @@ def pruning_fixed_basis() -> dict[str, Any]:
         "Auto.linpreds": False,
     }
     penalty = 2.0
+
+    basis_multi = blackbox.fit_bx_dirs(X, y_multi, earth_args)
+    t_k1 = _prune_k1(basis_multi["bx"], y_multi)
+    t_k2 = _prune_k2(basis_multi["bx"], y_multi)
+    diverges_at = sorted(m for m in t_k1 if t_k1[m] != t_k2[m])
+    if not diverges_at:
+        raise AssertionError(
+            "pruning_fixed_basis's several-responses case no longer "
+            "separates PRUNE-3's K=1 rule from its K>=2 rule (T[m] agree "
+            "at every size); pick a different seed or noise level"
+        )
+
     return {
         "X": X.tolist(),
         "earth_args": earth_args,
         "penalty": penalty,
         "one_response": _pruning_case(X, y1, earth_args, penalty),
-        "several_responses": _pruning_case(X, y_multi, earth_args, penalty),
+        "several_responses": {
+            **_pruning_case(X, y_multi, earth_args, penalty),
+            "k1_vs_k2_diverge_at_sizes": diverges_at,
+        },
     }
 
 
 @register_component
 def lm_fit_coefficients() -> dict[str, Any]:
     """VALIDATION_PLAN.md, "Component tests" > "Coefficients of fixed
-    terms": pymars' weighted least-squares coefficients (LA-4) are compared
-    with R's lm.fit on the same columns; a duplicated column exercises
-    LA-4's aliased-coefficient (rank-deficient) rule."""
+    terms": pymars' weighted least-squares coefficients (LA-4, PRUNE-8) are
+    compared with R's lm.fit/lm.wfit on the same columns.
+
+    Review round 1 (#42 finding 5): besides the exact duplicate (any
+    dependence tolerance from about 1e-15 to 0.9 passes that one case), two
+    near-duplicate columns straddle LA-4's 1e-7 threshold on each side (an
+    added-noise scale of 1e-6, ratio about 1.5e-6, clears it; 1e-8, ratio
+    about 1.9e-8, does not); a fourth column (1000 + 1e-6 z, next to the
+    intercept) is dependent under LA-4's uncentered norm (ratio about 1e-9)
+    but not under a centered one (ratio about 0.99), the case bb09.9 notes;
+    and a weighted case exercises PRUNE-8's ``lm.wfit`` path.
+    """
     rng = np.random.default_rng(21)
     n = 80
     x0 = rng.uniform(0, 1, size=n)
     x1 = rng.uniform(0, 1, size=n)
     y = 1.5 + 2.0 * x0 - 0.7 * x1 + rng.normal(scale=0.1, size=n)
 
-    def case(X: np.ndarray, label: str) -> dict[str, Any]:
-        result = blackbox.lm_fit(X, y)
+    def case(
+        X: np.ndarray, label: str, *, w: np.ndarray | None = None
+    ) -> dict[str, Any]:
+        result = blackbox.lm_fit(X, y, w=w)
         coefficients = result["coefficients"].ravel().tolist()
         return {
             "label": label,
             "x": X.tolist(),
+            "weights": None if w is None else w.tolist(),
             "coefficients": [None if c is None else float(c) for c in coefficients],
             "residuals": result["residuals"].ravel().tolist(),
             "rank": int(result["rank"]),
@@ -238,9 +350,43 @@ def lm_fit_coefficients() -> dict[str, Any]:
 
     full_rank = np.column_stack([np.ones(n), x0, x1])
     duplicated = np.column_stack([np.ones(n), x0, x0])
+    above_threshold = np.column_stack(
+        [np.ones(n), x0, x1, x0 + 1e-6 * rng.normal(size=n)]
+    )
+    below_threshold = np.column_stack(
+        [np.ones(n), x0, x1, x0 + 1e-8 * rng.normal(size=n)]
+    )
+    centered_vs_uncentered = np.column_stack(
+        [np.ones(n), x0, x1, 1000.0 + 1e-6 * rng.normal(size=n)]
+    )
+    weights = rng.uniform(0.5, 3.0, size=n)
     return {
         "y": y.tolist(),
-        "cases": [case(full_rank, "full_rank"), case(duplicated, "duplicated_column")],
+        "cases": [
+            case(full_rank, "full_rank"),
+            case(duplicated, "duplicated_column"),
+            case(above_threshold, "near_duplicate_above_1e-7"),
+            case(below_threshold, "near_duplicate_below_1e-7"),
+            case(centered_vs_uncentered, "centered_vs_uncentered_norm"),
+            case(full_rank, "weighted_full_rank", w=weights),
+        ],
+    }
+
+
+def _predict_case(
+    x: np.ndarray, y: np.ndarray, newx: np.ndarray, earth_args: dict[str, Any]
+) -> dict[str, Any]:
+    result = blackbox.predict_earth(x, y, newx, earth_args)
+    return {
+        "x": x.tolist(),
+        "y": y.tolist(),
+        "earth_args": earth_args,
+        "newx": newx.tolist(),
+        "pred": result["pred"].tolist(),
+        "dirs": result["dirs"].tolist(),
+        "cuts": result["cuts"].tolist(),
+        "selected_terms": result["selected_terms"].tolist(),
+        "coefficients": result["coefficients"].tolist(),
     }
 
 
@@ -249,14 +395,26 @@ def predict_new_points() -> dict[str, Any]:
     """VALIDATION_PLAN.md, "Component tests" > "Prediction at new points":
     the basis evaluated at points outside the training range (TERM-3:
     "nothing is clipped"), compared with predict.earth; degree 1 (one
-    covariate) and degree 2 (an interaction)."""
+    covariate) and degree 2 (an interaction).
+
+    Review round 1 (#42 finding 2): each case stores earth's own dirs,
+    cuts, selected_terms and coefficients alongside pred, so a failure
+    points at TERM-3 alone, not at a whole forward-pass refit. The
+    ``linear_auto``/``linear_hinge`` pair is FWD-6: with an exactly linear
+    truth (so a knot's RSS reduction ties the linear candidate's, and
+    FWD-5 breaks that tie for the linear candidate), ``Auto.linpreds =
+    TRUE`` selects the true linear term (code 2, extrapolating as a
+    straight line) and ``Auto.linpreds = FALSE`` selects a hinge at the
+    training minimum (code +1, extrapolating as a constant below it); the
+    two agree inside the training range and diverge only below the
+    minimum, which ``newx`` includes.
+    """
     rng = np.random.default_rng(31)
     n = 100
     x = rng.uniform(0, 1, size=(n, 1))
     y = 2 * np.maximum(0, x[:, 0] - 0.4) + rng.normal(scale=0.05, size=n)
     earth_args_d1 = {"degree": 1, "nk": 11, "thresh": 0}
     newx_d1 = np.array([[-2.0], [-0.5], [0.0], [0.4], [0.9], [1.0], [1.5], [3.0]])
-    pred_d1 = blackbox.predict_earth(x, y, newx_d1, earth_args_d1)
 
     rng2 = np.random.default_rng(32)
     n2 = 150
@@ -266,23 +424,30 @@ def predict_new_points() -> dict[str, Any]:
     ) + rng2.normal(scale=0.05, size=n2)
     earth_args_d2 = {"degree": 2, "nk": 15, "thresh": 0}
     newx_d2 = np.array([[-1.0, -1.0], [0.0, 0.0], [0.5, 0.5], [1.0, 1.0], [2.0, 2.0]])
-    pred_d2 = blackbox.predict_earth(x2, y2, newx_d2, earth_args_d2)
+
+    rng3 = np.random.default_rng(33)
+    n3 = 100
+    x3 = rng3.uniform(0, 1, size=(n3, 1))
+    y3 = 3.0 * x3[:, 0] - 1.0  # exactly linear: no noise, so every knot ties the
+    # linear candidate's RSS reduction exactly (any mirrored hinge pair, or a
+    # single hinge plus the intercept, reproduces a line identically), and
+    # FWD-5 then favors the linear candidate on that tie.
+    newx_linear = np.array(
+        [[-2.0], [-0.5], [0.0], [0.5], [1.0], [1.5], [3.0]]
+    )  # below, at and above the training minimum (about 0.0154)
+    earth_args_linear_auto = {"degree": 1, "nk": 3, "thresh": 0, "Auto.linpreds": True}
+    earth_args_linear_hinge = {
+        "degree": 1,
+        "nk": 3,
+        "thresh": 0,
+        "Auto.linpreds": False,
+    }
 
     return {
-        "degree1": {
-            "x": x.tolist(),
-            "y": y.tolist(),
-            "earth_args": earth_args_d1,
-            "newx": newx_d1.tolist(),
-            "pred": pred_d1.tolist(),
-        },
-        "degree2": {
-            "x": x2.tolist(),
-            "y": y2.tolist(),
-            "earth_args": earth_args_d2,
-            "newx": newx_d2.tolist(),
-            "pred": pred_d2.tolist(),
-        },
+        "degree1": _predict_case(x, y, newx_d1, earth_args_d1),
+        "degree2": _predict_case(x2, y2, newx_d2, earth_args_d2),
+        "linear_auto": _predict_case(x3, y3, newx_linear, earth_args_linear_auto),
+        "linear_hinge": _predict_case(x3, y3, newx_linear, earth_args_linear_hinge),
     }
 
 
@@ -291,7 +456,14 @@ def classifier_refit() -> dict[str, Any]:
     """VALIDATION_PLAN.md, "Binary outcomes": R's glm (binomial) and
     nnet::multinom on fixed columns, the reference for EarthClassifier's
     GLM-refit coefficients and fitted probabilities (binary and, for three
-    or more classes, the multinom comparison the plan calls for)."""
+    or more classes, the multinom comparison the plan calls for).
+
+    Review round 1 (#42 finding 1): the multinomial case's labels are now
+    drawn from the softmax probabilities of a linear score (not a
+    threshold rule), so the classes overlap and a finite MLE exists;
+    nnet's convergence code is checked (0 required) and stored, since GLM-
+    3/GLM-4 only promise agreement where the reference itself converged.
+    """
     rng = np.random.default_rng(41)
     n = 300
     x0 = rng.uniform(-2, 2, size=n)
@@ -301,6 +473,12 @@ def classifier_refit() -> dict[str, Any]:
     p = 1.0 / (1.0 + np.exp(-eta))
     y_binary = (rng.uniform(size=n) < p).astype(float)
     glm = blackbox.glm_fit(X, y_binary, family="binomial")
+    if not glm["converged"] or glm["warnings"]:
+        raise AssertionError(
+            f"classifier_refit's binomial case did not give a clean GLM-3 "
+            f"reference: converged={glm['converged']}, "
+            f"warnings={glm['warnings']}"
+        )
 
     rng2 = np.random.default_rng(42)
     n2 = 300
@@ -308,8 +486,17 @@ def classifier_refit() -> dict[str, Any]:
     z1 = rng2.uniform(-3, 3, size=n2)
     Xm = np.column_stack([np.ones(n2), z0, z1])
     score = z0 - 0.5 * z1
-    y3 = np.where(score < -1, "lo", np.where(score > 1, "hi", "mid"))
+    scores = np.column_stack([np.zeros(n2), score, -score])  # mid, hi, lo
+    probs = np.exp(scores) / np.exp(scores).sum(axis=1, keepdims=True)
+    levels = np.array(["mid", "hi", "lo"])
+    y3 = np.array([levels[rng2.choice(3, p=probs[i])] for i in range(n2)])
     multinom = blackbox.multinom_fit(Xm, y3)
+    if multinom["convergence"] != 0 or multinom["warnings"]:
+        raise AssertionError(
+            f"classifier_refit's multinomial case did not converge: "
+            f"convergence={multinom['convergence']}, "
+            f"warnings={multinom['warnings']}"
+        )
 
     return {
         "binomial": {
@@ -320,6 +507,7 @@ def classifier_refit() -> dict[str, Any]:
                 for c in glm["coefficients"].ravel().tolist()
             ],
             "fitted_values": glm["fitted_values"].tolist(),
+            "converged": glm["converged"],
         },
         "multinomial": {
             "x": Xm.tolist(),
@@ -327,6 +515,7 @@ def classifier_refit() -> dict[str, Any]:
             "coefficients": multinom["coefficients"].tolist(),
             "levels": multinom["levels"],
             "fitted": multinom["fitted"].tolist(),
+            "convergence": multinom["convergence"],
         },
     }
 
@@ -352,13 +541,16 @@ _KNOT_N_FULL = 20
 _KNOT_N_REDUCED: tuple[int, ...] = (200, 2000)
 
 
-def _knot_grid_xy(n: int, p: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+def _knot_grid_xy(
+    n: int, p: int, seed: int, *, low: float = 0.0, high: float = 1.0
+) -> tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(seed)
-    X = rng.uniform(0, 1, size=(n, p))
-    y = 2 * np.maximum(0, X[:, 0] - 0.4)
+    X = rng.uniform(low, high, size=(n, p))
+    mid = (low + high) / 2
+    y = 2 * np.maximum(0, X[:, 0] - mid)
     if p > 1:
-        y = y + 1.5 * np.maximum(0, X[:, 1] - 0.6)
-    y = y + rng.normal(scale=0.02, size=n)
+        y = y + 1.5 * np.maximum(0, X[:, 1] - (mid + 0.2 * (high - low)))
+    y = y + rng.normal(scale=0.02 * (high - low), size=n)
     return X, y
 
 
@@ -373,10 +565,14 @@ def _knot_jobs() -> list[tuple[dict[str, Any], driver.EarthJob]]:
         endspan: int | None,
         adjust_endspan: float,
         n: int,
+        *,
+        low: float = 0.0,
+        high: float = 1.0,
+        auto_linpreds: bool = False,
     ) -> None:
         nonlocal counter
         p = 1 if degree == 1 else 2
-        X, y = _knot_grid_xy(n, p, seed=9_000 + counter)
+        X, y = _knot_grid_xy(n, p, seed=9_000 + counter, low=low, high=high)
         earth_args = {
             "degree": degree,
             "nk": 5,
@@ -386,6 +582,7 @@ def _knot_jobs() -> list[tuple[dict[str, Any], driver.EarthJob]]:
             "endspan": endspan if endspan is not None else 0,
             "Adjust.endspan": adjust_endspan,
             "fast.k": 0,
+            "Auto.linpreds": auto_linpreds,
         }
         job_id = f"knot_{counter:03d}"
         meta = {
@@ -416,6 +613,28 @@ def _knot_jobs() -> list[tuple[dict[str, Any], driver.EarthJob]]:
         for adjust_endspan in adjust_values:
             for n in _KNOT_N_REDUCED:
                 add(degree, None, None, adjust_endspan, n)
+
+    # Review round 1 (#42, spec finding 4): at n = 20 the SPAN-5 cap (9)
+    # hides Adjust.endspan's effect (SPAN-4) whenever the adjusted endspan
+    # would exceed it, which endspan = 5 and the automatic endspan both do
+    # there; one endspan = 5 case per Adjust.endspan value at the larger
+    # n = 200 (automatic minspan) shows it uncapped.
+    for adjust_endspan in _KNOT_ADJUST_ENDSPANS:
+        add(2, None, 5, adjust_endspan, 200)
+
+    # Also review round 1 (#42, spec finding 4): no case has negative x or
+    # a linear term. x on [-1, 1] with Auto.linpreds = True exercises
+    # KNOT-1's rule for a linear parent's negative values (a case is
+    # inactive there) whenever earth's forward search happens to pick a
+    # linear term as the first-step parent; several designs meant to force
+    # that choice (a dominant, near-noiseless linear component) still had
+    # earth's pair search prefer a mirrored hinge pair over the tied linear
+    # candidate, unlike the single-covariate case, so this is left to
+    # record whatever earth actually does rather than to force one
+    # structure (T05 brief: no interpreting earth's internals beyond the
+    # spec; this asymmetry is flagged in the pull request for the spec
+    # writer, not resolved here by trial and error).
+    add(2, None, None, 2.0, 200, low=-1.0, high=1.0, auto_linpreds=True)
     return jobs
 
 
@@ -523,7 +742,8 @@ def _write_component(name: str, components_dir: Path) -> Path:
     components_dir.mkdir(parents=True, exist_ok=True)
     path = components_dir / f"{name}.json"
     path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
     )
     return path
 
@@ -544,7 +764,8 @@ def _write_fixture(dataset_id: str, mode: str, fixtures_dir: Path) -> Path:
     fixtures_dir.mkdir(parents=True, exist_ok=True)
     path = fixtures_dir / f"{dataset_id}_{mode}.json"
     path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
     )
     return path
 
@@ -582,15 +803,24 @@ def check(*, fixtures_dir: Path | None = None) -> CheckResult:
     (``pymars_commit``) that would differ on every run from a different
     commit by construction, and nothing about earth conformance follows
     from the rest of ``versions`` differing.
+
+    Also reports (as a problem) a committed ``*.json`` under
+    ``fixtures_dir`` or ``fixtures_dir/components`` that no generator
+    wrote (review round 1, #42 adversarial finding 6): a stale file, for
+    example left behind by a renamed dataset or component, would
+    otherwise never be caught, since the loop above only ever compares
+    fixtures a generator actually produced.
     """
     fixtures_dir = fixtures_dir if fixtures_dir is not None else FIXTURES_DIR
     problems: list[str] = []
     notes: list[str] = []
+    fresh_relative: set[Path] = set()
     with tempfile.TemporaryDirectory(prefix="pymars-fixture-check-") as tmp:
         tmp = Path(tmp)
         fresh_paths = make_all(fixtures_dir=tmp) + make_all_components(fixtures_dir=tmp)
         for fresh in fresh_paths:
             relative = fresh.relative_to(tmp)
+            fresh_relative.add(relative)
             committed = fixtures_dir / relative
             if not committed.is_file():
                 problems.append(f"{relative}: missing from {fixtures_dir}")
@@ -605,6 +835,19 @@ def check(*, fixtures_dir: Path | None = None) -> CheckResult:
                 problems.append(f"{relative}: differs from the committed fixture")
             elif fresh_payload.get("versions") != committed_payload.get("versions"):
                 notes.append(f"{relative}: versions differ")
+
+    committed_relative: set[Path] = set()
+    if fixtures_dir.is_dir():
+        committed_relative |= {
+            p.relative_to(fixtures_dir) for p in fixtures_dir.glob("*.json")
+        }
+        components_dir = fixtures_dir / "components"
+        if components_dir.is_dir():
+            committed_relative |= {
+                p.relative_to(fixtures_dir) for p in components_dir.glob("*.json")
+            }
+    for stale in sorted(committed_relative - fresh_relative):
+        problems.append(f"{stale}: committed but no generator writes it")
     return CheckResult(problems=problems, notes=notes)
 
 

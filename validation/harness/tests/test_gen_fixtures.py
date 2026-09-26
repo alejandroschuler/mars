@@ -238,12 +238,24 @@ class TestMakeAllComponentsAndCheck:
             payload["one_response"]["rss_per_subset"][0]
             >= payload["one_response"]["rss_per_subset"][-1]
         )
+        # Review round 1, #42 adversarial finding 3: the several-responses
+        # case must actually separate PRUNE-3's K = 1 rule from its K >= 2
+        # rule, not just happen to agree with either.
+        assert payload["several_responses"]["k1_vs_k2_diverge_at_sizes"]
 
     def test_lm_fit_coefficients_has_a_rank_deficient_case(self, component_fixtures):
         payload = component_fixtures["lm_fit_coefficients"]
         by_label = {c["label"]: c for c in payload["cases"]}
         assert by_label["full_rank"]["rank"] == 3
         assert by_label["duplicated_column"]["coefficients"].count(None) == 1
+        # Review round 1, #42 finding 5: near-duplicate columns on each
+        # side of LA-4's 1e-7 threshold, and the centered/uncentered norm
+        # case (bb09.9), and a weighted case (PRUNE-8's lm.wfit path).
+        assert by_label["near_duplicate_above_1e-7"]["rank"] == 4
+        assert by_label["near_duplicate_below_1e-7"]["coefficients"].count(None) == 1
+        assert by_label["centered_vs_uncentered_norm"]["coefficients"].count(None) == 1
+        assert by_label["weighted_full_rank"]["weights"] is not None
+        assert by_label["weighted_full_rank"]["coefficients"].count(None) == 0
 
     def test_predict_new_points_covers_outside_the_training_range(
         self, component_fixtures
@@ -255,6 +267,27 @@ class TestMakeAllComponentsAndCheck:
             assert newx.min() < x.min()
             assert newx.max() > x.max()
             assert np.all(np.isfinite(case["pred"]))
+            # Review round 1, #42 finding 2: the model, not only pred.
+            assert len(case["dirs"]) == len(case["cuts"])
+            assert len(case["coefficients"]) == len(case["selected_terms"])
+
+    def test_predict_new_points_linear_factor_diverges_below_the_minimum(
+        self, component_fixtures
+    ):
+        # FWD-6: a linear term (Auto.linpreds = TRUE) extrapolates as a
+        # straight line; a hinge at the training minimum (Auto.linpreds =
+        # FALSE) extrapolates as a constant below it. The two must agree
+        # inside the training range and diverge below the minimum.
+        payload = component_fixtures["predict_new_points"]
+        linear = np.array(payload["linear_auto"]["pred"]).ravel()
+        hinge = np.array(payload["linear_hinge"]["pred"]).ravel()
+        newx = np.array(payload["linear_auto"]["newx"]).ravel()
+        x_min = np.array(payload["linear_auto"]["x"]).min()
+        below = newx < x_min
+        above = ~below
+        assert below.any() and above.any()
+        assert np.allclose(linear[above], hinge[above])
+        assert not np.allclose(linear[below], hinge[below])
 
     def test_classifier_refit_has_binomial_and_multinomial_cases(
         self, component_fixtures
@@ -265,6 +298,10 @@ class TestMakeAllComponentsAndCheck:
         probs = np.array(payload["multinomial"]["fitted"])
         assert probs.shape[1] == len(payload["multinomial"]["levels"]) == 3
         assert np.allclose(probs.sum(axis=1), 1.0)
+        # Review round 1, #42/#43 finding 1: both references must have
+        # actually converged (GLM-3/GLM-4).
+        assert payload["binomial"]["converged"] is True
+        assert payload["multinomial"]["convergence"] == 0
 
     def test_knot_candidates_grid_covers_the_documented_axes(self, component_fixtures):
         cases = component_fixtures["knot_candidates"]["cases"]
@@ -273,6 +310,17 @@ class TestMakeAllComponentsAndCheck:
         assert {c["endspan"] for c in cases} == {None, 1, 5}
         assert {c["n"] for c in cases} >= {20, 200, 2000}
         assert all("FindKnotBegin" in c["trace_text"] for c in cases)
+        # Review round 1, #42 finding 4: endspan = 5 at n = 200 (SPAN-5's
+        # cap does not hide Adjust.endspan there), for both its values.
+        endspan5_at_200 = {
+            c["adjust_endspan"] for c in cases if c["endspan"] == 5 and c["n"] == 200
+        }
+        assert endspan5_at_200 == {1.0, 2.0}
+        # A degree-2, negative-x case exists (KNOT-1's negative-linear-
+        # parent rule), whatever term structure earth actually picked.
+        assert any(
+            c["degree"] == 2 and min(min(row) for row in c["X"]) < 0 for c in cases
+        )
 
     def test_check_reports_nothing_when_components_match(self, tmp_path):
         gen_fixtures.make_all(fixtures_dir=tmp_path)
