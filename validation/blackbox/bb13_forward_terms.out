@@ -3,21 +3,21 @@ Friedman #1, degree 1    21 terms, 15 steps
 Friedman #1, degree 2    28 terms, 15 steps
 three x, degree 2        21 terms, 15 steps
 three x, degree 3        17 terms, 12 steps
-parts A and B: 26 pair steps, 31 single-hinge steps, 1086 knot searches; iNewCol rule matches the structural rule in 951
+parts A and B: 26 pair steps and 31 single-hinge steps
 one covariate, dirs by term: 0 1 -1 1 1 1 1 1 1 1 1 1 
-low-end knots, dirs by term: 0 1 -1 1 1  cuts: 0 0.1575 0.1575 0.275 0.3825 
-Auto.linpreds TRUE, term 2: x1 dirs 2 0 0 cuts 0 0 0 
-Auto.linpreds FALSE, term 2: x1 dirs 1 0 0 cuts 0 0 0 
-hinge parent with a 3-level covariate (active cases have z2 in 1..2, global minimum 0):
-                  z1 z2        z1 z2
-(Intercept)        0  0 0.0000000  0
-h(z1-0.492993)     1  0 0.4929932  0
-h(0.492993-z1)    -1  0 0.4929932  0
-h(z1-0.492993)*z2  1  1 0.4929932  0
-h(z1-0.560984)     1  0 0.5609839  0
+knots near the low end, dirs by term: 0 1 -1 1 1  cuts: 0 0.1575 0.1575 0.275 0.3825 
+Auto.linpreds TRUE, term 2: x1 | dirs 2 0 0 
+Auto.linpreds FALSE, term 2: x1 | dirs 1 0 0 | cuts 0 0 0 
+hinge parent h(z1 - c), covariate z2 with values 0..2; its active cases have z2 in 1..2:
+                  z1 z2       z1 z2
+(Intercept)        0  0 0.000000  0
+h(z1-0.492993)     1  0 0.492993  0
+h(0.492993-z1)    -1  0 0.492993  0
+h(z1-0.492993)*z2  1  1 0.492993  0
+h(z1-0.560984)     1  0 0.560984  0
 CHECK bb13.1 TRUE a pair step adds the +1 hinge, then the -1 hinge, with the same knot and the parent's factors (26 pair steps)
-CHECK bb13.2 FALSE a search is a single-hinge search exactly when an existing term is its parent times a factor in its covariate (1086 searches)
-CHECK bb13.3 TRUE a single-hinge step adds b*(x - t)+ (dirs +1), also for knots near the low end
+CHECK bb13.3 TRUE a single-hinge step adds b*(x - t)+ (dirs +1), also for knots near the low end (31 single-hinge steps)
 CHECK bb13.4 TRUE with Auto.linpreds = TRUE the linear option adds b*x as one term (dirs 2)
 CHECK bb13.5 TRUE with Auto.linpreds = FALSE it adds the one hinge (x - min x)+ (dirs +1, cut = min x), and the other terms do not change
-CHECK bb13.6 FALSE for a hinge parent the Auto.linpreds = FALSE hinge sits at the smallest value among the active cases (cut 0, active minimum 1, global minimum 0)
+CHECK bb13.6 FALSE HYPOTHESIS for a hinge parent the Auto.linpreds = FALSE hinge sits at the smallest value among the active cases (1)
+CHECK bb13.7 TRUE it sits at the smallest value of the covariate over all cases (cut 0, global minimum 0)
