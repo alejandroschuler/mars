@@ -1,0 +1,866 @@
+[
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0",
+      "E-pym": "20d1d1a65b1790c0",
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      },
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi"
+    ],
+    "reps": [
+      0,
+      100
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T08:46:48Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0",
+      "E-pym": "20d1d1a65b1790c0",
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      },
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi"
+    ],
+    "reps": [
+      100,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T09:11:40Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D6_n00200",
+      "D8_n00200_lo",
+      "D8_n00200_hi"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T10:03:36Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "EarthClassifier": "4667a02ac5e09494"
+    },
+    "arms": {
+      "EarthClassifier": {
+        "class_name": "EarthClassifier",
+        "kwargs": {
+          "max_degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3-bin_n00200",
+      "D4-bin_n00200"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T12:55:22Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "GLMEarth": "4667a02ac5e09494"
+    },
+    "arms": {
+      "GLMEarth": {
+        "class_name": "GLMEarth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3-bin_n00200",
+      "D4-bin_n00200"
+    ],
+    "reps": [
+      0,
+      20
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T13:26:58Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D3_n01000_lo",
+      "D4_n01000_lo",
+      "D5_n01000_lo",
+      "D8_n01000_lo"
+    ],
+    "reps": [
+      0,
+      200
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T13:28:58Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0",
+      "E-pym": "20d1d1a65b1790c0",
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      },
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi"
+    ],
+    "reps": [
+      0,
+      100
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:37Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0",
+      "E-pym": "20d1d1a65b1790c0",
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      },
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi"
+    ],
+    "reps": [
+      100,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:39Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D6_n00200",
+      "D8_n00200_lo",
+      "D8_n00200_hi"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:41Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "EarthClassifier": "4667a02ac5e09494"
+    },
+    "arms": {
+      "EarthClassifier": {
+        "class_name": "EarthClassifier",
+        "kwargs": {
+          "max_degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3-bin_n00200",
+      "D4-bin_n00200"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:43Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "GLMEarth": "4667a02ac5e09494"
+    },
+    "arms": {
+      "GLMEarth": {
+        "class_name": "GLMEarth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3-bin_n00200",
+      "D4-bin_n00200"
+    ],
+    "reps": [
+      0,
+      20
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:45Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "P-cur": "4667a02ac5e09494",
+      "P-ear": "4667a02ac5e09494"
+    },
+    "arms": {
+      "P-cur": {
+        "class_name": "Earth",
+        "kwargs": {
+          "max_degree": 2
+        }
+      },
+      "P-ear": {
+        "class_name": "Earth",
+        "kwargs": {
+          "endspan_alpha": 0.05,
+          "max_degree": 2,
+          "minspan_alpha": 0.05,
+          "penalty": 1.5
+        }
+      }
+    },
+    "cells": [
+      "D3_n01000_lo",
+      "D4_n01000_lo",
+      "D5_n01000_lo",
+      "D8_n01000_lo"
+    ],
+    "reps": [
+      0,
+      200
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T18:06:46Z",
+    "test_n": 10000,
+    "versions": {
+      "legacy_mars_earth": "1.0.4",
+      "legacy_sklearn": "1.9.1",
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D6_n00200",
+      "D8_n00200_lo",
+      "D8_n00200_hi"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:05:17Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3-bin_n00200",
+      "D4-bin_n00200"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:05:46Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "20d1d1a65b1790c0"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D3_n01000_lo",
+      "D4_n01000_lo",
+      "D5_n01000_lo",
+      "D8_n01000_lo"
+    ],
+    "reps": [
+      0,
+      200
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:05:56Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-pym": "20d1d1a65b1790c0"
+    },
+    "arms": {
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      }
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi",
+      "D6_n00200",
+      "D7_n00200_lo",
+      "D7_n00200_hi",
+      "D8_n00200_lo",
+      "D8_n00200_hi"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:06:14Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-pym": "20d1d1a65b1790c0"
+    },
+    "arms": {
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      }
+    },
+    "cells": [
+      "D3_n01000_lo",
+      "D4_n01000_lo",
+      "D5_n01000_lo",
+      "D8_n01000_lo"
+    ],
+    "reps": [
+      0,
+      200
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:08:06Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "HGB": "3f67c7aea749a780",
+      "OLS": "0cb60542c4c2cef7"
+    },
+    "arms": {
+      "HGB": {},
+      "OLS": {}
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D1_n01000_lo",
+      "D1_n01000_hi",
+      "D1_n05000_lo",
+      "D1_n05000_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D2_n01000_lo",
+      "D2_n01000_hi",
+      "D2_n05000_lo",
+      "D2_n05000_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D3_n01000_lo",
+      "D3_n01000_hi",
+      "D3_n05000_lo",
+      "D3_n05000_hi",
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D4_n01000_lo",
+      "D4_n01000_hi",
+      "D4_n05000_lo",
+      "D4_n05000_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi",
+      "D5_n01000_lo",
+      "D5_n01000_hi",
+      "D5_n05000_lo",
+      "D5_n05000_hi",
+      "D6_n00200",
+      "D6_n01000",
+      "D6_n05000",
+      "D7_n00200_lo",
+      "D7_n00200_hi",
+      "D7_n01000_lo",
+      "D7_n01000_hi",
+      "D7_n05000_lo",
+      "D7_n05000_hi",
+      "D8_n00200_lo",
+      "D8_n00200_hi",
+      "D8_n01000_lo",
+      "D8_n01000_hi",
+      "D8_n05000_lo",
+      "D8_n05000_hi",
+      "D3-bin_n00200",
+      "D3-bin_n01000",
+      "D3-bin_n05000",
+      "D4-bin_n00200",
+      "D4-bin_n01000",
+      "D4-bin_n05000"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-09-26T23:08:25Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "8760ceefc5b2564318db47f547c3332535a1a5e4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  }
+]

@@ -1,0 +1,22 @@
+DGP,noise,arm,median_terms,iqr_terms,share_irrelevant,mean_n_irrelevant
+D4 Friedman #1,lo,E-def,14.0,2.0,0.7666666666666667,1.0633333333333332
+D4 Friedman #1,hi,E-def,10.0,3.0,0.88,1.5166666666666666
+D4 Friedman #1,lo,P-cur,15.0,3.0,0.9966666666666667,2.8333333333333335
+D4 Friedman #1,hi,P-cur,11.0,4.0,0.9966666666666667,3.2666666666666666
+D4 Friedman #1,lo,P-fix,missing,missing,missing,missing
+D4 Friedman #1,hi,P-fix,missing,missing,missing,missing
+D6 pure noise,na,E-def,4.0,4.0,0.9366666666666666,3.44
+D6 pure noise,na,P-cur,9.0,4.25,1.0,6.556666666666667
+D6 pure noise,na,P-fix,missing,missing,missing,missing
+D7 many covariates,lo,E-def,missing,missing,missing,missing
+D7 many covariates,hi,E-def,missing,missing,missing,missing
+D7 many covariates,lo,P-cur,n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50)
+D7 many covariates,hi,P-cur,n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50)
+D7 many covariates,lo,P-fix,missing,missing,missing,missing
+D7 many covariates,hi,P-fix,missing,missing,missing,missing
+D8 correlated,lo,E-def,12.0,3.0,0.8033333333333333,1.2633333333333334
+D8 correlated,hi,E-def,8.0,4.0,0.85,1.72
+D8 correlated,lo,P-cur,14.0,3.0,0.99,2.8833333333333333
+D8 correlated,hi,P-cur,11.0,3.0,0.9966666666666667,3.2533333333333334
+D8 correlated,lo,P-fix,missing,missing,missing,missing
+D8 correlated,hi,P-fix,missing,missing,missing,missing

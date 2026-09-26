@@ -1,0 +1,11 @@
+DGP,n,arm,excess_log_loss_ratio,calibration_slope
+D3-bin,200,EarthClassifier,"0.520 [0.467, 0.578]",1.1312735985884315
+D3-bin,200,GLMEarth,"0.760 [0.418, 1.380]",1.1159618028315914
+D3-bin,200,P-fix,missing,missing
+D3-bin,1000,P-fix,missing,missing
+D3-bin,5000,P-fix,missing,missing
+D4-bin,200,EarthClassifier,"0.365 [0.336, 0.396]",1.1099809951112738
+D4-bin,200,GLMEarth,"0.404 [0.277, 0.587]",1.0382639484807297
+D4-bin,200,P-fix,missing,missing
+D4-bin,1000,P-fix,missing,missing
+D4-bin,5000,P-fix,missing,missing
