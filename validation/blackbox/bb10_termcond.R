@@ -57,12 +57,28 @@ cat(sprintf("CHECK bb10.5 %s no new term that raises RSq gives code 6\n", all(ta
 cat(sprintf("CHECK bb10.6 %s with thresh = 0 the rule RSq >= 1 - thresh still acts (an exact fit gives code 5)\n", isTRUE(tab["c"] == 5)))
 
 # A constant y at several n: earth's termination code, rss, gcv, rsq and grsq
-cy <- lapply(c(3, 12, 100), function(n) {
+cy <- lapply(c(3, 6, 12, 100), function(n) {
   set.seed(n); xc <- matrix(runif(2 * n), n, 2)
   out <- capture.output(f <- quiet(withCallingHandlers(earth(xc, rep(0.1, n)), warning = function(w) invokeRestart("muffleWarning"))))
   cat(sprintf("constant y = 0.1, n = %3d: termcond %d, terms %d, rss %g, gcv %g, rsq %s, grsq %s\n", n, f$termcond, nrow(f$dirs), f$rss, f$gcv, f$rsq, f$grsq))
-  c(code = f$termcond, rss = f$rss, gcv = f$gcv, rsq_nan = is.nan(f$rsq), grsq_nan = is.nan(f$grsq))
+  c(code = f$termcond, terms = nrow(f$dirs), rss = f$rss, gcv = f$gcv, rsq_nan = is.nan(f$rsq), grsq_nan = is.nan(f$grsq))
 })
 cy <- do.call(rbind, cy)
-cat(sprintf("CHECK bb10.7 %s for a constant y earth gives the intercept alone, rss 0 and gcv 0, rsq and grsq NaN, and termination code 2 at n = 3 and 4 at n = 12 and 100\n",
-  all(cy[, "rss"] == 0) && all(cy[, "gcv"] == 0) && all(cy[, "rsq_nan"] == 1) && all(cy[, "grsq_nan"] == 1) && all(cy[, "code"] == c(2, 4, 4))))
+# With weights: does earth's result for a constant y follow the computed sd(y)?
+wres <- NULL
+for (yv in c(0.1, 1/3, -2.7, 5)) for (n in c(6, 8, 12, 40)) {
+  set.seed(n); xw <- matrix(runif(2 * n), n, 2); wv <- rep(c(1, 2, 3), length.out = n)
+  fw <- quiet(withCallingHandlers(earth(xw, rep(yv, n), weights = wv), warning = function(w) invokeRestart("muffleWarning")))
+  wres <- rbind(wres, data.frame(y = yv, n = n, sd_is_zero = sd(rep(yv, n)) == 0, error = is.character(fw)))
+}
+print(wres, digits = 4, row.names = FALSE)
+cat("the error message:", quiet(withCallingHandlers(earth(matrix(runif(16), 8, 2), rep(5, 8), weights = rep(1:2, 4)),
+  warning = function(w) invokeRestart("muffleWarning"))), "\n")
+cat(sprintf("CHECK bb10.7 %s for a constant y earth gives the intercept alone (1 term), rss 0 and gcv 0, rsq and grsq NaN, and a termination code that depends on n: 2 at n = 3, 3 at n = 6, 4 at n = 12 and 100\n",
+  all(cy[, "terms"] == 1) && all(cy[, "rss"] == 0) && all(cy[, "gcv"] == 0) && all(cy[, "rsq_nan"] == 1) && all(cy[, "grsq_nan"] == 1) &&
+  all(cy[, "code"] == c(2, 3, 4, 4))))
+cat(sprintf("CHECK bb10.8 %s HYPOTHESIS with weights, earth stops with an error for a constant y exactly when R's sd(y) is 0 (it is 0 in all %d cases)\n",
+  all(wres$error == wres$sd_is_zero), nrow(wres)))
+cat(sprintf("CHECK bb10.9 %s with weights, earth stops with an error for some constant responses and fits others: y = 5 at every n, 1/3 at n = 6 to 12, and neither 0.1 nor -2.7 (%d of %d cases error)\n",
+  all(wres$error[wres$y == 5]) && all(wres$error[wres$y == 1/3 & wres$n <= 12]) && !any(wres$error[wres$y %in% c(0.1, -2.7)]),
+  sum(wres$error), nrow(wres)))

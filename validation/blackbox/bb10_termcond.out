@@ -27,6 +27,27 @@ CHECK bb10.4 TRUE GRSq of -Inf gives code 2 and GRSq below -10 gives code 3, and
 CHECK bb10.5 TRUE no new term that raises RSq gives code 6
 CHECK bb10.6 TRUE with thresh = 0 the rule RSq >= 1 - thresh still acts (an exact fit gives code 5)
 constant y = 0.1, n =   3: termcond 2, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
+constant y = 0.1, n =   6: termcond 3, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
 constant y = 0.1, n =  12: termcond 4, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
 constant y = 0.1, n = 100: termcond 4, terms 1, rss 0, gcv 0, rsq NaN, grsq NaN
-CHECK bb10.7 TRUE for a constant y earth gives the intercept alone, rss 0 and gcv 0, rsq and grsq NaN, and termination code 2 at n = 3 and 4 at n = 12 and 100
+       y  n sd_is_zero error
+  0.1000  6       TRUE FALSE
+  0.1000  8       TRUE FALSE
+  0.1000 12       TRUE FALSE
+  0.1000 40       TRUE FALSE
+  0.3333  6       TRUE  TRUE
+  0.3333  8       TRUE  TRUE
+  0.3333 12       TRUE  TRUE
+  0.3333 40       TRUE FALSE
+ -2.7000  6       TRUE FALSE
+ -2.7000  8       TRUE FALSE
+ -2.7000 12       TRUE FALSE
+ -2.7000 40       TRUE FALSE
+  5.0000  6       TRUE  TRUE
+  5.0000  8       TRUE  TRUE
+  5.0000 12       TRUE  TRUE
+  5.0000 40       TRUE  TRUE
+the error message: ERROR: length of 'scale' must equal the number of columns of 'x' 
+CHECK bb10.7 TRUE for a constant y earth gives the intercept alone (1 term), rss 0 and gcv 0, rsq and grsq NaN, and a termination code that depends on n: 2 at n = 3, 3 at n = 6, 4 at n = 12 and 100
+CHECK bb10.8 FALSE HYPOTHESIS with weights, earth stops with an error for a constant y exactly when R's sd(y) is 0 (it is 0 in all 16 cases)
+CHECK bb10.9 TRUE with weights, earth stops with an error for some constant responses and fits others: y = 5 at every n, 1/3 at n = 6 to 12, and neither 0.1 nor -2.7 (7 of 16 cases error)

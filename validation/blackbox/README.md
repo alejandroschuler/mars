@@ -23,7 +23,7 @@ Notes for the trace parser (T02):
 
 | ID | Question | Spec rules |
 |---|---|---|
-| bb01 | the formula of `earth:::get.gcv` over a grid of RSS, terms, penalties and n; the negative penalties that `earth()` accepts | GCV-1, GCV-2 |
+| bb01 | the formula of `earth:::get.gcv` over a grid of RSS, terms, penalties and n; the penalties that `earth()` accepts (−1, 0 to 1000) | GCV-1, GCV-2, CORE-2 |
 | bb02 | the GCV, RSq and GRSq of fitted models; weights; several responses; the default penalty | GCV-1 to GCV-8, W-2 |
 | bb03 | the default `nk`, and how steps count toward it | LIMIT-1, LIMIT-2 |
 | bb05 | the knot scan for the intercept, and the automatic spans; a knot at a repeated minimum | SPAN-1 to SPAN-6, KNOT-3 to KNOT-5 |
@@ -31,7 +31,7 @@ Notes for the trace parser (T02):
 | bb07 | the pruning pass on a fixed basis: the prefix rule, `nprune`, `pmethod` | PRUNE-2 to PRUNE-7 |
 | bb08 | exact ties in the pruning pass, in the removed term and in the size | PRUNE-3, PRUNE-5 |
 | bb09 | the final coefficients, the cut stored for a linear factor, and R's rule for dependent columns | TERM-1 to TERM-3, LA-4, PRUNE-8 |
-| bb10 | the termination codes | CORE-4, LIMIT-2 |
+| bb10 | the termination codes; a constant y, with and without weights | CORE-4, LIMIT-2, GCV-7, EDGE-1 |
 | bb11 | the collinearity tolerance and when it changes | LA-3 |
 | bb12 | how the forward pass chooses a candidate: the RSS reduction, the penalty, the limit MaxLegalRssDelta | FWD-3, FWD-4 |
 | bb13 | the terms that a forward step adds: pairs, single hinges, the linear candidate | FWD-3, FWD-6 |
