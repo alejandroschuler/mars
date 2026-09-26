@@ -92,9 +92,31 @@ class TestObjectShapedFit:
         result = mars_fit_to_common(_fake_object_fit())
         assert result["termcond"] == 6
         assert result["fwd_rss"] == [18.0, 10.0, 4.0]
+        # direction coerces a bare code to a one-element frozenset, so it
+        # compares equal to compare.py's own {1, -1}/{1}/{-1}/{2} shape; the
+        # best/second-best candidate RSS are merged in from "candidates" by
+        # position, not left as a separate list the caller must re-zip.
         assert result["forward_steps"] == [
-            {"parent": 0, "pred": 0, "direction": 1, "knot": 0.3},
-            {"parent": 0, "pred": 0, "direction": -1, "knot": 0.3},
+            {
+                "parent": 0,
+                "pred": 0,
+                "direction": frozenset({1}),
+                "knot": 0.3,
+                "best_rss": 10.0,
+                "second_best_rss": 10.5,
+                "rss_before": None,
+                "flags": None,
+            },
+            {
+                "parent": 0,
+                "pred": 0,
+                "direction": frozenset({-1}),
+                "knot": 0.3,
+                "best_rss": 4.0,
+                "second_best_rss": 4.2,
+                "rss_before": None,
+                "flags": None,
+            },
         ]
         assert result["forward_candidates"] == [(10.0, 10.5), (4.0, 4.2)]
 
@@ -106,6 +128,27 @@ class TestDictShapedFit:
         assert mars_fit_to_common(_fake_dict_fit()) == mars_fit_to_common(
             _fake_object_fit()
         )
+
+
+class TestForwardStepDirectionAndCandidates:
+    def test_a_direction_already_given_as_a_set_passes_through(self):
+        fit = SimpleNamespace(
+            forward=SimpleNamespace(
+                steps=[SimpleNamespace(parent=1, pred=2, direction={1, -1}, knot=0.5)],
+            ),
+        )
+        result = mars_fit_to_common(fit)
+        assert result["forward_steps"][0]["direction"] == frozenset({1, -1})
+
+    def test_missing_candidates_gives_none_best_and_second_best(self):
+        fit = SimpleNamespace(
+            forward=SimpleNamespace(
+                steps=[SimpleNamespace(parent=1, pred=2, direction=2, knot=0.5)],
+            ),
+        )
+        result = mars_fit_to_common(fit)
+        step = result["forward_steps"][0]
+        assert step["best_rss"] is None and step["second_best_rss"] is None
 
 
 class TestMissingSubRecords:

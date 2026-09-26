@@ -44,11 +44,15 @@ def mars_fit_to_common(fit: Any) -> dict[str, Any]:
     Assumed shape of the two sub-records, beyond the plan's own field list:
 
     - `fit.forward` (or `fit["forward"]`): `.steps`, a list of one entry per
-      forward step, each with `.parent`, `.pred`, `.direction` (+1, -1 or 2,
-      matching a `dirs` code) and `.knot`; `.rss`, the RSS after each step;
-      `.termcond`, the termination code; and, when `record_candidates` was
-      requested, `.candidates`, a list of `(best_rss, second_best_rss)`
-      pairs, one per step.
+      forward step, each with `.parent`, `.pred`, `.knot` and `.direction`
+      (the `dirs` codes this step added, as a collection: `{1, -1}` for a
+      hinge pair, `{1}` or `{-1}` for a single hinge, `{2}` for a linear
+      term -- compare.py's `compare_forward_steps` compares this as a
+      `frozenset`, so a single bare code also works and is coerced to one);
+      `.rss`, the RSS after each step; `.termcond`, the termination code;
+      and, when `record_candidates` was requested, `.candidates`, a list of
+      `(best_rss, second_best_rss)` pairs, one per step (merged onto each
+      step's own dict below, so the result needs no separate zipping).
     - `fit.pruning` (or `fit["pruning"]`): `.removed`, the term index taken
       out at each pruning step, in order; `.rss`/`.gcv`, one value per
       subset size; `.selected`, the selected term indices.
@@ -60,6 +64,7 @@ def mars_fit_to_common(fit: Any) -> dict[str, Any]:
     forward = _get(fit, "forward")
     pruning = _get(fit, "pruning")
     forward_steps = _get(forward, "steps")
+    candidates = _get(forward, "candidates")
 
     return {
         "dirs": _to_nested_list(_get(fit, "dirs")),
@@ -79,19 +84,50 @@ def mars_fit_to_common(fit: Any) -> dict[str, Any]:
         "gcv_per_subset": _list_or_none(_get(pruning, "gcv")),
         "pruning_removed": _list_or_none(_get(pruning, "removed")),
         "fwd_rss": _list_or_none(_get(forward, "rss")),
-        "forward_steps": [
+        "forward_steps": _build_forward_steps(forward_steps, candidates),
+        "forward_candidates": _list_or_none(candidates),
+    }
+
+
+def _build_forward_steps(
+    forward_steps: Any, candidates: Any
+) -> list[dict[str, Any]] | None:
+    if forward_steps is None:
+        return None
+    candidates = list(candidates) if candidates is not None else []
+    steps = []
+    for i, step in enumerate(forward_steps):
+        direction = _get(step, "direction")
+        if direction is not None and not isinstance(direction, frozenset | set):
+            direction = (
+                frozenset(direction)
+                if _is_iterable(direction)
+                else frozenset({direction})
+            )
+        best_rss, second_best_rss = (
+            candidates[i] if i < len(candidates) else (None, None)
+        )
+        steps.append(
             {
                 "parent": _get(step, "parent"),
                 "pred": _get(step, "pred"),
-                "direction": _get(step, "direction"),
+                "direction": direction,
                 "knot": _get(step, "knot"),
+                "best_rss": best_rss,
+                "second_best_rss": second_best_rss,
+                "rss_before": _get(step, "rss_before"),
+                "flags": _get(step, "flags"),
             }
-            for step in forward_steps
-        ]
-        if forward_steps is not None
-        else None,
-        "forward_candidates": _list_or_none(_get(forward, "candidates")),
-    }
+        )
+    return steps
+
+
+def _is_iterable(value: Any) -> bool:
+    try:
+        iter(value)
+    except TypeError:
+        return False
+    return True
 
 
 def _list_or_none(value: Any) -> list | None:
