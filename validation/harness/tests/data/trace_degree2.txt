@@ -1,0 +1,695 @@
+Call: earth(x=matrix[36,2], y=c(0.1816,-0.053...), pmethod="none", trace=9,
+            degree=2, penalty=3, nk=9, thresh=0, minspan=1, endspan=1,
+            fast.k=0, Auto.linpreds=FALSE, Adjust.endspan=1)
+
+maxmem 0.0 GB
+earth.c version 5.3.4
+BetaCache 1.27 kB
+Forward pass: minspan 1 endspan 1   x[36,2] 576 Bytes   bx[36,9] 2.53 kB
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 2    RssDelta 0 MaxLegalRssDelta 35.35
+
+
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 33.318       RssDeltaLin 1.6817       best for term (lin pred)
+--FindKnotBegin-- iPred 1 iNewCol 3 RssBeforeAddingHinge 35 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       32.887 RssDelta       2.1135 Cut      0.94833 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       30.423 RssDelta       4.5769 Cut      0.90613 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       30.014 RssDelta        4.986 Cut      0.90143 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       29.169 RssDelta       5.8306 Cut      0.89576 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       27.864 RssDelta       7.1356 Cut      0.86733 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   30 RssWithKnot       28.648 RssDelta       6.3517 Cut      0.84589 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       29.194 RssDelta        5.806 Cut      0.81674 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       29.507 RssDelta       5.4933 Cut      0.80514 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       31.236 RssDelta       3.7635 Cut      0.73925 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       32.178 RssDelta       2.8224 Cut      0.67336 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       32.183 RssDelta       2.8172 Cut      0.67036 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       32.189 RssDelta       2.8107 Cut      0.66284 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       32.016 RssDelta       2.9835 Cut       0.6015 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       31.986 RssDelta       3.0136 Cut      0.55373 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       32.433 RssDelta       2.5669 Cut      0.46707 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       32.437 RssDelta       2.5626 Cut       0.4663 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       32.464 RssDelta       2.5361 Cut      0.45972 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       32.623 RssDelta       2.3768 Cut      0.42995 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       32.886 RssDelta       2.1141 Cut      0.36899 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       33.011 RssDelta       1.9891 Cut      0.35327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       33.053 RssDelta       1.9467 Cut      0.34575 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       33.095 RssDelta       1.9048 Cut      0.33932 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       33.182 RssDelta       1.8183 Cut      0.30871 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       33.316 RssDelta       1.6842 Cut       0.2353 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       33.125 RssDelta       1.8753 Cut      0.15982 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       33.318 RssDelta       1.6817 Cut      0.14793 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       33.318 RssDelta       1.6817 Cut      0.13797 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       33.318 RssDelta       1.6817 Cut      0.12857 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       33.318 RssDelta       1.6817 Cut     0.089237 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       33.318 RssDelta       1.6817 Cut     0.083117 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       33.318 RssDelta       1.6817 Cut     0.070421 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       33.318 RssDelta       1.6817 Cut      0.06192 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       33.318 RssDelta       1.6817 Cut     0.054668 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       33.318 RssDelta       1.6817 Cut     0.033075 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   31 Cut       0.8673  Rss 27.864       RssDelta 7.1356          best for term
+
+
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 34.644       RssDeltaLin 0.35565     
+--FindKnotBegin-- iPred 2 iNewCol 3 RssBeforeAddingHinge 35 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       34.644 RssDelta      0.35571 Cut      0.92821 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       34.637 RssDelta      0.36294 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       34.458 RssDelta      0.54156 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       34.306 RssDelta      0.69416 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       34.321 RssDelta      0.67874 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       34.425 RssDelta      0.57475 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       34.455 RssDelta      0.54464 Cut      0.69104 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       34.573 RssDelta      0.42664 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       34.636 RssDelta       0.3639 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       34.642 RssDelta      0.35824 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       34.644 RssDelta      0.35635 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot        34.58 RssDelta      0.42022 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       34.442 RssDelta      0.55782 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       34.437 RssDelta      0.56257 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       34.417 RssDelta      0.58345 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       34.371 RssDelta      0.62943 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       34.365 RssDelta      0.63528 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       34.567 RssDelta      0.43291 Cut      0.31738 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       34.625 RssDelta      0.37547 Cut      0.27714 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       34.627 RssDelta      0.37304 Cut      0.27531 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       34.642 RssDelta      0.35766 Cut      0.21715 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       34.644 RssDelta      0.35569 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       34.644 RssDelta      0.35575 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       34.644 RssDelta      0.35641 Cut      0.20077 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       34.641 RssDelta      0.35886 Cut      0.19565 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       34.637 RssDelta      0.36297 Cut      0.19017 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       34.622 RssDelta       0.3776 Cut      0.17267 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       34.617 RssDelta       0.3826 Cut      0.14769 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       34.607 RssDelta      0.39301 Cut      0.12977 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       34.604 RssDelta      0.39634 Cut      0.12876 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       34.604 RssDelta      0.39594 Cut       0.1272 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       34.644 RssDelta      0.35565 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       34.644 RssDelta      0.35565 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       34.644 RssDelta      0.35565 Cut     0.026943 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 34.644       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+2     -0.0836 0.2039       0.2039    1           x0     0.86733  2   3         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 4    RssDelta 0 MaxLegalRssDelta 28.143
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut      0.01688< Rss 27.864       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 4 RssBeforeAddingHinge 27.8644 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 2 bx1   0.0000
+--FindKnot--Case   32 iSpan 2 bx1   0.0000
+--FindKnot--Case   31 iSpan 2 bx1   0.0000
+--FindKnot--Case   30 iSpan 2 bx1   0.0000
+--FindKnot--Case   29 iSpan 1 bx1   0.0388
+--FindKnot--Case   28 iSpan 1 bx1   0.0000
+--FindKnot--Case   27 RssWithKnot        25.42 RssDelta       2.4442 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnot--Case   24 iSpan 1 bx1   0.0000
+--FindKnot--Case   23 iSpan 1 bx1   0.0000
+--FindKnot--Case   22 iSpan 1 bx1   0.0000
+--FindKnot--Case   21 iSpan 1 bx1   0.0000
+--FindKnot--Case   20 iSpan 1 bx1   0.0000
+--FindKnot--Case   19 iSpan 1 bx1   0.0000
+--FindKnot--Case   18 iSpan 1 bx1   0.0000
+--FindKnot--Case   17 iSpan 1 bx1   0.0000
+--FindKnot--Case   16 iSpan 1 bx1   0.0000
+--FindKnot--Case   15 iSpan 1 bx1   0.0000
+--FindKnot--Case   14 RssWithKnot       24.862 RssDelta       3.0027 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   13 RssWithKnot       24.851 RssDelta       3.0132 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   12 iSpan 1 bx1   0.0000
+--FindKnot--Case   11 iSpan 1 bx1   0.0000
+--FindKnot--Case   10 iSpan 1 bx1   0.0000
+--FindKnot--Case    9 iSpan 1 bx1   0.0000
+--FindKnot--Case    8 iSpan 1 bx1   0.0000
+--FindKnot--Case    7 iSpan 1 bx1   0.0000
+--FindKnot--Case    6 iSpan 1 bx1   0.0000
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 iSpan 1 bx1   0.0000
+--FindKnot--Case    3 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   13 Cut       0.2022  Rss 24.851       RssDelta 3.0132          best for term
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut      0.01688< Rss 27.864       RssDeltaLin 9.1938e-05  
+--FindKnotBegin-- iPred 2 iNewCol 5 RssBeforeAddingHinge 27.8644 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 1 bx1   0.7075
+--FindKnot--Case   34 RssWithKnot        27.53 RssDelta      0.33469 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       27.838 RssDelta       0.0267 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   32 RssWithKnot       27.853 RssDelta     0.010911 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 RssWithKnot       27.836 RssDelta     0.027956 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       27.474 RssDelta      0.39041 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 RssWithKnot       27.245 RssDelta      0.61942 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   27 iSpan 1 bx1   0.0000
+--FindKnot--Case   26 RssWithKnot       27.175 RssDelta      0.68918 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   25 RssWithKnot       27.153 RssDelta      0.71147 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   24 RssWithKnot       26.912 RssDelta      0.95242 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   23 RssWithKnot       26.699 RssDelta       1.1657 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   22 RssWithKnot       26.693 RssDelta       1.1717 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   21 RssWithKnot       26.684 RssDelta         1.18 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   20 RssWithKnot        26.56 RssDelta       1.3042 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   19 RssWithKnot       26.479 RssDelta       1.3849 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   18 RssWithKnot       25.731 RssDelta       2.1338 Cut      0.31738 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   17 RssWithKnot       25.469 RssDelta       2.3951 Cut      0.27714 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   16 RssWithKnot       25.457 RssDelta       2.4069 Cut      0.27531 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   15 RssWithKnot       24.903 RssDelta       2.9617 Cut      0.21715 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   14 iSpan 1 bx1   0.0000
+--FindKnot--Case   13 iSpan 1 bx1   0.0000
+--FindKnot--Case   12 RssWithKnot       24.795 RssDelta       3.0692 Cut      0.20077 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   11 RssWithKnot        24.85 RssDelta       3.0141 Cut      0.19565 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       24.918 RssDelta       2.9463 Cut      0.19017 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut      0.17267 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut      0.14769 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut      0.12977 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut      0.12876 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       27.864 RssDelta   9.1938e-05 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   12 Cut       0.2008  Rss 24.795       RssDelta 3.0692          best for term
+
+|Parent 1  Pred 1  no new form
+--FindKnotBegin-- iPred 1 iNewCol 4 RssBeforeAddingHinge 27.8644 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       25.432 RssDelta       2.4327 Cut      0.94833 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       26.822 RssDelta       1.0423 Cut      0.90613 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 RssWithKnot       27.086 RssDelta      0.77858 Cut      0.90143 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   32 RssWithKnot       27.584 RssDelta      0.28055 Cut      0.89576 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 RssWithKnot       27.864 RssDelta            0 Cut      0.86733 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   30 RssWithKnot        27.34 RssDelta      0.52386 Cut      0.84589 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       27.672 RssDelta      0.19265 Cut      0.81674 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       27.644 RssDelta      0.22035 Cut      0.80514 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       27.377 RssDelta      0.48722 Cut      0.73925 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       27.231 RssDelta      0.63337 Cut      0.67336 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot        27.25 RssDelta      0.61464 Cut      0.67036 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       27.292 RssDelta      0.57224 Cut      0.66284 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       27.687 RssDelta      0.17725 Cut       0.6015 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       27.803 RssDelta     0.061726 Cut      0.55373 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       27.807 RssDelta     0.057214 Cut      0.46707 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       27.807 RssDelta     0.057497 Cut       0.4663 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       27.806 RssDelta     0.058366 Cut      0.45972 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       27.783 RssDelta     0.081804 Cut      0.42995 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       27.741 RssDelta      0.12356 Cut      0.36899 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot        27.68 RssDelta      0.18477 Cut      0.35327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       27.654 RssDelta      0.21078 Cut      0.34575 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       27.618 RssDelta      0.24619 Cut      0.33932 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       27.535 RssDelta      0.32905 Cut      0.30871 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       27.004 RssDelta      0.85998 Cut       0.2353 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       26.576 RssDelta       1.2882 Cut      0.15982 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       27.864 RssDelta            0 Cut      0.14793 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       27.864 RssDelta            0 Cut      0.13797 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       27.864 RssDelta            0 Cut      0.12857 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       27.864 RssDelta            0 Cut     0.089237 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       27.864 RssDelta            0 Cut     0.083117 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       27.864 RssDelta            0 Cut     0.070421 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       27.864 RssDelta            0 Cut      0.06192 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       27.864 RssDelta            0 Cut     0.054668 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       27.864 RssDelta            0 Cut     0.033075 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 27.864       RssDelta 0           
+
+
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 27.312       RssDeltaLin 0.55195     
+--FindKnotBegin-- iPred 2 iNewCol 5 RssBeforeAddingHinge 27.8644 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       27.297 RssDelta      0.56749 Cut      0.92821 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       27.254 RssDelta      0.61084 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       27.267 RssDelta      0.59757 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   32 RssWithKnot       27.206 RssDelta      0.65808 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       27.228 RssDelta      0.63652 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       27.308 RssDelta      0.55613 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       27.311 RssDelta      0.55322 Cut      0.69104 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       27.299 RssDelta      0.56499 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       27.269 RssDelta      0.59515 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot        27.26 RssDelta      0.60442 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       27.252 RssDelta      0.61229 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot         27.1 RssDelta      0.76443 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   23 RssWithKnot        26.95 RssDelta      0.91405 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   22 RssWithKnot       26.945 RssDelta      0.91899 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   21 RssWithKnot       26.931 RssDelta      0.93339 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   20 RssWithKnot       26.878 RssDelta      0.98641 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   19 RssWithKnot       26.871 RssDelta      0.99328 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   18 RssWithKnot       27.088 RssDelta      0.77614 Cut      0.31738 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot        27.17 RssDelta      0.69438 Cut      0.27714 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       27.174 RssDelta      0.69008 Cut      0.27531 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       27.189 RssDelta      0.67574 Cut      0.21715 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       27.147 RssDelta      0.71753 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       27.145 RssDelta      0.71954 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       27.136 RssDelta      0.72798 Cut      0.20077 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot        27.13 RssDelta      0.73434 Cut      0.19565 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       27.122 RssDelta      0.74216 Cut      0.19017 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       27.118 RssDelta      0.74601 Cut      0.17267 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    8 RssWithKnot        27.17 RssDelta      0.69419 Cut      0.14769 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    7 RssWithKnot        27.19 RssDelta       0.6744 Cut      0.12977 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       27.186 RssDelta      0.67881 Cut      0.12876 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       27.188 RssDelta       0.6767 Cut       0.1272 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       27.312 RssDelta      0.55195 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       27.312 RssDelta      0.55195 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       27.312 RssDelta      0.55195 Cut     0.026943 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 27.312       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+4     -0.3885 0.2916      0.08769    2           x1     0.20077  4   5     3   2 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 6    RssDelta 0 MaxLegalRssDelta 25.0431
+|Parent 4                                                       skip (degree of term would be 3)
+|Parent 5                                                       skip (degree of term would be 3)
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut      0.01688< Rss 24.795       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 6 RssBeforeAddingHinge 24.7952 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 1 bx1   0.7075
+--FindKnot--Case   34 RssWithKnot       24.757 RssDelta     0.037971 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot        24.66 RssDelta      0.13567 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       24.514 RssDelta       0.2807 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot        24.54 RssDelta       0.2552 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       24.724 RssDelta     0.071209 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 RssWithKnot       24.762 RssDelta     0.033527 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 iSpan 1 bx1   0.0000
+--FindKnot--Case   26 RssWithKnot       24.769 RssDelta     0.025927 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       24.772 RssDelta      0.02366 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot        24.79 RssDelta    0.0052975 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       24.795 RssDelta   1.7107e-06 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       24.795 RssDelta    1.242e-05 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       24.795 RssDelta   0.00014161 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       24.795 RssDelta    0.0004282 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       24.794 RssDelta   0.00075468 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       24.795 RssDelta            0 Cut      0.31738 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       24.795 RssDelta            0 Cut      0.27714 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       24.795 RssDelta            0 Cut      0.27531 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       24.795 RssDelta            0 Cut      0.21715 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   14 iSpan 1 bx1   0.0000
+--FindKnot--Case   13 iSpan 1 bx1   0.0000
+--FindKnot--Case   12 RssWithKnot       24.795 RssDelta            0 Cut      0.20077 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       24.795 RssDelta            0 Cut      0.19565 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       24.795 RssDelta            0 Cut      0.19017 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       24.795 RssDelta            0 Cut      0.17267 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       24.795 RssDelta            0 Cut      0.14769 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       24.795 RssDelta            0 Cut      0.12977 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       24.795 RssDelta            0 Cut      0.12876 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 RssWithKnot       24.795 RssDelta            0 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       24.795 RssDelta            0 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   32 Cut       0.8022  Rss 24.514       RssDelta 0.2807          best for term
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut      0.01688< Rss 24.795       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 6 RssBeforeAddingHinge 24.7952 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 2 bx1   0.0000
+--FindKnot--Case   32 iSpan 2 bx1   0.0000
+--FindKnot--Case   31 iSpan 2 bx1   0.0000
+--FindKnot--Case   30 iSpan 2 bx1   0.0000
+--FindKnot--Case   29 iSpan 1 bx1   0.0388
+--FindKnot--Case   28 iSpan 1 bx1   0.0000
+--FindKnot--Case   27 RssWithKnot        22.43 RssDelta       2.3649 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnot--Case   24 iSpan 1 bx1   0.0000
+--FindKnot--Case   23 iSpan 1 bx1   0.0000
+--FindKnot--Case   22 iSpan 1 bx1   0.0000
+--FindKnot--Case   21 iSpan 1 bx1   0.0000
+--FindKnot--Case   20 iSpan 1 bx1   0.0000
+--FindKnot--Case   19 iSpan 1 bx1   0.0000
+--FindKnot--Case   18 iSpan 1 bx1   0.0000
+--FindKnot--Case   17 iSpan 1 bx1   0.0000
+--FindKnot--Case   16 iSpan 1 bx1   0.0000
+--FindKnot--Case   15 iSpan 1 bx1   0.0000
+--FindKnot--Case   14 RssWithKnot       21.841 RssDelta       2.9545 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   13 RssWithKnot        21.83 RssDelta       2.9652 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   12 iSpan 1 bx1   0.0000
+--FindKnot--Case   11 iSpan 1 bx1   0.0000
+--FindKnot--Case   10 iSpan 1 bx1   0.0000
+--FindKnot--Case    9 iSpan 1 bx1   0.0000
+--FindKnot--Case    8 iSpan 1 bx1   0.0000
+--FindKnot--Case    7 iSpan 1 bx1   0.0000
+--FindKnot--Case    6 iSpan 1 bx1   0.0000
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 iSpan 1 bx1   0.0000
+--FindKnot--Case    3 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   13 Cut       0.2022  Rss 21.83        RssDelta 2.9652          best for term
+
+
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 24.795       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 6 RssBeforeAddingHinge 24.7952 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       22.478 RssDelta       2.3172 Cut      0.94833 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot        23.87 RssDelta      0.92517 Cut      0.90613 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 RssWithKnot       24.119 RssDelta      0.67607 Cut      0.90143 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   32 RssWithKnot       24.576 RssDelta      0.21936 Cut      0.89576 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 RssWithKnot       24.795 RssDelta            0 Cut      0.86733 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       24.127 RssDelta      0.66777 Cut      0.84589 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot        24.49 RssDelta      0.30542 Cut      0.81674 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       24.444 RssDelta      0.35145 Cut      0.80514 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       24.085 RssDelta      0.71001 Cut      0.73925 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       23.927 RssDelta      0.86864 Cut      0.67336 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       23.952 RssDelta      0.84355 Cut      0.67036 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       24.009 RssDelta      0.78667 Cut      0.66284 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       24.544 RssDelta      0.25153 Cut       0.6015 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot        24.67 RssDelta      0.12534 Cut      0.55373 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       24.665 RssDelta      0.13028 Cut      0.46707 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       24.665 RssDelta      0.13042 Cut       0.4663 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       24.665 RssDelta      0.13027 Cut      0.45972 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       24.637 RssDelta      0.15827 Cut      0.42995 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       24.604 RssDelta      0.19129 Cut      0.36899 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       24.543 RssDelta      0.25235 Cut      0.35327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       24.521 RssDelta       0.2737 Cut      0.34575 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       24.493 RssDelta      0.30186 Cut      0.33932 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       24.385 RssDelta       0.4103 Cut      0.30871 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       23.904 RssDelta      0.89078 Cut       0.2353 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       24.795 RssDelta            0 Cut      0.15982 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       24.795 RssDelta            0 Cut      0.14793 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       24.795 RssDelta            0 Cut      0.13797 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       24.795 RssDelta            0 Cut      0.12857 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       24.795 RssDelta            0 Cut     0.089237 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       24.795 RssDelta            0 Cut     0.083117 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       24.795 RssDelta            0 Cut     0.070421 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       24.795 RssDelta            0 Cut      0.06192 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       24.795 RssDelta            0 Cut     0.054668 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       24.795 RssDelta            0 Cut     0.033075 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 24.795       RssDelta 0           
+
+
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 21.938       RssDeltaLin 2.8574      
+--FindKnotBegin-- iPred 2 iNewCol 7 RssBeforeAddingHinge 24.7952 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       21.936 RssDelta       2.8597 Cut      0.92821 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       21.908 RssDelta       2.8867 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       21.858 RssDelta       2.9369 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       21.805 RssDelta       2.9901 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       21.839 RssDelta       2.9561 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       21.931 RssDelta       2.8645 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       21.925 RssDelta       2.8705 Cut      0.69104 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       21.905 RssDelta       2.8899 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       21.882 RssDelta       2.9129 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       21.874 RssDelta       2.9215 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       21.864 RssDelta       2.9308 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       21.733 RssDelta       3.0626 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   23 RssWithKnot       21.697 RssDelta       3.0981 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   22 RssWithKnot       21.696 RssDelta        3.099 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   21 RssWithKnot       21.734 RssDelta       3.0609 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       21.735 RssDelta       3.0604 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       21.781 RssDelta       3.0137 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       21.374 RssDelta       3.4213 Cut      0.31738 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   17 RssWithKnot       20.687 RssDelta       4.1081 Cut      0.27714 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   16 RssWithKnot       20.645 RssDelta       4.1497 Cut      0.27531 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   15 RssWithKnot       19.794 RssDelta       5.0011 Cut      0.21715 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   14 RssWithKnot       19.926 RssDelta       4.8695 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       19.918 RssDelta       4.8768 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       19.951 RssDelta       4.8439 Cut      0.20077 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.19565 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.19017 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.17267 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.14769 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.12977 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.12876 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       21.938 RssDelta       2.8574 Cut       0.1272 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       21.938 RssDelta       2.8574 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       21.938 RssDelta       2.8574 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       21.938 RssDelta       2.8574 Cut     0.026943 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   15 Cut       0.2171  Rss 19.794       RssDelta 5.0011          best for term
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+6     -0.7320 0.4345       0.1429    2           x1     0.21715  6   7         1 
+
+-----------------------------------------------------------------------------
+|FindTerm: Searching for new term 8    RssDelta 0 MaxLegalRssDelta 19.992
+|Parent 4                                                       skip (degree of term would be 3)
+
+
+|Parent 6  Pred 1  Case   -1 Cut      0.02459< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 1 bx1   0.4047
+--FindKnot--Case   33 RssWithKnot       18.756 RssDelta       1.0378 Cut      0.90143 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 iSpan 1 bx1   0.0000
+--FindKnot--Case   30 iSpan 1 bx1   0.0000
+--FindKnot--Case   29 RssWithKnot       17.083 RssDelta       2.7107 Cut      0.81674 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   28 RssWithKnot       17.107 RssDelta       2.6876 Cut      0.80514 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 iSpan 1 bx1   0.0000
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnot--Case   24 RssWithKnot       18.022 RssDelta       1.7718 Cut      0.66284 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       18.055 RssDelta       1.7392 Cut       0.6015 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 iSpan 1 bx1   0.0000
+--FindKnot--Case   21 RssWithKnot       18.639 RssDelta       1.1549 Cut      0.46707 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       18.643 RssDelta       1.1508 Cut       0.4663 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 iSpan 1 bx1   0.0000
+--FindKnot--Case   18 RssWithKnot       18.835 RssDelta      0.95868 Cut      0.42995 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 iSpan 1 bx1   0.0000
+--FindKnot--Case   16 RssWithKnot       19.307 RssDelta       0.4873 Cut      0.35327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       19.345 RssDelta      0.44881 Cut      0.34575 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       19.383 RssDelta      0.41112 Cut      0.33932 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 iSpan 1 bx1   0.0000
+--FindKnot--Case   12 RssWithKnot        19.79 RssDelta    0.0036447 Cut       0.2353 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       19.793 RssDelta     0.001204 Cut      0.15982 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       19.793 RssDelta    0.0015054 Cut      0.14793 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       19.788 RssDelta      0.00593 Cut      0.13797 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       19.772 RssDelta     0.022107 Cut      0.12857 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       19.794 RssDelta            0 Cut     0.089237 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 iSpan 1 bx1   0.0000
+--FindKnot--Case    5 RssWithKnot       19.794 RssDelta            0 Cut     0.070421 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 iSpan 1 bx1   0.0000
+--FindKnot--Case    3 RssWithKnot       19.794 RssDelta            0 Cut     0.054668 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 6  Pred 1  Case   29 Cut       0.8167  Rss 17.083       RssDelta 2.7107          best for term
+
+|Parent 6  Pred 2                                               skip (pred is in parent)
+|Parent 5                                                       skip (degree of term would be 3)
+
+
+|Parent 7  Pred 1  Case   -1 Cut      0.02459< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 1 bx1   0.0126
+--FindKnot--Case   34 iSpan 1 bx1   0.0000
+--FindKnot--Case   33 iSpan 1 bx1   0.0000
+--FindKnot--Case   32 iSpan 1 bx1   0.0000
+--FindKnot--Case   31 RssWithKnot       19.305 RssDelta      0.48908 Cut      0.86733 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   30 RssWithKnot       18.859 RssDelta      0.93522 Cut      0.84589 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 iSpan 1 bx1   0.0000
+--FindKnot--Case   27 RssWithKnot       18.365 RssDelta       1.4294 Cut      0.73925 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   26 RssWithKnot       18.255 RssDelta       1.5388 Cut      0.67336 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   25 RssWithKnot       18.258 RssDelta       1.5359 Cut      0.67036 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 iSpan 1 bx1   0.0000
+--FindKnot--Case   23 iSpan 1 bx1   0.0000
+--FindKnot--Case   22 RssWithKnot       17.997 RssDelta       1.7966 Cut      0.55373 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   21 iSpan 1 bx1   0.0000
+--FindKnot--Case   20 iSpan 1 bx1   0.0000
+--FindKnot--Case   19 RssWithKnot       17.591 RssDelta       2.2033 Cut      0.45972 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   18 iSpan 1 bx1   0.0000
+--FindKnot--Case   17 RssWithKnot       17.462 RssDelta       2.3317 Cut      0.36899 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   16 iSpan 1 bx1   0.0000
+--FindKnot--Case   15 iSpan 1 bx1   0.0000
+--FindKnot--Case   14 iSpan 1 bx1   0.0000
+--FindKnot--Case   13 RssWithKnot       17.509 RssDelta       2.2847 Cut      0.30871 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 iSpan 1 bx1   0.0000
+--FindKnot--Case   11 iSpan 1 bx1   0.0000
+--FindKnot--Case   10 iSpan 1 bx1   0.0000
+--FindKnot--Case    9 iSpan 1 bx1   0.0000
+--FindKnot--Case    8 iSpan 1 bx1   0.0000
+--FindKnot--Case    7 iSpan 1 bx1   0.0000
+--FindKnot--Case    6 RssWithKnot       19.794 RssDelta            0 Cut     0.083117 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 RssWithKnot       19.794 RssDelta            0 Cut      0.06192 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 7  Pred 1  Case   -1 Cut      0.02459< Rss 19.794       RssDelta 0           
+
+|Parent 7  Pred 2                                               skip (pred is in parent)
+
+
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 1 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       17.144 RssDelta       2.6506 Cut      0.94833 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       18.083 RssDelta       1.7109 Cut      0.90613 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   33 RssWithKnot       18.204 RssDelta       1.5902 Cut      0.90143 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   32 RssWithKnot       18.444 RssDelta       1.3498 Cut      0.89576 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   31 RssWithKnot       19.794 RssDelta            0 Cut      0.86733 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       19.788 RssDelta    0.0064009 Cut      0.84589 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       19.778 RssDelta     0.016381 Cut      0.81674 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       19.794 RssDelta   0.00011465 Cut      0.80514 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot       19.525 RssDelta      0.26891 Cut      0.73925 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   26 RssWithKnot       19.316 RssDelta      0.47798 Cut      0.67336 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       19.332 RssDelta      0.46236 Cut      0.67036 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       19.356 RssDelta      0.43808 Cut      0.66284 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       19.625 RssDelta      0.16916 Cut       0.6015 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       19.741 RssDelta     0.053349 Cut      0.55373 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       19.734 RssDelta     0.060298 Cut      0.46707 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       19.734 RssDelta     0.060545 Cut       0.4663 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot       19.735 RssDelta     0.059534 Cut      0.45972 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       19.711 RssDelta     0.082668 Cut      0.42995 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       19.695 RssDelta     0.098935 Cut      0.36899 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       19.649 RssDelta      0.14499 Cut      0.35327 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       19.631 RssDelta      0.16324 Cut      0.34575 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       19.606 RssDelta      0.18802 Cut      0.33932 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       19.521 RssDelta      0.27281 Cut      0.30871 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       19.107 RssDelta      0.68702 Cut       0.2353 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       19.794 RssDelta            0 Cut      0.15982 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       19.794 RssDelta            0 Cut      0.14793 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       19.794 RssDelta            0 Cut      0.13797 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       19.794 RssDelta            0 Cut      0.12857 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       19.794 RssDelta            0 Cut     0.089237 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       19.794 RssDelta            0 Cut     0.083117 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       19.794 RssDelta            0 Cut     0.070421 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       19.794 RssDelta            0 Cut      0.06192 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       19.794 RssDelta            0 Cut     0.054668 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       19.794 RssDelta            0 Cut     0.033075 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 1  Case   -1 Cut      0.02459< Rss 19.794       RssDelta 0           
+
+
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 1 nStartSpan 1
+--FindKnot--Case   35 RssWithKnot       19.787 RssDelta    0.0068171 Cut      0.92821 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   34 RssWithKnot       19.748 RssDelta     0.045699 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       19.733 RssDelta     0.061272 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       19.675 RssDelta      0.11931 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       19.707 RssDelta     0.086743 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       19.781 RssDelta     0.012622 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 RssWithKnot       19.771 RssDelta     0.023022 Cut      0.69104 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   28 RssWithKnot       19.686 RssDelta       0.1076 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 RssWithKnot        19.61 RssDelta      0.18452 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   26 RssWithKnot       19.581 RssDelta       0.2133 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   25 RssWithKnot       19.555 RssDelta      0.23888 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   24 RssWithKnot       19.195 RssDelta      0.59933 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   23 RssWithKnot       18.983 RssDelta      0.81142 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   22 RssWithKnot       18.977 RssDelta       0.8173 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   21 RssWithKnot       18.992 RssDelta      0.80171 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       18.894 RssDelta       0.9001 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   19 RssWithKnot       18.896 RssDelta      0.89833 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       19.794 RssDelta            0 Cut      0.31738 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       19.794 RssDelta            0 Cut      0.27714 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       19.794 RssDelta            0 Cut      0.27531 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       19.794 RssDelta            0 Cut      0.21715 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   14 RssWithKnot       19.794 RssDelta            0 Cut      0.20451 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   13 RssWithKnot       19.794 RssDelta            0 Cut      0.20222 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   12 RssWithKnot       19.794 RssDelta            0 Cut      0.20077 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       19.794 RssDelta            0 Cut      0.19565 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       19.794 RssDelta            0 Cut      0.19017 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       19.794 RssDelta            0 Cut      0.17267 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       19.794 RssDelta            0 Cut      0.14769 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       19.794 RssDelta            0 Cut      0.12977 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       19.794 RssDelta            0 Cut      0.12876 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 RssWithKnot       19.794 RssDelta            0 Cut       0.1272 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    4 RssWithKnot       19.794 RssDelta            0 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       19.794 RssDelta            0 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    2 RssWithKnot       19.794 RssDelta            0 Cut     0.026943 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 1  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDelta 0           
+
+|Parent 2  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 2  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 2 bx1   0.0000
+--FindKnot--Case   34 iSpan 2 bx1   0.0000
+--FindKnot--Case   33 iSpan 2 bx1   0.0000
+--FindKnot--Case   32 iSpan 2 bx1   0.0000
+--FindKnot--Case   31 iSpan 2 bx1   0.0000
+--FindKnot--Case   30 iSpan 2 bx1   0.0000
+--FindKnot--Case   29 iSpan 1 bx1   0.0388
+--FindKnot--Case   28 iSpan 1 bx1   0.0000
+--FindKnot--Case   27 RssWithKnot        18.32 RssDelta       1.4736 Cut      0.59839 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   26 iSpan 1 bx1   0.0000
+--FindKnot--Case   25 iSpan 1 bx1   0.0000
+--FindKnot--Case   24 iSpan 1 bx1   0.0000
+--FindKnot--Case   23 iSpan 1 bx1   0.0000
+--FindKnot--Case   22 iSpan 1 bx1   0.0000
+--FindKnot--Case   21 iSpan 1 bx1   0.0000
+--FindKnot--Case   20 iSpan 1 bx1   0.0000
+--FindKnot--Case   19 iSpan 1 bx1   0.0000
+--FindKnot--Case   18 iSpan 1 bx1   0.0000
+--FindKnot--Case   17 iSpan 1 bx1   0.0000
+--FindKnot--Case   16 iSpan 1 bx1   0.0000
+--FindKnot--Case   15 iSpan 1 bx1   0.0000
+--FindKnot--Case   14 RssWithKnot       17.684 RssDelta       2.1098 Cut      0.20451 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   13 RssWithKnot       17.684 RssDelta       2.1099 Cut      0.20222 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   12 iSpan 1 bx1   0.0000
+--FindKnot--Case   11 iSpan 1 bx1   0.0000
+--FindKnot--Case   10 iSpan 1 bx1   0.0000
+--FindKnot--Case    9 iSpan 1 bx1   0.0000
+--FindKnot--Case    8 iSpan 1 bx1   0.0000
+--FindKnot--Case    7 iSpan 1 bx1   0.0000
+--FindKnot--Case    6 iSpan 1 bx1   0.0000
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 iSpan 1 bx1   0.0000
+--FindKnot--Case    3 iSpan 1 bx1   0.0000
+--FindKnotEnd--
+|Parent 2  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDelta 0           
+
+|Parent 3  Pred 1                                               skip (pred is in parent)
+
+
+|Parent 3  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDeltaLin 0           
+--FindKnotBegin-- iPred 2 iNewCol 8 RssBeforeAddingHinge 19.7941 nMinSpan 1 nEndSpan 2 nStartSpan 2
+--FindKnot--Case   35 iSpan 1 bx1   0.7075
+--FindKnot--Case   34 RssWithKnot       19.748 RssDelta     0.046577 Cut      0.89594 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   33 RssWithKnot       19.702 RssDelta      0.09189 Cut      0.83912 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   32 RssWithKnot       19.625 RssDelta      0.16923 Cut       0.8022 bx1G 1 CovColG 1 TolG 1 MaxG 1  best
+--FindKnot--Case   31 RssWithKnot       19.655 RssDelta      0.13879 Cut      0.78804 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   30 RssWithKnot       19.793 RssDelta    0.0012216 Cut      0.69736 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   29 iSpan 1 bx1   0.0000
+--FindKnot--Case   28 RssWithKnot        19.79 RssDelta    0.0038088 Cut      0.62188 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   27 iSpan 1 bx1   0.0000
+--FindKnot--Case   26 RssWithKnot       19.786 RssDelta    0.0080825 Cut       0.5916 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   25 RssWithKnot       19.784 RssDelta     0.010023 Cut      0.58788 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   24 RssWithKnot       19.751 RssDelta     0.043439 Cut      0.54908 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   23 RssWithKnot       19.705 RssDelta     0.089332 Cut      0.51238 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   22 RssWithKnot       19.703 RssDelta     0.090683 Cut      0.51139 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   21 RssWithKnot       19.713 RssDelta     0.080817 Cut      0.49928 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   20 RssWithKnot       19.687 RssDelta      0.10703 Cut      0.48362 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   19 RssWithKnot        19.68 RssDelta      0.11433 Cut      0.46891 bx1G 1 CovColG 1 TolG 1 MaxG 1 
+--FindKnot--Case   18 RssWithKnot       19.794 RssDelta            0 Cut      0.31738 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   17 RssWithKnot       19.794 RssDelta            0 Cut      0.27714 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   16 RssWithKnot       19.794 RssDelta            0 Cut      0.27531 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   15 RssWithKnot       19.794 RssDelta            0 Cut      0.21715 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   14 iSpan 1 bx1   0.0000
+--FindKnot--Case   13 iSpan 1 bx1   0.0000
+--FindKnot--Case   12 RssWithKnot       19.794 RssDelta            0 Cut      0.20077 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   11 RssWithKnot       19.794 RssDelta            0 Cut      0.19565 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case   10 RssWithKnot       19.794 RssDelta            0 Cut      0.19017 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    9 RssWithKnot       19.794 RssDelta            0 Cut      0.17267 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    8 RssWithKnot       19.794 RssDelta            0 Cut      0.14769 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    7 RssWithKnot       19.794 RssDelta            0 Cut      0.12977 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    6 RssWithKnot       19.794 RssDelta            0 Cut      0.12876 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    5 iSpan 1 bx1   0.0000
+--FindKnot--Case    4 RssWithKnot       19.794 RssDelta            0 Cut      0.03405 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnot--Case    3 RssWithKnot       19.794 RssDelta            0 Cut     0.028689 bx1G 1 CovColG 1 TolG 0 MaxG 1 
+--FindKnotEnd--
+|Parent 3  Pred 2  Case   -1 Cut      0.01688< Rss 19.794       RssDelta 0           
+
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+8     -0.9524 0.5119      0.07745    1           x0     0.81674  8         6   2 final (reached nk 9)
+
+-----------------------------------------------------------------------------
+
+Reached nk 9
+After forward pass GRSq -0.952 RSq 0.512
+Forward pass complete: 9 terms, 8 terms used
+
+Prune none penalty 3 nprune null: selected 8 of 8 terms, and 2 of 2 preds
+After pruning pass GRSq -0.952 RSq 0.512
