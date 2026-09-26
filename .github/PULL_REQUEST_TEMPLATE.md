@@ -1,50 +1,24 @@
-## Description
+<!-- Fill in every section. The title is the squash-merge subject, so it follows Conventional Commits. -->
 
-<!-- Provide a clear and concise description of what this PR does -->
+## Task
 
-## Type of Change
+<!-- The task ID and its issue, for example "T07, closes #12". -->
 
-<!-- Check the relevant options -->
+## Plan sections
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Refactoring (no functional change)
-- [ ] CI/CD or infrastructure change
-- [ ] Performance improvement
+<!-- The sections of VALIDATION_PLAN.md and docs/algorithm.md that this change implements. -->
 
-## Testing
+## Summary
 
-<!-- Describe the tests you ran and how to reproduce them -->
+## Evidence
 
-- [ ] Unit tests pass locally
-- [ ] Integration tests pass (if applicable)
-- [ ] Code coverage meets requirements (>90%)
-- [ ] No ruff/linting violations
-- [ ] ty type checking passes
+<!-- The commands you ran and their results, the head SHA and the gate B log path. -->
 
-## Checklist
+## Clean room
 
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published
+<!-- A statement that no earth source code was read or ported. -->
 
-## Related Issues
+## Risks and follow-ups
 
-<!-- Link any related issues using GitHub's linking syntax -->
-
-Closes #
-
-## Screenshots (if applicable)
-
-<!-- Add screenshots or GIFs for UI changes -->
-
-## Additional Notes
-
-<!-- Add any other context about the PR here -->
+<!-- Agents end the body with the line below. -->
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
