@@ -1,56 +1,150 @@
+# Lean CI for pymars 2.0 (VALIDATION_PLAN.md, "Inherited workflows and CI"):
+# ruff, the fast tests on three operating systems, the slow tests, the lowest
+# direct dependency versions and a wheel build. No secrets and no publishing.
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The uv release that made uv.lock; the local gates use the same one.
+  UV_VERSION: "0.11.11"
+  HYPOTHESIS_PROFILE: ci
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  VECLIB_MAXIMUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  test:
+  lint:
+    name: ruff and uv.lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          cache-suffix: ${{ github.job }}
+      - run: uv lock --check
+      - run: uv run --frozen ruff check --output-format=github
+      - run: uv run --frozen ruff format --check
+
+  fast:
+    name: fast tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12']
-        exclude:
-          # Reduce matrix size: only test all Python versions on Ubuntu
-          - os: macos-latest
-            python-version: '3.10'
-          - os: windows-latest
-            python-version: '3.10'
-
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - { os: macos-latest, python: "3.12" }
+          - { os: macos-latest, python: "3.14" }
+          - { os: windows-latest, python: "3.12" }
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+          cache-suffix: ${{ github.job }}
+      - run: uv run --frozen pytest -m "not slow"
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --extra dev
-
-      - name: Run tests
+  slow:
+    name: slow tests (ubuntu-latest, Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          cache-suffix: ${{ github.job }}
+      - name: Run the slow tests (pytest exit code 5 means that none exist yet)
         run: |
-          uv run pytest tests/ -q --tb=short -x --cov-fail-under=90
+          status=0
+          uv run --frozen pytest -m slow || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No slow tests are collected yet."
+            status=0
+          fi
+          exit "$status"
 
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v5
+  lowest:
+    name: lowest direct dependencies (ubuntu-latest, Python 3.10)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.10"
+          cache-suffix: ${{ github.job }}
+      - name: Install numpy, scipy and scikit-learn at their lowest allowed versions
+        run: |
+          uv venv
+          uv pip install --resolution lowest-direct -r pyproject.toml
+          uv pip freeze | tee "$RUNNER_TEMP/lowest.txt"
+          uv pip install --no-deps .
+      - name: Install the test tools without changing those versions
+        run: uv pip install --constraint "$RUNNER_TEMP/lowest.txt" pytest hypothesis pandas
+      - run: .venv/bin/pytest -m "not slow"
+
+  wheel:
+    name: wheel build and smoke check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          cache-suffix: ${{ github.job }}
+      - run: uv build
+      - name: Check that the wheel is pure Python
+        run: ls dist/mars_earth-*-py3-none-any.whl
+      - name: Install the wheel into a fresh venv and run the smoke check
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-venv"
+          uv pip install --python "$RUNNER_TEMP/wheel-venv/bin/python" dist/mars_earth-*-py3-none-any.whl
+          "$RUNNER_TEMP/wheel-venv/bin/python" -I -c '
+          import importlib.metadata
+          import pymars
+          assert pymars.__version__ == importlib.metadata.version("mars-earth")
+          assert "site-packages" in pymars.__file__, pymars.__file__
+          if hasattr(pymars, "Earth"):
+              import numpy as np
+              X = np.random.default_rng(0).uniform(size=(100, 3))
+              y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
+              assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
+          print("smoke check passed:", pymars.__version__, pymars.__file__)
+          '
