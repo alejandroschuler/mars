@@ -1,10 +1,13 @@
 """Tests for blackbox.py. Every test here calls ``Rscript blackbox.R`` for
-real, so all of them need R and the earth (and nnet) packages; they are not
-part of gate A/B."""
+real, so all of them need R and the earth (and nnet) packages; they are
+marked ``external`` (gate A/B and CI exclude it; gate C and manual runs
+include it)."""
 
 import blackbox as bb
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.external
 
 
 @pytest.fixture

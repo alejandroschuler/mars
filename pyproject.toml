@@ -80,7 +80,7 @@ known-first-party = ["pymars"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests", "validation/sims/tests"]
+testpaths = ["tests", "validation/sims/tests", "validation/harness/tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 markers = [
     "slow: a long test; gate A and the fast CI jobs skip it",

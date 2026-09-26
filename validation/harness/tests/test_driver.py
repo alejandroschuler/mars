@@ -1,10 +1,9 @@
 """Tests for driver.py.
 
 The CSV-writing and column-naming tests need no R. ``TestRunEarth`` and
-``test_run_earth_reports_the_r_error`` call ``Rscript fit_earth.R`` for real,
-so they need R and the earth package (VALIDATION_PLAN.md's harness section
-says a conformance run needs both); run them explicitly, they are not part
-of gate A/B.
+``test_run_earth_reports_the_r_error`` call ``Rscript fit_earth.R`` for
+real, so they need R and the earth package; both are marked ``external``
+(gate A/B and CI exclude it; gate C and manual runs include it).
 """
 
 import math
@@ -124,6 +123,7 @@ class TestVersions:
         assert info["earth_version"] == "5.3.4"
 
 
+@pytest.mark.external
 class TestRunEarth:
     """These call Rscript fit_earth.R for real; they need R and earth."""
 
@@ -272,6 +272,7 @@ class TestRunEarth:
         assert "FindKnotBegin" in trace_file.read_text()
 
 
+@pytest.mark.external
 def test_run_earth_reports_the_r_error(tmp_path):
     rng = np.random.default_rng(0)
     X = rng.uniform(size=(20, 1))
