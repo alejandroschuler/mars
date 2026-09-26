@@ -33,5 +33,13 @@ Notes for the trace parser (T02):
 | bb09 | the final coefficients, the cut stored for a linear factor, and R's rule for dependent columns | TERM-1 to TERM-3, LA-4, PRUNE-8 |
 | bb10 | the termination codes | CORE-4, LIMIT-2 |
 | bb11 | the collinearity tolerance and when it changes | LA-3 |
+| bb12 | how the forward pass chooses a candidate: the RSS reduction, the penalty, the limit MaxLegalRssDelta | FWD-3, FWD-4 |
+| bb13 | the terms that a forward step adds: pairs, single hinges, the linear candidate | FWD-3, FWD-6 |
 | bb14 | when earth runs a pair search and when a single-hinge search; the RSS of a single-hinge search | LA-2, LA-7, KNOT-5 |
 | bb15 | the pruning pass with two or more responses; `pmethod = "none"` with `nprune` | PRUNE-3, PRUNE-4, PRUNE-7, LIMIT-3 |
+| bb16 | the Fast MARS queue: ranks, ageing, `fast_k`, slots, updates | FAST-1 to FAST-6, FWD-2, STOP-2 |
+| bb17 | how earth scales the response in the forward pass | FWD-10, RESP-3 |
+| bb18 | exact ties between candidates in the forward pass | FWD-5, EDGE-4 |
+| bb19 | the stopping rules and their order | STOP-1 to STOP-6 |
+| bb20 | several responses in the forward pass | RESP-1, RESP-2, STOP-6, FWD-4 |
+| bb22 | small and degenerate inputs, constant and duplicated covariates, non-finite values | EDGE-1 to EDGE-5, ERR-1 |
