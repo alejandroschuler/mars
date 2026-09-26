@@ -1,3 +1,0 @@
-[submodule ".agents/plugins/conductor"]
-	path = .agents/plugins/conductor
-	url = https://github.com/gemini-cli-extensions/conductor.git

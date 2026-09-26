@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0.dev0] - unreleased
+
+The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code will follow a written specification and will be checked against the R package earth, as VALIDATION_PLAN.md describes. This version has no estimators yet. The git tag `legacy-1.0.4-head` keeps the legacy code, upstream commit d68b54a with the version string 1.0.4.
+
+### Changed
+- The build backend is hatchling. The package is pure Python and depends only on numpy 1.23.5 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14.
+- A lean CI workflow replaces the 21 inherited workflows.
+
+### Removed
+- All legacy code in `pymars/`, with `EarthCV`, `GLMEarth`, `CategoricalImputer`, `categorical_features`, `feature_importance_type`, the plots, `explain.py`, the portable JSON model format and the command-line tool.
+- `pymars_runtime/`, the Rust crate, the bindings for R, Julia, Go, TypeScript and C#, and the Go code at the root.
+- The old tests, whose fixtures compared the code only with its own stored outputs.
+- The documentation site, the agent and planning files, the packaging recipes, the scripts, and the release and security tooling.
+
 ## [1.0.1] - 2025-11-08
 ### Fixed
 - Addressed sklearn deprecation warnings by updating `force_all_finite` parameter to `ensure_all_finite` with backward compatibility

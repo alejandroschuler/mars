@@ -1,331 +1,101 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mars-earth"
-version = "1.0.4"
-description = "A Pure Python Implementation of Multivariate Adaptive Regression Splines"
+version = "2.0.0.dev0"
+description = "Multivariate adaptive regression splines (MARS) in pure Python, with a scikit-learn API"
 readme = "README.md"
-authors = [
-    {name = "Dylan A Mordaunt", email = "dylan@mordaunt.dev"}
-]
-maintainers = [
-    {name = "Dylan A Mordaunt", email = "dylan@mordaunt.dev"}
-]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = [
-    "numpy>=1.20.0",
-    "scikit-learn>=1.0.0",
-    "matplotlib>=3.4.0",
+authors = [
+    { name = "Dylan A Mordaunt", email = "dylan@mordaunt.dev" },
+    { name = "Alejandro Schuler" },
 ]
-keywords = [
-    "mars",
-    "multivariate adaptive regression splines",
-    "machine learning",
-    "scikit-learn",
-    "regression",
-    "classification",
-]
+keywords = ["mars", "multivariate adaptive regression splines", "earth", "scikit-learn", "regression"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+# dev/DECISIONS.md gives the reasons for these floors.
+dependencies = [
+    "numpy>=1.23.5",
+    "scipy>=1.9.3",
+    "scikit-learn>=1.6",
 ]
 
 [project.urls]
-Homepage = "https://github.com/edithatogo/mars"
-Documentation = "https://edithatogo.github.io/mars/"
-Repository = "https://github.com/edithatogo/mars"
-Changelog = "https://github.com/edithatogo/mars/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/edithatogo/mars/issues"
+Homepage = "https://github.com/alejandroschuler/mars"
+Repository = "https://github.com/alejandroschuler/mars"
+Issues = "https://github.com/alejandroschuler/mars/issues"
+Changelog = "https://github.com/alejandroschuler/mars/blob/main/CHANGELOG.md"
 
-[project.optional-dependencies]
-pandas = ["pandas>=1.3.0"]
-cli = ["pandas>=1.3.0", "click>=8.0.0", "rich>=12.0.0"]
-profiling = ["scalene>=1.5.0", "py-spy>=0.3.0"]
+[dependency-groups]
 dev = [
-    # Package management
-    "uv>=0.11.15",
-    # Testing
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-xdist>=3.0.0",
-    "pytest-benchmark>=4.0.0",
-    "pytest-sugar>=0.9.0",
-    "hypothesis>=6.90.0",
-    "mutmut>=2.4.0",
-    "nbmake>=1.4.0",
-    "diff-cover>=8.0.0",
-    # Linting & formatting
-    "ruff>=0.4.0",
-    "ty>=0.0.30",
-    "pre-commit>=3.6.0",
-    # Security
-    "bandit>=1.7.10",
-    "pip-audit>=2.9.0",
-    "msgpack>=1.2.0",
-    "click>=8.3.3",
-    "gitpython>=3.1.58",
-    "idna>=3.15",
-    "pillow>=12.3.0",
-    "pymdown-extensions>=10.21.3",
-    "tornado>=6.5.7",
-    "urllib3>=2.7.0",
-    # Documentation
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.5.0",
-    "mkdocstrings[python]>=0.24.0",
-    "mike>=2.0.0",
-    # Release
-    "python-semantic-release>=9.0.0",
-    # Other
-    "pandas>=1.3.0",
-    "tox>=4.11.0",
+    "pytest>=8",
+    "pytest-cov>=6",
+    "pytest-xdist>=3.6",
+    "hypothesis>=6.100",
+    "ruff>=0.9",
+    "pandas>=2",
+]
+# For the harness, the simulations and the benchmarks; never shipped.
+validation = [
+    "pandas>=2",
+    "joblib>=1.3",
+    "matplotlib>=3.8",
 ]
 
-[project.scripts]
-mars = "pymars.cli:main"
+[tool.hatch.build.targets.wheel]
+packages = ["pymars"]
 
-[build-system]
-requires = ["maturin>=1.8.0"]
-build-backend = "maturin"
+[tool.hatch.build.targets.sdist]
+include = ["/pymars", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md", "/CITATION.cff"]
 
-[tool.maturin]
-manifest-path = "rust-runtime/Cargo.toml"
-python-source = "."
-python-packages = ["pymars", "pymars_runtime"]
-
-[tool.setuptools]
-packages = ["pymars", "pymars.demos"]
-package-dir = {"" = "."}
-
-[tool.setuptools.dynamic]
-version = {attr = "pymars.__version__"}
-
-# ============================================================
-# Ruff configuration (comprehensive rules)
-# ============================================================
 [tool.ruff]
 line-length = 88
-target-version = "py39"
-src = ["pymars", "tests"]
+target-version = "py310"
+# The legacy prototypes stay as they were run, and the code in Markdown files
+# (which ruff 0.16 would format) is example text, so ruff leaves both alone.
+extend-exclude = ["validation/legacy", "*.md"]
 
 [tool.ruff.lint]
-select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "C",      # complexity (like mccabe)
-    "B",      # bugbear
-    "UP",     # pyupgrade
-    "YTT",    # flake8-2020
-    "BLE",    # flake8-blind-except
-    "S",      # flake8-bandit
-    "C9",     # mccabe complexity
-    "SIM",    # simplify code
-    "ARG",    # unused arguments
-    "PERF",   # performance anti-patterns
-    "RUF",    # ruff-specific rules
-    "PTH",    # use pathlib instead of os.path
-    "FLY",    # use f-strings
-    "RET",    # return statement analysis
-    "D",      # pydocstyle
-    "N",      # pep8-naming
-    "C4",     # flake8-comprehensions
-    "TCH",    # flake8-type-checking
-    "FA",     # flake8-future-annotations
-    "Q",      # flake8-quotes
-    "EM",     # flake8-errmsg
-    "TRY",    # tryceratops
-    "FURB",   # refurb
-    "PIE",    # flake8-pie
-]
-ignore = [
-    "ANN",    # Type annotations (handled by ty)
-    "S101",   # Use of assert (needed in tests)
-    "E501",   # Line length (handled by formatter)
-    "C901",   # Too complex (handled by mccabe)
-    "RUF013", # Implicit Optional (requires extensive code changes)
-    "RUF012", # Mutable class attributes should be annotated
-    "BLE001", # Blind except (existing code pattern)
-    "UP006",  # Use builtin type annotation
-    "UP035",  # Deprecated import
-    "PERF203",# try-except-inner (perf)
-    "F841",   # Local variable assigned but unused
-    "F821",   # Undefined name (forward references in type hints)
-    "E402",   # Module level import not at top of file
-    "B904",   # Raise from err (legacy code pattern)
-    "S301",   # Pickle unsafe (needed for model serialization)
-    "B007",   # Unused loop variable (test code)
-    "E702",   # Multiple statements on one line (semicolon) (test code)
-    "D105",   # Missing docstring in magic method
-    "D200",   # One-line docstring should fit on one line (formatter handles)
-    "D205",   # Missing blank line after docstring summary (style, handled manually)
-    "D203",   # 1 blank line required before class docstring (inconsistent with formatter)
-    "D204",   # 1 blank line required after class docstring (inconsistent with formatter)
-    "D212",   # Multi-line docstring summary should start at first line (inconsistent with formatter)
-    "D213",   # Multi-line docstring summary should start at second line (inconsistent with formatter)
-    "D400",   # First line should end with a period (style preference)
-    "D401",   # First line should be in imperative mood (style preference)
-    "D402",   # First line should not be a function signature
-    "D404",   # First word of the docstring should not be This
-    "D405",   # Section name should be properly capitalized
-    "D406",   # Section name should end with a newline
-    "D407",   # Section name should be underlined
-    "D408",   # Section underline should be in line length
-    "D409",   # Section underline should be in line length
-    "D410",   # Section blank line
-    "D411",   # Section blank line
-    "D412",   # Section blank line
-    "D413",   # Section blank line
-    "D414",   # Section has no content
-    "D415",   # Section punctuation
-    "D416",   # Section name should be in quotes
-    "D417",   # Missing argument descriptions in docstring
-    "PYI041", # Redundant `self` type in `__init__` parameter (typing convention)
-    "N802",   # Function name should be lowercase (C compat functions)
-    "N803",   # Argument name should be lowercase (X is sklearn convention)
-    "N806",   # Variable in function should be lowercase (test code)
-    "N815",   # Variable in class scope should be lowercase
-    "TRY300", # try-consider-else (style preference)
-    "TRY002", # Create your own exception
-    "TRY003", # Avoid specifying long messages outside exception class
-    "EM101",  # Exception must not use a string literal (assign to variable)
-    "EM102",  # Exception must not use a f-string literal (assign to variable)
-    "FURB113", # Reimplemented builtin
-    "PERF",   # Performance (requires refactoring)
-    "PTH",    # Use pathlib (requires refactoring)
-]
-
-fixable = ["ALL"]
-unfixable = []
-
-[tool.ruff.lint.mccabe]
-max-complexity = 10
-
-[tool.ruff.lint.per-file-ignores]
-"pymars/demos/*" = ["E501", "S101", "T201"]
-"tests/**" = ["S101", "ARG001", "PERF203"]
-"tests/e2e/**" = ["S603"]
-"scripts/*" = ["T201", "S101"]
+select = ["E", "W", "F", "I", "B", "UP", "C4", "SIM", "RUF", "NPY", "PIE", "N"]
+# Capital names such as X, Y and B follow scikit-learn and the math.
+ignore = ["N803", "N806"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["pymars"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
-# ============================================================
-# ty configuration (strict mode)
-# ============================================================
-[tool.ty.environment]
-python-version = "3.9"
-root = ["."]
-
-# ============================================================
-# pytest configuration
-# ============================================================
 [tool.pytest.ini_options]
-minversion = "7.0"
-addopts = [
-    "-ra",
-    "-q",
-    "--cov=pymars",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-    "--cov-report=html",
-    "--tb=short",
-    "--strict-markers",
-    "--strict-config",
-]
+minversion = "8.0"
 testpaths = ["tests"]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (sklearn pipeline, CLI, I/O)",
-    "e2e: End-to-end tests (complete workflows)",
-    "slow: Slow tests (skip with -m 'not slow')",
-    "golden: Golden master regression tests",
-]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+markers = ["slow: a long test; gate A and the fast CI jobs skip it"]
+xfail_strict = true
+# Warnings are errors, except deprecations that other packages raise.
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    "error::DeprecationWarning:pymars",
+    "error::PendingDeprecationWarning:pymars",
 ]
 
-# ============================================================
-# Coverage configuration
-# ============================================================
 [tool.coverage.run]
 source = ["pymars"]
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/venv/*",
-    "*/.venv/*",
-]
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-]
 fail_under = 90
 show_missing = true
-
-# ============================================================
-# python-semantic-release configuration
-# ============================================================
-[tool.semantic_release]
-version_variable = [
-    "pyproject.toml:version",
-    "pymars/__init__.py:__version__",
-]
-branch = "main"
-upload_to_pypi = true
-upload_to_release = true
-commit_message = "chore(release): {version} [skip ci]"
-tag_format = "v{version}"
-
-[tool.semantic_release.publish]
-dist_glob = "dist/*"
-upload_to_pypi = true
-upload_to_release = true
-
-[tool.semantic_release.changelog]
-changelog_file = "CHANGELOG.md"
-
-# ============================================================
-# Mutation testing configuration (mutmut)
-# ============================================================
-[tool.mutmut]
-paths_to_mutate = "pymars/"
-backup = false
-runner = "pytest -x"
-tests_dir = "tests/"
-
-# ============================================================
-# Benchmarks configuration
-# ============================================================
-[tool.pytest-benchmark]
-min_rounds = 5
-max_time = 1.0
-timer = "perf_counter"
-
-[dependency-groups]
-dev = [
-    "ty>=0.0.30",
-]
