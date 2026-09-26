@@ -16,6 +16,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:38 Started agent `t00-author` (opus) with `briefs/T00-bootstrap-author.md`.
 - 17:25 The first push of `t00-bootstrap` registered Actions workflows on the fork: `ci.yml` (from the branch) and the inherited `welcome.yml` (pull_request_target from `main`, which posted a welcome comment on PR #1). CI now runs on pull requests, so the merge rule "CI green" applies from PR #1 on. Draft PR #1 is open.
 - 17:30 Wake: 5-hour 27 %, weekly 46 %. Told `t00-author` that CI must pass on the final head.
+- 17:54 T00 author reported: PR #1 ready at a663d38; CoC contact fixed; gate B passed; CI 12/12. Started reviewer `rev-pr1-bootstrap`.
 
 ## Core-hour ledger
 

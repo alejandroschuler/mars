@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-25 16:40 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-25 17:54 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -35,7 +35,8 @@ P0 bootstrap (T00).
 
 ## Running agents
 
-- `t00-author` (bootstrap author, opus), started 16:38 PDT. Worktree `<S>/.worktrees/t00-bootstrap`, branch `t00-bootstrap`.
+- `t00-author` (opus): done; PR #1 ready at a663d38 (gate B and CI 12/12 passed).
+- `rev-pr1-bootstrap` (opus): reviewing PR #1 as role `bootstrap`, started 18:05 PDT.
 
 ## Running jobs
 
