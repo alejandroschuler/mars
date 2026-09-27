@@ -114,10 +114,15 @@ jobs:
           uv pip install --resolution lowest-direct -r pyproject.toml
           uv pip freeze | tee "$RUNNER_TEMP/lowest.txt"
           uv pip install --no-deps .
-      - name: Install the test tools without changing those versions
+      # The floors of the validation group must work with the runtime floors,
+      # which the constraint file keeps. joblib stays at the release that
+      # scikit-learn brought in.
+      - name: Install the validation group at its lowest allowed versions
         run: |
-          uv pip install --constraint "$RUNNER_TEMP/lowest.txt" \
-            pytest hypothesis pandas joblib matplotlib
+          uv pip install --resolution lowest-direct \
+            --constraint "$RUNNER_TEMP/lowest.txt" --group validation
+      - name: Install the test tools without changing those versions
+        run: uv pip install --constraint "$RUNNER_TEMP/lowest.txt" pytest hypothesis
       - run: .venv/bin/pytest -m "not slow and not external"
 
   wheel:
