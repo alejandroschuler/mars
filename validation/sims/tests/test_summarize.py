@@ -11,8 +11,8 @@ in place of the geometric-mean ratio, a band of log 1.10, a median taken as a
 mean, a missing cell shown as 1.000, and a failed repetition kept in the
 ratio all passed every test that existed before this file changed.
 
-Also the two figures, drawn with the installed matplotlib: before these
-tests no test drew a figure, so a matplotlib floor too old for
+Also the two figures, drawn with the installed matplotlib. Before these
+tests no test drew a figure, so a matplotlib floor that was too old for
 ``box_plots`` passed every gate and CI job.
 """
 
@@ -303,10 +303,10 @@ def test_paired_log_ratio_is_sensitive_to_pairing_order(tmp_path):
 
 def test_main_draws_both_figures_and_labels_each_box(tmp_path, monkeypatch):
     """Draws both figures through ``main``. ``box_plots`` passes
-    ``tick_labels``, a keyword that matplotlib added in 3.9, while the
-    validation group first asked for matplotlib 3.8 or later; with 3.8 this
-    test fails with a TypeError. The x tick labels are read back, so a box
-    plot drawn without them (ticks numbered 1 and 2) fails as well.
+    ``tick_labels``, a keyword that matplotlib added in 3.9, but the
+    validation group first allowed matplotlib 3.8. With 3.8 this test fails
+    with a TypeError. The x tick labels are read back, so a box plot drawn
+    without them (ticks numbered 1 and 2) also fails.
     """
     results = tmp_path / "results"
     risks = {"E-def": [1.0, 1.0], "P-cur": [2.0, 8.0], "P-fix": [1.0, 2.0]}
