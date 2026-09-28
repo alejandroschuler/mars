@@ -593,7 +593,8 @@ def test_drop_costs_do_not_depend_on_the_scale_of_a_column():
 
 def test_pruning_factor_near_the_la4_limit_matches_exact_refits():
     # kappa above 1e6: a hinge and its copy with noise of relative size 1e-6,
-    # against refits in exact rational arithmetic (LA-5 allows 1e-8).
+    # against refits in exact rational arithmetic, within a tenth of the 1e-8
+    # that LA-5 allows (1e-10 was seen with OpenBLAS).
     rng = np.random.default_rng(17)
     x1, x2 = rng.standard_normal((2, 24))
     h = np.maximum(x1 - 0.2, 0.0)
@@ -605,11 +606,11 @@ def test_pruning_factor_near_the_la4_limit_matches_exact_refits():
     f = la.r_factor(A, y, w)
     prefix = la.prefix_rss(f.Z, f.rss)
     want = _exact_rss(A, y, w, [list(range(m)) for m in range(1, 7)])
-    np.testing.assert_allclose(prefix, want, rtol=1e-10)
+    np.testing.assert_allclose(prefix, want, rtol=1e-9)
     for pos in range(2, 7):
         got = prefix[pos - 1] + la.drop_costs(f.R, f.Z, pos)
         rest = [[c for c in range(pos) if c != i] for i in range(pos)]
-        np.testing.assert_allclose(got, _exact_rss(A, y, w, rest), rtol=1e-10)
+        np.testing.assert_allclose(got, _exact_rss(A, y, w, rest), rtol=1e-9)
 
 
 def test_r_factor_edge_cases():
