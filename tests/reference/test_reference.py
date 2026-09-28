@@ -5,9 +5,11 @@ computation (numpy's least squares, repeated rows, a brute-force loop).
 Bracketed IDs cite ``docs/algorithm.md``.
 """
 
+import dataclasses
 import importlib.util
 import math
 import types
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -902,10 +904,15 @@ class TestParams:
     def test_as_params_reads_a_mapping_or_attributes(self):
         assert ref.as_params(None) == ref.Params()
         assert ref.as_params({"max_degree": 2}).max_degree == 2
-        other = types.SimpleNamespace(max_degree=3, fast_k=0)
+        fields = dataclasses.asdict(ref.Params(max_degree=3, fast_k=0))
+        other = types.SimpleNamespace(**fields)
         assert ref.as_params(other) == ref.Params(max_degree=3, fast_k=0)
         with pytest.raises(ValueError, match="unknown"):
             ref.as_params({"degree": 2})
+        # a field that the object lacks is an error, not a default (CORE-6)
+        del fields["nprune"]
+        with pytest.raises(ValueError, match="nprune"):
+            ref.as_params(types.SimpleNamespace(**fields))
 
 
 # ---------------------------------------------------------------------------
@@ -969,9 +976,81 @@ class TestLegality:
         assert ref.is_legal(ref.LINEAR, 100.0, 5.0)
         assert not ref.is_legal(ref.LINEAR, 0.0, 5.0)
 
+    def test_the_queue_value_of_a_searched_entry(self):
+        # FAST-5 with RSS_s = 10 and MaxLegal_s = 5
+        linear = ref.Candidate(0, 0, ref.LINEAR, math.nan, 2.0)  # reduction 8
+        too_big = ref.Candidate(0, 0, ref.PAIR, 0.5, 3.0)  # reduction 7 > 5
+        knot = ref.Candidate(0, 1, ref.PAIR, 0.5, 6.0)  # reduction 4
+        assert ref.queue_value([linear, too_big, knot], True, 10.0, 5.0) == 8.0
+        assert ref.queue_value([too_big, knot], True, 10.0, 5.0) == 4.0
+        assert ref.queue_value([too_big], True, 10.0, 5.0) == 0.0
+        assert ref.queue_value([], True, 10.0, 5.0) == 0.0
+        assert ref.queue_value([], False, 10.0, 5.0) == -1.0
+
+    def test_the_candidate_key(self):
+        # CORE-3: a linear candidate has no knot, whatever NaN it holds
+        a = ref.Candidate(0, 1, ref.LINEAR, math.nan, 1.0)
+        b = ref.Candidate(0, 1, ref.LINEAR, float("nan"), 2.0)
+        assert ref.candidate_key(a) == ref.candidate_key(b) == (0, 1, ref.LINEAR, None)
+        knot = ref.Candidate(0, 1, ref.PAIR, 0.25, 1.0)
+        assert ref.candidate_key(knot) == (0, 1, ref.PAIR, 0.25)
+
+    def test_the_covariate_variances_divide_by_n(self):
+        X = np.random.default_rng(26).normal(size=(12, 3))
+        np.testing.assert_allclose(
+            ref.covariate_variances(X, np.ones(12), 12.0), np.var(X, axis=0), rtol=1e-13
+        )
+
     def test_collinearity_tolerance_changes_after_seven_steps(self):
         assert ref.collinearity_tol(0) == ref.collinearity_tol(6) == 0.01
         assert ref.collinearity_tol(7) == 1e-5
+
+
+def exact_rss(A, y, w):
+    """The weighted RSS of y on the independent columns of A, in exact
+    rational arithmetic: the normal equations solved with fractions."""
+    n, m = A.shape
+    a = [[Fraction(float(v)) for v in row] for row in A]
+    yy = [Fraction(float(v)) for v in y]
+    ww = [Fraction(float(v)) for v in w]
+    rows = [
+        [sum(ww[i] * a[i][r] * a[i][q] for i in range(n)) for q in range(m)]
+        + [sum(ww[i] * a[i][r] * yy[i] for i in range(n))]
+        for r in range(m)
+    ]
+    for col in range(m):
+        pivot = next(r for r in range(col, m) if rows[r][col] != 0)
+        rows[col], rows[pivot] = rows[pivot], rows[col]
+        for r in range(m):
+            if r != col and rows[r][col] != 0:
+                f = rows[r][col] / rows[col][col]
+                rows[r] = [u - f * v for u, v in zip(rows[r], rows[col], strict=True)]
+    beta = [rows[r][m] / rows[r][r] for r in range(m)]
+    fitted = [sum(a[i][q] * beta[q] for q in range(m)) for i in range(n)]
+    return float(sum(ww[i] * (yy[i] - fitted[i]) ** 2 for i in range(n)))
+
+
+def check_best_and_second(log, index, cands, rss_s, limit):
+    """The log entry of a step against the legal candidates of the step:
+    the first with the largest reduction, then the first of the others that
+    differ from it [FWD-4, FWD-5, FWD-8, CORE-3]."""
+    legal = [c for c in cands if ref.is_legal(c.kind, rss_s - c.rss, limit)]
+    best = max(legal, key=lambda c: rss_s - c.rss)
+    best = next(c for c in legal if rss_s - c.rss == rss_s - best.rss)
+    others = [c for c in legal if ref.candidate_key(c) != ref.candidate_key(best)]
+    second = next(
+        c for c in others if rss_s - c.rss == max(rss_s - o.rss for o in others)
+    )
+    # the same values in another memory layout: equal up to the last bits
+    assert log["best_rss"][index] == pytest.approx(best.rss, rel=1e-12)
+    assert log["second_rss"][index] == pytest.approx(second.rss, rel=1e-12)
+    assert log["second_parent"][index] == second.parent
+    assert log["second_variable"][index] == second.variable
+    assert log["second_kind"][index] == second.kind
+    if second.kind == ref.LINEAR:
+        assert math.isnan(log["second_knot"][index])
+    else:
+        assert log["second_knot"][index] == second.knot
 
 
 def noisy_data(seed, n=60, p=2):
@@ -1185,6 +1264,253 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
+    def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
+        # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
+        # covariates of the parent and x; with a power of 2 every value scales
+        # exactly, so the pass is the same bit for bit and the cuts scale
+        X, y = noisy_data(23, n=80, p=3)
+        base = run_forward(X, y, max_degree=3)
+        scaled_X = X.copy()
+        scaled_X[:, 0] *= 2.0**-10
+        scaled = run_forward(scaled_X, y, max_degree=3)
+        for key in ("dirs", "parent", "step", "rss", "termination"):
+            np.testing.assert_array_equal(scaled[key], base[key])
+        cuts = base["cuts"].copy()
+        cuts[:, 0] *= 2.0**-10
+        np.testing.assert_array_equal(scaled["cuts"], cuts)
+        assert (base["dirs"][:, 0] != 0).sum() > 1
+
+    @pytest.mark.parametrize(("ratio", "pair"), [(1.02, True), (0.98, False)])
+    def test_the_kind_of_a_search_near_the_la_7_threshold(self, ratio, pair):
+        # B = [1, x0] and x1 = x0 + eta z, with eta such that
+        # A_w / (0.01 sigma^2(x1)) = ratio; a pair search has a linear candidate
+        rng = np.random.default_rng(24)
+        n, N, w = 20, 20.0, np.ones(20)
+        x0, z = rng.uniform(size=n), rng.normal(size=n)
+        B = np.column_stack([np.ones(n), x0])
+        P_B = ref.Projector(B, w)
+        rest = float(np.sum(P_B.residual(z) ** 2))
+        s0, sz = np.var(x0), np.var(z)
+        c = float(np.mean((x0 - x0.mean()) * (z - z.mean())))
+        roots = np.roots(
+            [rest - 0.01 * ratio * sz, -0.02 * ratio * c, -0.01 * ratio * s0]
+        )
+        eta = float(max(roots.real))
+        X = np.column_stack([x0, x0 + eta * z])
+        sigma2 = ref.covariate_variances(X, w, N)
+        assert P_B.rss(X[:, 1]) / (0.01 * sigma2[1]) == pytest.approx(ratio, rel=1e-9)
+        y = X[:, 1] + 0.1 * rng.normal(size=n)
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(2, np.int8),
+            X,
+            y[:, None],
+            w,
+            B,
+            P_B,
+            P_B.residual(y[:, None]),
+            sigma2,
+            N,
+            ref.weight_tol(N),
+            ref.Params(),
+            0.01,
+        )
+        linear = [c for c in cands if c.kind == ref.LINEAR and c.variable == 1]
+        assert bool(linear) == pair
+
+    def test_a_linear_parent_is_active_where_it_is_positive(self):
+        # KNOT-1: the parent x0 (code 2) is active where x0 > 0; FWD-5: in the
+        # search the linear candidate comes first, then the knots from the top
+        rng = np.random.default_rng(25)
+        n, N, w = 40, 40.0, np.ones(40)
+        X = np.column_stack([rng.uniform(-1, 1, size=n), rng.uniform(size=n)])
+        y = X[:, 0] * np.maximum(X[:, 1] - 0.4, 0) + 0.1 * rng.normal(size=n)
+        B = np.column_stack([np.ones(n), X[:, 0]])
+        P_B = ref.Projector(B, w)
+        tau_N = ref.weight_tol(N)
+        cands, _ = ref._parent_candidates(
+            1,
+            np.array([2, 0], np.int8),
+            X,
+            y[:, None],
+            w,
+            B,
+            P_B,
+            P_B.residual(y[:, None]),
+            ref.covariate_variances(X, w, N),
+            N,
+            tau_N,
+            ref.Params(minspan=1, endspan=1),
+            0.01,
+        )
+        assert cands[0].kind == ref.LINEAR and cands[0].variable == 1
+        active = X[:, 0] > 0
+        L, E = ref.search_spans(2, 1, float(active.sum()), N, tau_N, 1, 1)
+        scan = ref.distinct_knots(ref.knot_scan_unit(X[:, 1], active, L, E))
+        G = np.column_stack([B, X[:, 0] * X[:, 1]])
+        expected = [
+            t
+            for t in scan
+            if ref.collinearity_ratio(X[:, 0] * np.maximum(X[:, 1] - t, 0), G, w)
+            >= 0.01
+        ]
+        assert [c.knot for c in cands[1:]] == expected
+        assert len(expected) > 3 and expected == sorted(expected, reverse=True)
+
+    def test_the_linear_option_uses_the_smallest_x_of_all_cases(self):
+        # FWD-6 with auto_linpreds=False: m is the smallest x over all n
+        # cases, also where the parent is 0: here the smallest x1 (0.05) is at
+        # an inactive case, and the smallest at an active case is 0.2
+        X = np.column_stack([[0.1, 0.5, 0.9, 0.3, 0.7], [0.05, 0.3, 0.9, 0.5, 0.2]])
+        parent = np.maximum(X[:, 0] - 0.4, 0)
+        columns = [np.ones(5), parent]
+        dirs = [np.zeros(2, np.int8), np.array([1, 0], np.int8)]
+        cuts = [np.zeros(2), np.array([0.4, 0.0])]
+        c = ref.Candidate(1, 1, ref.LINEAR, math.nan, 0.0)
+        ((row, cut, column),) = ref._new_terms(c, X, columns, dirs, cuts, False)
+        assert row.tolist() == [1, 1] and cut[1] == 0.05
+        np.testing.assert_array_equal(column, parent * np.maximum(X[:, 1] - 0.05, 0))
+
+    def test_an_entry_whose_covariates_have_no_candidate_gets_zero(self):
+        # FAST-5: the step-1 hinges can take the constant covariate, which has
+        # no candidate, so their lambda is 0 and not -1
+        rng = np.random.default_rng(27)
+        X = np.column_stack([rng.uniform(size=60), np.full(60, 3.0)])
+        y = np.abs(X[:, 0] - 0.5) + rng.normal(scale=0.05, size=60)
+        trace = []
+        run_forward(X, y, trace=trace, max_degree=2, max_terms=5)
+        assert trace[1]["entries"][1] == (0.0, 4)
+        assert trace[1]["entries"][2] == (0.0, 4)
+
+    @pytest.mark.parametrize(
+        ("penalty", "thresh", "code", "steps"),
+        [(2.899495, 0.001, 2, 1), (2.992898, 0.001, 3, 0), (4.0, 0.5, 3, 0)],
+    )
+    def test_the_grsq_stop_at_minus_ten(self, penalty, thresh, code, steps):
+        # STOP-3 on the 8 alternating cases: GRSq' is -9.5 at step 1 with
+        # penalty 2.899495 (the step is taken), and -10.5 with 2.992898 (no
+        # step). It comes before STOP-4: with thresh 0.5 the code is 3, not 4.
+        x = np.arange(8.0)[:, None]
+        rec = run_forward(x, [1.0, -1.0] * 4, penalty=penalty, thresh=thresh)
+        assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
+
+    @pytest.mark.parametrize(
+        ("factor", "thresh", "code", "steps"),
+        [(0.97, 0.0, 5, 1), (5.0, 0.0, 7, 10), (None, 0.05, 5, 1)],
+    )
+    def test_the_stop_at_an_exact_fit(self, factor, thresh, code, steps):
+        # STOP-5 after the pair at 0.5: y = 2 (x - 0.5)+ + eps v with v
+        # orthogonal to the step-1 model, so RSS_1 = eps^2. At 0.97 times the
+        # floor 1e-10 TSS / (N - 1) the pass stops, at 5 times it goes on,
+        # and with noise of sd 0.02 RSq_1 is above 1 - thresh = 0.95.
+        x = np.arange(21.0) / 20
+        base = 2 * np.maximum(x - 0.5, 0)
+        M = np.column_stack(
+            [np.ones(21), np.maximum(x - 0.5, 0), np.maximum(0.5 - x, 0)]
+        )
+        v = ref.Projector(M, np.ones(21)).residual(
+            np.random.default_rng(0).normal(size=21)
+        )
+        v = v / np.linalg.norm(v)
+        tss = ref.rss(np.ones((21, 1)), base[:, None], np.ones(21))
+        eps = (
+            0.02 * np.sqrt(21)
+            if factor is None
+            else math.sqrt(factor * 1e-10 * tss / 20)
+        )
+        rec = run_forward(
+            x[:, None], base + eps * v, minspan=1, endspan=1, thresh=thresh
+        )
+        assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
+
+    def test_a_term_that_depends_on_the_earlier_ones_is_dropped(self):
+        # FWD-11: x0 = 1e7 + k / 20 is added as a linear term; its part
+        # outside the intercept is 3e-8 of its norm, so LA-4 drops it
+        x0 = 1e7 + np.arange(21.0) / 20
+        rec = run_forward(x0[:, None], 1 + 2 * (x0 - 1e7))
+        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+        np.testing.assert_array_equal(rec["kept"], [0])
+        np.testing.assert_array_equal(rec["dropped"], [1])
+        # with weights 50 on the three rows where x0 moves, the w-norm ratio
+        # is 1.7e-7 and the term is kept; without the weights it would be 6.9e-8
+        u = np.zeros(21)
+        u[:3] = [-2.0, 2.0, 1.5]
+        w = np.ones(21)
+        w[:3] = 50.0
+        rec = run_forward((1e7 + u)[:, None], 1 + 2 * u, w=w)
+        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+        assert rec["dropped"].size == 0
+
+    def test_candidate_rss_on_a_badly_conditioned_basis(self):
+        # LA-5: two knots 1e-6 apart and a linear term with offset 1e4 give a
+        # condition number above 1e10; each candidate RSS stays within 1e-8 of
+        # the RSS before the step, against exact rational least squares
+        rng = np.random.default_rng(29)
+        n = 20
+        x = np.sort(rng.uniform(size=n))
+        x[11] = x[10] + 1e-6
+        X = np.column_stack([x, rng.uniform(size=n)])
+        B = np.column_stack(
+            [np.ones(n), np.maximum(x - x[10], 0), np.maximum(x - x[11], 0), x + 1e4]
+        )
+        w = rng.uniform(0.5, 2.0, size=n)
+        y = np.abs(X[:, 1] - 0.5) + x + 0.1 * rng.normal(size=n)
+        assert np.linalg.cond(B * np.sqrt(w)[:, None]) > 1e10
+        N0 = ref.weight_sum(w)
+        tau_N = ref.weight_tol(N0)
+        N = ref.snap(N0, tau_N)
+        P_B = ref.Projector(B, w)
+        before = exact_rss(B, y, w)
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(2, np.int8),
+            X,
+            y[:, None],
+            w,
+            B,
+            P_B,
+            P_B.residual(y[:, None]),
+            ref.covariate_variances(X, w, N),
+            N,
+            tau_N,
+            ref.Params(minspan=3),
+            0.01,
+        )
+        assert len(cands) > 4
+        for c in cands:
+            cols = [B]
+            if c.kind in (ref.PAIR, ref.LINEAR):
+                cols.append(X[:, c.variable])
+            if c.kind != ref.LINEAR:
+                cols.append(np.maximum(X[:, c.variable] - c.knot, 0))
+            exact = exact_rss(np.column_stack(cols), y, w)
+            assert abs(c.rss - exact) <= 1e-8 * before
+
+    def test_the_second_best_candidate_of_the_first_step(self):
+        # CORE-3 against every legal candidate of the intercept at step 1
+        X, y = noisy_data(28, n=50, p=3)
+        rec = run_forward(X, y)
+        n, N, w = 50, 50.0, np.ones(50)
+        B = np.ones((n, 1))
+        P_B = ref.Projector(B, w)
+        tss = rec["rss"][0]
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(3, np.int8),
+            X,
+            y[:, None],
+            w,
+            B,
+            P_B,
+            P_B.residual(y[:, None]),
+            ref.covariate_variances(X, w, N),
+            N,
+            ref.weight_tol(N),
+            ref.Params(),
+            0.01,
+        )
+        check_best_and_second(rec["candidates"], 0, cands, tss, 1.01 * tss)
+
     def test_inputs_are_not_changed(self):
         X, y = noisy_data(9)
         w = np.ones(60)
@@ -1375,3 +1701,169 @@ def test_the_pruning_pass_matches_earth_on_its_forward_basis(load_fixture, name)
     assert result["gcv"] == pytest.approx(earth["gcv"], rel=1e-8)
     assert result["rsq"] == pytest.approx(earth["rsq"], abs=1e-8)
     assert result["grsq"] == pytest.approx(earth["grsq"], abs=1e-8)
+
+
+EARTH_NAMES = {  # [API-7]
+    "degree": "max_degree",
+    "nk": "max_terms",
+    "penalty": "penalty",
+    "thresh": "thresh",
+    "minspan": "minspan",
+    "endspan": "endspan",
+    "Adjust.endspan": "adjust_endspan",
+    "Auto.linpreds": "auto_linpreds",
+    "fast.k": "fast_k",
+    "fast.beta": "fast_beta",
+    "pmethod": "pmethod",
+    "nprune": "nprune",
+}
+
+
+def params_from_earth(args):
+    """earth's arguments as reference parameters; a span of 0 is automatic."""
+    return {
+        EARTH_NAMES[key]: None
+        if key in ("minspan", "endspan") and value == 0
+        else value
+        for key, value in args.items()
+    }
+
+
+def forward_on_fixture(fixture, trace=None):
+    """The reference forward pass on an unweighted fixture, and its basis."""
+    X = np.array(fixture["inputs"]["X"], dtype=float)
+    Y = np.array(fixture["inputs"]["y"], dtype=float).reshape(len(X), -1)
+    n = len(X)
+    w = np.ones(n)
+    tss = ref.rss(np.ones((n, 1)), Y, w)
+    return ref.forward_pass(
+        X,
+        Y,
+        w,
+        params_from_earth(fixture["earth_args"]),
+        N=float(n),
+        tau_N=ref.weight_tol(float(n)),
+        tss=tss,
+        record_candidates=True,
+        trace=trace,
+    )
+
+
+def check_forward_steps(record, earth):
+    """The forward record against earth's, step by step: the rows of each step
+    (codes exact, knots bit for bit), the RSS after it within 1e-8 of the RSS
+    before it, and the termination code. The comparison stops at the first
+    near-tie: best and second-best RSS closer than 1e-7 of the RSS before the
+    step (plan: Ties). Returns the number of steps compared."""
+    dirs = np.array(earth["dirs"]).astype(int)
+    cuts = np.array(earth["cuts"], dtype=float)
+    fwd_rss = np.array(earth["fwd_rss"], dtype=float)
+    log = record["candidates"]
+    for s in range(1, len(record["rss"])):
+        before = record["rss"][s - 1]
+        if log["second_rss"][s - 1] - log["best_rss"][s - 1] < 1e-7 * before:
+            return s - 1
+        rows = np.flatnonzero(record["step"] == s)
+        assert rows.max() < len(dirs), f"step {s}"
+        np.testing.assert_array_equal(
+            record["dirs"][rows], dirs[rows], err_msg=f"step {s}"
+        )
+        hinge = np.abs(dirs[rows]) == 1
+        np.testing.assert_array_equal(
+            np.where(hinge, record["cuts"][rows], 0.0), np.where(hinge, cuts[rows], 0.0)
+        )
+        assert abs(record["rss"][s] - fwd_rss[rows.max()]) <= 1e-8 * before, f"step {s}"
+    assert len(record["dirs"]) == len(dirs)
+    assert record["termination"] == earth["termcond"]
+    return len(record["rss"]) - 1
+
+
+FORWARD_FIXTURES = [
+    "S01_defaults_d1",
+    "S01_matched_d1",
+    "S02_n020_defaults_d1",
+    "S02_n020_matched_d1",
+    "S02_n020_span_m1_e1",
+    "S02_n050_defaults_d1",
+    "S02_n050_matched_d1",
+    "S03_matched_d1_linear",
+    "S05_matched_d2",
+    "S07_matched_d1",
+    "S08_matched_d1",
+    "S11_n03_matched_d1",
+    "S11_n05_matched_d1",
+    "S11_n08_defaults_d1",
+    "S11_n08_matched_d1",
+    "S12_x_1em8_matched_d1",
+    "S17_matched_d1",
+    "S20_matched_d1",
+]
+
+
+@pytest.mark.parametrize("name", FORWARD_FIXTURES)
+def test_the_forward_pass_matches_earth_step_by_step(load_fixture, name):
+    fixture = load_fixture(name)
+    record, _ = forward_on_fixture(fixture)
+    check_forward_steps(record, fixture["result"])
+
+
+@pytest.mark.slow
+def test_the_forward_pass_matches_earth_on_every_small_fixture(load_fixture):
+    # every unweighted matched and defaults fixture with n <= 400, raw x left
+    # out (the LA-7 departure); factor responses have no least-squares pass
+    compared = 0
+    for path in sorted((HARNESS.parent / "fixtures").glob("S*.json")):
+        name = path.stem
+        if ("matched" not in name and "defaults" not in name) or "raw" in name:
+            continue
+        fixture = load_fixture(name)
+        inputs = fixture["inputs"]
+        if inputs.get("weights") is not None or len(inputs["X"]) > 400:
+            continue
+        if fixture["result"].get("dirs") is None:  # earth stopped with an error
+            continue
+        y = np.ravel(np.array(inputs["y"], dtype=object))
+        if any(isinstance(v, str) for v in y) or all(v == y[0] for v in y):
+            continue  # a factor response, or a constant one (EDGE-1)
+        record, _ = forward_on_fixture(fixture)
+        check_forward_steps(record, fixture["result"])
+        compared += 1
+    assert compared >= 60
+
+
+def test_the_second_best_candidate_where_the_limit_binds(load_fixture):
+    # CORE-3 at step 8 of S02_n020_matched_d1, where MaxLegal = 10 Delta_s
+    # makes some knots illegal: every legal candidate of the searched parents
+    fixture = load_fixture("S02_n020_matched_d1")
+    trace = []
+    record, B = forward_on_fixture(fixture, trace)
+    X = np.array(fixture["inputs"]["X"], dtype=float)
+    y = np.array(fixture["inputs"]["y"], dtype=float)[:, None]
+    N, w = float(len(X)), np.ones(len(X))
+    earlier = np.flatnonzero(record["step"] <= 7)
+    B7 = B[:, earlier]
+    P_B = ref.Projector(B7, w)
+    rss_s = record["rss"][7]
+    limit = ref.max_legal(list(record["rss"][:8]))
+    assert limit < 1.01 * rss_s  # the limit 10 Delta_s binds
+    params = ref.as_params(params_from_earth(fixture["earth_args"]))
+    cands = []
+    for k in trace[7]["searched"]:
+        found, _ = ref._parent_candidates(
+            k,
+            record["dirs"][k],
+            X,
+            y,
+            w,
+            B7,
+            P_B,
+            P_B.residual(y),
+            ref.covariate_variances(X, w, N),
+            N,
+            ref.weight_tol(N),
+            params,
+            ref.collinearity_tol(7),
+        )
+        cands += found
+    assert any(not ref.is_legal(c.kind, rss_s - c.rss, limit) for c in cands)
+    check_best_and_second(record["candidates"], 7, cands, rss_s, limit)

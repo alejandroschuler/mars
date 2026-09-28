@@ -744,9 +744,10 @@ def as_params(params=None) -> Params:
         if unknown:
             raise ValueError(f"unknown parameters: {unknown}")
         return Params(**params)
-    return Params(
-        **{name: getattr(params, name) for name in names if hasattr(params, name)}
-    )
+    missing = [name for name in names if not hasattr(params, name)]
+    if missing:
+        raise ValueError(f"params has no field {missing}")
+    return Params(**{name: getattr(params, name) for name in names})
 
 
 # ---------------------------------------------------------------------------
@@ -794,6 +795,29 @@ def is_legal(kind: int, reduction: float, limit: float) -> bool:
     return 0 < reduction <= limit
 
 
+def queue_value(candidates, searchable: bool, rss_s: float, limit: float) -> float:
+    """lambda_e of a searched entry [FAST-5]: the largest legal reduction among
+    its candidates, linear candidates of any size included; 0 when none is
+    legal, and -1 when no covariate could be searched."""
+    if not searchable:
+        return -1.0
+    return max(
+        (rss_s - c.rss for c in candidates if is_legal(c.kind, rss_s - c.rss, limit)),
+        default=0.0,
+    )
+
+
+def candidate_key(c) -> tuple:
+    """What tells two candidates apart [CORE-3]: the parent, the variable, the
+    kind and the knot, with None as the knot of a linear candidate."""
+    return (c.parent, c.variable, c.kind, None if c.kind == LINEAR else c.knot)
+
+
+def covariate_variances(X, w, N: float) -> list[float]:
+    """sigma_v^2 of every covariate, with divisor N [Notation, LA-7]."""
+    return [weighted_variance(X[:, j], w, N) for j in range(X.shape[1])]
+
+
 def queue_table(entries, steps_taken: int, fast_beta: float) -> list[int]:
     """The table of FAST-2: the entry numbers (1-based), in table order.
 
@@ -832,6 +856,8 @@ def _parent_candidates(
     largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
     [LA-2], where G is B, and B with b x in a pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
+    Cost: up to n knots per covariate, each projected on up to M + 1
+    columns, so O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
     """
     p = X.shape[1]
     b = B[:, k]
@@ -951,7 +977,9 @@ def forward_pass(
     the n x M_a matrix of the columns of the terms. When ``trace`` is a
     list, each step appends a dict with its queue table, the visited
     entries, the searched parents (forward indices), the queue entries after
-    the search, and the chosen candidate.
+    the search, and the chosen candidate. Cost: a step searches up to M
+    parents, so it takes O(p n^2 M^2) time at worst, and O(n (p + M) + n^2)
+    memory.
     """
     params = as_params(params)
     X = np.asarray(X, dtype=np.float64)
@@ -960,7 +988,7 @@ def forward_pass(
     w = np.asarray(w, dtype=np.float64)
     max_terms = params.resolved_max_terms(p)
     penalty = params.resolved_penalty()
-    sigma2 = [weighted_variance(X[:, j], w, N) for j in range(p)]
+    sigma2 = covariate_variances(X, w, N)
     columns, dirs, cuts = [np.ones(n)], [np.zeros(p, dtype=np.int8)], [np.zeros(p)]
     parent, step, rss_path = [-1], [0], [float(tss)]
     slots = {1: 0}  # slot -> forward index of its term [FWD-9]
@@ -988,11 +1016,7 @@ def forward_pass(
             cands, searchable = _parent_candidates(
                 k, dirs[k], X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
             )
-            gains = [
-                rss_s - c.rss for c in cands if is_legal(c.kind, rss_s - c.rss, limit)
-            ]
-            lam = max(gains, default=0.0) if searchable else -1.0
-            entries[e - 1] = [lam, kappa]  # [FAST-5]
+            entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
             found.extend(cands)
             searched.append(k)
         legal = [c for c in found if is_legal(c.kind, rss_s - c.rss, limit)]
@@ -1038,8 +1062,7 @@ def forward_pass(
         s += 1
         rss_path.append(chosen.rss)
         if record_candidates:
-            key = (chosen.parent, chosen.variable, chosen.kind, chosen.knot)
-            others = [c for c in legal if (c.parent, c.variable, c.kind, c.knot) != key]
+            others = [c for c in legal if candidate_key(c) != candidate_key(chosen)]
             log.append((chosen, _first_best(others, rss_s)))
         floor = 1e-10 * tss / (N - 1)
         if rsq(chosen.rss, tss) >= 1 - params.thresh or chosen.rss < floor:
