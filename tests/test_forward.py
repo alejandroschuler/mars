@@ -736,8 +736,25 @@ def test_a_reduction_within_its_bound_of_max_legal(monkeypatch, value, best):
     assert (chosen.order[2], second.order[2]) == best
 
 
+@pytest.mark.parametrize(("value", "best"), [(0.05, (1, 2)), (0.0, (2, None))])
+def test_a_reduction_within_its_bound_of_0(monkeypatch, value, best):
+    """FWD-4 in pass 1: a knot with the scan's reduction 0 ± 0.1 is kept but not
+    sure; pass 2 keeps it when its explicit reduction is positive, and drops it
+    when that is 0. The other knots gain nothing and are dropped for sure."""
+    zero = dict.fromkeys(range(3, 11), (0.0, 0.0, 0.5, 0.0))
+    scan = zero | {1: (0.0, 0.1, 0.5, 0.0), 2: (0.02, 0.001, 0.5, 0.0)}
+    st_, _ = _fixed_passes(monkeypatch, scan, {1: (0.5, value), 2: (0.5, 0.02)})
+    assert [(c.order[2], c.sure) for c in st_.search(0, set())] == [
+        (2, True),
+        (1, False),
+    ]
+    chosen, _, second = st_.best()
+    assert (chosen.order[2], second and second.order[2]) == best
+
+
 def test_second_largest():
     assert _forward._second_largest([1.0, 5.0, 3.0]) == 3.0
+    assert _forward._second_largest([4.0, 7.0]) == 4.0
     assert _forward._second_largest([2.0]) == -math.inf
 
 
