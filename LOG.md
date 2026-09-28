@@ -134,6 +134,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:44 t11-forward reports stage 1 ready as #57 (_scan.py, 10c6e8e) and #55 (_forward.py, 8f0e178, stacked by content, base main): 82 of 88 earth fixtures match the whole forward path, 6 near-ties; identical to the reference on all 88; 1958 of 2000 random fits identical (42 at ties below 3.3e-13); mutants 459 of 463. Reviews wait for the 5-hour reset. It made a git-ignored venv in <S> by mistake (housekeeping for the user).
 - 01:27 01:27 check: 5-hour 97 %, weekly 29 %; the limit is near. Resume list written at the top of Next actions. New PR #58 (cc02cc3).
 - 03:23 After the 5-hour reset (limit hit about 01:30; weekly 30 %, 5-hour 1 %; next reset 08:20). The first #48 review lost its adversarial reviewer to the limit (no post); the spec review posted REQUEST_CHANGES: code correct against earth (all matched and defaults fits of S01, S03, S04, S05; 197 of 200 S15; 44 Fast MARS fits), but 33 surviving mutants; recipes (a) to (i). Sent to t06-reference; a new adversarial review of 5756c66 started (wf_0b66106a-7f3). Dual review of #57 started (wf_e0ddfd90-495). rebase-check-56 started. t18-legacy resumed. compare.py _is_mirror_pair bug (spec review item 7) added to the T07 brief.
+- 03:25 Merged #56 (TOOLS-1) as 1918863 after rebase-check-56's re-approval (range-diff all '='). <main> fast-forwarded, so merge_pr.sh now refuses while an open PR is based on the head branch.
 
 ## Core-hour ledger
 

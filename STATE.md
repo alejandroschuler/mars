@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 03:23 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 03:25 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -17,13 +17,13 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 RUNNING (week 2). Weekly 30 % at 03:22 Monday 2026-09-28 (5-hour 1 %, next reset 08:20 PDT); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
 
-main: 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
+main: 1918863 (#56 TOOLS-1 merge guard), 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
 
 Open pull requests:
 - #48 part 3 forward pass (5756c66): round 1. Spec REQUEST_CHANGES (code correct against earth everywhere; 33 surviving mutants; recipes (a) to (i)), sent to t06-reference. The first adversarial attempt died at the 5-hour limit before posting; a new adversarial review runs on 5756c66 (wf_0b66106a-7f3, task wqjbu5460); its findings go to t06-reference as a second batch. #49 part 4 fit_mars (Closes #8) after #48 merges.
 - #57 dual review running (wf_e0ddfd90-495, task wg0mewwm2). #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
-- #56 TOOLS-1: round 2 APPROVE at 032ad32 (wf_e417c814-a4d). Rebased to 02d28ad (range-diff all '=', gate B PASS, CI 12/12). rebase-check-56 (sonnet) running; it posts `REVIEW single 02d28ad...: APPROVE` citing the old approval, then merge_pr.sh 56 single, then fast-forward <main>. Follow-up TOOLS-2: the `pr view` branch of the fake gh also ignores its arguments (older gap; tools-merge-guard made a task chip for it).
+- TOOLS-2 (later, small): the `pr view` branch of the fake gh in test_merge_pr.sh also ignores its arguments.
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
 ## Done in P0
@@ -52,7 +52,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 - `t11-forward` (opus): idle; stage 1 ready (#57, #55); resumable for review fixes, the #55 rebase and stage 2.
 - `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
 - `t18-legacy` (opus): T18, issue #20, draft PR #58; cut by the 5-hour limit at 01:30, resumed 03:25.
-- `tools-merge-guard` (sonnet): TOOLS-1 (brief `briefs/TOOLS-1-merge-guard.md`): merge_pr.sh refuses while an open PR is based on the head branch; DECISIONS.md process entries. 1 reviewer (`single`). After it merges, sync `<main>` (the executor runs `<main>/dev/tools/merge_pr.sh`).
+- `tools-merge-guard` (sonnet): done (#56 merged); resumable for TOOLS-2.
 - Resumable: `t10-pruning` (#54 follow-ups), `integrator` (sonnet, pure rebases), `rebase-check-45` (sonnet, rebase-only re-approvals), `rev46-r3-adv`, `rev46-r3-spec`, `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
 
 ## Running jobs
