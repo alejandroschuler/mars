@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 05:18 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 05:23 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING (week 2). Weekly 30 % at 03:22 Monday 2026-09-28 (5-hour 1 %, next reset 08:20 PDT); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Pacing to stop cleanly at 50 %: from 44 % weekly, start no new agents or reviews; from 48 %, ask running agents to push a checkpoint and stop; at 50 %, pause and tell the user. The burn is about 8 points per hour with 5 to 7 agents (34 % at 03:52 Monday). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
+RUNNING (week 2). Weekly 30 % at 03:22 Monday 2026-09-28 (5-hour 1 %, next reset 08:20 PDT); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Pacing to stop cleanly at 50 %: from 44 % weekly, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet), and no new author work; from 48 %, start nothing and ask running agents to push a checkpoint and stop; at 50 %, pause and tell the user. The burn is about 8 points per hour with 5 to 7 agents (34 % at 03:52 Monday). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
 
 main: 1918863 (#56 TOOLS-1 merge guard), 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
@@ -66,7 +66,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Guard notes
 
-- Heartbeat near a 5-hour limit (decision 2026-09-27 23:58): once the 5-hour use is 70 % or more, the executor writes max(now, reset + 15 min) into the heartbeat, so that a watchdog run that resumes with the reset does not take the lock from an executor that also resumes. A future heartbeat means that. Current 5-hour reset: 2026-09-28 03:19:59 PDT (epoch 1790590799). If the executor does not resume, the watchdog takes over about 75 minutes after that time.
+- Heartbeat near a 5-hour limit (decision 2026-09-27 23:58): once the 5-hour use is 70 % or more, the executor writes max(now, reset + 15 min) into the heartbeat, so that a watchdog run that resumes with the reset does not take the lock from an executor that also resumes. A future heartbeat means that. Current 5-hour reset: 2026-09-28 08:19:59 PDT (epoch 1790608799). If the executor does not resume, the watchdog takes over about 75 minutes after that time.
 - The `dcg` hook blocks `rm -rf`, `git reset --hard`, `git clean`, `git checkout -- <file>`. It allows `git rm -r`, `git push --force-with-lease`, `gh pr merge --squash --delete-branch`, `git worktree remove`, `git rebase`, `git branch -d`, `mv`, `kill`. Check with `dcg test "<command>"`.
 - The app's worktree guard blocks Write and Edit outside the session worktree, also after request_directory for `<main>`. change_directory is refused for a worktree session.
 - The auto-mode classifier denied `run_scheduled_task`.
