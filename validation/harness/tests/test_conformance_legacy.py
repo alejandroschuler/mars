@@ -384,13 +384,13 @@ EARTH_PRUNE = {
     "prune_terms": [
         [1, 0, 0, 0, 0],
         [1, 2, 0, 0, 0],
-        [1, 2, 4, 0, 0],
+        [1, 3, 4, 0, 0],
         [1, 2, 3, 4, 0],
         [1, 2, 3, 4, 5],
     ],
     "rss_per_subset": [10.0, 6.0, 4.0, 3.0, 2.9],
     "gcv_per_subset": [1.0, 0.8, 0.7, 0.75, 0.9],
-    "selected_terms": [1, 2, 4],
+    "selected_terms": [1, 3, 4],
     "coef": [[0.5], [1.0], [2.0]],
     "gcv": 0.7,
 }
@@ -425,7 +425,7 @@ def run_pruning(leg, earth=None, legacy=None):
     return row
 
 
-FULL = [[0, 1, 2, 3, 4], [0, 1, 2, 3], [0, 1, 3]]
+FULL = [[0, 1, 2, 3, 4], [0, 1, 2, 3], [0, 2, 3]]  # size 3: h(0.5-x0), h(x0-0.3)
 
 
 def test_pruning_intercept_missing_from_the_final_model_comes_first():
@@ -471,14 +471,14 @@ def test_pruning_other_subset_at_the_selected_size():
 
 
 def test_pruning_same_path_and_model_has_no_difference():
-    subsets = [[0, 1, 2, 3, 4], [0, 1, 2, 3], [0, 1, 3], [0, 1], [0]]
+    subsets = [[0, 1, 2, 3, 4], [0, 1, 2, 3], [0, 2, 3], [0, 1], [0]]
     fitted = np.linspace(0, 1, 8)
     earth = earth_rec(ROWS, **EARTH_PRUNE, fitted=fitted.reshape(-1, 1).tolist())
     leg = pruned(
         subsets,
         [2.9, 3, 4, 6, 10],
         [0.9, 0.75, 0.7, 0.8, 1.0],
-        [0, 1, 3],
+        [0, 2, 3],
         coef=[0.5, 1.0, 2.0],
         gcv=0.7,
         pred_train=fitted.tolist(),
