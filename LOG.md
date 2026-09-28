@@ -184,6 +184,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:45 t15-oracle found a real bug in merged _pruning.py: Y is not centered before the QR, so a large-mean response misses LA-5 (1.2e-6 relative at y + 1e10); the reference is exact. t10-pruning resumed for a small fix PR (_pruning.py and _gcv.tss). T15 adds the failing draws after the fix merges (no red commits).
 - 13:48 Weekly 6 %, 5-hour 35 %. Started single reviews (sonnet) of the user's PRs #61 (CI floors test) and #63 (summarize with no cells).
 - 13:50 #55 at 82bf18c (the reviewer's linear-candidate case; the revert now fails; gate B PASS; CI 12/12). recheck-55 (sonnet) started.
+- 13:55 Merged #55 as 20cdde0 after recheck-55's narrow re-approvals: T11 stage 1 (the fast forward pass at degree 1) is on main. Asked t12-core to rebase and open T12's PR; told t15-oracle to rebase.
 
 ## Core-hour ledger
 
