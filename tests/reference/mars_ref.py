@@ -20,13 +20,17 @@ How it computes, and how that differs from the fast code:
   the other.
 
 It is slow on purpose, and practical up to n <= 300, p <= 6 and
-max_degree <= 3 [CORE-7]. Bracketed IDs such as [GCV-2] cite the rules of
-the spec. Indices are 0-based, as in the spec. No function changes its
-inputs.
+max_degree <= 3 [CORE-7]. Sums of squares are formed from the values as
+they are, so values whose squares leave the normal range of float64 (above
+about 1e150 or below about 1e-150 in absolute value, in a covariate or in a
+product of factors) are outside its range; Y is scaled first [EDGE-6].
+Bracketed IDs such as [GCV-2] cite the rules of the spec. Indices are
+0-based, as in the spec. No function changes its inputs.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import numpy as np
@@ -142,7 +146,11 @@ def default_max_terms(p: int) -> int:
 
 
 def auto_minspan(p: int, Nb: float) -> int:
-    """L = max(1, trunc(-log2(-ln(1 - alpha) / (p N_b)) / 2.5)) [SPAN-1]."""
+    """L = max(1, trunc(-log2(-ln(1 - alpha) / (p N_b)) / 2.5)) [SPAN-1].
+
+    N_b must be positive: the caller asks for spans only for a parent with
+    an active case.
+    """
     return max(1, math.trunc(-math.log2(-math.log(1.0 - ALPHA) / (p * Nb)) / 2.5))
 
 
@@ -175,7 +183,8 @@ def search_spans(
 ) -> tuple[int, int]:
     """(L, E*) for one knot search: a user value replaces the automatic L or E
     [SPAN-3], the adjustment and the cap apply to both kinds [SPAN-4, SPAN-5],
-    and the minspan is not capped [SPAN-6]."""
+    and the minspan is not capped [SPAN-6]. N_b, the weight of the parent's
+    active cases, must be positive when the minspan is automatic."""
     L = auto_minspan(p, Nb) if minspan is None else int(minspan)
     E = auto_endspan(p) if endspan is None else int(endspan)
     return L, scan_endspan(adjusted_endspan(E, parent_degree, adjust_endspan), N, tau_N)
@@ -188,6 +197,14 @@ def search_spans(
 def case_order(x: np.ndarray, active: np.ndarray) -> np.ndarray:
     """The order of KNOT-2: ascending x, and among equal x the inactive cases first."""
     return np.lexsort((np.asarray(active, dtype=np.int8), np.asarray(x)))
+
+
+def scan_start(N: float, minspan: int, endspan: int) -> int:
+    """c0 = E* + ceil(g / 2), the start of the counter of a scan, with
+    g = D - L floor(D / L) and D = N - 2 E* - 1 [KNOT-3, KNOT-6]."""
+    L, E = int(minspan), int(endspan)
+    D = N - 2 * E - 1
+    return E + math.ceil((D - L * math.floor(D / L)) / 2)
 
 
 def knot_scan_unit(x, active, minspan: int, endspan: int) -> list[float]:
@@ -206,8 +223,7 @@ def knot_scan_unit(x, active, minspan: int, endspan: int) -> list[float]:
     xs, act = x[order], active[order]
     v = x[active].max()
     L, E = int(minspan), int(endspan)
-    g = (n - 2 * E - 1) % L
-    counter = E + (g + 1) // 2  # E* + ceil(g / 2)
+    counter = scan_start(n, L, E)
     knots = []
     for q in range(n, E + 1, -1):  # q = n, n - 1, ..., E* + 2 (1-based)
         t = xs[q - 2]  # x_(q-1)
@@ -216,7 +232,7 @@ def knot_scan_unit(x, active, minspan: int, endspan: int) -> list[float]:
         if act[q - 1]:  # a_q
             counter -= 1
             if counter == 0:
-                knots.append(float(t))
+                knots.append(float(t) + 0.0)  # + 0.0: a zero knot has no sign
                 counter = L
     return knots
 
@@ -224,39 +240,67 @@ def knot_scan_unit(x, active, minspan: int, endspan: int) -> list[float]:
 def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
     """The knot list of KNOT-6 (cumulative weight), in scan order, repeats included.
 
-    The visits u = N, N - 1, ... while u >= E* + 2 - tau_N are listed at once.
-    At each visit t = x(u - 1), the counter moves when t < v and a(u) = 1,
-    and a knot is appended at the c0-th move and at every L-th move after it,
-    which is where the counter of KNOT-3 reaches 0.
+    The scan visits u = N, N - 1, ... while u >= E* + 2 - tau_N; visit k
+    (u = N - k) takes t = x(u - 1) and a(u) from the cases that hold u - 1
+    and u. Those two cases stay the same over stretches of visits, so the
+    visits of a stretch are counted at once (KNOT-7): the counter moves in
+    every visit of a stretch or in none, and a knot is appended at the
+    c0-th move and at every L-th move after it, where the counter of KNOT-3
+    reaches 0. Time O(n log n) and memory O(n), whatever N is. The tests
+    check this form against a loop over single visits.
     """
     x = np.asarray(x, dtype=np.float64)
     active = np.asarray(active, dtype=bool)
     w = np.asarray(w, dtype=np.float64)
-    n = x.shape[0]
-    L, E = int(minspan), int(endspan)
     if not active.any():
         return []
-    last = math.floor(N - (E + 2 - tau_N))
-    if last < -1:
-        return []
-    u = N - np.arange(last + 2, dtype=np.float64)
-    u = u[u >= E + 2 - tau_N]
-    if u.size == 0:
+    L, E = int(minspan), int(endspan)
+    bound = E + 2 - tau_N
+
+    def first_visit(level: float) -> int:
+        # The smallest k >= 0 with N - k <= level; N - k is exact in float64.
+        k = max(0, math.ceil(N - level))
+        while k > 0 and N - (k - 1) <= level:
+            k -= 1
+        while N - k > level:
+            k += 1
+        return k
+
+    visits = max(0, math.floor(N - bound) + 1)  # k = 0, ..., visits - 1
+    while visits > 0 and N - (visits - 1) < bound:
+        visits -= 1
+    while N - visits >= bound:
+        visits += 1
+    if visits == 0:
         return []
     order = case_order(x, active)
     xs, act = x[order], active[order]
-    upper = np.cumsum(w[order]) + tau_N  # W_q + tau_N
-    # the case that holds u: the smallest q with u <= W_q + tau_N, else case n
-    holds = np.minimum(np.searchsorted(upper, u, side="left"), n - 1)
-    holds_below = np.minimum(np.searchsorted(upper, u - 1.0, side="left"), n - 1)
-    t = xs[holds_below]
-    moves = (t < x[active].max()) & act[holds]
-    D = N - 2 * E - 1
-    g = D - L * math.floor(D / L)
-    c0 = E + math.ceil(g / 2)
-    count = np.cumsum(moves)
-    hits = moves & (count >= c0) & ((count - c0) % L == 0)
-    return [float(value) for value in t[hits]]
+    n = xs.shape[0]
+    # The case that holds u is the smallest q with u <= W_q + tau_N, else the
+    # last case; first[q] is the first visit at which case q or a lower one
+    # holds u, so it does not increase with q.
+    first = np.array([first_visit(level) for level in np.cumsum(w[order]) + tau_N])
+
+    def holder(k: int) -> int:  # the case that holds u = N - k
+        return min(int(np.searchsorted(-first, -k, side="left")), n - 1)
+
+    marks = {0, visits}
+    for f in first.tolist():
+        marks.update(b for b in (f - 1, f) if 0 < b < visits)
+    marks = sorted(marks)
+    v = x[active].max()
+    c0 = scan_start(N, L, E)
+    knots, moves = [], 0
+    for begin, end in itertools.pairwise(marks):
+        t = xs[holder(begin + 1)]
+        if not (t < v and act[holder(begin)]):
+            continue
+        stretch = end - begin
+        hit = c0 + L * max(0, -(-(moves + 1 - c0) // L))  # the next knot's move
+        if hit <= moves + stretch:
+            knots += [float(t) + 0.0] * ((moves + stretch - hit) // L + 1)
+        moves += stretch
+    return knots
 
 
 def distinct_knots(knot_list) -> list[float]:
