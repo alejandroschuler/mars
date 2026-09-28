@@ -57,11 +57,13 @@ def knot3(x, active, L, E):
     return sorted(set(listed), reverse=True)
 
 
-def knot6(x, active, L, E, w):
+def knot6(x, active, L, E, w, total=None):
     """KNOT-2 and KNOT-6 transcribed: u = N, N - 1, … on cumulative weight."""
     order = np.lexsort((active, x))
     xs, a, ws = x[order], active[order], w[order]
     N, tau = _gcv.total_weight(len(w), w)
+    if total is not None:
+        N, tau = total, _gcv.weight_tolerance(total)
     if not a.any():
         return []
     W = np.cumsum(ws)
@@ -271,6 +273,17 @@ def test_fractional_weights():
                 _knots.candidate_knots(x100, active100, L, 1, w).knots,
                 run(x10, active10, L, 1).knots,
             )
+
+
+def test_case_n_holds_the_top():
+    """KNOT-6: a u above W_n + τ_N is held by case n. W-4 bounds the rounding
+    of W below τ_N/10, so only an N above the weight sum reaches this rule;
+    here N exceeds it by 0.5, and u = N counts for the active top case."""
+    x = np.arange(1.0, 7.0)
+    active = np.ones(6, bool)
+    w = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 0.3])
+    knots = _knots.candidate_knots(x, active, 1, 1, w, total=5.8).knots
+    assert knots.tolist() == knot6(x, active, 1, 1, w, total=5.8) == [4.0, 3.0]
 
 
 def test_candidate_knots_errors():
