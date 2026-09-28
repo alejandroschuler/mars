@@ -140,6 +140,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:52 Weekly 34 % (+4 in 30 minutes), 5-hour 25 % (reset 08:20). Pacing rule for the 50 % stop: no new agents from 44 %, checkpoints from 48 %, pause and tell the user at 50 %.
 - 04:06 #57 round 1: both REQUEST_CHANGES on scan accuracy (cancellation in D and the n·u error of cumsum; LA-5 missed by up to 650x at n = 1e4; a knot near tau can be wrongly rejected) and a red CI job (lstsq rcond on the numpy floor). Sent to t11-forward with the non-blocking items; spec item 8 to #44 as a v2 note.
 - 04:07 Started the single review of #58 (T18; wf_490d20d1-c2a), focused on sampled labels, the 8 bug fits, F17 to F19 and the Adjust.endspan correction.
+- 04:31 #48 adversarial review (on 8a56ea3): REQUEST_CHANGES for 8 surviving mutants (the reviewer's 16 tests kill them); the pass matches earth on 2320 fresh fits apart from explained cases. Two spec questions for #44 (earth's code 2 below GRSq' -1000; second_rss below best_rss by rounding). Sent as batch 2 to t06-reference.
 
 ## Core-hour ledger
 
