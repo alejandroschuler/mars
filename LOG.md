@@ -102,6 +102,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:47 T08: recheck-t08 re-approved #52, #53, #51 (only the 2-line Windows glob fix). Retargeted #51 to main and merged it as 85ac0e6 (_gcv.py and _knots.py); closed #53 as folded in; #10 closed by the merge; #52 (_terms.py) still to merge. #45 (T09) round 2: both APPROVE at d556101 (91 of 95 mutants killed; notes: the stated scale range must include weights and products for LA-7; the LA-4 <= mutant can be pinned by a fixed point). Next: a small sonnet integrator rebases #45 then #52 onto main, a checker re-approves each, then merge; then #46 (round 3 pending).
 - 18:57 #45 rebased by the integrator (c387cdf, range-diff all '='), re-approved by rebase-check-45, merged as f9cfc5a; T09 (#11) closed. #46 round 3: spec APPROVE at 06bac02 (hand-derived large-N cases exact); adversarial pending. Integrator now rebases #52.
 - 19:00 #46 round 3: spec APPROVE (rev46-r3-spec), adversarial REQUEST_CHANGES (rev46-r3-adv): the stretch-boundary mutant at mars_ref.py:303 survives the large-N tests (5 other tests catch it). Asked t06-reference for one exact boundary case; rev46-r3-adv re-checks.
+- 19:02 #52 rebased (82b65f4), re-approved by rebase-check-45, merged. T08 complete on main (_terms, _gcv, _knots).
 
 ## Core-hour ledger
 
