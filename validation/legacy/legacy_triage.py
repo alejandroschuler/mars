@@ -161,14 +161,14 @@ VERDICTS: dict[str, Verdict] = {
     "intercept_final": (
         "bug",
         "F3",
-        "the legacy final model has {terms} terms and no intercept: its pruning "
+        "the legacy final model, of size {terms}, has no intercept: its pruning "
         "pass removed the intercept at size {size}",
     ),
     "intercept_path": (
         "bug",
         "F3",
         "the legacy pruning path drops the intercept at size {size} and below; "
-        "the selected model, with {selected} terms, keeps it",
+        "the selected model, of size {selected}, keeps it",
     ),
     "prune_subset": (
         "rule",
@@ -179,7 +179,8 @@ VERDICTS: dict[str, Verdict] = {
     "size_tie": (
         "tie",
         None,
-        "the same subsets and GCVs, but {legacy} selected terms against {earth}: "
+        "the same subsets and GCVs, but selected sizes {legacy} (legacy) and "
+        "{earth} (earth): "
         "tied GCVs go to the larger model in the legacy code (strict <), to the "
         "smaller one in earth (which.min)",
     ),
@@ -189,8 +190,8 @@ VERDICTS: dict[str, Verdict] = {
         "at size {size} both pruning paths keep the same subset, with {h} hinge "
         "and {lin} linear terms, but the legacy C = M + d*H = {c_l} (d = {d_l} "
         "for each hinge term, none for a linear term) and earth's C = M + "
-        "d*(M - 1)/2 = {c_e} (d = {d_e}), GCV {gcv_l} against {gcv_e}; the legacy "
-        "code selects {legacy} terms and earth {earth}",
+        "d*(M - 1)/2 = {c_e} (d = {d_e}), GCV {gcv_l} against {gcv_e}; the "
+        "selected sizes are {legacy} (legacy) and {earth} (earth)",
     ),
     "constant_y": (
         "quirk",
@@ -223,8 +224,8 @@ VERDICTS: dict[str, Verdict] = {
     "categorical": (
         "bug",
         "F17",
-        "legacy categorical_features on string labels: {terms} term(s), fitted "
-        "values off earth's factor fit by up to {diff}",
+        "legacy categorical_features on string labels: a model of size {terms}, "
+        "with fitted values off earth's factor fit by up to {diff}",
     ),
 }
 

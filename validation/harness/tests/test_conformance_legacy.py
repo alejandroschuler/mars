@@ -436,7 +436,7 @@ def test_pruning_intercept_missing_from_the_final_model_comes_first():
     assert kinds(row) == [("pruning", None, "bug", "F3")]
     text = row["diffs"][0]["text"]
     assert text == (
-        "the legacy final model has 2 terms and no intercept: its pruning pass "
+        "the legacy final model, of size 2, has no intercept: its pruning pass "
         "removed the intercept at size 2"
     )
 
@@ -452,10 +452,10 @@ def test_pruning_gcv_convention_comes_before_the_intercept_on_the_path():
         "at size 3 both pruning paths keep the same subset, with 2 hinge and 0 "
         "linear terms, but the legacy C = M + d*H = 9 (d = 3 for each hinge term, "
         "none for a linear term) and earth's C = M + d*(M - 1)/2 = 5 (d = 2), GCV "
-        "0.72 against 0.7; the legacy code selects 2 terms and earth 3"
+        "0.72 against 0.7; the selected sizes are 2 (legacy) and 3 (earth)"
     )
     assert (
-        "drops the intercept at size 1 and below; the selected model, with 2"
+        "drops the intercept at size 1 and below; the selected model, of size 2"
         in (row["diffs"][1]["text"])
     )
 
