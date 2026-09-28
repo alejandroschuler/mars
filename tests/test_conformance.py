@@ -225,7 +225,9 @@ def s15_cases() -> list[tuple[dict, Case]]:
     return out
 
 
-DATASETS = sorted(path.stem for path in FIXTURES.glob("S*.json"))
+DATASETS = sorted(  # glob ignores case on Windows, so check the name too
+    path.stem for path in FIXTURES.glob("S*.json") if path.name.startswith("S")
+)
 
 
 def _case_params() -> list:
