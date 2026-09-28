@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-27 23:39 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 23:40 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -52,6 +52,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 - `t11-forward` (opus): T11 stage 1, PR #55 (draft).
 - `t12-core` (opus): T12, issue #14, from 23:31 Sunday.
 - `t18-legacy` (opus): T18, issue #20, from 23:31 Sunday.
+- `tools-merge-guard` (sonnet): TOOLS-1 (brief `briefs/TOOLS-1-merge-guard.md`): merge_pr.sh refuses while an open PR is based on the head branch; DECISIONS.md process entries. 1 reviewer (`single`). After it merges, sync `<main>` (the executor runs `<main>/dev/tools/merge_pr.sh`).
 - Resumable: `t10-pruning` (#54 follow-ups), `integrator` (sonnet, pure rebases), `rebase-check-45` (sonnet, rebase-only re-approvals), `rev46-r3-adv`, `rev46-r3-spec`, `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
 
 ## Running jobs

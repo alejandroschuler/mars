@@ -116,6 +116,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:32 23:45 Sunday: answered the user's question on the rewrite scope; weekly 17 %, 5-hour 24 %. Wrote briefs T12-core.md and T18-legacy.md; started t12-core (opus, #14, branch stacked on t11-forward-stage1) and t18-legacy (opus, #20). #55 (T11 stage 1) is open as a draft.
 - 23:33 Briefs T07-conformance.md and T13-estimators.md written (T07 after #49; T13 after T12 and #49); style scan clean.
 - 23:39 #47 round-1 fixes in (23 listed mutants now fail); #47 to #49 rebased on eec81d2 (range-diff all '='; gate B PASS; CI 12/12). Round-2 dual review of #47 started (wf_d340cde6-e81).
+- 23:40 Started tools-merge-guard (sonnet) for TOOLS-1: the stacked-branch guard in merge_pr.sh and the process decisions (rebase-only and CI-only re-approvals, retarget before merge) in DECISIONS.md.
 
 ## Core-hour ledger
 
