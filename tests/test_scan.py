@@ -141,6 +141,28 @@ def test_the_intercept_parent_in_a_pair_search(seed, n, ties, adjacent):
             assert scan.gain_err[i] <= 1e-9 * rss
 
 
+@given(seeds, st.integers(20, 200))
+def test_the_intercept_parent_with_weights(seed, n):
+    """``intercept=True`` with b = √w and Q[:, 0] = √w/√N: the weighted D and
+    the scan meet LA-5 against ``exact_knot`` with the weights (stage 3)."""
+    rng = np.random.default_rng(seed)
+    x = np.sort(rng.uniform(size=n))
+    w = rng.uniform(0.2, 3.0, size=n)
+    sw, N = np.sqrt(w), w.sum()
+    Q = (sw / np.sqrt(N))[:, None]
+    for v in (x, np.maximum(x - np.median(x), 0.0)):
+        Q = np.column_stack((Q, _linalg.gram_schmidt(Q, sw * v).q))
+    y = np.sin(6 * x) + 0.1 * rng.normal(size=n)
+    E = _linalg.orthogonalize(Q, sw * (y - w @ y / N))[0]
+    splits = np.arange(1, n)
+    scan = _scan.knot_scan(x, sw, Q, E, splits, intercept=True)
+    rss = float(E @ E)
+    for i, s in enumerate(splits):
+        rho, gain = _scan.exact_knot(Q, E, np.maximum(x - x[s - 1], 0.0), w)
+        if rho > 1e-4:
+            _within(scan, i, rho, gain, rss)
+
+
 def _spec_case(n):
     """Finding 1 of the spec review: two low values below a tight bulk."""
     rng = np.random.default_rng(0)
@@ -216,6 +238,36 @@ def test_a_knot_at_tau_is_left_to_the_explicit_values():
     assert not _linalg.knot_rejected(rho, 8)
 
 
+def test_the_bounds_are_pinned():
+    """The error bounds of a fixed pair search with two responses, on both
+    paths. The tests above check that bounds hold and are tight enough; these
+    values pin the formula of the module docstring, so that a change of it is
+    deliberate."""
+    rng = np.random.default_rng(7)
+    n = 30
+    x = np.sort(rng.normal(size=n))
+    Q = _pair_basis(x, [])
+    Q = np.column_stack((Q, _linalg.gram_schmidt(Q, np.maximum(x - x[15], 0.0)).q))
+    Y = np.column_stack((np.sin(3 * x), np.cos(2 * x))) + 0.1 * rng.normal(size=(n, 2))
+    E = _linalg.orthogonalize(Q, Y - Y.mean(axis=0))[0]
+    want = {
+        False: (
+            [6.728832e-13, 3.228621e-13, 2.199265e-13, 1.760439e-13],
+            [3.607742e-10, 3.246823e-11, 2.430756e-11, 4.056525e-12],
+        ),
+        True: (
+            [2.112684e-13, 1.790302e-13, 1.576731e-13, 1.306046e-13],
+            [1.194552e-10, 1.908544e-11, 1.814592e-11, 3.345206e-12],
+        ),
+    }
+    for intercept, (ratio_err, gain_err) in want.items():
+        scan = _scan.knot_scan(
+            x, np.ones(n), Q, E, [2, 10, 20, 28], intercept=intercept
+        )
+        np.testing.assert_allclose(scan.ratio_err, ratio_err, rtol=2e-6)
+        np.testing.assert_allclose(scan.gain_err, gain_err, rtol=2e-6)
+
+
 def test_a_constant_hinge_has_ratio_and_gain_zero():
     """LA-3: a constant h (here 0 at every case) is rejected, with bounds 0."""
     x, _, _, Q, _, E, splits = _problem(3, 20, 2, 1)
@@ -247,6 +299,14 @@ def test_extreme_scales_change_nothing():
         big = _scan.knot_scan(xs, bs, Q, E, splits, intercept=True)
         for a, c in zip(big, base, strict=True):
             np.testing.assert_array_equal(a, c)
+    # gaps from 1 to 1e160: the largest gap sets the power of 2
+    x = np.array([0.0, 1.0, 2.0, 3.0, 1e160, 2e160])
+    Q = np.full((6, 1), 6**-0.5)
+    E = _linalg.orthogonalize(Q, np.array([1.0, -1.0, 2.0, 0.0, 3.0, -5.0]))[0]
+    wide = _scan.knot_scan(x, np.ones(6), Q, E, [1, 2, 3, 4, 5], intercept=True)
+    for i, s in enumerate([1, 2, 3, 4, 5]):
+        rho, gain = _scan.exact_knot(Q, E, np.maximum(x - x[s - 1], 0.0))
+        _within(wide, i, rho, gain, float(E @ E))
 
 
 @given(seeds, st.integers(10, 60), st.booleans())
