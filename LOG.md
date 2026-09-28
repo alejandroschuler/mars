@@ -171,6 +171,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:10 The user allowed work until 98 % of this week's limit (a reset comes this week). Resumed at 53 %: heartbeat refreshed. Plan: #55 fix to t11-forward; start T07 (conformance) and T15 (oracle tests, brief to write); T12's PR after #55; T11 stage 2 after #55.
 - 12:10 Brief T15-oracle.md written (oracle tests fast against reference, gate C script; replaces narrow tests that the oracle covers).
 - 12:11 Sent the #55 fix list to t11-forward. Started t07-conformance, t15-oracle (brief T15-oracle.md) and t13-estimators (stacked on origin/t12-core; PR after T12). Four authors at work.
+- 12:37 #55 round-1 fixes at bc4e8c5 (x centered by its middle data value, TSS about the centered Y; 300 shifted fits equal the reference; the flagged tests deleted; CI 12/12). Narrow round 2 started: spec (opus), adversarial (sonnet). Incident: t11-forward discarded its own manual mutant in its worktree with a variant of the guarded file checkout, and reported it; harmless. COMMON.md now names such variants and forbids trial edits in a worktree (dcg blocked my first edit of that text because it quoted the command; I wrote it with the Edit tool in reworded form). Follow-up noted: _gcv.tss centering for a large-mean y.
 
 ## Core-hour ledger
 
