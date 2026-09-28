@@ -199,6 +199,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:19 T15 PR #67 ready (1ebabee): the oracle compares fast and reference on fixtures, S15 and 10,000 hypothesis fits (0.7 % near-tie stops); 29 narrow tests deleted, their designs now oracle cases; gate C PASS. Its only disagreement is the pruning centering bug (#69). It had briefly swapped an untracked file in its worktree before the new rule; disclosed. Its dual review waits for the 5-hour reset (18:10), with #70's.
 - 14:22 #69 spec APPROVE (sonnet). It found the same centering problem in the reference's final_rss (1.3e-4 relative at mean 1e13); sent a small fix PR to t06-reference.
 - 14:29 The user asked to pause all work until the 5-hour reset (18:10). Told t11-stage2, t07-conformance and t06-reference to push a checkpoint and stop; stopped the #69 adversarial review workflow (to rerun) and the timer; a single timer wakes the executor at 18:12.
+- 14:29 All three authors paused with their work pushed: t11-stage2 (894e10a, draft #71; the interaction pass already equals the reference on every degree-2 and 3 fixture), t07-conformance (49b1a94), t06-reference (a7c32dd, draft #72). Nothing runs until 18:12.
 
 ## Core-hour ledger
 
