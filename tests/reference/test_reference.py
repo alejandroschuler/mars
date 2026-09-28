@@ -354,6 +354,16 @@ class TestKnots:
             [0.0, 1.0], [True, True], np.full(2, 1e9), 10**9, 1, 2e9, 0.1
         )
         assert two == [0.0]
+        # A knot on the last move of a stretch. With x = (0, 1), all active and
+        # E* = 1, the moves are the visit u = W0 + 1 (a stretch of one), then
+        # u = W0, ..., 3: W0 - 1 moves in all, each with t = 0.
+        # W = (1e9 + 1, 1e9 + 2), L = 1e9: D = 2e9, g = 0, c0 = 1, the knot is
+        # the one move of the first stretch; W = (1e9, 1e9 - 1), L = 3e9:
+        # D = g = 2e9 - 4, c0 = 1e9 - 1 = W0 - 1, the last move of the second.
+        for w0, w1, L in [(1e9 + 1, 1e9 + 2, 10**9), (1e9, 1e9 - 1, 3 * 10**9)]:
+            w = np.array([w0, w1])
+            knots = ref.knot_scan([0.0, 1.0], [True, True], w, L, 1, w0 + w1, 0.1)
+            assert knots == [0.0]
 
     def test_tenth_weights_give_the_knots_of_unit_weights(self):
         # W-4: 100 cases of weight 0.1 (10 at each of 10 values) and 10 cases

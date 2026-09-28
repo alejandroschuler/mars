@@ -237,6 +237,21 @@ def knot_scan_unit(x, active, minspan: int, endspan: int) -> list[float]:
     return knots
 
 
+def _smallest_from(guess: int, holds) -> int:
+    """The smallest k >= 0 with holds(k), for a condition that holds from some
+    k on, found from a guess a step or so away. The steps are bounded, so a
+    guess that is far off fails at once instead of running on."""
+    k = max(0, guess)
+    for _ in range(4):
+        if k > 0 and holds(k - 1):
+            k -= 1
+        elif not holds(k):
+            k += 1
+        else:
+            return k
+    raise AssertionError(f"the guess {guess} is not within a few steps")
+
+
 def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
     """The knot list of KNOT-6 (cumulative weight), in scan order, repeats included.
 
@@ -262,18 +277,10 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
 
     def first_visit(level: float) -> int:
         # The smallest k >= 0 with N - k <= level; N - k is exact in float64.
-        k = max(0, math.ceil(N - level))
-        while k > 0 and N - (k - 1) <= level:
-            k -= 1
-        while N - k > level:
-            k += 1
-        return k
+        return _smallest_from(math.ceil(N - level), lambda k: N - k <= level)
 
-    visits = max(0, math.floor(N - bound) + 1)  # k = 0, ..., visits - 1
-    while visits > 0 and N - (visits - 1) < bound:
-        visits -= 1
-    while N - visits >= bound:
-        visits += 1
+    # the visits are k = 0, ..., visits - 1: the first k that is not a visit
+    visits = _smallest_from(math.floor(N - bound) + 1, lambda k: N - k < bound)
     if visits == 0:
         return []
     order = case_order(x, active)
