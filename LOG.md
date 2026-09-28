@@ -87,6 +87,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-09-27
 - 17:04 17:03 Sunday: weekly reset (0 %; next reset 2026-10-04 17:00). Started: t09-linalg (fixture test for #45), dual review of #46 (wf_840068d4-87c), t08-terms-gcv-knots (opus), rev-pr41-legacy (sonnet). Pacing target about 14 % per day.
+- 17:07 #45 (T09) rebased with the lm_fit_coefficients fixture test (6 of 6 pass), head e0deb7c, gate B and CI 12 of 12 passed. Its dual review waits for a reviewer slot (limit 3; running: 2 on #46, 1 on #41).
 
 ## Core-hour ledger
 
