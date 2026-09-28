@@ -183,6 +183,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:41 #55 round 2: adversarial APPROVE; spec asks for one test case (the centered linear-candidate column unpinned; revert gives 4.2e-7 of the RSS); code right. Sent to t11-forward (tests only). Removed the clean worktree review-55-spec-r2 left by the failed first attempt.
 - 13:45 t15-oracle found a real bug in merged _pruning.py: Y is not centered before the QR, so a large-mean response misses LA-5 (1.2e-6 relative at y + 1e10); the reference is exact. t10-pruning resumed for a small fix PR (_pruning.py and _gcv.tss). T15 adds the failing draws after the fix merges (no red commits).
 - 13:48 Weekly 6 %, 5-hour 35 %. Started single reviews (sonnet) of the user's PRs #61 (CI floors test) and #63 (summarize with no cells).
+- 13:50 #55 at 82bf18c (the reviewer's linear-candidate case; the revert now fails; gate B PASS; CI 12/12). recheck-55 (sonnet) started.
 
 ## Core-hour ledger
 
