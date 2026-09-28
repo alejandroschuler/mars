@@ -12,8 +12,9 @@ for RSq and GRSq, normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5,
 and 1e-8·sd(y) for fitted values.
 
 The explicit answers come from a refit of every subset by numpy's SVD solver,
-which follows the steps of PRUNE-3 as the spec writes them. Every input is
-passed read-only, so a function that writes into its input fails.
+which follows the steps of PRUNE-3 as the spec writes them. The inputs from
+``_case`` and from the fixtures are read-only, so a function that writes into
+them fails.
 """
 
 import json
