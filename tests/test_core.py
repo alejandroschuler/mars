@@ -9,8 +9,10 @@ subsets, relative 1e-8 for RSS and GCV, absolute 1e-8 for RSq and GRSq, and
 normwise relative 1e-6 for the coefficients where κ(B) ≤ 1e5. earth reports
 sums of squares below about 1e-10 as 0 (PRUNE-4), ignores weights that are
 all equal (GCV-8) and counts cases in its GCV (W-2), so those values are not
-compared. Inputs are read-only where a test can make them so, so a write into
-them fails.
+compared. The reference's ``fit_mars`` (T06), called as a black box through
+``MarsFit.from_dict`` (CORE-5, CORE-6), must give the same fits with the same
+tolerances. Inputs are read-only where a test can make them so, so a write
+into them fails.
 """
 
 import dataclasses
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from reference import mars_ref  # the oracle (tests/reference), as a black box
 
 from pymars import _forward, _gcv, _terms
 from pymars._core import (
@@ -180,6 +183,51 @@ def _check_earth(fit, r, X, w):
     if w is None:
         _rel(fit.gcv, r["gcv"], 1e-8)
         assert abs(fit.rsq - r["rsq"]) <= 1e-8 and abs(fit.grsq - r["grsq"]) <= 1e-8
+
+
+def _check_reference(X, Y, w, params):
+    """CORE-5, CORE-6: the reference's fit_mars through MarsFit.from_dict gives
+    the core's forward terms up to the first near-tie of either log (the plan's
+    Ties, where either choice passes); when the whole path matches, which it
+    must without a near-tie, also the forward record, the pruning record, the
+    selection and the final fit, with the plan's tolerances."""
+    Y2 = np.asarray(Y, dtype=float).reshape(len(X), -1)
+    ref = MarsFit.from_dict(mars_ref.fit_mars(X, Y2, w, params, record_candidates=True))
+    fit = fit_mars(X, Y, w, params, record_candidates=True)
+    f, g = fit.forward, ref.forward
+    S = min(len(f.rss), len(g.rss)) - 1
+    tie = np.zeros(S, dtype=bool)
+    for rec in (f, g):
+        tie |= rec.candidates.second_rss[:S] - rec.rss[1 : S + 1] < 1e-7 * rec.rss[:S]
+    rows = f.step <= (np.argmax(tie) if tie.any() else S)
+    np.testing.assert_array_equal(g.dirs[: rows.sum()], f.dirs[rows])
+    np.testing.assert_array_equal(g.cuts[: rows.sum()], f.cuts[rows])
+    same = f.dirs.shape == g.dirs.shape and np.array_equal(f.dirs, g.dirs)
+    if not (same and np.array_equal(f.cuts, g.cuts)):
+        assert tie.any()
+        return
+    for key in ("kept", "dropped", "parent", "step", "termination"):
+        assert np.array_equal(getattr(f, key), getattr(g, key)), key
+    before = np.r_[f.rss[0], f.rss[:-1]]
+    assert np.all(np.abs(f.rss - g.rss) <= 1e-8 * before)
+    a, b = f.candidates.second_rss, g.candidates.second_rss  # each within 1e-8
+    np.testing.assert_array_equal(np.isinf(a), np.isinf(b))
+    ok = np.isfinite(b)
+    assert np.all(np.abs(a[ok] - b[ok]) <= 2e-8 * f.rss[:-1][ok])
+    for key in ("removed", "subsets", "selected_size"):
+        assert np.array_equal(getattr(fit.pruning, key), getattr(ref.pruning, key)), key
+    _rel(fit.pruning.rss_per_size, ref.pruning.rss_per_size, 1e-8)
+    _rel(fit.pruning.gcv_per_size, ref.pruning.gcv_per_size, 1e-8)
+    np.testing.assert_array_equal(fit.selected, ref.selected)
+    if np.linalg.cond(_terms.basis_matrix(X, fit.dirs, fit.cuts)) <= 1e5:
+        assert np.linalg.norm(fit.coef - ref.coef) <= 1e-6 * np.linalg.norm(ref.coef)
+    _rel([fit.rss, fit.gcv], [ref.rss, ref.gcv], 1e-8)
+    assert np.allclose([fit.rsq, fit.grsq], [ref.rsq, ref.grsq], rtol=0, atol=1e-8)
+    assert (fit.n_eff, fit.max_terms, fit.penalty) == (
+        ref.n_eff,
+        ref.max_terms,
+        ref.penalty,
+    )
 
 
 # MarsParams (CORE-2)
@@ -494,10 +542,11 @@ def test_matched_fits_against_earth(load_fixture, name):
     first near-tie (the plan's Ties), where either choice passes; when the
     whole path matches, which it must without a near-tie, also the termination,
     the RSS of each step, the pruning record, the selected terms and the
-    coefficients."""
+    coefficients. The reference gives the same fit (CORE-6)."""
     d = load_fixture(name)
     r = d["result"]
     X, y = _frozen(d["inputs"]["X"], d["inputs"]["y"])
+    _check_reference(X, y, None, _params(d["earth_args"]))
     fit = fit_mars(X, y, None, _params(d["earth_args"]), record_candidates=True)
     f, log = fit.forward, fit.forward.candidates
     tie = log.second_rss - log.best_rss < 1e-7 * f.rss[:-1]
@@ -586,7 +635,8 @@ DEGENERATE = {
 @pytest.mark.parametrize("record", [False, True])
 def test_degenerate_fits(monkeypatch, case, record):
     """The intercept alone, with the weighted mean, gcv +∞, rsq and grsq 0, code
-    DEGENERATE and the trivial records; the forward pass does not run."""
+    DEGENERATE and the trivial records; the forward pass does not run. The
+    reference gives the same fit (CORE-6)."""
     X, Y, w, tss = DEGENERATE[case]
     X, Y, w = _frozen(X, Y, w)
     monkeypatch.setattr(_forward, "forward_pass", _no_forward)
@@ -617,12 +667,14 @@ def test_degenerate_fits(monkeypatch, case, record):
         0,
     )
     assert fit.n_eff == math.fsum(wv)
+    if record:
+        _check_reference(X, Y, w, MarsParams())
 
 
 @pytest.mark.parametrize("max_terms", [1, 2])
 def test_no_room(max_terms):
     """max_terms ≤ 2: no forward step, code NO_ROOM, and the intercept model
-    with its finite GCV, not a degenerate fit."""
+    with its finite GCV, not a degenerate fit; the reference agrees."""
     rng = np.random.default_rng(4)
     X, y = _frozen(rng.uniform(size=(30, 2)), rng.normal(size=30))
     fit = fit_mars(X, y, None, MarsParams(max_terms=max_terms, fast_k=0))
@@ -631,11 +683,13 @@ def test_no_room(max_terms):
     assert fit.rss == pytest.approx(_gcv.tss(y), rel=1e-14)
     assert fit.gcv == _gcv.gcv(fit.rss, 1, 2.0, 30.0) and fit.rsq == fit.grsq == 0.0
     assert fit.coef[0, 0] == pytest.approx(np.mean(y), rel=1e-14)
+    _check_reference(X, y, None, MarsParams(max_terms=max_terms, fast_k=0))
 
 
 def test_a_power_of_two_on_y_changes_no_bit():
     """EDGE-6: y of size 1e-170 has a TSS that underflows unscaled; its fit is
-    that of y·2^600 with every value on the scale of y multiplied back."""
+    that of y·2^600 with every value on the scale of y multiplied back, and
+    the reference's fit."""
     x = _frozen(np.arange(8.0)[:, None])[0]
     p = MarsParams(fast_k=0, minspan=1, endspan=1, thresh=0.0)
     tiny = fit_mars(x, [0.0] * 7 + [1e-170], None, p, record_candidates=True)
@@ -653,6 +707,7 @@ def test_a_power_of_two_on_y_changes_no_bit():
     for key in ("best_rss", "second_rss"):
         log[key] = np.ldexp(log[key], -1200)
     _same(tiny, back)
+    _check_reference(x, [0.0] * 7 + [1e-170], None, p)
 
 
 @pytest.mark.parametrize(
@@ -665,10 +720,13 @@ def test_a_power_of_two_on_y_changes_no_bit():
 def test_a_tss_out_of_range_raises(monkeypatch, Y, w, j):
     """EDGE-6: a scaled TSS that is not a positive normal number, for a tiny
     response beside a constant one, and for extreme weights; the power of 2 is
-    the j with D·2^j in [1, 2), D = max |Y|."""
+    the j with D·2^j in [1, 2), D = max |Y|. The reference raises too."""
     monkeypatch.setattr(_forward, "forward_pass", _no_forward)
+    X = np.arange(len(Y), dtype=float)[:, None]
     with pytest.raises(ValueError, match=rf"scale of y or of the weights.*y·2\^{j} is"):
-        fit_mars(np.arange(len(Y), dtype=float)[:, None], Y, w, MarsParams())
+        fit_mars(X, Y, w, MarsParams())
+    with pytest.raises(ValueError, match="scale of y or of the weights"):
+        mars_ref.fit_mars(X, Y.reshape(len(X), -1), w, MarsParams())
 
 
 # The kept terms, pmethod and nprune, and the resolved values
@@ -757,7 +815,8 @@ def test_resolved_values(monkeypatch, p, degree, max_terms, penalty):
 
 def test_pure_and_row_order():
     """CORE-1: read-only inputs, the same fit after a permutation of the rows
-    (no near-tie here), and a 1-D y as one response."""
+    (no near-tie here), and a 1-D y as one response; the reference's fit, also
+    with pmethod="none" and nprune (PRUNE-7)."""
     rng = np.random.default_rng(8)
     X = np.round(rng.uniform(size=(90, 3)), 3)
     y = np.sin(4 * X[:, 0]) + np.maximum(X[:, 1] - 0.4, 0) + 0.1 * rng.normal(size=90)
@@ -772,6 +831,8 @@ def test_pure_and_row_order():
     np.testing.assert_array_equal(other.forward.cuts, fit.forward.cuts)
     _close(fit, other, 1e-10)
     assert fit.coef.shape == (fit.selected.size, 1)
+    for q in (p, dataclasses.replace(p, pmethod="none", nprune=4)):
+        _check_reference(Xr, yr, None, q)
 
 
 @pytest.mark.parametrize(
