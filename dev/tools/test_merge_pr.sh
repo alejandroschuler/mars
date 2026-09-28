@@ -24,11 +24,16 @@ cat >"$dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 # Fake gh: "pr view ... --jq <program>" runs the program on $FAKE_PR_JSON.
 # "pr list ... --jq <program>" runs it on $FAKE_STACKED_JSON, or fails when
-# $FAKE_PR_LIST_FAIL is set.
+# $FAKE_PR_LIST_FAIL is set. A pr list call missing one of the expected
+# filters also fails, so a one-token change to that call is caught here
+# rather than by a real gh query.
 case "$1 $2" in
   "pr view") json=$FAKE_PR_JSON ;;
   "pr list")
     [ -z "${FAKE_PR_LIST_FAIL:-}" ] || { echo "fake gh: pr list failed" >&2; exit 1; }
+    for want in "--repo alejandroschuler/mars" "--state open" "--base t99-test"; do
+      [[ " $* " == *" $want "* ]] || { echo "fake gh: pr list without $want: $*" >&2; exit 1; }
+    done
     json=$FAKE_STACKED_JSON ;;
   *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
 esac
@@ -94,6 +99,8 @@ stacked '[]'
 expect "no stacked pull request passes" "^PASS no open pull request is based on t99-test"
 stacked '[{"number": 39}]'
 expect "a stacked pull request fails and names it" "^FAIL retarget.*#39"
+stacked '[{"number": 39}, {"number": 40}]'
+expect "two stacked pull requests fail and both are named" "^FAIL retarget.*#39 #40"
 stacked '[]'
 expect "a failed pr list call fails the check" "^FAIL gh pr list" "" "FAKE_PR_LIST_FAIL=1"
 
