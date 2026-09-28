@@ -306,23 +306,32 @@ def test_a_degenerate_fit(y):
 
 
 @pytest.mark.parametrize(
-    ("x_shift", "y_shift"), [(2.0**36, 0), (2.0**40, 0), (0, 2.0**40), (0, 2.0**44)]
+    ("x_shift", "grid", "y_shift", "p"),
+    [
+        (2.0**36, 12, 0, 2),
+        (2.0**40, 12, 0, 2),
+        (2.0**46, 6, 0, 1),
+        (0, 12, 2.0**40, 2),
+        (0, 12, 2.0**44, 2),
+    ],
 )
-def test_exact_shifts(x_shift, y_shift):
-    """Exact shifts of a covariate (on a 2^-12 grid) and of y (on a 2^-8 grid)
-    give the fit of the unshifted data: the same terms, knots moved by the
+def test_exact_shifts(x_shift, grid, y_shift, p):
+    """Exact shifts of a covariate (on a 2^-grid grid) and of y (on a 2^-8
+    grid) give the fit of the unshifted data: the same terms, knots moved by the
     shift, and every RSS, rss[0] = TSS included, within 1e-8 of the RSS before
     its step (LA-5, CORE-3). x is centered before Gram-Schmidt (the plan's
-    "Fast path"), and the TSS comes from the centered y (FWD-10)."""
+    "Fast path"); near 1e14 an uncentered x also makes A of LA-7 rounding noise
+    above its threshold, and a single-hinge search becomes a pair search. The
+    TSS comes from the centered y (FWD-10)."""
     rng = np.random.default_rng(0)
     n = 200
-    u = np.round(rng.uniform(size=n) * 2**12) / 2**12
-    v = rng.uniform(size=n)
-    y = np.sin(5 * v) + np.maximum(u - 0.5, 0.0) + 0.05 * rng.normal(size=n)
+    u = np.round(rng.uniform(size=n) * 2**grid) / 2**grid
+    X = np.column_stack((u, rng.uniform(size=n)))[:, :p]
+    y = np.sin(5 * X[:, -1]) + np.maximum(u - 0.5, 0.0) + 0.05 * rng.normal(size=n)
     y = np.round(y * 2**8) / 2**8
     kw = {"thresh": 0.0, "minspan": 1, "endspan": 1, "max_terms": 11}
-    a = _fit(np.column_stack((u, v)), y, **kw)
-    b = _fit(np.column_stack((u + x_shift, v)), y + y_shift, **kw)
+    a = _fit(X, y, **kw)
+    b = _fit(X + np.eye(p)[0] * x_shift, y + y_shift, **kw)
     np.testing.assert_array_equal(b.dirs, a.dirs)
     moved = np.abs(a.dirs[:, 0]) == 1
     np.testing.assert_array_equal(b.cuts[moved, 0], a.cuts[moved, 0] + x_shift)
