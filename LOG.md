@@ -194,6 +194,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:04 5-hour 60 % at 14:04 (reset 18:10), weekly 10 %: by the 60 % start rule, T12's full review waits; running work continues.
 - 14:06 Merged #61 as 11202d3 (update-check-61: the PR's own diff unchanged by the branch update; gate B PASS; CI 12/12). Updated #63's branch to 68b21f5; update-check-63 started.
 - 14:12 Merged #63 (the user's summarize fix) after update-check-63's re-approval.
+- 14:18 5-hour 78 %, weekly 13 %: heartbeat set to 18:25 (reset 18:10 plus 15 minutes) by the 70 % rule.
 
 ## Core-hour ledger
 
