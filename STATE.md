@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-27 19:30 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 22:49 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING (week 2). Weekly 11 % at 19:05 Sunday 2026-09-27; reset 2026-10-04 17:00 PDT. Daily allowance: cumulative 14 % per day (14 % by Monday 17:00, 28 % by Tuesday 17:00, ...). The user has not set a cap for week 2; default is the plan's rule (projected use at the reset at most 95 %). At most 2 to 3 agents at a time; sonnet for mechanical work (integrator, checkers).
+RUNNING (week 2). Weekly 11 % at 19:05 Sunday 2026-09-27; reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
 
 main: 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11.
