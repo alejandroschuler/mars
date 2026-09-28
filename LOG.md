@@ -167,6 +167,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:13 Started the dual review of #55 (5399a75, only the _forward.py commits after 2b5d35f) under the new test rules, in parallel with recheck-57; weekly about 48 % at the start.
 - 11:32 Merged #57 (_scan.py) as 2a00063 after recheck-57's re-approvals (the extra refactor checked bit for bit on 410 outputs). Weekly 51 %, 5-hour 39 %. The #55 dual review runs; after it, only work that finishes open PRs, and a pause at 55 %.
 - 11:54 #55 round 1: both REQUEST_CHANGES on one real finding (the uncentered covariate in Gram-Schmidt breaks LA-5 on shifted covariates; plus TSS about one computed mean at large y shifts); both reviewers checked their fixes; 4 performative tests flagged for deletion; samples of 29 to 30 mutants. Weekly 53 %: PAUSED (limit 55 %). Fix list written in STATE for t11-forward. Heartbeat set to the weekly reset.
+- 12:06 The user started TOOLS-2 (pin the fake gh's pr view arguments) in a separate local session; not to be duplicated here.
 
 ## Core-hour ledger
 
