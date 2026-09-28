@@ -1563,6 +1563,422 @@ class TestForwardPass:
 
 
 # ---------------------------------------------------------------------------
+# The fit [CORE-1, CORE-3, CORE-5, W-1 to W-5, EDGE-1 to EDGE-6, RESP-1 to RESP-3]
+
+FIT_FIELDS = {
+    "dirs": np.int8,
+    "cuts": np.float64,
+    "coef": np.float64,
+    "selected": np.int64,
+}
+FORWARD_FIELDS = {
+    "dirs": np.int8,
+    "cuts": np.float64,
+    "kept": np.int64,
+    "dropped": np.int64,
+    "parent": np.int64,
+    "step": np.int64,
+    "rss": np.float64,
+}
+LOG_FIELDS = {
+    "best_rss": np.float64,
+    "second_rss": np.float64,
+    "second_parent": np.int64,
+    "second_variable": np.int64,
+    "second_knot": np.float64,
+    "second_kind": np.int8,
+}
+PRUNING_FIELDS = {
+    "removed": np.int64,
+    "rss_per_size": np.float64,
+    "gcv_per_size": np.float64,
+    "subsets": np.bool_,
+}
+
+
+FIT_KEYS = {
+    "dirs",
+    "cuts",
+    "coef",
+    "selected",
+    "rss",
+    "gcv",
+    "rsq",
+    "grsq",
+    "n_eff",
+    "max_terms",
+    "penalty",
+    "forward",
+    "pruning",
+}
+FORWARD_KEYS = {
+    "dirs",
+    "cuts",
+    "kept",
+    "dropped",
+    "parent",
+    "step",
+    "rss",
+    "termination",
+    "candidates",
+}
+PRUNING_KEYS = {"removed", "rss_per_size", "gcv_per_size", "subsets", "selected_size"}
+
+
+def check_fields(fit, p, K):
+    """The keys (exactly), dtypes and shapes of CORE-3 and CORE-5."""
+    M = len(fit["selected"])
+    fwd, pr = fit["forward"], fit["pruning"]
+    assert set(fit) == FIT_KEYS and set(fwd) == FORWARD_KEYS
+    assert set(pr) == PRUNING_KEYS
+    if fwd["candidates"] is not None:
+        assert set(fwd["candidates"]) == set(LOG_FIELDS)
+    Ma, S, Mf = len(fwd["dirs"]), len(fwd["rss"]) - 1, len(fwd["kept"])
+    shapes = {
+        "dirs": (M, p),
+        "cuts": (M, p),
+        "coef": (M, K),
+        "selected": (M,),
+        "forward.dirs": (Ma, p),
+        "forward.cuts": (Ma, p),
+        "forward.kept": (Mf,),
+        "forward.dropped": (Ma - Mf,),
+        "forward.parent": (Ma,),
+        "forward.step": (Ma,),
+        "pruning.removed": (Mf - 1,),
+        "pruning.rss_per_size": (Mf,),
+        "pruning.gcv_per_size": (Mf,),
+        "pruning.subsets": (Mf, Mf),
+    }
+    for group, fields in [("", FIT_FIELDS), ("forward.", FORWARD_FIELDS)]:
+        source = fit if not group else fwd
+        for key, dtype in fields.items():
+            assert source[key].dtype == dtype, group + key
+            if group + key in shapes:
+                assert source[key].shape == shapes[group + key], group + key
+    for key, dtype in PRUNING_FIELDS.items():
+        assert pr[key].dtype == dtype and pr[key].shape == shapes["pruning." + key]
+    if fwd["candidates"] is not None:
+        for key, dtype in LOG_FIELDS.items():
+            log = fwd["candidates"][key]
+            assert log.dtype == dtype and log.shape == (S,), key
+    for key in ("rss", "gcv", "rsq", "grsq", "n_eff", "penalty"):
+        assert type(fit[key]) is float, key
+    assert type(fit["max_terms"]) is int and type(pr["selected_size"]) is int
+    assert type(fwd["termination"]) is int and pr["selected_size"] == M
+
+
+def fit(X, y, w=None, **params):
+    return ref.fit_mars(X, y, w, params, record_candidates=True)
+
+
+class TestFit:
+    @pytest.mark.parametrize("K", [1, 2])
+    def test_the_fields_of_marsfit(self, K):
+        X, y = noisy_data(11, p=3)
+        Y = np.column_stack([y, X[:, 1]])[:, :K]
+        result = fit(X, Y, max_degree=2)
+        check_fields(result, 3, K)
+        assert ref.fit_mars(X, Y, None, {})["forward"]["candidates"] is None
+        np.testing.assert_array_equal(result["selected"][0], 0)
+        np.testing.assert_array_equal(
+            result["dirs"], result["forward"]["dirs"][result["selected"]]
+        )
+
+    def test_a_single_true_knot_is_recovered(self):
+        rng = np.random.default_rng(12)
+        x = np.sort(rng.uniform(size=100))
+        y = 2 * np.maximum(x - 0.5, 0) + rng.normal(scale=0.01, size=100)
+        result = fit(x[:, None], y)
+        knots = result["cuts"][np.abs(result["dirs"][:, 0]) == 1, 0]
+        assert knots.size and np.min(np.abs(knots - 0.5)) < 0.05
+        assert result["rsq"] > 0.99
+
+    def test_a_pure_linear_truth(self):
+        x = np.arange(21.0) / 20
+        result = fit(x[:, None], 1 + 2 * x)
+        np.testing.assert_array_equal(result["dirs"], [[0], [2]])
+        np.testing.assert_allclose(result["coef"], [[1.0], [2.0]], rtol=1e-12)
+        assert result["forward"]["termination"] == ref.RSQ_HIGH
+        assert result["rsq"] == pytest.approx(1.0, abs=1e-12)
+
+    def test_a_constant_response_is_degenerate(self):
+        X, _ = noisy_data(13)
+        result = fit(X, np.full(60, 3.7))
+        check_fields(result, 2, 1)
+        assert result["forward"]["termination"] == ref.DEGENERATE
+        assert result["gcv"] == math.inf and result["rsq"] == result["grsq"] == 0.0
+        assert result["rss"] == 0.0 and result["forward"]["rss"].tolist() == [0.0]
+        np.testing.assert_array_equal(result["coef"], [[3.7]])
+        np.testing.assert_array_equal(result["pruning"]["gcv_per_size"], [math.inf])
+
+    def test_a_weight_sum_of_at_most_one_is_degenerate(self):
+        one = fit(np.array([[0.5]]), np.array([2.0]))
+        assert one["forward"]["termination"] == ref.DEGENERATE and one["rss"] == 0.0
+        # N = 0.9: rss is the RSS of the intercept model, 0.3 (2/3)^2 + 0.6 (1/3)^2
+        two = fit(np.array([[0.0], [1.0]]), np.array([0.0, 1.0]), np.array([0.3, 0.6]))
+        assert two["forward"]["termination"] == ref.DEGENERATE
+        assert two["rss"] == pytest.approx(0.2, rel=1e-14)
+        assert two["forward"]["rss"][0] == pytest.approx(0.2, rel=1e-14)
+        np.testing.assert_allclose(two["coef"], [[2 / 3]], rtol=1e-14)
+        assert two["gcv"] == math.inf and two["n_eff"] == pytest.approx(0.9)
+
+    def test_small_samples_give_the_intercept_by_grsq(self):
+        # [EDGE-2]: no special case, the chosen candidate has GRSq = -inf
+        result = fit(np.arange(5.0)[:, None], [0.0, 1.0, 0.0, 1.0, 0.0])
+        assert result["forward"]["termination"] == ref.GRSQ_NEG_INF
+        assert len(result["selected"]) == 1 and math.isfinite(result["gcv"])
+
+    def test_zero_weights_drop_their_rows(self):
+        X, y = noisy_data(14)
+        w = np.random.default_rng(14).integers(0, 3, size=60).astype(float)
+        dropped = fit(X, y, w)
+        kept = fit(X[w > 0], y[w > 0], w[w > 0])
+        for key in ("dirs", "cuts", "coef", "selected"):
+            np.testing.assert_array_equal(dropped[key], kept[key])
+        assert dropped["rss"] == kept["rss"] and dropped["n_eff"] == w.sum()
+
+    def test_unit_weights_are_no_weights(self):
+        X, y = noisy_data(15)
+        a, b = fit(X, y), fit(X, y, np.ones(60))
+        for key in ("dirs", "cuts", "coef", "selected"):
+            np.testing.assert_array_equal(a[key], b[key])
+        np.testing.assert_array_equal(
+            a["pruning"]["rss_per_size"], b["pruning"]["rss_per_size"]
+        )
+
+    def test_integer_weights_give_the_fit_of_repeated_rows(self):
+        X, y = noisy_data(16, n=40)
+        w = np.random.default_rng(16).integers(1, 4, size=40)
+        weighted = fit(X, y, w.astype(float), max_degree=2)
+        repeated = fit(np.repeat(X, w, axis=0), np.repeat(y, w), max_degree=2)
+        for key in ("dirs", "cuts", "selected"):
+            np.testing.assert_array_equal(weighted[key], repeated[key])
+        for key in ("coef", "rss", "gcv", "rsq", "grsq", "n_eff"):
+            np.testing.assert_allclose(weighted[key], repeated[key], rtol=1e-9)
+        np.testing.assert_array_equal(
+            weighted["pruning"]["subsets"], repeated["pruning"]["subsets"]
+        )
+
+    @pytest.mark.parametrize("scale", [1000.0, 1e-9, 1e150])
+    def test_the_terms_do_not_change_with_a_positive_scale_of_y(self, scale):
+        X, y = noisy_data(17, p=3)
+        base, scaled = fit(X, y, max_degree=2), fit(X, scale * y, max_degree=2)
+        for key in ("dirs", "cuts", "selected"):
+            np.testing.assert_array_equal(scaled[key], base[key])
+        np.testing.assert_allclose(scaled["coef"], scale * base["coef"], rtol=1e-9)
+        assert scaled["rss"] == pytest.approx(scale**2 * base["rss"], rel=1e-9)
+        assert scaled["grsq"] == pytest.approx(base["grsq"], rel=1e-9)
+
+    def test_a_dropped_term_before_kept_ones(self):
+        # FWD-11 in the fit: x0 = 1e7 + (k mod 2) makes the linear term of x0
+        # dependent by LA-4 (5e-8 of its norm outside the intercept), so the
+        # pruning pass gets the terms of kept, and pruning index m is forward
+        # index kept[m] [CORE-3]
+        rng = np.random.default_rng(5)
+        n = 60
+        X = np.column_stack([1e7 + (np.arange(n) % 2), rng.uniform(size=n)])
+        noise = rng.normal(scale=0.05, size=n)
+        y = 2 * (X[:, 0] - 1e7) + 3 * np.maximum(X[:, 1] - 0.5, 0) + noise
+        result = fit(X, y)
+        fwd, pr = result["forward"], result["pruning"]
+        assert fwd["dropped"].size and fwd["dropped"].min() < fwd["kept"].max()
+        check_fields(result, 2, 1)
+        size = pr["selected_size"]
+        np.testing.assert_array_equal(
+            result["selected"], fwd["kept"][np.flatnonzero(pr["subsets"][size - 1])]
+        )
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        np.testing.assert_allclose(
+            result["coef"], ref.lstsq_coef(B, y[:, None], np.ones(n)), rtol=1e-10
+        )
+
+    def test_the_bound_of_edge_1_and_the_degenerate_record(self):
+        # N = 1 exactly is degenerate [EDGE-1]; D = 10 gives j = -3, so every
+        # value on the scale of y is scaled back [EDGE-6, GCV-7]
+        X, y = np.array([[0.0], [1.0]]), np.array([0.0, 10.0])
+        one = fit(X, y, np.array([0.5, 0.5]))
+        check_fields(one, 1, 1)
+        assert one["forward"]["termination"] == ref.DEGENERATE
+        for value in (
+            one["rss"],
+            one["forward"]["rss"][0],
+            one["pruning"]["rss_per_size"][0],
+        ):
+            assert value == pytest.approx(25.0, rel=1e-14)
+        np.testing.assert_array_equal(one["coef"], [[5.0]])
+        assert one["forward"]["parent"].tolist() == [-1]
+        assert one["forward"]["step"].tolist() == [0]
+        assert one["pruning"]["subsets"].tolist() == [[True]]
+        # N = 1 + 2^-52 is within tau_N of 1, so it is 1 [W-4]
+        near = fit(X, y, np.array([0.5, 0.5 + 2.0**-52]))
+        assert near["forward"]["termination"] == ref.DEGENERATE and near["n_eff"] == 1.0
+        # N = 2 has no special case [EDGE-2]
+        assert fit(X, y)["forward"]["termination"] != ref.DEGENERATE
+        # N = 0.4 with y in the thousands: weighted mean 2250, RSS 475000
+        tiny = fit(
+            np.array([[0.0], [1.0], [2.0]]),
+            np.array([1000.0, 2000.0, 4000.0]),
+            np.array([0.1, 0.2, 0.1]),
+        )
+        assert tiny["forward"]["termination"] == ref.DEGENERATE
+        assert tiny["rss"] == pytest.approx(475000.0, rel=1e-14)
+        assert tiny["forward"]["rss"][0] == pytest.approx(475000.0, rel=1e-14)
+        np.testing.assert_allclose(tiny["coef"], [[2250.0]], rtol=1e-14)
+
+    def test_the_passes_get_the_resolved_penalty_and_the_snapped_n(self):
+        # weights 1 + 1e-10: the sum 60 + 6e-9 snaps to 60 [W-4]; max_degree 2
+        # gives d = 3 [GCV-4]; the pruning pass uses both [PRUNE-4]
+        X, y = noisy_data(11, p=3)
+        result = fit(X, y, np.full(60, 1.0 + 1e-10), max_degree=2)
+        assert result["penalty"] == 3.0 and result["n_eff"] == 60.0
+        pr = result["pruning"]
+        tau = ref.weight_tol(60.0)
+        for m in range(1, len(pr["rss_per_size"]) + 1):
+            expected = ref.gcv(pr["rss_per_size"][m - 1], m, 3.0, 60.0, tau)
+            assert pr["gcv_per_size"][m - 1] == expected
+        # weights 1 - 1e-9 sum to 19.99999998, which snaps to 20
+        X, y = noisy_data(12, n=20)
+        assert fit(X, y, np.full(20, 1 - 1e-9))["n_eff"] == 20.0
+
+    def test_a_power_of_two_changes_no_bit(self):
+        # [EDGE-6]: Y is scaled to D in [1, 2) before any sum
+        X, y = noisy_data(18)
+        base, scaled = fit(X, y), fit(X, 2.0**-40 * y)
+        np.testing.assert_array_equal(scaled["coef"], 2.0**-40 * base["coef"])
+        np.testing.assert_array_equal(
+            scaled["forward"]["rss"], 2.0**-80 * base["forward"]["rss"]
+        )
+        assert scaled["rsq"] == base["rsq"] and scaled["grsq"] == base["grsq"]
+        # the candidate log is on the scale of Y too, and best_rss is rss[s]
+        # [CORE-3]; here max |y| is outside [1, 2), so j is not 0
+        for result in (base, scaled):
+            log = result["forward"]["candidates"]
+            np.testing.assert_array_equal(log["best_rss"], result["forward"]["rss"][1:])
+        assert ref.y_scale_power(2.0**-40 * y) != 0
+        np.testing.assert_array_equal(
+            scaled["forward"]["candidates"]["second_rss"],
+            2.0**-80 * base["forward"]["candidates"]["second_rss"],
+        )
+
+    def test_a_tiny_response_has_a_positive_tss(self):
+        # seven 0s and one 1e-170: the fit is not degenerate, although its TSS
+        # (about 1e-340) underflows to 0 when it is reported [EDGE-6]
+        y = np.zeros(8)
+        y[5] = 1e-170
+        result = fit(np.arange(8.0)[:, None], y)
+        assert result["forward"]["termination"] != ref.DEGENERATE
+        assert result["forward"]["rss"][0] == 0.0
+        big = fit(np.arange(8.0)[:, None], y * 2.0**600)
+        assert result["forward"]["termination"] == big["forward"]["termination"]
+        np.testing.assert_array_equal(result["dirs"], big["dirs"])
+
+    def test_an_out_of_range_weight_scale_is_an_error(self):
+        X = np.arange(4.0)[:, None]
+        with pytest.raises(ValueError, match="scale of y or of the weights"):
+            fit(X, [0.0, 1.0, 0.0, 1.0], np.full(4, 1e-310))
+        # weights 8e307 keep N finite, but the scaled TSS overflows; under the
+        # repository's filterwarnings = error a warning would fail this test
+        with pytest.raises(ValueError, match="scale of y or of the weights"):
+            fit(np.array([[0.0], [1.0]]), np.array([-1.9, 1.9]), np.full(2, 8e307))
+
+    def test_several_responses_share_one_basis(self):
+        X, y = noisy_data(19, p=3)
+        Y = np.column_stack([y, np.maximum(X[:, 2] - 0.3, 0)])
+        both = fit(X, Y, max_degree=2)
+        assert both["coef"].shape == (len(both["selected"]), 2)
+        subsets = both["pruning"]["subsets"]
+        for m in range(1, len(subsets)):
+            assert np.all(subsets[m] >= subsets[m - 1])  # K >= 2: nested [PRUNE-3]
+        B = ref.basis_matrix(X, both["dirs"], both["cuts"])
+        for k in range(2):  # one column of coefficients per response [PRUNE-8]
+            np.testing.assert_allclose(
+                both["coef"][:, k],
+                np.linalg.lstsq(B, Y[:, k], rcond=None)[0],
+                rtol=1e-9,
+            )
+        one_column = fit(X, y[:, None])
+        flat = fit(X, y)
+        for key in ("dirs", "cuts", "coef", "selected"):
+            np.testing.assert_array_equal(one_column[key], flat[key])  # [RESP-2]
+
+    def test_pmethod_none_and_nprune(self):
+        X, y = noisy_data(20)
+        full = fit(X, y, pmethod="none")
+        np.testing.assert_array_equal(full["selected"], full["forward"]["kept"])
+        first = fit(X, y, pmethod="none", nprune=3)
+        np.testing.assert_array_equal(first["selected"], full["forward"]["kept"][:3])
+        capped = fit(X, y, nprune=2)
+        assert len(capped["selected"]) <= 2
+
+    def test_the_rows_order_does_not_matter(self):
+        X, y = noisy_data(21)
+        perm = np.random.default_rng(21).permutation(60)
+        a, b = fit(X, y, max_degree=2), fit(X[perm], y[perm], max_degree=2)
+        for key in ("dirs", "cuts", "selected"):
+            np.testing.assert_array_equal(a[key], b[key])
+        np.testing.assert_allclose(a["coef"], b["coef"], rtol=1e-9)
+
+    def test_inputs_are_not_changed(self):
+        X, y = noisy_data(22)
+        w = np.linspace(0.0, 2.0, 60)
+        copies = X.copy(), y.copy(), w.copy()
+        fit(X, y, w)
+        for original, copy in zip((X, y, w), copies, strict=True):
+            np.testing.assert_array_equal(original, copy)
+
+
+# ---------------------------------------------------------------------------
+# The whole fit against earth (EARTH_NAMES and params_from_earth are below,
+# with the forward-pass self-checks)
+
+
+@pytest.mark.parametrize("name", ["S01_matched_d1", "S01_defaults_d1"])
+def test_the_fit_matches_earth_on_s01(name, load_fixture):
+    # The harness divides the fixture's x by its standard deviation, so
+    # earth's rule for the kind of a search and the pymars rule agree
+    # [LA-7]. Tolerances from the plan's table.
+    fixture = load_fixture(name)
+    earth = fixture["result"]
+    X = np.array(fixture["inputs"]["X"])
+    result = ref.fit_mars(
+        X,
+        np.array(fixture["inputs"]["y"]),
+        None,
+        params_from_earth(fixture["earth_args"]),
+    )
+    forward = result["forward"]
+    np.testing.assert_array_equal(forward["dirs"], earth["dirs"])
+    np.testing.assert_array_equal(forward["cuts"], earth["cuts"])  # no linear term
+    assert forward["termination"] == earth["termcond"]
+    # earth's fwd_rss[m - 1] is the RSS of the first m forward terms
+    sizes = [
+        1 + int(np.sum(forward["step"][1:] <= s)) for s in range(len(forward["rss"]))
+    ]
+    np.testing.assert_allclose(
+        forward["rss"], np.array(earth["fwd_rss"])[np.array(sizes) - 1], rtol=1e-8
+    )
+    np.testing.assert_array_equal(
+        result["selected"], np.array(earth["selected_terms"]) - 1
+    )
+    pruning = result["pruning"]
+    np.testing.assert_allclose(
+        pruning["rss_per_size"], earth["rss_per_subset"], rtol=1e-8
+    )
+    np.testing.assert_allclose(
+        pruning["gcv_per_size"], earth["gcv_per_subset"], rtol=1e-8
+    )
+    for m, row in enumerate(np.array(earth["prune_terms"], dtype=int)):
+        assert set(np.flatnonzero(pruning["subsets"][m])) == set(row[row > 0] - 1)
+    coef = np.array(earth["coef"])
+    assert np.linalg.norm(result["coef"] - coef) <= 1e-6 * np.linalg.norm(coef)
+    assert result["rss"] == pytest.approx(earth["rss"], rel=1e-8)
+    assert result["gcv"] == pytest.approx(earth["gcv"], rel=1e-8)
+    assert result["rsq"] == pytest.approx(earth["rsq"], abs=1e-8)
+    assert result["grsq"] == pytest.approx(earth["grsq"], abs=1e-8)
+
+
+# ---------------------------------------------------------------------------
 # Self-checks against earth's component fixtures (validation/fixtures)
 
 HARNESS = Path(__file__).resolve().parents[2] / "validation" / "harness"
