@@ -144,6 +144,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 04:39 #48 batch 2 at c2fbfbc (16 adversarial tests in; knot_scan(distinct=True) bounds the scan by n; spec questions on #44). Round 2 started: spec role (opus) and adversarial role (sonnet, narrow).
 - 04:55 #58 round 1 REQUEST_CHANGES: the triage logic needs unit tests (16 of 22 mutants survive, some change the committed counts) and the F4 evidence is wrong for 4 of 5 fits; the reviewer confirmed 34 sampled labels, F17 to F19 and the Adjust.endspan = 0 correction. Sent to t18-legacy.
 - 05:12 #48 round 2: adversarial (sonnet) APPROVE on c2fbfbc; spec REQUEST_CHANGES on one unpinned call (queue_value in FAST-5; one mutant changes 137 of 150 fits), with the exact test given. Sent to t06-reference (tests only).
+- 05:18 #48 at 55f2841 (tests only: FAST-5 lambda against brute force, second_rss = +inf, the exact-fit case; the listed mutants fail; gate B PASS; CI 12/12). recheck-48 (sonnet) started for the narrow re-approval of both roles.
 
 ## Core-hour ledger
 
