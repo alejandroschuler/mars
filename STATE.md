@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 09:51 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 10:09 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,9 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED for the budget (week 2). Weekly 46 % at 08:48 Monday 2026-09-28 (the user's limit for this week is 50 %; the weekly reset is 2026-10-04 17:00 PDT). The executor asked the user in its session whether more budget may be used. No agents are running and no jobs. The heartbeat is set to 2026-10-04 17:00 PDT, so the watchdog does not resume the work during the pause. If the user allows more budget, the executor in this session resumes and refreshes the heartbeat normally. If a watchdog run takes over after the weekly reset, it first asks the user in its session about the week-3 budget, then follows the plan's pacing.
-
-BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit, with no daily pacing. When the work pauses at 50 %, check back in with the user in the session. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrators, checkers, narrow re-reviews).
+RUNNING (week 2). BUDGET RULE FROM THE USER (about 09:00 Monday 2026-09-28): use up to 55 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), and see whether the meaningful-tests rule (2026-09-28) makes the work more efficient; log the weekly use per review round. Weekly 46 % at 08:48 Monday. Pacing to stop cleanly at 55 %: from 49 %, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet); from 53 %, start nothing and ask running agents to push a checkpoint and stop; at 55 %, pause, set the heartbeat to the weekly reset, and tell the user in the session. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work.
 
 ## Done in P0
 
