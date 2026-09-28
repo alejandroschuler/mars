@@ -6,6 +6,9 @@
 # The checks:
 # - the pull request is open, not a draft and based on main, and its title (the
 #   squash subject) is a conventional commit subject;
+# - no open pull request has the head branch as its base; --delete-branch would
+#   close such a pull request once the branch is gone, so it must be retargeted
+#   to main first;
 # - for each role, the newest verdict is APPROVE for the head, and no
 #   REQUEST_CHANGES for the head is newer. A verdict is the first line of a
 #   comment or review by the fork's account (every agent posts as that account),
@@ -55,6 +58,19 @@ IFS=$'\t' read -r pr_state draft base head_ref head title <<<"$fields"
 [ "$base" = main ] && pass "#$pr is based on main" || fail "#$pr is based on $base"
 conventional='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?: .+'
 [[ $title =~ $conventional ]] && pass "conventional title: $title" || fail "not a conventional title: $title"
+
+# --delete-branch removes head_ref on merge, which closes any open pull request
+# based on it (this happened to #39). Refuse until such pull requests are
+# retargeted to main.
+if stacked=$(gh pr list --repo "$REPO" --state open --base "$head_ref" --json number --jq '.[] | "#\(.number)"'); then
+  if [ -z "$stacked" ]; then
+    pass "no open pull request is based on $head_ref"
+  else
+    fail "retarget these to main first, or --delete-branch would close them: $(tr '\n' ' ' <<<"$stacked")"
+  fi
+else
+  fail "gh pr list --base $head_ref failed"
+fi
 
 # One line per verdict, oldest first: "<time> <role> <sha> <verdict>". Only the
 # first line of a body by the fork's account (alejandroschuler) can be a verdict.
