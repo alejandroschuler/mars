@@ -96,6 +96,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:07 T08 author done: #52 _terms (291cff4, base main), #53 _gcv (f5ffe4f, base main), #51 _knots (6d5ee40, base t08-gcv, Closes #10); #50 closed as too large. gate B passed on all three; 100 % coverage each; gcv_grid exact (64 cells, 1,019 infinite cells equal), S datasets exact per-size GCV (119 fits), predictions 7.6e-14 sd(y), 214 knot searches exact; 85 of 85 mutants killed (methodology to be rechecked with python -B). Leftover: branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots, unused. Spec questions on #44.
 - 18:08 Started one dual review covering T08's #52, #53 and #51 (weekly 7 % at 18:09). Before merging #53, retarget #51 to main.
 - 18:24 #46 round 2 (wf_2d518719-907): round-1 fixes confirmed (python -B reruns: 101 of 112 killed, survivors change no result); both block on one point: a new N = 5e9 test builds a 428M-entry list (8 s, 4.6 GB) in every gate. Sent the fix to t06-reference. The spec reviewer's mutation copies (about 100 MB) remain in this session's scratchpad because the guard blocked their removal; harmless, removal left to the user (rev46spec_mut, rev46spec_base).
+- 18:24 #45 round-1 fixes (t09-linalg): head d556101, gate B and CI 12 of 12; python -B mutation rerun 49 of 51 killed (2 survivors change no result). Narrow round-2 dual review started. Weekly 8 % at 18:25.
 
 ## Core-hour ledger
 
