@@ -639,7 +639,8 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     """
     Mf, several = B.shape[1], Y.shape[1] >= 2
     rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
-    floor = 1e-10 * ref["rss_per_size"][0] / (float(np.sum(w)) - 1)
+    N = float(np.sum(w))  # a degenerate fit (N <= 1, EDGE-1) has no exact fits
+    floor = 1e-10 * ref["rss_per_size"][0] / (N - 1) if N > 1 else 0.0
     for rec, who in ((fast, "fast"), (ref, "reference")):
         for key, (dtype, shape) in {
             "removed": (np.int64, (Mf - 1,)),
