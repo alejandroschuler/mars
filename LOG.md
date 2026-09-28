@@ -149,6 +149,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:24 #58 round-1 fixes at 870c482 (56 unit tests kill the reviewer's 21 mutants and 10 more; F4 evidence fixed, first-difference bug count 8 to 6). Narrow round 2 started (sonnet). Incident: t18-legacy discarded a regenerated report JSON in its runner worktree with 'git checkout <file>', a variant of a guarded command that the guard did not catch; a report output it had copied, so nothing was lost; it reported it; told it not to use variants of guarded commands.
 - 05:28 recheck-48 posted both narrow re-approvals (tests only; the listed mutants fail; 216 pass). Merged #48 as 0c2a896; <main> fast-forwarded. Weekly 42 %, 5-hour 75 %. Asked t06-reference to rebase #49 (drop the duplicates now in #48).
 - 05:33 #49 rebased to f6c481d on 0c2a896 (duplicates of #48 removed; gate B PASS; CI 12/12). Dual review started: spec with opus, adversarial with sonnet (to save weekly budget; 43 %).
+- 05:41 t11-forward fixed #57 round 1: #57 754c4bf and #55 071d181 (block sums, Welford D, per-knot error bounds, explicit valuation of uncertain knots in the driver; all bounds hold on 11904 random knots; the 88 fixtures still equal the reference). Weekly 43 %, 5-hour 83 %: no new agents until the 5-hour reset (08:20).
 
 ## Core-hour ledger
 
