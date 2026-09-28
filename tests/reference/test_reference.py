@@ -1811,32 +1811,8 @@ class TestFit:
 
 
 # ---------------------------------------------------------------------------
-# Self-checks against earth fixtures (validation/fixtures, made by the harness)
-
-EARTH_NAMES = {  # [API-7]
-    "degree": "max_degree",
-    "nk": "max_terms",
-    "penalty": "penalty",
-    "thresh": "thresh",
-    "minspan": "minspan",
-    "endspan": "endspan",
-    "Adjust.endspan": "adjust_endspan",
-    "Auto.linpreds": "auto_linpreds",
-    "fast.k": "fast_k",
-    "fast.beta": "fast_beta",
-    "pmethod": "pmethod",
-    "nprune": "nprune",
-}
-
-
-def params_from_earth(args):
-    """earth's arguments as reference parameters; a span of 0 is automatic."""
-    return {
-        EARTH_NAMES[key]: None
-        if key in ("minspan", "endspan") and value == 0
-        else value
-        for key, value in args.items()
-    }
+# The whole fit against earth (EARTH_NAMES and params_from_earth are below,
+# with the forward-pass self-checks)
 
 
 @pytest.mark.parametrize("name", ["S01_matched_d1", "S01_defaults_d1"])
