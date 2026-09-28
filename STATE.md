@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 03:52 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 04:06 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -22,7 +22,7 @@ Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T0
 
 Open pull requests:
 - #48 part 3 forward pass (5756c66): round 1. Spec REQUEST_CHANGES (code correct against earth everywhere; 33 surviving mutants; recipes (a) to (i)), sent to t06-reference. The first adversarial attempt died at the 5-hour limit before posting; a new adversarial review runs on 5756c66 (wf_0b66106a-7f3, task wqjbu5460); its findings go to t06-reference as a second batch. Spec fixes pushed: 8a56ea3 (all 33 mutants and 2 more killed; recipe (a) moved here from #49; diff now 1270 lines, 825 of them tests; gate B PASS; CI 12/12; not yet rebased on 1918863). #49 must drop its duplicate EARTH_NAMES and params_from_earth when rebased. #49 part 4 fit_mars (Closes #8) after #48 merges.
-- #57 dual review running (wf_e0ddfd90-495, task wg0mewwm2). #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
+- #57 round 1 (wf_e0ddfd90-495): both REQUEST_CHANGES. Blocking: knot_scan misses LA-5 at large n (cancellation in D = ||h||^2 - (q0'h)^2 and n·u error in the cumsum of q0'h; errors up to 650x the bound; a knot near tau can be wrongly rejected, and the driver never rechecks it); CI red (lstsq rcond). All 227 mutants killed. Sent to t11-forward (fix design: cancellation-free sums plus a per-knot error bound with explicit recomputation). #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
 - TOOLS-2 (later, small): the `pr view` branch of the fake gh in test_merge_pr.sh also ignores its arguments.
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
@@ -49,7 +49,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 ## Running agents
 
 - `t06-reference` (opus): idle; #48 spec fixes pushed (8a56ea3); waits for the adversarial batch.
-- `t11-forward` (opus): idle; stage 1 ready (#57, #55); resumable for review fixes, the #55 rebase and stage 2.
+- `t11-forward` (opus): #57 round-1 fix (scan accuracy), then the #55 rebase.
 - `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
 - `t18-legacy` (opus): idle; PR #58 ready; resumable for review fixes.
 - `tools-merge-guard` (sonnet): done (#56 merged); resumable for TOOLS-2.
