@@ -137,6 +137,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:25 Merged #56 (TOOLS-1) as 1918863 after rebase-check-56's re-approval (range-diff all '='). <main> fast-forwarded, so merge_pr.sh now refuses while an open PR is based on the head branch.
 - 03:39 #48 spec-round fixes at 8a56ea3 (the 33 surviving mutants and 2 more now fail; earth step-by-step self-check on 18 fixtures always and 70 in a slow test; helpers queue_value, candidate_key, covariate_variances; gate B PASS; CI 12/12). Waiting for the adversarial review of 5756c66.
 - 03:51 T18 PR #58 ready (a514801): every S01-S20 difference labeled (rule 316, quirk 23, bug 8); new findings F17 to F19; HEAD equals the wheel unweighted; plan correction Adjust.endspan = 0 for the legacy matched mode. Accepted as one PR (validation only). t18-legacy's ruff format on validation/legacy/ (uncommitted, in its old worktree) could not be undone (the classifier denied the restore); recorded with the other local cleanup in issue #60 (needs-user). dcg blocked two of my commands because their text quoted the recursive delete; reworded.
+- 03:52 Weekly 34 % (+4 in 30 minutes), 5-hour 25 % (reset 08:20). Pacing rule for the 50 % stop: no new agents from 44 %, checkpoints from 48 %, pause and tell the user at 50 %.
 
 ## Core-hour ledger
 
