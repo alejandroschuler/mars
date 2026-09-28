@@ -238,10 +238,9 @@ def test_logreg_is_unpenalized_and_predicts_probabilities():
 
 
 def test_p_fix_raises_not_implemented_today():
+    # pymars.EarthRegressor exists since T13; the classifier comes with T14.
     x_train, y_train = _linear_data(seed=0)
     x_test, _y_test = _linear_data(seed=1)
-    with pytest.raises(NotImplementedError, match="EarthRegressor"):
-        learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, False)
     with pytest.raises(NotImplementedError, match="EarthClassifier"):
         learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, True)
 
