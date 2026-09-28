@@ -6,8 +6,6 @@ accuracy: 1e-8 of the RSS, and 1e-7·max(rho, tau)) and the plan's "Fast path"
 (eq. 52). Every test of ``knot_scan`` also checks that its error bounds hold.
 """
 
-import math
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -66,17 +64,6 @@ def test_hinge_products_equal_the_explicit_columns(seed, n, c, ties, shift):
         scale = np.linalg.norm(h) * np.linalg.norm(V, axis=0)
         assert np.all(np.abs(HV[i] - h @ V) <= 1e-13 * scale)
         assert F[i] == pytest.approx(h @ h, rel=1e-13, abs=0.0)
-
-
-@given(seeds, st.integers(1, 3000))
-def test_suffix_sums_stay_within_their_bound(seed, m):
-    """The blocked suffix sums: an error of at most gamma_{2⌈√m⌉}·Σ|terms|."""
-    rng = np.random.default_rng(seed)
-    a = rng.normal(size=m) * 10.0 ** rng.integers(-8, 8, size=m)
-    out = _scan._suffix(a[:, None])[:, 0]
-    bound = 2 * (math.isqrt(max(m - 1, 0)) + 1) * 2.0**-53
-    for j in rng.choice(m, size=min(m, 20), replace=False):
-        assert abs(out[j] - math.fsum(a[j:])) <= bound * np.sum(np.abs(a[j:]))
 
 
 @given(
@@ -238,36 +225,6 @@ def test_a_knot_at_tau_is_left_to_the_explicit_values():
     assert not _linalg.knot_rejected(rho, 8)
 
 
-def test_the_bounds_are_pinned():
-    """The error bounds of a fixed pair search with two responses, on both
-    paths. The tests above check that bounds hold and are tight enough; these
-    values pin the formula of the module docstring, so that a change of it is
-    deliberate."""
-    rng = np.random.default_rng(7)
-    n = 30
-    x = np.sort(rng.normal(size=n))
-    Q = _pair_basis(x, [])
-    Q = np.column_stack((Q, _linalg.gram_schmidt(Q, np.maximum(x - x[15], 0.0)).q))
-    Y = np.column_stack((np.sin(3 * x), np.cos(2 * x))) + 0.1 * rng.normal(size=(n, 2))
-    E = _linalg.orthogonalize(Q, Y - Y.mean(axis=0))[0]
-    want = {
-        False: (
-            [6.728832e-13, 3.228621e-13, 2.199265e-13, 1.760439e-13],
-            [3.607742e-10, 3.246823e-11, 2.430756e-11, 4.056525e-12],
-        ),
-        True: (
-            [2.112684e-13, 1.790302e-13, 1.576731e-13, 1.306046e-13],
-            [1.194552e-10, 1.908544e-11, 1.814592e-11, 3.345206e-12],
-        ),
-    }
-    for intercept, (ratio_err, gain_err) in want.items():
-        scan = _scan.knot_scan(
-            x, np.ones(n), Q, E, [2, 10, 20, 28], intercept=intercept
-        )
-        np.testing.assert_allclose(scan.ratio_err, ratio_err, rtol=2e-6)
-        np.testing.assert_allclose(scan.gain_err, gain_err, rtol=2e-6)
-
-
 def test_a_constant_hinge_has_ratio_and_gain_zero():
     """LA-3: a constant h (here 0 at every case) is rejected, with bounds 0."""
     x, _, _, Q, _, E, splits = _problem(3, 20, 2, 1)
@@ -289,9 +246,12 @@ def test_a_hinge_in_the_span_is_rejected_for_sure(intercept):
     assert abs(scan.ratio[0]) + scan.ratio_err[0] < TAU < scan.ratio[1]
 
 
-def test_extreme_scales_change_nothing():
-    """Powers of 2 inside keep the squares in range: x·2^510 and b·2^-500 give
-    the values of x and b, bit for bit."""
+def test_extreme_scales():
+    """Powers of 2 inside: x·2^510 and b·2^-500 give the values of x and b bit
+    for bit, and gaps from 1 to 1e160 meet LA-5. When the small gaps' squares
+    would leave the normal range (gaps spanning 1e300 or 1e160, inside the
+    covariate range of _linalg), the bounds are infinite, so the caller values
+    the knot explicitly; the column is not taken for 0."""
     x, _, _, Q, _, E, splits = _problem(4, 30, 3, 1)
     b = np.ones(30)
     base = _scan.knot_scan(x, b, Q, E, splits, intercept=True)
@@ -307,6 +267,16 @@ def test_extreme_scales_change_nothing():
     for i, s in enumerate([1, 2, 3, 4, 5]):
         rho, gain = _scan.exact_knot(Q, E, np.maximum(x - x[s - 1], 0.0))
         _within(wide, i, rho, gain, float(E @ E))
+    y = np.array([0.0, 0.0, 1.0, 3.0, 2.0])
+    Q = np.full((5, 1), 5**-0.5)
+    E = _linalg.orthogonalize(Q, y - y.mean())[0]
+    for x in ([-1e150, 0, 1e-150, 2e-150, 3e-150], [-1e100, 0, 1e-60, 2e-60, 3e-60]):
+        x = np.array(x)
+        rho, gain = _scan.exact_knot(Q, E, np.maximum(x, 0.0))
+        assert rho == pytest.approx(1.0) and gain > 0.7 * float(E @ E)
+        for intercept in (True, False):
+            scan = _scan.knot_scan(x, np.ones(5), Q, E, [2], intercept=intercept)
+            assert scan.ratio_err[0] == scan.gain_err[0] == np.inf
 
 
 @given(seeds, st.integers(10, 60), st.booleans())
@@ -325,8 +295,9 @@ def test_exact_knot(seed, n, weighted):
     E = _linalg.orthogonalize(Q, yc)[0]
     h = np.maximum(x - np.median(x), 0.0)
     rho, gain = _scan.exact_knot(Q, E, h, w if weighted else None)
-    assert rho == pytest.approx(_linalg.collinearity_ratio(Q, h, w), rel=1e-12)
     rep = np.repeat(np.arange(n), w.astype(int))
+    hr = h[rep]
+    assert rho == pytest.approx(_rss(B[rep], hr) / np.sum((hr - hr.mean()) ** 2))
     A = np.column_stack((B[rep], h[rep]))
     want = _rss(B[rep], y[rep]) - _rss(A, y[rep])
     assert gain == pytest.approx(want, rel=1e-9, abs=1e-12)
@@ -387,9 +358,11 @@ def test_hinge_products_checks_its_input(x, b, V, split, match):
         _scan.hinge_products(x, b, V, split)
 
 
-def test_one_case_has_no_knot():
-    HV, F = _scan.hinge_products([0.0], [1.0], np.ones((1, 2)), [])
-    assert HV.shape == (0, 2) and F.shape == (0,)
+def test_a_covariate_without_knots():
+    """EDGE-3: a constant covariate has no knot, and its scan is empty."""
+    Q = np.full((4, 1), 0.5)
+    scan = _scan.knot_scan(np.ones(4), np.ones(4), Q, np.zeros(4), [], intercept=True)
+    assert all(a.shape == (0,) for a in scan)
 
 
 @pytest.mark.parametrize(

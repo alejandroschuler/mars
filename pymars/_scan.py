@@ -57,19 +57,28 @@ a bound on its error: the worst-case first-order rounding of the sums, plus
 the departure of Q and E from exact orthonormality and orthogonality, which
 the caller guarantees (the preconditions ‖QᵀQ - I‖₂ ≤ (r + 1)·gamma_n and
 ‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖, which Gram-Schmidt applied twice gives); the bound
-is doubled for the second-order terms. The caller decides with a scan value
-only when that value, moved by its bound either way, decides the same, and
-otherwise with the explicit values of ``exact_knot`` (LA-5).
+is doubled for the second-order terms. It bounds the distance from exact
+arithmetic on the given Q and E, not the rounding that Q and E carry as a
+basis and residuals of the data, which is far inside LA-5. The caller decides
+with a scan value only when that value, moved by its bound either way,
+decides the same, and otherwise with the explicit values of ``exact_knot``
+(LA-5).
 
 Weights (stage 3 of T11). With case weights, b is √w·b, and Q and E are the
 basis and the residuals of the √w-scaled problem (plan: Fast path); the
 formulas are unchanged, and no division by a weight occurs.
 
 Numerics. float64; no function writes into its inputs; no absolute epsilon.
-The scan multiplies the gaps and b by powers of 2, which changes neither rho
-nor the reduction, so that the squares stay in range. Tied rows take the
-input order, so in floating point a permutation of tied rows changes the
-sums by rounding (KNOT-2 holds in exact arithmetic). Memory is O(n·(r + K)).
+The scan multiplies the gaps and b by the powers of 2 that bring their
+largest values to [0.5, 1), which changes neither rho nor the reduction.
+When the gaps or b span a wider range than about 2^450, the squares of the
+small ones can leave the normal range of float64, where rounding is no longer
+relative, so a knot whose scaled ‖h‖² or D is below 2^-900 gets infinite
+bounds, and the caller values it with ``exact_knot``. A column that is 0 at
+every case is found from the inputs (no q ≥ s with b_q ≠ 0 and
+x_q > x_{s-1}), not from its sums (Conventions). Tied rows take the input
+order, so in floating point a permutation of tied rows changes the sums by
+rounding (KNOT-2 holds in exact arithmetic). Memory is O(n·(r + K)).
 
 Public names, for ``_forward``:
 
@@ -95,6 +104,9 @@ FloatArray = npt.NDArray[np.float64]
 
 #: The unit roundoff of float64.
 UNIT_ROUNDOFF = 2.0**-53
+#: Below this scaled ‖h‖² or D, a bound would not cover underflow: far above
+#: the subnormal range (2^-1022), so that n·2^-1022 stays below u·2^-900.
+SCALED_FLOOR = 2.0**-900
 
 
 class KnotScan(NamedTuple):
@@ -102,8 +114,8 @@ class KnotScan(NamedTuple):
     is not positive; ``gain`` is the RSS reduction of adding h to G, summed over
     the responses, 0.0 where ‖h⊥‖² is not positive. ``ratio_err`` and
     ``gain_err`` bound the errors of the two (+∞ when the rounding could make D
-    or ‖h⊥‖² vanish); both are 0.0 for a column h that is 0 at every case,
-    which LA-3 rejects as constant."""
+    or ‖h⊥‖² vanish, or when underflow could reach them). A column h that is 0
+    at every case, which LA-3 rejects as constant, gets 0.0 for all four."""
 
     ratio: FloatArray
     gain: FloatArray
@@ -251,8 +263,8 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     part = Q[:, 1:] if intercept else Q
-    x, b, V, split = _check(x, b, np.hstack((part, E)), split)
-    g, b = _to_unit(np.diff(x)), _to_unit(b)
+    x, b0, V, split = _check(x, b, np.hstack((part, E)), split)
+    g, b = _to_unit(np.diff(x)), _to_unit(b0)
     HV, F = _products(g, b, V, split)
     k = part.shape[1]
     he = HV[:, k:]
@@ -274,8 +286,8 @@ def knot_scan(
     dQ = (r + 1) * g_n  # the precondition on ‖QᵀQ - I‖₂
     sqF = np.sqrt(F)
     e_c = (g_hv + dQ) * sqF  # the error of each q_cᵀh
-    if intercept:
-        errD = _gamma(7 * lam + 20) * D
+    if intercept:  # and the departure of Q[:, 0] from b/‖b‖, one rounding per row
+        errD = _gamma(7 * lam + 20) * D + 2.0 * u * np.sqrt(F * np.abs(D))
     else:
         errD = _gamma(3 * lam + 8) * F + 2.0 * np.abs(c0) * e_c + e_c**2
         errD += (dQ + 2.0 * u) * F
@@ -291,8 +303,14 @@ def knot_scan(
         gain_err = np.where(errP < perp, (errN + gain * errP) / (perp - errP), np.inf)
     ratio_err = 2.0 * (ratio_err + 4.0 * u * np.abs(ratio))
     gain_err = 2.0 * (gain_err + 4.0 * u * gain)
-    zero = F == 0.0  # h is 0 at every case: a constant column, rejected
-    ratio_err[zero], gain_err[zero] = 0.0, 0.0
+    lost = (F < SCALED_FLOOR) | (np.abs(D) < SCALED_FLOOR)  # underflow can reach
+    ratio_err[lost], gain_err[lost] = np.inf, np.inf
+    # h is 0 at every case, a constant column (LA-3), when no case q ≥ s has
+    # b_q ≠ 0 and x_q > x_{s-1}: a count over the inputs.
+    nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
+    zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
+    for a in (ratio, gain, ratio_err, gain_err):
+        a[zero] = 0.0
     return KnotScan(ratio, gain, ratio_err, gain_err)
 
 
@@ -308,7 +326,9 @@ def exact_knot(
     ``_linalg.collinearity_ratio(Q, h, w)``; the reduction is Σ_k (qᵀE_k)², with
     q the unit vector of √w·h orthogonalized twice against Q
     (``_linalg.gram_schmidt``), so the residuals' own departure from QᵀE = 0
-    does not enter; it is 0.0 when that part is exactly 0.
+    does not enter; it is 0.0 when that part is exactly 0. For a column that
+    lies in the span only up to rounding the reduction is rounding noise, as
+    in ``rebuild``, so the caller decides LA-3 on rho first.
     Complexity: O(n·(r + K)).
     """
     Q = np.asarray(Q, dtype=np.float64)
