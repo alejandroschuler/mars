@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:26 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 00:31 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -21,7 +21,7 @@ main: 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c 
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
 
 Open pull requests:
-- #48 part 3 forward pass: t06-reference rebases it onto 77b6692 (drop the part-2 commits); then its dual review. #49 part 4 fit_mars (Closes #8) after #48 merges.
+- #48 part 3 forward pass (5756c66, rebased on 77b6692, gate B PASS, CI 12/12): dual review running (wf_595b6a8e-4a7, task wkg8gboi5). #49 part 4 fit_mars (Closes #8) after #48 merges.
 - #55 T11 stage 1 (t11-forward-stage1, draft) and #57 (t11-scan, draft): `t11-forward` split stage 1; dual review when it reports.
 - #56 TOOLS-1 (032ad32, gate B PASS, CI 12/12): round 1 REQUEST_CHANGES fixed; narrow round 2 by a sonnet single reviewer running (wf_e417c814-a4d). Follow-up TOOLS-2: the `pr view` branch of the fake gh also ignores its arguments (older gap; tools-merge-guard made a task chip for it).
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
@@ -48,7 +48,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Running agents
 
-- `t06-reference` (opus): rebasing #48 onto main after #47's merge.
+- `t06-reference` (opus): idle; resumable for #48 review fixes and the #49 rebase.
 - `t11-forward` (opus): T11 stage 1, PR #55 (draft).
 - `t12-core` (opus): T12, issue #14, from 23:31 Sunday.
 - `t18-legacy` (opus): T18, issue #20, from 23:31 Sunday.

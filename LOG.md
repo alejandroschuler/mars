@@ -126,6 +126,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:19 00:25: #47 head 81c5341 adds both reviewers' tests (the two tail-of-move mutants now fail; gate B PASS; CI 12/12). Started recheck-47 (sonnet) for the narrow re-approval. Note: dcg blocked a heredoc with shutil.rmtree in t06-reference's own mutation script; it dropped the deletion and used new folder names (nothing deleted, no workaround). Scratch copies grow; for the user to clean later.
 - 00:23 00:30: #56 round-1 fixes at 032ad32 (the fake gh pins --repo, --state, --base; two-stacked case; DECISIONS.md reasons). Narrow round 2 with a sonnet single reviewer (the review workflow now takes an optional model). Follow-up TOOLS-2 noted: the fake gh's pr view branch has the same unpinned-argument gap.
 - 00:26 00:27: recheck-47 posted the narrow re-approvals (both new tests byte-for-byte as the reviewers posted; both mutants fail; 118 pass). Merged #47 as 77b6692 with merge_pr.sh (no PR based on its branch). <main> fast-forwarded to 77b6692. Asked t06-reference to rebase #48 onto main. 5-hour 66 %, weekly 24 %.
+- 00:31 00:33: #48 rebased on 77b6692 (5756c66; its own two commits; 159 reference tests; gate B PASS; CI 12/12). Dual review started (wf_595b6a8e-4a7), with a request to check the pass against earth's fixture forward steps (S01, S03, S04, S05) and not against the fast code.
 
 ## Core-hour ledger
 
