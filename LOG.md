@@ -120,6 +120,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:54 00:00 Monday: #56 (TOOLS-1, 35bab0b) ready from tools-merge-guard (14 merge_pr.sh tests pass; gate B PASS); single review started (wf_9a94cef1-865). T11 opened #57 (t11-scan) beside #55.
 - 23:57 23:58: 5-hour 44 % (+20 points in 30 minutes with 7 agents), weekly 21 %. Decision: from 70 % of the 5-hour limit, the heartbeat holds max(now, reset + 15 min), so that a watchdog run resuming at the reset does not race the resuming executor for the lock.
 
+## 2026-09-28
+- 00:10 00:15 Monday: #56 single review REQUEST_CHANGES (the fake gh ignored pr list arguments, so argument mutants survived); sent to tools-merge-guard with the non-blocking notes (two stacked PRs case, reasons in DECISIONS.md, the checker confirms a test-only fix loosens no tolerance and adds no skip).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
