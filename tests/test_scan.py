@@ -128,16 +128,23 @@ def test_the_intercept_parent_in_a_pair_search(seed, n, ties, adjacent):
             assert scan.gain_err[i] <= 1e-9 * rss
 
 
-@given(seeds, st.integers(20, 200))
-def test_the_intercept_parent_with_weights(seed, n):
+@given(seeds, st.integers(20, 200), st.booleans())
+def test_the_intercept_parent_with_weights(seed, n, far):
     """``intercept=True`` with b = √w and Q[:, 0] = √w/√N: the weighted D and
-    the scan meet LA-5 against ``exact_knot`` with the weights (stage 3)."""
+    the scan meet LA-5 against ``exact_knot`` with the weights (stage 3). With
+    ``far``, two low cases of weight 1e-10 lie far below a tight cluster and Q
+    is the intercept alone, so rho is 1 and ‖h‖²/D about 1e11 (round 2 of #57,
+    spec note 2: the departure of Q[:, 0] from √w/√N enters D's bound)."""
     rng = np.random.default_rng(seed)
-    x = np.sort(rng.uniform(size=n))
-    w = rng.uniform(0.2, 3.0, size=n)
+    if far:
+        x = np.r_[0.0, 1.0, np.sort(1000 + 1e-3 * rng.uniform(size=n - 2))]
+        w = np.r_[1e-10, 1e-10, rng.uniform(0.5, 2.0, size=n - 2)]
+    else:
+        x = np.sort(rng.uniform(size=n))
+        w = rng.uniform(0.2, 3.0, size=n)
     sw, N = np.sqrt(w), w.sum()
     Q = (sw / np.sqrt(N))[:, None]
-    for v in (x, np.maximum(x - np.median(x), 0.0)):
+    for v in () if far else (x, np.maximum(x - np.median(x), 0.0)):
         Q = np.column_stack((Q, _linalg.gram_schmidt(Q, sw * v).q))
     y = np.sin(6 * x) + 0.1 * rng.normal(size=n)
     E = _linalg.orthogonalize(Q, sw * (y - w @ y / N))[0]
@@ -226,7 +233,8 @@ def test_a_knot_at_tau_is_left_to_the_explicit_values():
 
 
 def test_a_constant_hinge_has_ratio_and_gain_zero():
-    """LA-3: a constant h (here 0 at every case) is rejected, with bounds 0."""
+    """LA-3: a constant h (0 at every case) is rejected, with bounds 0: where
+    the parent is 0 above the knot, and for a knot at a tied largest x."""
     x, _, _, Q, _, E, splits = _problem(3, 20, 2, 1)
     b = np.where(np.arange(20) < 10, 1.0, 0.0)  # zero above case 9
     scan = _scan.knot_scan(x, b, Q, E, splits)
@@ -234,6 +242,9 @@ def test_a_constant_hinge_has_ratio_and_gain_zero():
     for a in scan:
         assert np.all(a[above] == 0.0)
     assert np.all(scan.ratio[~above] > 0.0)
+    x = np.array([0.0, 1.0, 2.0, 2.0])
+    top = _scan.knot_scan(x, np.ones(4), np.full((4, 1), 0.5), np.zeros(4), [3])
+    assert all(a[0] == 0.0 for a in top)
 
 
 @pytest.mark.parametrize("intercept", [False, True])
