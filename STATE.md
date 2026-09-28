@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 13:55 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 13:59 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -33,7 +33,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 1. T11 stage 1 done: #57 and #55 merged (20cdde0). Next: stage 2 (interactions: degree 2 and 3, parents other than the intercept, Adjust.endspan, the slot rules) by a fresh author `t11-stage2` (brief `briefs/T11-forward.md`, stage 2; a fresh agent because resuming the long-context t11-forward is costly); T12's PR by t12-core now.
 2. T07 conformance: PR #66 ready (80bd7f5, on 2a00063; gate B PASS; CI 12/12). The reference against earth: 124 of 133 dataset fixtures and 197 of 200 S15 draws agree in full; validation/differences.json has 7 labeled entries (4 rule: LA-7 in raw units, earth's zeroing of small sums of squares twice, a constant y; 3 quirk: FWD-11's hidden term), no bug; S15: 98.5 % agree, near-tie stops 0 %. OQ-2 decided (pruning near-tie at 1e-7 of the lower RSS). Four questions posted on #44. About 1,000 lines of test and harness code. Its single review (opus) runs (wf_0064e414-0b1). Follow-up for the pruning pass: four earth self-checks in test_reference.py now duplicate this suite. PRs from the user's own separate sessions, to review (single role, sonnet) and merge after the 5-hour reset at 13:20: #61 (t03-validation-floors: draw the summary figures in a test and test the validation dependency floors in CI; touches ci.yml, DECISIONS.md, test_summarize.py), #63 (t03-summarize-empty: summarize.py with no cells), #64 (TOOLS-2; closes #62): APPROVE at 6e15ed4 (sonnet); rebase-64 rebased it to 99f1eee (range-diff '='; gate B PASS), but auto mode denied the force-push to the user's branch; needs-user issue opened with the exact command; after the user pushes: a rebase-check re-approval, then the merge. Keep the worktree <S>/.worktrees/rebase-64 until then. TOOLS-3 follow-up (from #64's review): the fake gh never fails a pr view call, so 5 exit-code mutants survive; a FAKE_PR_VIEW_FAIL case; open an issue for it.
-3. T15 oracle tests: `t15-oracle` at work, draft PR #67. It found a real bug in merged pymars/_pruning.py (no centering of Y before the QR; LA-5 missed by up to 1.2e-6 with a large-mean y); `t10-pruning` fixes it and _gcv.tss in a small PR (branch t10-center-y); T15 adds its shifted-response draws after that merges.
+3. T15 oracle tests: `t15-oracle` at work, draft PR #67. It found a real bug in merged pymars/_pruning.py (no centering of Y before the QR; LA-5 missed by up to 1.2e-6 with a large-mean y); Fix PR #69 ready (2a9edb3, on 20cdde0; center by a data value then the weighted mean in pruning_pass, final_fit and _gcv.tss; 1e-16 on T15's case; gate B PASS): its review (spec sonnet, adversarial opus) starts when a reviewer slot frees; then T15 adds its shifted-response draws.
 4. T13's PR after T12 merges (see Running agents); then T14 (`_glm.py` and the classifier; brief to write), T16, T17.
 5. Test pruning (the user's rule of 2026-09-28: meaningful tests only): once T07's conformance tests cover the reference against earth, prune the reference's unit tests that only repeat that coverage (tests/reference/test_reference.py is 2,633 lines for 1,259 lines of code); the same pass for the fast modules before the freeze (T21) and in T23.
 6. Follow-ups: `_gcv.tss` centers y about one computed mean, so T12's statistics keep a small rss[0] error for a y with a large mean (t11-forward's note; fix in `_gcv` as #55 did: center about a data value, or twice); TOOLS-2 (the fake gh's `pr view` branch ignores its arguments); DECISIONS.md: the legacy matched mode needs Adjust.endspan = 0 (T18); T05 notes PR; T08, T09 and T10 non-blocking notes; spec v2 (#44) collects the questions from #47 to #49 and #57.
@@ -46,7 +46,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 - `t07-conformance` (opus): idle; PR #66 ready.
 - `t15-oracle` (opus): T15, issue #17, brief `briefs/T15-oracle.md`, from 12:15 Monday; PR after #55 merges.
 - `t13-estimators` (opus): T13 done up to T12's merge: branch t13-estimators at 073811b (a scaffold merge of main 278fcaf; after T12 merges: `git rebase --onto origin/main 278fcaf`, then the PR with Closes #15). EarthRegressor, Earth, _EarthBase; scikit-learn checks pass on the reference (no expected failures) and 52 on the fast core (7 skips name #13 until T11 stages land); 30 of 30 sampled mutants killed. Decision: the gate B and CI smoke fits use fast_k=0 until T11 stage 3 (restore then; note on #13).
-- `t10-pruning` (opus): fix PR: center the responses in _pruning (and _gcv.tss), from 14:05 Monday.
+- `t10-pruning` (opus): idle; PR #69 ready.
 - Idle, resumable: `t12-core` (open its PR after #55 merges), `t06-reference`, `t18-legacy`, `tools-merge-guard`.
 
 ## Running jobs
