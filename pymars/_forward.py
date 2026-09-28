@@ -289,7 +289,7 @@ class _Pass:
         """Build the candidate again (``_scan.rebuild``) and apply FWD-4 to its
         rebuilt RSS; return the rebuild, or None when it fails. LA-3 is not
         tested again: pass 2 decided it on the same Gram-Schmidt of the same
-        columns, so the ratio would be the same bit for bit. The rebuilt RSS and
+        columns, so the ratio would be the same up to rounding. The rebuilt RSS and
         pass 2's reduction can differ in the last bits, so a knot at MaxLegal
         can fail here. Complexity: O(n·r·K)."""
         cols, _ = self.columns(c)

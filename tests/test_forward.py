@@ -305,33 +305,48 @@ def test_a_degenerate_fit(y):
     assert fp.candidates.second_kind.dtype == np.int8
 
 
-@pytest.mark.parametrize(
-    ("x_shift", "grid", "y_shift", "p"),
-    [
-        (2.0**36, 12, 0, 2),
-        (2.0**40, 12, 0, 2),
-        (2.0**46, 6, 0, 1),
-        (0, 12, 2.0**40, 2),
-        (0, 12, 2.0**44, 2),
-    ],
-)
-def test_exact_shifts(x_shift, grid, y_shift, p):
-    """Exact shifts of a covariate (on a 2^-grid grid) and of y (on a 2^-8
-    grid) give the fit of the unshifted data: the same terms, knots moved by the
-    shift, and every RSS, rss[0] = TSS included, within 1e-8 of the RSS before
-    its step (LA-5, CORE-3). x is centered before Gram-Schmidt (the plan's
-    "Fast path"); near 1e14 an uncentered x also makes A of LA-7 rounding noise
-    above its threshold, and a single-hinge search becomes a pair search. The
-    TSS comes from the centered y (FWD-10)."""
-    rng = np.random.default_rng(0)
+def _on_binary_grids(design):
+    """The data of test_exact_shifts. Every value lies on a binary grid, so a
+    shift by a power of 2 is exact. "pairs" and "one covariate" have a hinge
+    in x0 and a sine in the last covariate; in "linear", x0 is x1 plus noise
+    and y = 5·(x1 - x0)."""
     n = 200
+    if design == "linear":
+        rng = np.random.default_rng(3)
+        x1 = np.round(rng.uniform(size=n) * 2**12) / 2**12
+        x0 = np.round((x1 + 0.02 * rng.normal(size=n)) * 2**12) / 2**12
+        y = 5 * (x1 - x0) + 1e-3 * rng.normal(size=n)
+        return np.column_stack((x0, x1)), np.round(y * 2**20) / 2**20
+    grid, p = (12, 2) if design == "pairs" else (6, 1)
+    rng = np.random.default_rng(0)
     u = np.round(rng.uniform(size=n) * 2**grid) / 2**grid
     X = np.column_stack((u, rng.uniform(size=n)))[:, :p]
     y = np.sin(5 * X[:, -1]) + np.maximum(u - 0.5, 0.0) + 0.05 * rng.normal(size=n)
-    y = np.round(y * 2**8) / 2**8
+    return X, np.round(y * 2**8) / 2**8
+
+
+@pytest.mark.parametrize(
+    ("design", "x_shift", "y_shift"),
+    [
+        ("one covariate", 2.0**46, 0),  # A of LA-7, in setup
+        ("pairs", 2.0**36, 0),  # the first column of a pair
+        ("linear", 2.0**24, 0),  # the column of the linear candidate
+        ("pairs", 0, 2.0**44),  # the TSS
+    ],
+)
+def test_exact_shifts(design, x_shift, y_shift):
+    """Exact shifts of x0 or of y give the fit of the unshifted data: the same
+    terms, knots moved by the shift, and every RSS, rss[0] = TSS included,
+    within 1e-8 of the RSS before its step (LA-5, CORE-3). x is centered before
+    Gram-Schmidt (the plan's "Fast path"), and the TSS comes from the centered
+    y (FWD-10); each case pins one of these uses. Near 1e14 an uncentered x
+    makes A of LA-7 rounding noise above its threshold, and a single-hinge
+    search becomes a pair search. In "linear", FWD-4 bars every knot of x0 at
+    step 2, and the linear candidate of x0 wins."""
+    X, y = _on_binary_grids(design)
     kw = {"thresh": 0.0, "minspan": 1, "endspan": 1, "max_terms": 11}
     a = _fit(X, y, **kw)
-    b = _fit(X + np.eye(p)[0] * x_shift, y + y_shift, **kw)
+    b = _fit(X + np.eye(X.shape[1])[0] * x_shift, y + y_shift, **kw)
     np.testing.assert_array_equal(b.dirs, a.dirs)
     moved = np.abs(a.dirs[:, 0]) == 1
     np.testing.assert_array_equal(b.cuts[moved, 0], a.cuts[moved, 0] + x_shift)
