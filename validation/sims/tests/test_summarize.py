@@ -188,6 +188,26 @@ def test_ratio_table_missing_when_no_data_at_all():
     assert d7_row["P-cur / E-def"].startswith("n/a")
 
 
+def test_main_writes_every_display_when_no_cell_has_run(tmp_path):
+    """Before any cell has run, the results folder has no cell folders.
+    ``main`` must still write ``captions.md`` and each display that
+    ``CAPTIONS`` names, and no file without a caption. The appendix table
+    then holds only its header. Before the fix, ``appendix_table`` sorted a
+    frame with no columns and raised ``KeyError: 'dgp'``, so the figures and
+    the captions were never written.
+    """
+    results = tmp_path / "results"
+    results.mkdir()
+    out = tmp_path / "report"
+    summ.main(["--results", str(results), "--out", str(out)])
+    assert sorted(path.name for path in out.iterdir()) == sorted(
+        [*summ.CAPTIONS, "captions.md"]
+    )
+    assert (out / "appendix_table.csv").read_text().splitlines() == [
+        "dgp,n,noise,arm,n_ok,n_failed,mean_log_measure,mc_se_log_measure"
+    ]
+
+
 def test_selection_table_median_and_iqr_hand_case(tmp_path):
     """n_terms = [1, 1, 1, 1, 10] (an asymmetric sample, pandas' default
     linear interpolation): median 1, mean 2.8, Q1 1, Q3 1, IQR 0. A mean
