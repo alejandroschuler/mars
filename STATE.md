@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 10:09 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 10:10 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING (week 2). BUDGET RULE FROM THE USER (about 09:00 Monday 2026-09-28): use up to 55 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), and see whether the meaningful-tests rule (2026-09-28) makes the work more efficient; log the weekly use per review round. Weekly 46 % at 08:48 Monday. Pacing to stop cleanly at 55 %: from 49 %, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet); from 53 %, start nothing and ask running agents to push a checkpoint and stop; at 55 %, pause, set the heartbeat to the weekly reset, and tell the user in the session. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work.
+RUNNING (week 2). BUDGET RULE FROM THE USER (10:05 Monday 2026-09-28): use up to 55 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), and see whether the meaningful-tests rule (2026-09-28) makes the work more efficient; log the weekly use per review round. Weekly 46 % at 10:10 Monday. Pacing to stop cleanly at 55 %: from 49 %, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet); from 53 %, start nothing and ask running agents to push a checkpoint and stop; at 55 %, pause, set the heartbeat to the weekly reset, and tell the user in the session. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work.
 
 ## Done in P0
 
@@ -29,7 +29,7 @@ RUNNING (week 2). BUDGET RULE FROM THE USER (about 09:00 Monday 2026-09-28): use
 
 ## Next actions (on resume)
 
-1. #57 (T11 `_scan.py`, head 754c4bf) and #55 (`_forward.py`, 071d181, on #57): a round-2 review of #57 by both roles (opus: the error bounds of the fix need a strong check; the round-1 comments are https://github.com/alejandroschuler/mars/pull/57#issuecomment-5868460714 and #issuecomment-5868616482; the author's reply #issuecomment-5870015920), merge; t11-forward rebases #55 onto main; the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase onto main, open its PR with `Closes #14`, ready) and start T11 stage 2 (interactions).
+1. #57 (T11 `_scan.py`, head 754c4bf) and #55 (`_forward.py`, 071d181, on #57): round-2 review of #57 running (wf_3eeced04-77a; started at weekly 46 %, 10:10) by both roles (opus: the error bounds of the fix need a strong check; the round-1 comments are https://github.com/alejandroschuler/mars/pull/57#issuecomment-5868460714 and #issuecomment-5868616482; the author's reply #issuecomment-5870015920), merge; t11-forward rebases #55 onto main; the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase onto main, open its PR with `Closes #14`, ready) and start T11 stage 2 (interactions).
 2. T07 conformance (brief `briefs/T07-conformance.md`; T06 is done, so it can start now; add the fast implementation when T12 merges).
 3. T15 oracle tests (brief to write; needs T06, done, and the fast code as it lands).
 4. T13 estimators (brief `briefs/T13-estimators.md`) after T12; then T14, T16, T17.

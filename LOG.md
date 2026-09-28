@@ -161,6 +161,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:43 Merged #49 as 5ff189f after rebase-check-49's re-approvals; T06 (#8) done. Weekly 46 %, 5-hour 5 %. PAUSED for the week-2 budget (limit 50 %): no agents or jobs running; the #57 round 2 needs a strong review that would reach the limit, so it waits. Heartbeat set to the weekly reset (2026-10-04 17:00 PDT) so that the watchdog does not resume during the pause. Asked the user in the session.
 - 09:51 User's rule (2026-09-28): tests must be meaningful, not performative, to save usage and avoid cruft. REVIEWER.md: mutation checks become a sample of about 30 mutants on the changed lines; a surviving mutant blocks only with an input in scope where it changes an observable result; fewest tests; flag performative tests; narrow re-reviews. COMMON.md: a Tests section (behavior tests only, no duplicates, proportion, fewest tests on request). STATE: a pruning pass after T07. Measured on main: package 1,610 lines; fast-code tests 2,422; reference 1,259 with 2,633 lines of tests; validation Python 14,365 lines.
 - 10:09 The user allowed up to 55 % this week (from 46 %) to see whether the meaningful-tests rule makes the work more efficient. Resumed: heartbeat refreshed. Priority: #57 round 2, then #55, then T12's PR.
+- 10:10 Started the round-2 review of #57 (both roles, opus) under the new test rules; weekly 46 % at the start, for the efficiency comparison.
 
 ## Core-hour ledger
 
