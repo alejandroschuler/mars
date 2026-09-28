@@ -135,10 +135,11 @@ def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | 
         mean = math.fsum(w) / n
         if abs(mean - 1.0) > _MEAN_WEIGHT_TOL:
             warnings.warn(
-                f"sample_weight is not integer, and its mean is {mean:.6g}, not 1. "
-                "pymars reads weights as case counts: a weight w acts as w "
-                "copies of its row, so the scale of the weights changes the fit. "
-                "For importance weights, rescale them to w * n / sum(w) first.",
+                "sample_weight holds weights that are not integers, and their "
+                f"mean is {mean:.6g}, not 1. pymars reads weights as case "
+                "counts: a weight w acts as w copies of its row, so the scale "
+                "of the weights changes the fit. For importance weights, "
+                "rescale them to w * n / sum(w) first.",
                 UserWarning,
                 stacklevel=3,
             )
