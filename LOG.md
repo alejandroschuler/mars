@@ -129,6 +129,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:31 00:33: #48 rebased on 77b6692 (5756c66; its own two commits; 159 reference tests; gate B PASS; CI 12/12). Dual review started (wf_595b6a8e-4a7), with a request to check the pass against earth's fixture forward steps (S01, S03, S04, S05) and not against the fast code.
 - 00:33 00:40: t12-core done up to #55: origin/t12-core has part 1 (e040a86, types) and part 2 (0659fcd, fit_mars), gate B PASS on both, 129 of 131 S fits equal earth through a stub forward pass, mutants 291 of 314. The auto-mode classifier denied new_worktree.sh with a start point (a split branch); no workaround; recorded in issue #59 (needs-user, no action needed). Decision: one PR with two commits.
 - 00:33 00:42: 5-hour 73 %, weekly 25 %. Heartbeat set to 03:35 PDT (reset + 15 min) by the 70 % rule. No new agents from 80 %.
+- 00:37 00:55: #56 round 2 APPROVE (sonnet single reviewer, gate B rerun). Merge refused: head does not contain 77b6692. Asked tools-merge-guard for a pure rebase.
 
 ## Core-hour ledger
 

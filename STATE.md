@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:33 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 00:37 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -23,7 +23,7 @@ Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T0
 Open pull requests:
 - #48 part 3 forward pass (5756c66, rebased on 77b6692, gate B PASS, CI 12/12): dual review running (wf_595b6a8e-4a7, task wkg8gboi5). #49 part 4 fit_mars (Closes #8) after #48 merges.
 - #55 T11 stage 1 (t11-forward-stage1, draft) and #57 (t11-scan, draft): `t11-forward` split stage 1; dual review when it reports.
-- #56 TOOLS-1 (032ad32, gate B PASS, CI 12/12): round 1 REQUEST_CHANGES fixed; narrow round 2 by a sonnet single reviewer running (wf_e417c814-a4d). Follow-up TOOLS-2: the `pr view` branch of the fake gh also ignores its arguments (older gap; tools-merge-guard made a task chip for it).
+- #56 TOOLS-1: round 2 APPROVE at 032ad32 (wf_e417c814-a4d). merge_pr.sh refused (head behind 77b6692); tools-merge-guard rebases; then a rebase-check re-approval and the merge; then fast-forward <main>. Follow-up TOOLS-2: the `pr view` branch of the fake gh also ignores its arguments (older gap; tools-merge-guard made a task chip for it).
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
 ## Done in P0
