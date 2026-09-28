@@ -484,9 +484,12 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
     lf, lr, i = fast["candidates"], ref["candidates"], s - 1
     kf, kr = _second(lf, i), _second(lr, i)
     if kf == kr:
-        if kf is not None:
-            R = LA5 * ref["rss"][i]
-            _close(case, lf["second_rss"][i], lr["second_rss"][i], R, f"second, {s}")
+        fields = ("second_parent", "second_variable", "second_kind", "second_knot")
+        raw = [np.array([log[f][i] for f in fields]) for log in (lf, lr)]
+        if not np.array_equal(*raw, equal_nan=True):
+            _fail(case, f"step {s}: the second's fields: fast {raw[0]}, ref {raw[1]}")
+        R = LA5 * ref["rss"][i]
+        _close(case, lf["second_rss"][i], lr["second_rss"][i], R, f"second, {s}")
         return None
     step = _Step(case, ref, s)
     if kf is not None and kr is not None and _identical(step, kf, kr):
@@ -545,6 +548,24 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
     )
 
 
+#: CORE-3: the dtypes of the forward record and of the candidate log.
+DTYPES = {
+    "dirs": np.int8,
+    "cuts": np.float64,
+    "kept": np.int64,
+    "dropped": np.int64,
+    "parent": np.int64,
+    "step": np.int64,
+    "rss": np.float64,
+    "best_rss": np.float64,
+    "second_rss": np.float64,
+    "second_parent": np.int64,
+    "second_variable": np.int64,
+    "second_knot": np.float64,
+    "second_kind": np.int8,
+}
+
+
 def compare_forward(case: Case, fast, ref) -> Outcome:
     """Compare two forward records (CORE-3) of one case, as the module
     docstring says; ``fast`` and ``ref`` are records or their dicts."""
@@ -553,6 +574,10 @@ def compare_forward(case: Case, fast, ref) -> Outcome:
         _plain(fast["candidates"]),
         _plain(ref["candidates"]),
     )
+    for rec, who in ((fast, "fast"), (ref, "reference")):
+        for key, value in {**rec, **(rec["candidates"] or {})}.items():
+            if key in DTYPES and np.asarray(value).dtype != DTYPES[key]:
+                _fail(case, f"the {who} {key} has dtype {np.asarray(value).dtype}")
     _close(case, fast["rss"][0], ref["rss"][0], LA5 * ref["rss"][0], "TSS, rss[0]")
     S = min(len(fast["rss"]), len(ref["rss"])) - 1
     for s in range(1, S + 1):
@@ -653,7 +678,8 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     if mf != mr:
         gf, gr = ref["gcv_per_size"][mf - 1], ref["gcv_per_size"][mr - 1]
         exact = same(*(ref["rss_per_size"][m - 1] for m in (mf, mr)), 0.0)
-        if not (exact or abs(gf - gr) <= PRUNE_TIE * max(gf, gr)):
+        by_gcv = case.params.get("pmethod", "backward") == "backward"  # PRUNE-7
+        if not (by_gcv and (exact or abs(gf - gr) <= PRUNE_TIE * max(gf, gr))):
             _fail(case, f"selected size: fast {mf}, reference {mr}")
         return Outcome(Mf - 1, "selected size", Mf)
     if not np.array_equal(fast["selected"], ref["selected"]):
@@ -850,6 +876,17 @@ def _fixture_cases() -> tuple[list[Case], list[PruneCase]]:
         tag = f"S15_draw{rep:03d}"
         basis = _basis_case(tag, X, y, None, draw["dirs"], draw["cuts"], args)
         add(_in_supported(tag, X, y, None, _earth_params(args)), basis)
+    component = json.loads(
+        (FIXTURES_DIR / "components" / "pruning_fixed_basis.json").read_text()
+    )
+    for key in ("one_response", "several_responses"):
+        c = component[key]
+        args = {"degree": 2, "penalty": component["penalty"]}
+        name = f"pruning_fixed_basis[{key}]"
+        X, dirs, cuts = component["X"], c["dirs"], c["cuts"]
+        bases.append(_basis_case(name, X, c["y"], None, dirs, cuts, args))
+    for b in [b for b in bases if b.Y.shape[1] >= 3]:  # the rule for K = 2 (PRUNE-3)
+        bases.append(dataclasses.replace(b, name=f"{b.name}[y0, y1]", Y=b.Y[:, :2]))
     return cases, bases
 
 
@@ -867,7 +904,9 @@ def _settings():
     return st.fixed_dictionaries(
         {
             "max_degree": st.sampled_from(SUPPORTED["max_degree"]),
-            "max_terms": st.one_of(st.none(), st.integers(1, 21)),
+            "max_terms": st.sampled_from(
+                [None] * 4 + list(range(21, 0, -2)) + [8, 6, 4, 2]
+            ),
             "penalty": st.sampled_from([None, -1.0, 0.0, 2.0, 3.0, 7.5]),
             "thresh": st.one_of(st.just(0.0), st.sampled_from([0.001, 0.01, 0.05])),
             "minspan": st.sampled_from([None, 1, 2, 5]),
@@ -881,11 +920,12 @@ def _settings():
 
 
 def _truth(rng, X, smooth: bool) -> np.ndarray:
-    """A smooth truth, or a sum of one to three hinges at data quantiles."""
+    """A smooth truth, or a sum of one to three hinges at data quantiles; now
+    and then plus a linear part, which a linear term can take (FWD-6)."""
+    f = rng.normal(0, 3) * X[:, rng.integers(X.shape[1])] * (rng.uniform() < 0.3)
     if smooth:
         a = rng.uniform(1, 8)
-        return np.sin(a * X[:, 0]) + (X[:, -1] - 0.5) ** 2 + 0.5 * X[:, 0] * X[:, -1]
-    f = np.zeros(len(X))
+        return f + np.sin(a * X[:, 0]) + (X[:, -1] - 0.5) ** 2 + X[:, 0] * X[:, -1]
     for _ in range(rng.integers(1, 4)):
         j = rng.integers(X.shape[1])
         t = np.quantile(X[:, j], rng.uniform(0.1, 0.9))
@@ -897,13 +937,14 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 def forward_cases(draw, kind: str) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
     covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
-    constant column (FWD-5, KNOT-2, EDGE-3, EDGE-4); ``scaled``, covariates and
-    y scaled and shifted by powers of 10 (LA-7, EDGE-6, FWD-10); ``small``, 3
-    to 15 cases (EDGE-2, STOP-3). The noise runs from none (exact fits and
-    STOP-5) to as large as the signal."""
+    constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
+    ``scaled``, covariates and y scaled and shifted by powers of 10 (LA-7,
+    EDGE-6, FWD-10, FWD-11); ``small``, 1 to 15 cases, now and then with a
+    constant y (EDGE-1, EDGE-2, STOP-3). The noise runs from none (exact fits
+    and STOP-5) to as large as the signal."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
-    n = draw(st.integers(3, 15) if kind == "small" else st.integers(20, 120))
+    n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
@@ -917,9 +958,15 @@ def forward_cases(draw, kind: str) -> Case:
             X[:, 1] = X[:, 0]
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
+        if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
+            X[:] = X[0]
+        if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
+            X = X + 10.0 ** rng.uniform(6, 9, p)
     smooth = kind == "smooth" or rng.uniform() < 0.3
     Y = np.column_stack([_truth(rng, X, smooth) for _ in range(K)])
     Y = Y + noise * np.std(Y) * rng.standard_normal((n, K))
+    if kind == "small" and rng.uniform() < 0.1:  # a degenerate fit (EDGE-1)
+        Y[:] = Y[0]
     if kind == "scaled":
         X = X * 10.0 ** rng.uniform(-6, 6, p)
         X = X + rng.choice([0, 1, -1], p) * 10.0 ** rng.uniform(0, 8, p)
@@ -980,6 +1027,60 @@ def pruning_cases(draw) -> PruneCase:
     return PruneCase(f"pruning seed={seed}", B[:, order], Y, w, params)
 
 
+def _designed_cases() -> list[Case]:
+    """Designs that earlier tests and reviews built for one rule each; here the
+    reference gives the answer."""
+    rng = np.random.default_rng(0)
+    x0 = rng.uniform(size=300)
+    x1 = x0 + 0.02 * rng.normal(size=300)
+    y = 5 * (np.maximum(x0 - 0.5, 0) - np.maximum(x1 - 0.5, 0))
+    y = y + 0.001 * rng.normal(size=300)
+    X = np.column_stack((x0, x1))
+    spans = {"thresh": 0.0, "minspan": 1, "endspan": 1, "fast_k": 0}
+    # FWD-4: a pair on x1 comes first, and then every pair on x0 reduces the
+    # RSS by more than 10 Delta_1, while the linear term may (with either
+    # form of FWD-6); the same with X + 1e9 (LA-5 for shifted covariates).
+    cases = [
+        Case(f"FWD-4 cap, auto_linpreds={a}", X, y, None, spans | {"auto_linpreds": a})
+        for a in (True, False)
+    ]
+    cases.append(
+        Case("FWD-4 cap, X + 1e9", X + 1e9, y, None, spans | {"max_terms": 11})
+    )
+    # A few values far below a tight bulk (the scan's error bounds).
+    n = 400
+    x0 = np.r_[rng.uniform(0, 1, 12), 40 + rng.uniform(size=n - 12)]
+    Xb = np.column_stack((x0, rng.uniform(size=n)))
+    yb = np.maximum(x0 - 0.5, 0) + np.sin(6 * Xb[:, 1]) + 0.05 * rng.normal(size=n)
+    cases.append(Case("values below a tight bulk", Xb, yb, None, {"fast_k": 0}))
+    # LA-7: x1 is x0 plus noise, so A of x0 after a pair on x1 is near the
+    # pair rule's threshold.
+    for sd in (4e-3, 1e-3):
+        x0 = rng.uniform(size=200)
+        Xp = np.column_stack((x0, x0 + sd * rng.normal(size=200)))
+        yp = np.maximum(x0 - 0.5, 0) + 5 * Xp[:, 1]
+        cases.append(Case(f"LA-7, sd {sd}", Xp, yp, None, spans | {"max_terms": 5}))
+    # STOP-5 before STOP-1: an exact fit.
+    x = np.linspace(0, 1, 41)
+    yx = 2 * np.maximum(x - x[12], 0.0)
+    cases.append(Case("exact fit", x[:, None], yx, None, spans | {"max_terms": 3}))
+    # FWD-11: the linear term of a binary covariate shifted by 1e7, which LA-4
+    # drops; FWD-5 and EDGE-4: a duplicated covariate.
+    Xs = np.column_stack([1e7 + (np.arange(60) % 2), rng.uniform(size=60)])
+    ys = 2 * (Xs[:, 0] - 1e7) + 3 * np.maximum(Xs[:, 1] - 0.5, 0)
+    ys = ys + rng.normal(scale=0.05, size=60)
+    cases.append(
+        Case("FWD-11, a shifted binary covariate", Xs, ys, None, {"fast_k": 0})
+    )
+    u = rng.uniform(size=100)
+    Xd = np.column_stack((u, u, rng.uniform(size=100)))
+    yd = np.sin(6 * u) + 0.1 * Xd[:, 2]
+    cases.append(
+        Case("a duplicated covariate", Xd, yd, None, {"fast_k": 0, "thresh": 0.0})
+    )
+    return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
+
+
 # ---------------------------------------------------------------------------
 # The tests
 
@@ -993,6 +1094,12 @@ def test_forward_pass_on_hypothesis_data(kind, data):
     CORE-4)."""
     case = data.draw(forward_cases(kind), label="case")
     _count(f"forward, hypothesis {kind}", check_forward(case))
+
+
+@pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
+def test_forward_pass_on_designed_data(case):
+    """The same comparison on designs made for single rules (``_designed_cases``)."""
+    _count("forward, designs", check_forward(case))
 
 
 @pytest.mark.slow
@@ -1033,5 +1140,6 @@ def test_pruning_pass_on_random_bases(case):
 def test_pruning_pass_on_earth_forward_bases(case):
     """The same comparison on earth's forward basis of every fixture fit, at
     degrees 1 to 3, with the fixtures' weights and several responses."""
-    group = "S15" if case.name.startswith("S15") else "S01 to S20"
+    group = case.name[:3] if case.name[:3] in ("S15", "pru") else "S01 to S20"
+    group = {"pru": "components"}.get(group, group)
     _count(f"pruning, earth bases, {group}", check_pruning(case))
