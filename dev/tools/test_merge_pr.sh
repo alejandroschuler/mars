@@ -22,23 +22,36 @@ echo "GATE B PASS $head" >"$state/gates/$head.gateB.log"
 
 cat >"$dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-# Fake gh: "pr view ... --jq <program>" runs the program on $FAKE_PR_JSON.
-# "pr list ... --jq <program>" runs it on $FAKE_STACKED_JSON, or fails when
-# $FAKE_PR_LIST_FAIL is set. A pr list call missing one of the expected
-# filters also fails, so a one-token change to that call is caught here
-# rather than by a real gh query.
+# Fake gh for pull request 1 of alejandroschuler/mars. "pr view 1 ... --jq
+# <program>" runs the program on $FAKE_PR_JSON. "pr list ... --jq <program>"
+# runs it on $FAKE_STACKED_JSON, or fails when $FAKE_PR_LIST_FAIL is set. As in
+# gh, the program sees only the fields that --json names, so a field left out
+# of that list reads as null. A call for another pull request, or one without
+# --repo alejandroschuler/mars or an expected pr list filter, fails. So a
+# one-token change to the pull request, the repository, a filter or a field
+# list of a query that these tests run is caught here, not by a real gh query.
+set -o pipefail
 case "$1 $2" in
-  "pr view") json=$FAKE_PR_JSON ;;
+  "pr view")
+    [ "$3" = 1 ] || { echo "fake gh: pr view of '$3', not of pull request 1: $*" >&2; exit 1; }
+    wants=("--repo alejandroschuler/mars")
+    json=$FAKE_PR_JSON ;;
   "pr list")
     [ -z "${FAKE_PR_LIST_FAIL:-}" ] || { echo "fake gh: pr list failed" >&2; exit 1; }
-    for want in "--repo alejandroschuler/mars" "--state open" "--base t99-test"; do
-      [[ " $* " == *" $want "* ]] || { echo "fake gh: pr list without $want: $*" >&2; exit 1; }
-    done
+    wants=("--repo alejandroschuler/mars" "--state open" "--base t99-test")
     json=$FAKE_STACKED_JSON ;;
   *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
 esac
-while [ $# -gt 0 ]; do [ "$1" = --jq ] && prog=$2; shift; done
-exec jq -r "$prog" "$json"
+for want in "${wants[@]}"; do
+  [[ " $* " == *" $want "* ]] || { echo "fake gh: $1 $2 without $want: $*" >&2; exit 1; }
+done
+while [ $# -gt 0 ]; do
+  case $1 in --json) fields=$2 ;; --jq) prog=$2 ;; esac
+  shift
+done
+jq --arg fields "${fields:-}" '
+  def named: with_entries(select(.key | IN($fields | split(",") | .[])));
+  if type == "array" then map(named) else named end' "$json" | jq -r "$prog"
 EOF
 chmod +x "$dir/bin/gh"
 
