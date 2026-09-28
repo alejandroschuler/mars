@@ -193,6 +193,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:03 T12 PR #70 ready (328af43): fit_mars equals the reference on 16 cases to 8.8e-14 and earth on the five matched fits; gate B PASS. Dual review queued for free reviewer slots.
 - 14:04 5-hour 60 % at 14:04 (reset 18:10), weekly 10 %: by the 60 % start rule, T12's full review waits; running work continues.
 - 14:06 Merged #61 as 11202d3 (update-check-61: the PR's own diff unchanged by the branch update; gate B PASS; CI 12/12). Updated #63's branch to 68b21f5; update-check-63 started.
+- 14:12 Merged #63 (the user's summarize fix) after update-check-63's re-approval.
 
 ## Core-hour ledger
 
