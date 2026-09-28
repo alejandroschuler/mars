@@ -148,6 +148,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:23 Weekly 42 %, 5-hour 73 % (reset 08:20): heartbeat set to 08:35 by the 70 % rule. Pacing refined: from 44 % only small agents that finish open PRs.
 - 05:24 #58 round-1 fixes at 870c482 (56 unit tests kill the reviewer's 21 mutants and 10 more; F4 evidence fixed, first-difference bug count 8 to 6). Narrow round 2 started (sonnet). Incident: t18-legacy discarded a regenerated report JSON in its runner worktree with 'git checkout <file>', a variant of a guarded command that the guard did not catch; a report output it had copied, so nothing was lost; it reported it; told it not to use variants of guarded commands.
 - 05:28 recheck-48 posted both narrow re-approvals (tests only; the listed mutants fail; 216 pass). Merged #48 as 0c2a896; <main> fast-forwarded. Weekly 42 %, 5-hour 75 %. Asked t06-reference to rebase #49 (drop the duplicates now in #48).
+- 05:33 #49 rebased to f6c481d on 0c2a896 (duplicates of #48 removed; gate B PASS; CI 12/12). Dual review started: spec with opus, adversarial with sonnet (to save weekly budget; 43 %).
 
 ## Core-hour ledger
 
