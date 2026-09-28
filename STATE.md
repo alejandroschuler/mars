@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 08:40 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 08:43 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,16 +15,9 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING (week 2). Weekly 30 % at 03:22 Monday 2026-09-28 (5-hour 1 %, next reset 08:20 PDT); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Pacing to stop cleanly at 50 %: from 44 % weekly, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet), and no new author work; from 48 %, start nothing and ask running agents to push a checkpoint and stop; at 50 %, pause and tell the user. The burn is about 8 points per hour with 5 to 7 agents (34 % at 03:52 Monday). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
+PAUSED for the budget (week 2). Weekly 46 % at 08:48 Monday 2026-09-28 (the user's limit for this week is 50 %; the weekly reset is 2026-10-04 17:00 PDT). The executor asked the user in its session whether more budget may be used. No agents are running and no jobs. The heartbeat is set to 2026-10-04 17:00 PDT, so the watchdog does not resume the work during the pause. If the user allows more budget, the executor in this session resumes and refreshes the heartbeat normally. If a watchdog run takes over after the weekly reset, it first asks the user in its session about the week-3 budget, then follows the plan's pacing.
 
-main: 62f5b6a (#58 T18 legacy description), 0c2a896 (#48 T06 part 3, forward pass), 1918863 (#56 TOOLS-1 merge guard), 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
-Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12, T18 #20.
-
-Open pull requests:
-- #49 part 4 fit_mars (Closes #8): rebased to f6c481d (duplicates removed; 454 lines; 238 reference tests; gate B PASS; CI 12/12). Round 1: both REQUEST_CHANGES on tests (code agrees with earth on all 123 regression fixtures whole-fit; 23 of 59 spec mutants and 3 adversarial ones survive; the spec review gave 5 candidate tests; one code fix: np.errstate for the EDGE-6 overflow side). Fixed at 9dd16fa (tests for spec 1 to 5 and the adversarial cases; np.errstate for the TSS; a constant's coefficient from Y[:1]; exact key sets; all 26 mutants fail; gate B PASS; CI 12/12). recheck-49 posted both narrow re-approvals on 9dd16fa. Rebased to c6cbeed (all 3 commits '='; gate B PASS; CI 12/12). rebase-check-49 (sonnet) posts both roles' re-approvals; then merge (closes #8, T06 done).
-- #57 round 1 (wf_e0ddfd90-495): both REQUEST_CHANGES. Blocking: knot_scan misses LA-5 at large n (cancellation in D = ||h||^2 - (q0'h)^2 and n·u error in the cumsum of q0'h; errors up to 650x the bound; a knot near tau can be wrongly rejected, and the driver never rechecks it); CI red (lstsq rcond). All 227 mutants killed. Fixed: #57 754c4bf (block sums of about sqrt(n), Welford D, a worst-case bound per rho and reduction, exact_knot; the reviewers' cases now within 0.8 of the LA-5 bound; 11904 random knots within their bounds; mutants 341 of 366, the rest equivalent or second order) and #55 071d181 (a two-pass step: only surely illegal knots dropped, every knot whose bound reaches the best two valued explicitly; 88 fixtures still equal the reference; mutants 384 of 393). Both gate B PASS, CI 12/12. #57 is 753 lines, #55 1349. Next: a narrow round 2 of #57 (both roles), when the 5-hour window allows (83 % at 05:42; reset 08:20) and the weekly budget allows. #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
-- TOOLS-2 (later, small): the `pr view` branch of the fake gh in test_merge_pr.sh also ignores its arguments.
-Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
+BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit, with no daily pacing. When the work pauses at 50 %, check back in with the user in the session. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrators, checkers, narrow re-reviews).
 
 ## Done in P0
 
@@ -36,23 +29,18 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 - Text of Milborrow's notes saved for local reading at `<main>/.git/pymars-executor/ref/earth-notes.txt` (never commit or quote it).
 - Watchdog task `pymars-executor-watchdog` created (cron `17 * * * *`, the app shows 25 past the hour; notifyOnCompletion false). Its folder and mode are not checked yet: `run_scheduled_task` was denied by the auto-mode classifier, so the user was asked to click Run now once.
 
-## Next actions
+## Next actions (on resume)
 
-1. #49 (T06 part 4, Closes #8): after t06-reference's rebase, a dual review (spec, adversarial), fixes, merge. That completes T06 and unblocks T07 (brief `briefs/T07-conformance.md`) and T15.
-2. #57 (T11 `_scan.py`): t11-forward fixes the scan accuracy; then a narrow round 2, merge; t11-forward rebases #55 onto main; then the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase, open its PR, `Closes #14`), and T11 stage 2 (interactions).
-3. T18 done: #58 merged as 62f5b6a (issue #20 closed). Worktrees t18-legacy-head and t18-legacy-gate removed; runner-t18 has a modified output file (issue #60 comment); t18-legacy keeps the reformatted files (issue #60).
-4. Later: T13 estimators (brief `briefs/T13-estimators.md`) after T12; T15 oracle tests after T06; T14, T16, T17 after T13; T01 v2 (#44) after T07's triage.
-5. Follow-ups: TOOLS-2 (the fake gh's `pr view` branch ignores its arguments); DECISIONS.md: the legacy matched mode needs Adjust.endspan = 0 (T18); T05 notes PR; T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test); T10 non-blocking notes from #54's reviews. They go on #44 or later PRs.
-6. Housekeeping: issue #60 (needs-user: local cleanup the guard blocked); issue #59 (needs-user, no action needed: auto mode denied new_worktree.sh with a start point); the unused branch origin/t08-terms-gcv and its worktree <S>/.worktrees/t08-terms-gcv-knots.
+1. #57 (T11 `_scan.py`, head 754c4bf) and #55 (`_forward.py`, 071d181, on #57): a round-2 review of #57 by both roles (opus: the error bounds of the fix need a strong check; the round-1 comments are https://github.com/alejandroschuler/mars/pull/57#issuecomment-5868460714 and #issuecomment-5868616482; the author's reply #issuecomment-5870015920), merge; t11-forward rebases #55 onto main; the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase onto main, open its PR with `Closes #14`, ready) and start T11 stage 2 (interactions).
+2. T07 conformance (brief `briefs/T07-conformance.md`; T06 is done, so it can start now; add the fast implementation when T12 merges).
+3. T15 oracle tests (brief to write; needs T06, done, and the fast code as it lands).
+4. T13 estimators (brief `briefs/T13-estimators.md`) after T12; then T14, T16, T17.
+5. Follow-ups: TOOLS-2 (the fake gh's `pr view` branch ignores its arguments); DECISIONS.md: the legacy matched mode needs Adjust.endspan = 0 (T18); T05 notes PR; T08, T09 and T10 non-blocking notes; spec v2 (#44) collects the questions from #47 to #49 and #57.
+6. Housekeeping: issues #59 and #60 (needs-user); the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots.
 
 ## Running agents
 
-- `t06-reference` (opus): idle; #49 fixed at 9dd16fa.
-- `t11-forward` (opus): idle; #57 and #55 fixed, waiting for the round-2 review of #57.
-- `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
-- `t18-legacy` (opus): done (#58 merged).
-- `tools-merge-guard` (sonnet): done (#56 merged); resumable for TOOLS-2.
-- Resumable: `t10-pruning` (#54 follow-ups), `integrator` (sonnet, pure rebases), `rebase-check-45` (sonnet, rebase-only re-approvals), `rev46-r3-adv`, `rev46-r3-spec`, `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
+- None running. Resumable with SendMessage: `t11-forward` (#57, #55, stage 2), `t12-core` (T12 PR after #55), `t06-reference` (done), `t18-legacy` (done), `tools-merge-guard` (TOOLS-2), and older ones.
 
 ## Running jobs
 

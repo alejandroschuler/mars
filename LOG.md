@@ -158,6 +158,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:33 Merged #58 (T18) as 62f5b6a after rebase-58 (all 13 commits '=') and rebase-check-58's re-approval; issue #20 closed; <main> fast-forwarded. Removed the clean worktrees t18-legacy-head and t18-legacy-gate; runner-t18 holds a modified output file, so its forced removal is on issue #60 for the user. #49 now needs a pure rebase onto 62f5b6a after recheck-49.
 - 08:34 recheck-49 posted both narrow re-approvals on 9dd16fa (the 6 named mutants fail; only the requested code hunks). rebase-49 (sonnet) started: the rebase onto 62f5b6a.
 - 08:40 #49 rebased to c6cbeed by rebase-49 (all '='; gate B PASS; CI 12/12 confirmed by the executor). Removed its clean worktree. rebase-check-49 started.
+- 08:43 Merged #49 as 5ff189f after rebase-check-49's re-approvals; T06 (#8) done. Weekly 46 %, 5-hour 5 %. PAUSED for the week-2 budget (limit 50 %): no agents or jobs running; the #57 round 2 needs a strong review that would reach the limit, so it waits. Heartbeat set to the weekly reset (2026-10-04 17:00 PDT) so that the watchdog does not resume during the pause. Asked the user in the session.
 
 ## Core-hour ledger
 
