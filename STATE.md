@@ -39,7 +39,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 1. #47 (T06 part 2, pruning, head 94825c1, rebased on main 955b44c): its dual review (tools/dual_review.js) when the daily allowance allows (after Monday 17:00 if the weekly is near 14 %); then #48 and #49 the same way; before merging a part, retarget the next part to main.
 2. T10 `_pruning.py`: PR #54 ready (head f0be830, base main 955b44c, Closes #12; gate B passed; 100 % coverage; subsets equal to earth at every size in pruning_fixed_basis and in 136 S fits; RSS within 1.5e-14; python -B mutants 37 of 40 killed, 3 equivalent). Dual review when the allowance allows (with #47's).
-3. T11 `_scan.py`, `_forward.py` (opus, staged: degree 1; interactions, linear option, collinearity; Fast MARS, weights, several responses): brief to write; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
+3. T11 `_scan.py`, `_forward.py`: brief `briefs/T11-forward.md`; stage 1 author `t11-forward` started 22:12 Sunday; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
 4. T07 conformance (brief to write) after #49 merges. T12 core after T10. T13 estimators after T12. T18 legacy description (brief to write; sonnet).
 5. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test). All go on #44 (spec v2) or later PRs.
 6. Housekeeping: the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove).
@@ -48,6 +48,8 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 - `t06-reference` (opus): done for now; resumable for #47 to #49 review fixes and rebases.
 - `t10-pruning` (opus): done; PR #54 ready; resumable for review fixes.
+- Workflow wf_f0e82287-f9e: dual review of #54 (T10). Workflow wf_bfe992ce-cec: dual review of #47 (T06 part 2).
+- `t11-forward` (opus): T11 stage 1 (degree 1), issue #13, brief `briefs/T11-forward.md`, started 22:12 Sunday.
 - `rev46-r3-adv`, `rev46-r3-spec` (sonnet): #46 round-3 reviewers, resumable for the re-check.
 - `integrator` (sonnet): pure rebases; `rebase-check-45` (sonnet): rebase-only re-approvals.
 - Resumable authors: `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
