@@ -38,7 +38,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 ## Next actions
 
 1. #46: finish round 3 (above); merge; then dual reviews of #47, #48, #49 in order (each after the part below merges and is rebased).
-2. T10 `_pruning.py` (opus author, brief `briefs/T08-T10-components.md`, issue #12) can start now: T08 and T09 are merged.
+2. T10 `_pruning.py`: `t10-pruning` started 19:08 Sunday; its dual review follows its report.
 3. T11 `_scan.py`, `_forward.py` (opus, staged: degree 1; interactions, linear option, collinearity; Fast MARS, weights, several responses): brief to write; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
 4. T07 conformance (brief to write) after #49 merges. T12 core after T10. T13 estimators after T12. T18 legacy description (brief to write; sonnet).
 5. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test). All go on #44 (spec v2) or later PRs.
@@ -47,6 +47,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 ## Running agents
 
 - `t06-reference` (opus): adding the #46 large-N boundary test.
+- `t10-pruning` (opus): T10 `_pruning.py`, issue #12, started 19:08 Sunday.
 - `rev46-r3-adv`, `rev46-r3-spec` (sonnet): #46 round-3 reviewers, resumable for the re-check.
 - `integrator` (sonnet): pure rebases; `rebase-check-45` (sonnet): rebase-only re-approvals.
 - Resumable authors: `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
