@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-27 19:18 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 19:22 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -22,7 +22,7 @@ Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T0
 
 Open pull requests:
 - #46 merged as 955b44c (T06 part 1). #47 retargeted to main.
-- #47 part 2 pruning (4bf9e43), #48 part 3 forward pass (804ea69), #49 part 4 fit_mars (37df4c3, Closes #8): stacked; each needs a dual review after the part below merges and `t06-reference` rebases it.
+- #47 part 2 pruning (94825c1, base main, 292 lines, ready for its dual review), #48 part 3 forward pass (d1981bb), #49 part 4 fit_mars (f5f9a83, Closes #8): stacked; each needs a dual review after the part below merges and `t06-reference` rebases it.
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
 ## Done in P0
@@ -37,7 +37,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Next actions
 
-1. #47 (T06 part 2, pruning): `t06-reference` rebases it onto main (`git rebase --onto origin/main 75a8f5539309d2571f7ac39af86c1378919bc670 t06-reference-part2`), then its dual review (tools/dual_review.js) when the daily allowance allows (after Monday 17:00 if the weekly is near 14 %); then #48 and #49 the same way; before merging a part, retarget the next part to main.
+1. #47 (T06 part 2, pruning, head 94825c1, rebased on main 955b44c): its dual review (tools/dual_review.js) when the daily allowance allows (after Monday 17:00 if the weekly is near 14 %); then #48 and #49 the same way; before merging a part, retarget the next part to main.
 2. T10 `_pruning.py`: `t10-pruning` started 19:08 Sunday; its dual review follows its report.
 3. T11 `_scan.py`, `_forward.py` (opus, staged: degree 1; interactions, linear option, collinearity; Fast MARS, weights, several responses): brief to write; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
 4. T07 conformance (brief to write) after #49 merges. T12 core after T10. T13 estimators after T12. T18 legacy description (brief to write; sonnet).
