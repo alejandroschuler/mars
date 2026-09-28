@@ -97,6 +97,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:08 Started one dual review covering T08's #52, #53 and #51 (weekly 7 % at 18:09). Before merging #53, retarget #51 to main.
 - 18:24 #46 round 2 (wf_2d518719-907): round-1 fixes confirmed (python -B reruns: 101 of 112 killed, survivors change no result); both block on one point: a new N = 5e9 test builds a 428M-entry list (8 s, 4.6 GB) in every gate. Sent the fix to t06-reference. The spec reviewer's mutation copies (about 100 MB) remain in this session's scratchpad because the guard blocked their removal; harmless, removal left to the user (rev46spec_mut, rev46spec_base).
 - 18:24 #45 round-1 fixes (t09-linalg): head d556101, gate B and CI 12 of 12; python -B mutation rerun 49 of 51 killed (2 survivors change no result). Narrow round-2 dual review started. Weekly 8 % at 18:25.
+- 18:29 #46 round-2 fix (t06-reference): head 06bac02 (the large test replaced by exact short lists: 81 tests in 1.8 s and 98 MB; O(n log n + K) docstring; == 214; plan tolerances); #47 4bf9e43, #48 804ea69, #49 37df4c3 rebased, gate B and CI green. A narrow round-3 check by both roles waits for a reviewer slot.
 
 ## Core-hour ledger
 
