@@ -141,6 +141,9 @@ def test_gcv_infinite():
     assert _gcv.gcv(1.0, 20, 0, 20) == math.inf
     assert _gcv.gcv(1.0, 30, 0, 20) == math.inf
     assert _gcv.gcv(0.0, 20, 0, 20) == math.inf
+    # The test is strict: C(5) = 9 = N - τ_N gives +∞, just below it is finite.
+    assert _gcv.gcv(1.0, 5, 2, 10, tau=1.0) == math.inf
+    assert _gcv.gcv(1.0, 5, 2, 10, tau=0.99) == pytest.approx(1 / (10 * 0.01))
     # C = 2 + d/2 at M = 2; earth's test C < n keeps these finite.
     tau = _gcv.weight_tolerance(20)
     assert _gcv.gcv(1.0, 2, 2 * (18 - tau / 2), 20) == math.inf
