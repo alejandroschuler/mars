@@ -180,6 +180,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:31 T07 PR #66 ready (80bd7f5): the reference agrees with earth on 124 of 133 dataset fixtures and 197 of 200 S15 draws; 7 labeled entries (4 rule, 3 quirk), no bug; OQ-2 threshold decided; 4 questions on #44. Its single review waits for a reviewer slot. Weekly 3 %, 5-hour 16 %.
 - 13:34 #64 (the user's TOOLS-2 PR) APPROVE at 6e15ed4; rebase-64 started. Started the single review of #66 (T07, opus). TOOLS-3 noted (the fake gh never fails a pr view call).
 - 13:40 rebase-64: pure rebase of #64 to 99f1eee (gate B PASS), but auto mode denied the force-push to tools-fake-gh-pr-view (the user's branch) as Git Destructive; no workaround; needs-user issue with the exact command.
+- 13:41 #55 round 2: adversarial APPROVE; spec asks for one test case (the centered linear-candidate column unpinned; revert gives 4.2e-7 of the RSS); code right. Sent to t11-forward (tests only). Removed the clean worktree review-55-spec-r2 left by the failed first attempt.
 
 ## Core-hour ledger
 
