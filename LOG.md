@@ -177,6 +177,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:18 13:20: the 5-hour limit had stopped t07, t15 and both #55 round-2 reviewers (no posts) at about 13:00. The weekly counter reset to 0 % (the user's announced reset). Interim cap 50 % of the new counter until the user answers. Reran the #55 round 2 (spec opus, adversarial sonnet), resumed t07 and t15, started the single review of #64 (TOOLS-2, sonnet).
 - 13:21 The user set the budget for the new weekly counter: go to 50 % (then pause and tell the user).
 - 13:28 Pacing rule added: full reviews and long author tasks start only while the 5-hour window is below 60 % (two reviews lost to the limit so far).
+- 13:31 T07 PR #66 ready (80bd7f5): the reference agrees with earth on 124 of 133 dataset fixtures and 197 of 200 S15 draws; 7 labeled entries (4 rule, 3 quirk), no bug; OQ-2 threshold decided; 4 questions on #44. Its single review waits for a reviewer slot. Weekly 3 %, 5-hour 16 %.
 
 ## Core-hour ledger
 
