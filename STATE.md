@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 12:37 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 12:40 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -32,7 +32,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 ## Next actions (on resume)
 
 1. #55 (T11 stage 1 part 2, `_forward.py`): round-1 fixes at bc4e8c5 (on 2a00063, only #55's 12 commits; x centered by its middle data value; TSS from the centered Y; test_exact_shifts; the flagged tests deleted; gate B PASS; CI 12/12). Narrow round 2 running: spec (opus, wf_4ea1ce20-854) and adversarial (sonnet, wf_cab964fe-dee). Then merge (no rebase if main has not moved). Earlier round 1: Blocking (both reviewers checked their fixes): center x (for example x - mean, or a data value) before b·x enters Gram-Schmidt, in `setup` (line 207) and `columns` (277-279), as the plan's Fast path says (LA-5 fails on shifted covariates: 3.9e-7 at X + 1e9; 57 of 150 shifted fits differ from the reference; near 1e14 the pair rule fails); rss[0] = TSS from `_gcv.tss(Yc)` with Yc = Ys - Ys.mean(axis=0) (line 481; off by 8.8e-6 at y + 2^44); one extension of test_a_shift_of_y with exact shifts (2^36, 2^40, 2^44) pins both. Tests to delete (performative): test_second_largest, test_max_legal, the signature-defaults block of test_the_codes_and_the_defaults (lines 130-144), repeated cases in test_the_stop_after_a_step. Non-blocking: `_linalg.orthogonalize(Q_new, self.E)` in the pair search (line 212); np.errstate(over='ignore') for the ldexp overflow (lines 409, 484); the stage-1 LA-3 recheck is equivalent (keep only with a docstring note); document the CORE-7 worst case (pass 2 values every knot when y is nearly linear in one covariate); the two test extensions that kill the surviving sampled mutants; say in the PR that the committed comparison with the reference's fit_mars belongs to T15. Comments: https://github.com/alejandroschuler/mars/pull/55#issuecomment-5876389020 (spec), #issuecomment-5876432481 (adversarial). After the fix: rebase onto main with only #55's own commits (`git rebase --onto origin/main 2b5d35f`), gate B, CI; a checker's narrow re-approval of both roles; merge. Then message `t12-core` (rebase onto main, open its PR with `Closes #14`, ready), and T11 stage 2.
-2. T07 conformance (brief `briefs/T07-conformance.md`; T06 is done, so it can start now; add the fast implementation when T12 merges).
+2. T07 conformance: `t07-conformance` at work, draft PR #66. PRs from the user's own separate sessions, to review (single role, sonnet) and merge after the 5-hour reset at 13:20: #61 (t03-validation-floors: draw the summary figures in a test and test the validation dependency floors in CI; touches ci.yml, DECISIONS.md, test_summarize.py), #63 (t03-summarize-empty: summarize.py with no cells), #64 (TOOLS-2: pin the fake gh's pr view queries; closes #62).
 3. T15 oracle tests (brief to write; needs T06, done, and the fast code as it lands).
 4. T13 estimators (brief `briefs/T13-estimators.md`) after T12; then T14, T16, T17.
 5. Test pruning (the user's rule of 2026-09-28: meaningful tests only): once T07's conformance tests cover the reference against earth, prune the reference's unit tests that only repeat that coverage (tests/reference/test_reference.py is 2,633 lines for 1,259 lines of code); the same pass for the fast modules before the freeze (T21) and in T23.
@@ -58,7 +58,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 ## Guard notes
 
-- Heartbeat near a 5-hour limit (decision 2026-09-27 23:58): once the 5-hour use is 70 % or more, the executor writes max(now, reset + 15 min) into the heartbeat, so that a watchdog run that resumes with the reset does not take the lock from an executor that also resumes. A future heartbeat means that. Current 5-hour reset: 2026-09-28 08:19:59 PDT (epoch 1790608799). If the executor does not resume, the watchdog takes over about 75 minutes after that time.
+- Heartbeat near a 5-hour limit (decision 2026-09-27 23:58): once the 5-hour use is 70 % or more, the executor writes max(now, reset + 15 min) into the heartbeat, so that a watchdog run that resumes with the reset does not take the lock from an executor that also resumes. A future heartbeat means that. Current 5-hour reset: 2026-09-28 13:19:59 PDT. If the executor does not resume, the watchdog takes over about 75 minutes after that time.
 - The `dcg` hook blocks `rm -rf`, `git reset --hard`, `git clean`, `git checkout -- <file>`. It allows `git rm -r`, `git push --force-with-lease`, `gh pr merge --squash --delete-branch`, `git worktree remove`, `git rebase`, `git branch -d`, `mv`, `kill`. Check with `dcg test "<command>"`.
 - The app's worktree guard blocks Write and Edit outside the session worktree, also after request_directory for `<main>`. change_directory is refused for a worktree session.
 - The auto-mode classifier denied `run_scheduled_task`.
