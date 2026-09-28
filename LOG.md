@@ -154,6 +154,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 06:01 #49 round 1: both REQUEST_CHANGES on missing tests (FWD-11 in the fit, the candidate log's scale, the EDGE-1 bound and degenerate record, the inputs to the passes, the EDGE-6 overflow side needing np.errstate); code agrees with earth on 123 fixtures. Sent to t06-reference. Weekly 45 %, 5-hour about 87 %.
 - 06:10 #49 round-1 fixes at 9dd16fa (all 26 listed mutants fail; np.errstate for the TSS; gate B PASS; CI 12/12). 5-hour 91 %, weekly 45 %: the #49 checker, the #58 rebase and its checker wait for the 08:20 reset.
 - 06:23 No agents running. Heartbeat stays at 08:35 (future, by the 70 % rule). One timer until 08:22, just after the 5-hour reset; then the #49 checker, the #58 rebase and checker, and merges, within the weekly 50 %.
+- 08:23 08:22 after the 5-hour reset (2 %; next reset 13:20); weekly 45 %. Started recheck-49 and rebase-58 (both sonnet). The #57 round 2 waits for the user's answer on budget beyond 50 % (asked in the session at the user's summary request).
 
 ## Core-hour ledger
 
