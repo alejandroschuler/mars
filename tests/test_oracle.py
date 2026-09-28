@@ -77,18 +77,10 @@ SUPPORTED = {
     "responses": (1,),
 }
 
-FORWARD_PARAMS = (
-    "max_degree",
-    "max_terms",
-    "penalty",
-    "thresh",
-    "minspan",
-    "endspan",
-    "adjust_endspan",
-    "auto_linpreds",
-    "fast_k",
-    "fast_beta",
-)
+FORWARD_PARAMS = {f.name for f in dataclasses.fields(mars_ref.Params)} - {
+    "pmethod",
+    "nprune",
+}
 
 # LA-5 bounds each RSS by 1e-8 of the RSS before its step; two candidates
 # within 1e-7 of that RSS are a near-tie (plan, "Ties"); STOP-7's delta is
@@ -550,19 +542,12 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
 
 #: CORE-3: the dtypes of the forward record and of the candidate log.
 DTYPES = {
-    "dirs": np.int8,
-    "cuts": np.float64,
-    "kept": np.int64,
-    "dropped": np.int64,
-    "parent": np.int64,
-    "step": np.int64,
-    "rss": np.float64,
-    "best_rss": np.float64,
-    "second_rss": np.float64,
-    "second_parent": np.int64,
-    "second_variable": np.int64,
-    "second_knot": np.float64,
-    "second_kind": np.int8,
+    **dict.fromkeys(
+        ("cuts", "rss", "best_rss", "second_rss", "second_knot"), np.float64
+    ),
+    **dict.fromkeys(("kept", "dropped", "parent", "step"), np.int64),
+    **dict.fromkeys(("second_parent", "second_variable"), np.int64),
+    **dict.fromkeys(("dirs", "second_kind"), np.int8),
 }
 
 
@@ -1042,6 +1027,25 @@ def pruning_cases(draw) -> PruneCase:
     return PruneCase(f"pruning seed={seed}", B[:, order + rest], Y, w, params)
 
 
+def _on_binary_grids(design: str) -> tuple[np.ndarray, np.ndarray]:
+    """Data whose values lie on binary grids, so that a shift by a power of 2
+    is exact. "pairs" and "one covariate" have a hinge in x0 and a sine in the
+    last covariate; in "linear", x0 is x1 plus noise and y = 5 (x1 - x0)."""
+    n = 200
+    if design == "linear":
+        rng = np.random.default_rng(3)
+        x1 = np.round(rng.uniform(size=n) * 2**12) / 2**12
+        x0 = np.round((x1 + 0.02 * rng.normal(size=n)) * 2**12) / 2**12
+        y = 5 * (x1 - x0) + 1e-3 * rng.normal(size=n)
+        return np.column_stack((x0, x1)), np.round(y * 2**20) / 2**20
+    grid, p = (12, 2) if design == "pairs" else (6, 1)
+    rng = np.random.default_rng(0)
+    u = np.round(rng.uniform(size=n) * 2**grid) / 2**grid
+    X = np.column_stack((u, rng.uniform(size=n)))[:, :p]
+    y = np.sin(5 * X[:, -1]) + np.maximum(u - 0.5, 0.0) + 0.05 * rng.normal(size=n)
+    return X, np.round(y * 2**8) / 2**8
+
+
 def _designed_cases() -> list[Case]:
     """Designs that earlier tests and reviews built for one rule each; here the
     reference gives the answer."""
@@ -1087,6 +1091,19 @@ def _designed_cases() -> list[Case]:
     cases.append(
         Case("FWD-11, a shifted binary covariate", Xs, ys, None, {"fast_k": 0})
     )
+    # Exact shifts by powers of 2 on binary grids: x0 by 2^46 (A of LA-7),
+    # 2^36 (a pair's first column) and 2^24 (the linear candidate; FWD-4 bars
+    # the knots of x0 at step 2), and y by 2^44 (the TSS) [FWD-10].
+    for design, dx, dy in [
+        ("one covariate", 2.0**46, 0.0),
+        ("pairs", 2.0**36, 0.0),
+        ("linear", 2.0**24, 0.0),
+        ("pairs", 0.0, 2.0**44),
+    ]:
+        Xg, yg = _on_binary_grids(design)
+        Xg[:, 0] += dx
+        kw = spans | {"max_terms": 11}
+        cases.append(Case(f"{design}, x0 + {dx:g}, y + {dy:g}", Xg, yg + dy, None, kw))
     u = rng.uniform(size=100)
     Xd = np.column_stack((u, u, rng.uniform(size=100)))
     yd = np.sin(6 * u) + 0.1 * Xd[:, 2]
