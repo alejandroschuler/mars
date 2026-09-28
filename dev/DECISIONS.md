@@ -30,6 +30,10 @@ The table "Decisions" in VALIDATION_PLAN.md has the full text.
 - With `pmethod="none"` and `nprune`, pymars keeps the first `nprune` forward terms, as earth does, and reports `rss_`, `gcv_`, `rsq_` and `grsq_` of that model. earth reports the statistics of the backward subset of that size instead, which do not describe the model it returns (spec PRUNE-7, PRUNE-8).
 - earth chooses between a pair of hinges and a single hinge by comparing an absolute residual sum of squares with 0.01, so its fit depends on the units of the covariates. pymars scales that threshold by the variances of the term's covariates. Its fit then does not depend on the units, and it matches earth's rule on covariates with variance 1; the harness gives both programs the same covariates, each non-constant covariate divided by its standard deviation with divisor N (the weight sum), not centered, and constant covariates unchanged (spec LA-7).
 
+## Simulation harness (T03)
+
+- The `validation` dependency group needs matplotlib 3.9 or later, because `summarize.py` passes `tick_labels` to `boxplot`, a keyword that matplotlib added in 3.9. The group first allowed 3.8, and no check noticed, because no test drew a figure and CI installed matplotlib at its newest version. A test now draws both figures, and the lowest-version CI job installs the validation group at its lowest versions, with the runtime floors unchanged. joblib stays at the release that scikit-learn brings in, so its floor is not tested.
+
 ## Executor process
 
 - A pure rebase gets a re-approval in place of a fresh review, because an unchanged patch keeps the earlier reviews valid, and gate B and CI on the new head cover what changed on `main`. A small checker agent checks that `git range-diff` shows every commit as `=` against the old head, that gate B passed on the new head, and that CI is green. It then posts a verdict line for the new head, for every role the merge needs, citing the approvals of the old head.
