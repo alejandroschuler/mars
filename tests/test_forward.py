@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from reference import mars_ref
 
 from pymars import _forward, _gcv, _knots, _linalg, _scan, _terms
 from pymars._forward import Termination
@@ -112,6 +113,84 @@ def test_earth_fixture(load_fixture, name):
     if matched == len(ours):
         assert len(earth) == len(ours)
         assert fp.termination == d["result"]["termcond"]
+
+
+def _queue_design(name):
+    """Data and settings for test_the_queue_against_the_reference, with no
+    near-tie. "binary": a covariate with the values -1 and 1 has no knot, so
+    its linear term enters first and is a parent with negative cases
+    (KNOT-1). "degree 3": two covariates, single hinges (the slots run ahead
+    of M, FAST-4) and parents of degree 2 that hold both covariates (λ = -1,
+    FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
+    and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
+    an interaction, on covariates with variance 1/12, where the variances of
+    the parent's covariates decide the kind of a search (LA-7)."""
+    rng = np.random.default_rng({"binary": 14, "pair rule": 4}.get(name, 0))
+    kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
+    if name == "binary":
+        X = np.column_stack((rng.choice([-1.0, 1.0], size=60), rng.uniform(size=60)))
+        y = 2 * X[:, 0] + 3 * X[:, 0] * np.maximum(X[:, 1] - 0.4, 0)
+        return X, y + 0.05 * rng.normal(size=60), kw
+    if name == "pair rule":
+        x0 = rng.uniform(size=100)
+        X = np.column_stack((x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100)))
+        y = 5 * np.maximum(X[:, 2] - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
+        return X, y + 0.01 * rng.normal(size=100), kw | {"minspan": 1, "endspan": 1}
+    X = rng.uniform(size=(80, 2))
+    y = 10 * np.maximum(X[:, 0] - 0.4, 0) * np.maximum(X[:, 1] - 0.3, 0) + X[:, 0]
+    kw |= {"max_degree": 3, "max_terms": 21}
+    if name == "degree 3":
+        kw |= {"minspan": 1, "endspan": 1}
+    else:
+        kw |= {"fast_beta": 2.5, "adjust_endspan": 0.5}
+    return X, y + 0.05 * rng.normal(size=80), kw
+
+
+@pytest.mark.parametrize("name", ["binary", "degree 3", "ageing", "pair rule"])
+def test_the_queue_against_the_reference(monkeypatch, name):
+    """FAST-1, FAST-2, FAST-4 and FAST-5 with fast_k = 0, and the searches of
+    parents other than the intercept (FWD-2, KNOT-1 to KNOT-3, SPAN-4, LA-7),
+    against the reference called as a black box with its trace: at every step
+    the queue table, the parents searched (entry e stands for slot e), and κ
+    and λ of every entry after the search, λ within LA-5 of the TSS; then the
+    whole record. λ is the best legal reduction of a parent, so it checks the
+    search of every parent, also of those whose candidates do not win."""
+    X, y, kw = _queue_design(name)
+    fast, real = [], _forward._Pass.best
+
+    def best(st_):
+        table = st_.table()
+        out = real(st_)
+        fast.append((table, list(st_.rows), st_.lam.copy(), st_.kap.copy()))
+        return out
+
+    monkeypatch.setattr(_forward._Pass, "best", best)
+    fp = _forward.forward_pass(X, y, **KW, **kw)
+    Y = y[:, None]
+    Ys, n = np.ldexp(Y, mars_ref.y_scale_power(Y)), len(y)
+    tss = mars_ref.rss(np.ones((n, 1)), Ys, np.ones(n))
+    trace = []
+    ref, _ = mars_ref.forward_pass(
+        X,
+        Ys,
+        np.ones(n),
+        kw | {"fast_k": 0},
+        N=float(n),
+        tau_N=mars_ref.weight_tol(float(n)),
+        tss=tss,
+        record_candidates=True,
+        trace=trace,
+    )
+    for (table, parents, lam, kap), r in zip(fast, trace, strict=True):
+        assert (table, parents) == (list(r["table"]), list(r["searched"]))
+        assert kap == [k for _, k in r["entries"]]
+        want = [v for v, _ in r["entries"]]
+        np.testing.assert_allclose(lam, want, rtol=0.0, atol=1e-8 * tss)
+    for field in ("dirs", "cuts", "parent", "step", "kept"):
+        np.testing.assert_array_equal(getattr(fp, field), ref[field])
+    assert fp.termination == ref["termination"]
+    log = fp.candidates
+    assert np.all(log.second_rss - log.best_rss >= 1e-7 * fp.rss[:-1])
 
 
 def _fit(X, y, **kw):
