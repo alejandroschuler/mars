@@ -106,6 +106,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:03 Started t10-pruning (opus) for T10 (#12). Weekly 11 %; after this, hold new starts until the cumulative allowance allows (14 % by Monday 17:00).
 - 19:07 #46 round-3 fix: head 75a8f55 (two hand-derived large-N boundary cases; bounded first-guess loops); #47 f591dde, #48 b308184, #49 620e01b rebased. Sent to rev46-r3-adv and rev46-r3-spec for re-check of the small diff.
 - 19:14 #46 round 3 complete: spec APPROVE (old vs new knot_scan identical on 600 random weighted cases) and adversarial APPROVE at 75a8f55. Integrator rebasing #46 onto main (eabac8c); then rebase-check, retarget #47 to main, merge #46.
+- 19:18 #46 re-approved as a pure rebase (d8a55e8) and merged as 955b44c; #47 retargeted to main. Weekly 12 % at 19:45 Sunday; the #47 dual review waits for Monday's allowance. t10-pruning working.
 
 ## Core-hour ledger
 
