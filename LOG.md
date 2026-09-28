@@ -142,6 +142,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 04:07 Started the single review of #58 (T18; wf_490d20d1-c2a), focused on sampled labels, the 8 bug fits, F17 to F19 and the Adjust.endspan correction.
 - 04:31 #48 adversarial review (on 8a56ea3): REQUEST_CHANGES for 8 surviving mutants (the reviewer's 16 tests kill them); the pass matches earth on 2320 fresh fits apart from explained cases. Two spec questions for #44 (earth's code 2 below GRSq' -1000; second_rss below best_rss by rounding). Sent as batch 2 to t06-reference.
 - 04:39 #48 batch 2 at c2fbfbc (16 adversarial tests in; knot_scan(distinct=True) bounds the scan by n; spec questions on #44). Round 2 started: spec role (opus) and adversarial role (sonnet, narrow).
+- 04:55 #58 round 1 REQUEST_CHANGES: the triage logic needs unit tests (16 of 22 mutants survive, some change the committed counts) and the F4 evidence is wrong for 4 of 5 fits; the reviewer confirmed 34 sampled labels, F17 to F19 and the Adjust.endspan = 0 correction. Sent to t18-legacy.
 
 ## Core-hour ledger
 
