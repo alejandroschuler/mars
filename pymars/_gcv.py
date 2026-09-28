@@ -191,7 +191,10 @@ def tss(Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -> float:
     TSS = Σ_k Σ_i w_i (Y_ik - Ȳ_k)², with Ȳ_k the weighted mean of column k
     (GCV-5); the sums are not normalized (GCV-8). A response whose values over
     the cases are all equal adds 0.0 exactly, not a computed value
-    (Conventions, GCV-7), so the TSS of constant responses is 0.0. Y is (n,) or
+    (Conventions, GCV-7), so the TSS of constant responses is 0.0. Each
+    response is shifted by its first value before the mean is taken; the
+    differences are exact for values within a factor of 2 of it, so the
+    rounding is of the size of the spread, not of the mean. Y is (n,) or
     (n, K); w is (n,), or None for w_i = 1 (W-5). The rows are the cases of the
     fit, after zero weights are dropped (W-3). Complexity: O(n·K).
     """
@@ -206,7 +209,8 @@ def tss(Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -> float:
         y = Y[:, k]
         if np.all(y == y[0]):
             continue
-        r = y - float(wv @ y) / float(wv.sum())
+        d = y - y[0]
+        r = d - float(wv @ d) / float(wv.sum())
         total += float(wv @ (r * r))
     return total
 
