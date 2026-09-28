@@ -146,6 +146,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:12 #48 round 2: adversarial (sonnet) APPROVE on c2fbfbc; spec REQUEST_CHANGES on one unpinned call (queue_value in FAST-5; one mutant changes 137 of 150 fits), with the exact test given. Sent to t06-reference (tests only).
 - 05:18 #48 at 55f2841 (tests only: FAST-5 lambda against brute force, second_rss = +inf, the exact-fit case; the listed mutants fail; gate B PASS; CI 12/12). recheck-48 (sonnet) started for the narrow re-approval of both roles.
 - 05:23 Weekly 42 %, 5-hour 73 % (reset 08:20): heartbeat set to 08:35 by the 70 % rule. Pacing refined: from 44 % only small agents that finish open PRs.
+- 05:24 #58 round-1 fixes at 870c482 (56 unit tests kill the reviewer's 21 mutants and 10 more; F4 evidence fixed, first-difference bug count 8 to 6). Narrow round 2 started (sonnet). Incident: t18-legacy discarded a regenerated report JSON in its runner worktree with 'git checkout <file>', a variant of a guarded command that the guard did not catch; a report output it had copied, so nothing was lost; it reported it; told it not to use variants of guarded commands.
 
 ## Core-hour ledger
 
