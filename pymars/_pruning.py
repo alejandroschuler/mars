@@ -265,11 +265,9 @@ def final_fit(
     const, varying = _constant(Y)
     coef = np.zeros((m, Y.shape[1]))
     coef[0, const] = Y[0, const]
-    rss = 0.0
-    if varying.shape[1] > 0:
-        fit = _linalg.lm_fit(B[:, sel], varying, w)
-        coef[:, ~const] = fit.coef
-        rss = fit.rss
+    fit = _linalg.lm_fit(B[:, sel], varying, w)  # rss 0.0 with no column
+    coef[:, ~const] = fit.coef
+    rss = fit.rss
     gcv = _gcv.gcv(rss, m, penalty, N, tau)
     if _gcv.is_degenerate(Y, N):
         gcv = np.inf

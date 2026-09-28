@@ -314,6 +314,19 @@ def test_a_constant_response_adds_nothing():
     assert col[0] == -1.5 and not col[1:].any()
 
 
+def test_an_equal_offer_keeps_the_earlier_subset(monkeypatch):
+    """PRUNE-3 for one response: an offered prefix replaces T[m] only when its
+    RSS is lower, so when every offer gives the same RSS, the prefixes of the
+    starting order stay, although the stages reorder the terms."""
+    B, y, _ = _case(6, 30, 6, 1, False)
+    moved = pr.pruning_pass(B, y, penalty=2.0).removed
+    assert moved.tolist() != [5, 4, 3, 2, 1]
+    monkeypatch.setattr(_linalg, "prefix_rss", lambda Z, rss: np.arange(6.0, 0.0, -1))
+    res = pr.pruning_pass(B, y, penalty=2.0)
+    np.testing.assert_array_equal(res.removed, moved)
+    np.testing.assert_array_equal(res.subsets, np.tri(6, dtype=bool))
+
+
 def test_selected_size_is_the_smallest_with_the_lowest_gcv(monkeypatch):
     """PRUNE-5, PRUNE-6: ties go to the smaller size, and ``nprune`` bounds the
     range; PRUNE-7: ``pmethod="none"`` keeps the first min(nprune, M_f) terms."""
@@ -397,6 +410,22 @@ def test_degenerate_weight_sum():
     assert np.isposinf(fit.gcv)
 
 
+def test_rows_with_zero_weight_are_not_cases():
+    """W-3: a row with zero weight is dropped first, so a response that is
+    constant on the other rows makes the fit degenerate (GCV-7): every RSS is
+    0 exactly and every GCV +∞."""
+    B, _, _ = _case(2, 12, 3, 1, False)
+    y = np.full(12, 4.0)
+    y[5] = -1.0
+    w = np.ones(12)
+    w[5] = 0.0
+    res = pr.pruning_pass(B, y, w, penalty=2.0)
+    assert res.rss_per_size.tolist() == [0.0] * 3
+    assert np.isposinf(res.gcv_per_size).all()
+    fit = pr.final_fit(B, y, [0], w, penalty=2.0)
+    assert fit.coef.tolist() == [[4.0]] and fit.rss == 0.0
+
+
 @given(seeds, st.integers(8, 20), st.integers(1, 6), st.booleans())
 def test_integer_weights_equal_repeated_rows(seed, n, m, several):
     """W-1, W-2: an integer weight counts as that many copies of the row, a
@@ -466,6 +495,7 @@ def test_errors():
         lambda: pr.pruning_pass(B, y, penalty=2.0, nprune=True),
         lambda: pr.pruning_pass(B, y, penalty=-0.5),
         lambda: pr.pruning_pass(B[:, 1:], y, penalty=2.0),
+        lambda: pr.pruning_pass(B + np.eye(12, 3), y, penalty=2.0),
         lambda: pr.pruning_pass(B[0], y, penalty=2.0),
         lambda: pr.pruning_pass(B, y[:-1], penalty=2.0),
         lambda: pr.pruning_pass(B, np.empty((12, 0)), penalty=2.0),
@@ -474,9 +504,9 @@ def test_errors():
         lambda: pr.pruning_pass(B, y, np.ones(11), penalty=2.0),
         lambda: pr.pruning_pass(B, y, np.zeros(12), penalty=2.0),
         lambda: pr.pruning_pass(B[:2], y[:2], penalty=2.0),
-        lambda: pr.pruning_pass(np.column_stack([B, np.zeros(12)]), y, penalty=2.0),
         lambda: pr.final_fit(B, y, [1, 2], penalty=2.0),
         lambda: pr.final_fit(B, y, [0, 2, 1], penalty=2.0),
+        lambda: pr.final_fit(B, y, [0, 1, 1], penalty=2.0),
         lambda: pr.final_fit(B, y, [0, 3], penalty=2.0),
         lambda: pr.final_fit(B, y, [], penalty=2.0),
         lambda: pr.final_fit(B, y, [0.0, 1.0], penalty=2.0),
@@ -484,3 +514,5 @@ def test_errors():
     for call in bad:
         with pytest.raises(ValueError):
             call()
+    with pytest.raises(ValueError, match="independent"):
+        pr.pruning_pass(np.column_stack([B, np.zeros(12)]), y, penalty=2.0)
