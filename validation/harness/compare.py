@@ -823,15 +823,21 @@ def compare_forward_steps(
 
 def _is_mirror_pair(dirs: np.ndarray, cuts: np.ndarray, i: int, j: int) -> bool:
     """Whether ``dirs``/``cuts`` rows ``i`` and ``j`` are a mirrored hinge
-    pair earth's forward pass adds in one step: identical at every
+    pair earth's forward pass adds in one step: the same codes at every
     predictor column except one, where the codes are ``+1`` and ``-1``
-    (either order) and the cut is the same."""
+    (either order), and the same cut at every column whose code is ``+1``
+    or ``-1``, so the same parent. Two single hinges on different parents
+    whose rows differ only in that code are not a pair (spec review of #48,
+    item 7)."""
     di, dj = dirs[i], dirs[j]
     diff = np.flatnonzero(di != dj)
     if diff.size != 1:
         return False
     (k,) = diff
-    return {int(di[k]), int(dj[k])} == {1, -1} and cuts[i, k] == cuts[j, k]
+    hinge = np.abs(di) == 1
+    return {int(di[k]), int(dj[k])} == {1, -1} and bool(
+        np.all(cuts[i][hinge] == cuts[j][hinge])
+    )
 
 
 def _dirs_row_groups(dirs: np.ndarray, cuts: np.ndarray) -> list[list[int]]:
