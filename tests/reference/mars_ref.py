@@ -526,12 +526,20 @@ def prune(
     pruning indices of the selected terms, increasing), ``coef`` (m*, K),
     ``rss``, ``gcv``, ``rsq`` and ``grsq`` of the final model [PRUNE-8], and
     ``tss``.
+
+    The fit must not be degenerate: ``fit_mars`` applies EDGE-1 and the
+    degenerate values of GCV-7 before it calls this function, so here
+    N > 1 and some response is not constant. Cost: either rule refits
+    O(M_f^2) distinct subsets, each in O(n M_f (M_f + K)) time, so
+    O(n M_f^3 (M_f + K)) in all, and the cache holds O(M_f^2) values.
     """
     B = np.asarray(B, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64).reshape(B.shape[0], -1)
     w = np.asarray(w, dtype=np.float64)
     if pmethod not in ("backward", "none"):
         raise ValueError(f"pmethod must be 'backward' or 'none', not {pmethod!r}")
+    if nprune is not None and nprune < 1:
+        raise ValueError(f"nprune must be None or at least 1, not {nprune!r}")
     Mf = B.shape[1]
     memo: dict[frozenset, float] = {}
 
@@ -547,7 +555,9 @@ def prune(
 
     def lowest_removal(terms) -> int:
         # The term (never the intercept) whose removal leaves the lowest RSS;
-        # equal RSS values go to the term with the largest index.
+        # equal RSS values go to the term with the largest index. The terms
+        # come in increasing index order (the first pos entries of the working
+        # order stay increasing, as does the current set of K >= 2).
         choice, choice_rss = -1, math.inf
         for term in terms:
             if term == 0:
