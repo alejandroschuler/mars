@@ -44,6 +44,10 @@ The executor (session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`) runs `VALIDA
 
 Simulations, benchmarks and fixture runs that take more than about 10 minutes run as detached processes (`nohup caffeinate -i nice -n 15 ...`) with a PID file and a log, from a runner worktree `<main>/.worktrees/<runner-name>` made with `git worktree add` at a fixed commit. The job writes its own files there, so it survives if a session worktree goes away. Agents only start, check and restart such jobs; results are written per cell and atomically, with a manifest, so a restart with `--resume` loses nothing.
 
+## Mutation checks
+
+When you check tests with one-token mutations, run Python with `-B` (or `PYTHONDONTWRITEBYTECODE=1`) and use a fresh copy of the code for each mutant, without any `__pycache__` folder. Otherwise a cached bytecode file of an earlier mutant can load, and a kill rate can be wrong.
+
 ## Gates
 
 - Gate A on every commit: `bash dev/gate_a.sh` (ruff, format check, fast tests).
