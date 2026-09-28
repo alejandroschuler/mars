@@ -378,6 +378,27 @@ def test_lm_fit_shapes_and_errors():
         la.lm_fit(A, Y, np.full(10, -1.0))
 
 
+def test_lm_fit_matches_r_lm_fit_on_the_fixture(load_fixture):
+    # T05's component fixture: R's lm.fit and lm.wfit on fixed columns, with
+    # the plan's tolerances for coefficients (kappa ≤ 1e5) and fitted values.
+    fx = load_fixture("components/lm_fit_coefficients")
+    y = np.array(fx["y"])
+    for case in fx["cases"]:
+        A = np.array(case["x"])
+        w = None if case["weights"] is None else np.array(case["weights"])
+        want = np.array([np.nan if c is None else c for c in case["coefficients"]])
+        fit = la.lm_fit(A, y, w)
+        np.testing.assert_array_equal(fit.kept, ~np.isnan(want), err_msg=case["label"])
+        assert fit.kept.sum() == case["rank"]
+        sw = np.ones(len(y)) if w is None else np.sqrt(w)
+        kappa = np.linalg.cond(sw[:, None] * A[:, fit.kept])
+        if kappa <= 1e5:
+            b = want[fit.kept]
+            assert np.linalg.norm(fit.coef[fit.kept] - b) <= 1e-6 * np.linalg.norm(b)
+        tol = 1e-8 * np.std(y, ddof=1) * max(1.0, kappa / 1e6)
+        assert np.abs(fit.residuals - np.array(case["residuals"])).max() <= tol
+
+
 # The R factor of the pruning pass and its downdates (PRUNE-3, PRUNE-9)
 
 
