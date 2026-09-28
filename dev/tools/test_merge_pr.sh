@@ -23,9 +23,17 @@ echo "GATE B PASS $head" >"$state/gates/$head.gateB.log"
 cat >"$dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 # Fake gh: "pr view ... --jq <program>" runs the program on $FAKE_PR_JSON.
-[ "$1 $2" = "pr view" ] || { echo "fake gh: unexpected call: $*" >&2; exit 1; }
+# "pr list ... --jq <program>" runs it on $FAKE_STACKED_JSON, or fails when
+# $FAKE_PR_LIST_FAIL is set.
+case "$1 $2" in
+  "pr view") json=$FAKE_PR_JSON ;;
+  "pr list")
+    [ -z "${FAKE_PR_LIST_FAIL:-}" ] || { echo "fake gh: pr list failed" >&2; exit 1; }
+    json=$FAKE_STACKED_JSON ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
+esac
 while [ $# -gt 0 ]; do [ "$1" = --jq ] && prog=$2; shift; done
-exec jq -r "$prog" "$FAKE_PR_JSON"
+exec jq -r "$prog" "$json"
 EOF
 chmod +x "$dir/bin/gh"
 
@@ -41,10 +49,13 @@ pr() { # pr <comments> <reviews> [<checks>]: write the fake pull request
     "comments": [%s], "reviews": [%s], "statusCheckRollup": %s}' \
     "$head" "$1" "$2" "$checks" >"$dir/pr.json"
 }
+stacked() { echo "$1" >"$dir/stacked.json"; } # stacked <json array>: fake `gh pr list --base t99-test`
+stacked '[]'
 failed=0
-expect() { # expect <label> <pattern the output must match> [<extra option>]
+expect() { # expect <label> <pattern the output must match> [<extra option>] [<extra env assignment>]
   local out
-  out=$(cd "$dir/work" && PATH="$dir/bin:$PATH" FAKE_PR_JSON="$dir/pr.json" \
+  out=$(cd "$dir/work" && env PATH="$dir/bin:$PATH" FAKE_PR_JSON="$dir/pr.json" \
+    FAKE_STACKED_JSON="$dir/stacked.json" ${4:-} \
     bash dev/tools/merge_pr.sh --dry-run --session test-session ${3:+"$3"} 1 boot 2>&1)
   if grep -Eq "$2" <<<"$out"; then
     echo "ok   $1"
@@ -77,5 +88,13 @@ expect "no checks fail" "^FAIL #1 has no checks"
 expect "no checks pass with --allow-no-checks" "$passed" --allow-no-checks
 pr "$(c $me 2026-01-01T01:00:00Z "$A")" "" '[{"name": "ci", "status": "IN_PROGRESS", "conclusion": null}]'
 expect "a pending check fails" "^FAIL checks that did not pass"
+
+pr "$(c $me 2026-01-01T01:00:00Z "$A")" ""
+stacked '[]'
+expect "no stacked pull request passes" "^PASS no open pull request is based on t99-test"
+stacked '[{"number": 39}]'
+expect "a stacked pull request fails and names it" "^FAIL retarget.*#39"
+stacked '[]'
+expect "a failed pr list call fails the check" "^FAIL gh pr list" "" "FAKE_PR_LIST_FAIL=1"
 
 [ "$failed" -eq 0 ] && echo "all merge_pr.sh tests passed"
