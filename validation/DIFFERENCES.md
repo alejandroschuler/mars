@@ -21,7 +21,7 @@ Where the plan compares a fixture otherwise:
 
 ## Near-ties
 
-A step where the two choices differ is a near-tie when their RSS values on the basis before the step differ by less than 1e-7 of the RSS before the step (plan: Ties). A size where the pruning subsets differ is a near-tie when their RSS values differ by at most 1e-7 of the lower one. This is the threshold that OQ-2 asks T07 to fix: each program's RSS of one subset is within 1e-8 of that RSS (the tolerance for `rss.per.subset`), so a flip needs a gap below about 2e-8, and 1e-7 covers it five times over, as in the forward pass. A near-tie is labeled `tie` and passes, and the comparison of that fit's structure stops there.
+A step where the two choices differ is a near-tie when their RSS values on the basis before the step differ by less than 1e-7 of the RSS before the step (plan: Ties), when they are different candidates (another parent or covariate, or hinges at another knot), and when their new columns are not bitwise equal. A difference in the kind, the codes or the order of the terms of one candidate (FWD-3, FWD-6, LA-7) is not a near-tie, and neither is a tie between bitwise-equal columns, which FWD-5 breaks by its order as earth does (bb18.1). The test also fails when an entry that is not a `tie` matches a difference that the comparison labels `tie`, which bounds the band from above. A size where the pruning subsets differ is a near-tie when their RSS values differ by at most 1e-7 of the lower one. This is the threshold that OQ-2 asks T07 to fix: each program's RSS of one subset is within 1e-8 of that RSS (the tolerance for `rss.per.subset`), so a flip needs a gap below about 2e-8, and 1e-7 covers it five times over, as in the forward pass. A near-tie is labeled `tie` and passes, and the comparison of that fit's structure stops there.
 
 A near-tie in the implementation's own candidate log at a step where both programs chose the same term does not stop the comparison, since the paths after the same choice can still be compared. S10_matched_d1 shows why this matters. There the duplicated column makes the best and the second-best candidate tie exactly at 6 of its 10 steps, and within 1e-7 at the other 4, and both programs break these ties the same way (FWD-5, bb18.1). In all, 8 of the 131 whole fits have such a step in the reference's log (S04 with 1,000 cases, S07 matched, S10), and all 8 agree with earth.
 
@@ -33,8 +33,8 @@ Counts by label, over the comparisons of the reference:
 
 | Label | Entries | Comparisons |
 |---|---|---|
-| rule | 4 | 9 |
-| quirk | 3 | 3 |
+| rule | 3 | 8 |
+| quirk | 4 | 4 |
 | tie | 0 | 0 |
 | numeric | 0 | 0 |
 | bug | 0 | 0 |
@@ -43,7 +43,7 @@ By dataset: S11 1 comparison (E3), S12 4 (E1, E2), S13 4 (E4), S15 3 (E5 to E7).
 
 | Id | Cases | Step | pymars | earth | Candidate RSS (pymars, earth) | earth's flags | Label | Rules |
 |---|---|---|---|---|---|---|---|---|
-| E1 | S12_x_1em8_raw_d1 | forward 1 | the pair h(x0-4.08098e-09), h(4.08098e-09-x0) | the single hinge h(x0-4.08098e-09) | 0.36376841094440215, 0.3678187937537397 (before: 25.870380638504514) | no trace | rule | LA-7 |
+| E1 | S12_x_1em8_raw_d1 | forward 1 | the pair h(x0-4.08098e-09), h(4.08098e-09-x0) | the single hinge h(x0-4.08098e-09) | 0.36376841094440215, 0.3678187937537397 (before: 25.870380638504514) | no trace | quirk | LA-7 |
 | E2 | S12_y_1em9 in the defaults, matched and raw modes | the statistics | the computed values | rss, gcv and every rss.per.subset and gcv.per.subset 0; rsq, grsq NaN | | | rule | PRUNE-4, PRUNE-8 |
 | E3 | S11_n03_matched_d1 | rss.per.subset of size 3 | 1.8e-63 | 0 | | | rule | PRUNE-4, PRUNE-8 |
 | E4 | S13_constant_y_weighted and its repeated rows, defaults and matched modes | the whole fit | degenerate: gcv +inf, rsq and grsq 0, code 0 | gcv 0, rsq and grsq NaN, code 4 (defaults) or 7 (matched) | | | rule | EDGE-1, GCV-7, CORE-4 |
@@ -51,11 +51,11 @@ By dataset: S11 1 comparison (E3), S12 4 (E1, E2), S13 4 (E4), S15 3 (E5 to E7).
 | E6 | S15 draw 33 | forward 7 | h(3.3732-x0)*h(x9-2.62033) and its mirror | h(2.03371-x2)*h(x9-0.951963) and its mirror | 151.0823446122114, 148.705730583402 (before: 154.94244645559493) | rank fix printed | quirk | FWD-11, OQ-6, FAST-4 |
 | E7 | S15 draw 61 | forward 10 | the single hinge h(x7-0.609737)*h(x9-0.738223) | h(x8-0.813011)*h(x9-0.537277) and its mirror | 120.5298001805806, 119.36386027987149 (before: 123.536576669401) | rank fix printed | quirk | FWD-11, OQ-6, FAST-4 |
 
-The dataset fixtures hold no trace, so earth's flags are not known there; E1 needs none, since the rule decides it. The S15 draws with the rank fix hold no parsed trace steps either (`steps_error`: the hidden term moves the slots that `compare.steps_from_trace` maps), only the flag that the trace printed the rank fix.
+The dataset fixtures hold no trace, so earth's flags are not known there; E1 needs none, since LA-7 decides it. The S15 draws with the rank fix hold no parsed trace steps either (`steps_error`: the hidden term moves the slots that `compare.steps_from_trace` maps), only the flag that the trace printed the rank fix.
 
-### E1: the kind of a search in raw units (rule, LA-7)
+### E1: the kind of a search in raw units (quirk, LA-7)
 
-The raw mode of S12 keeps x in its own units, here 1e-8 times the base x. earth runs a single-hinge search because A, the RSS of x on the intercept in these units, is 1.4e-15, below 0.01. pymars compares A with 0.01 times the variance of x (A is 150 variances) and runs a pair search at the same knot. earth's single hinge is not a candidate of pymars at this step. The pruning pass on earth's forward basis agrees with earth. In the other raw fits (x times 1e8, x plus 1e6, y times 1e-9 and 1e9) the forward passes agree, since the scale of y does not enter the rule and A is far from 0.01 there.
+The raw mode of S12 keeps x in its own units, here 1e-8 times the base x. earth runs a single-hinge search because A, the RSS of x on the intercept in these units, is 1.4e-15, below 0.01. pymars compares A with 0.01 times the variance of x (A is 150 variances) and runs a pair search at the same knot. The label is `quirk` because the Quirks section of the spec lists this dependence on the units of x among the quirks that pymars does not copy. earth's single hinge is not a candidate of pymars at this step. The pruning pass on earth's forward basis agrees with earth. In the other raw fits (x times 1e8, x plus 1e6, y times 1e-9 and 1e9) the forward passes agree, since the scale of y does not enter the rule and A is far from 0.01 there.
 
 ### E2 and E3: earth reports small sums of squares as 0 (rule, PRUNE-4 and PRUNE-8)
 
@@ -63,15 +63,17 @@ In S12_y_1em9, y is 1e-9 times the base y, so every sum of squares is below 3e-1
 
 ### E4: a constant response (rule, EDGE-1, GCV-7, CORE-4)
 
-y is 3 at every case, so the pymars fit is degenerate: the intercept alone, gcv +inf, rsq and grsq 0, and termination code 0. earth reports gcv 0 and rsq and grsq NaN. Its total sum of squares is 8.6e-29 from rounding, not 0, so its forward pass runs: it stops at once at its defaults (code 4), and it takes 10 steps to the term limit in the matched mode (code 7). Both select the intercept alone, with the coefficient 3 (earth: 2.9999999999999982). earth stops with an error on the weighted data (bb10.9), so the weighted fits are compared with earth on the repeated rows.
+y is 3 at every case, so the pymars fit is degenerate: the intercept alone, gcv +inf, rsq and grsq 0, and termination code 0. The test checks these values of EDGE-1 in every degenerate fit. earth reports gcv 0, rsq and grsq NaN, and 0 for every rss.per.subset, and its forward pass runs anyway: it stops at once at its defaults (code 4), and it takes 10 steps to the term limit in the matched mode (code 7). The fixture's `fwd_rss[0]`, 8.6e-29, is the RSS of the harness's `lm.fit` on the intercept, not a value that earth reports. Both select the intercept alone, with the coefficient 3 (earth: 2.9999999999999982). earth stops with an error on the weighted data (bb10.9), so the weighted fits are compared with earth on the repeated rows.
 
 ### E5 to E7: earth's hidden term (quirk, FWD-11 and OQ-6)
 
-All three are S15 draws at degree 2 in the matched mode (`Auto.linpreds = FALSE`), and earth's trace prints the rank fix. FWD-11 says that T07 labels such a difference `quirk`, and each first divergence comes after the first linear-option step of its fit, as a note in #44 asks. The S15 test checks both conditions for every entry that cites FWD-11. The mechanism is the same in all three. A linear-option step (the hinge at the smallest x, FWD-6) made earth add its hidden term, which fills the empty second slot of that step (FWD-9). A later step then adds a pair whose second term sits in a slot above the number of pymars's terms, so pymars does not search it as a parent yet (FAST-4), while earth, with its hidden term, has one term more and does. earth's choice has the lower RSS on the common basis in all three.
+All three are S15 draws at degree 2 in the matched mode (`Auto.linpreds = FALSE`), and earth's trace prints the rank fix. FWD-11 says that T07 labels such a difference `quirk`, and each first divergence comes after the first linear-option step of its fit, as a note in #44 asks. The S15 test checks both conditions for every entry that cites FWD-11. The mechanism is the same in all three. A linear-option step (the hinge at the smallest x, FWD-6) made earth add its hidden term, which fills the empty second slot of that step (FWD-9). A later term then sits in a slot above the number of pymars's terms, so pymars does not search it as a parent yet (FAST-4), while earth, with its hidden term, has one term more and does. earth's choice has the lower RSS on the common basis in all three.
+
+A scratch copy of the reference that adds one empty queue entry (FAST-1) after the right linear option follows earth's whole path in all three draws, which confirms the mechanism. With an entry after every linear option, the copy also agrees with earth on the other 8 draws with the rank fix, but not on draw 61 (E7).
 
 - E5 (the DGP D1 at the high noise level): the linear option of step 5; earth's parent at step 7 is h(3.24208-x7), the second term of step 6, in slot 13, while pymars has 12 terms.
 - E6 (the DGP D6): the linear option of step 4; earth's parent at step 7 is h(2.03371-x2), the second term of step 6, in slot 13, while pymars has 12 terms.
-- E7 (the DGP D6): the linear options of steps 2 and 6; earth's parent at step 10 is h(x9-0.537277), the second term of step 9, in slot 18, while pymars has 17 terms.
+- E7 (the DGP D6): linear options at steps 2 and 6, but only one of them added the hidden term, and these data do not say which. earth's parent at step 10 is h(x9-0.537277), the first term of step 9, in slot 18: pymars, with 17 terms, does not search it, and earth, with 18, does, but not slot 19. With entries after both steps, the copy searches slot 19 and takes a linear option whose RSS, 119.08, is below earth's choice, 119.36, which earth did not do. So in one fit one linear option added the hidden term and the other did not (OQ-6).
 
 ## S15
 
@@ -88,4 +90,4 @@ Raised on #44 (spec v2), one comment each:
 - [the pruning near-tie threshold](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877383632), which could close OQ-2;
 - [the reading that only a near-tie with different choices stops the comparison](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384033);
 - [a record of the LA-5 and STOP-7 near-ties in the candidate log](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384385), so that the tests can label them;
-- [the S15 evidence on the hidden term](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384746) (OQ-6), together with the slot rule (FAST-4, OQ-4).
+- [the S15 evidence on the hidden term](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384746) (OQ-6), together with the slot rule (FAST-4, OQ-4), and [its correction for draw 61](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5879039462).

@@ -8,7 +8,7 @@
       ],
       "field": "forward",
       "step": 1,
-      "label": "rule",
+      "label": "quirk",
       "rules": [
         "LA-7"
       ],
@@ -24,7 +24,7 @@
         0.3678187937537397
       ],
       "rss_before": 25.870380638504514,
-      "note": "The raw mode keeps x in its own units, here 1e-8 times the base x of S12. earth runs a single-hinge search because A, the RSS of x on the intercept in these units, is 1.4e-15, below 0.01; pymars compares A with 0.01 times the variance of x (A is 150 variances) and runs a pair search at the same knot. The pruning pass on earth's forward basis agrees with earth."
+      "note": "The raw mode keeps x in its own units, here 1e-8 times the base x of S12. earth runs a single-hinge search because A, the RSS of x on the intercept in these units, is 1.4e-15, below 0.01; pymars compares A with 0.01 times the variance of x (A is 150 variances) and runs a pair search at the same knot. The Quirks section of the spec lists this dependence on the units of x among the quirks that pymars does not copy. The pruning pass on earth's forward basis agrees with earth."
     },
     {
       "id": "E2",
@@ -69,7 +69,13 @@
         "GCV-7",
         "CORE-4"
       ],
-      "note": "y is constant (every value is 3), so the pymars fit is degenerate: the intercept alone, gcv +inf, rsq and grsq 0, termination code 0. earth reports gcv 0 and rsq and grsq NaN. Its total sum of squares is 8.6e-29 from rounding, not 0, so its forward pass runs: it stops at once at its defaults (code 4) and takes 10 steps to the term limit in the matched mode (code 7). Both select the intercept alone, with the coefficient 3 (earth: 2.9999999999999982). earth stops with an error on the weighted data (bb10.9), so the weighted fits are compared with earth on the repeated rows."
+      "note": "y is constant (every value is 3), so the pymars fit is degenerate: the intercept alone, gcv +inf, rsq and grsq 0, termination code 0 (EDGE-1, GCV-7). earth reports gcv 0 and rsq and grsq NaN, and every rss.per.subset is 0. earth's forward pass runs anyway: it stops at once at its defaults (code 4) and takes 10 steps to the term limit in the matched mode (code 7). (The fixture's fwd_rss[0], 8.6e-29, is the RSS of the harness's lm.fit on the intercept, not a value that earth reports.) Both select the intercept alone, with the coefficient 3 (earth: 2.9999999999999982). earth stops with an error on the weighted data (bb10.9), so the weighted fits are compared with earth on the repeated rows.",
+      "pymars": [
+        Infinity,
+        0.0,
+        0.0,
+        0
+      ]
     },
     {
       "id": "E5",
@@ -97,7 +103,7 @@
         176.63399682138416
       ],
       "rss_before": 184.2567300017018,
-      "note": "The DGP D1 at the high noise level, degree 2, matched mode (Auto.linpreds = FALSE). earth's trace prints the rank fix: the linear option of step 5 added earth's hidden term, in the empty second slot of that step. earth's parent at step 7, h(3.24208-x7), is the second term of step 6, in slot 13; pymars has 12 terms, so it does not search that slot yet (FAST-4), while earth, with its hidden term, has 13 and does."
+      "note": "The DGP D1 at the high noise level, degree 2, matched mode (Auto.linpreds = FALSE). earth's trace prints the rank fix: the linear option of step 5 added earth's hidden term, in the empty second slot of that step. earth's parent at step 7, h(3.24208-x7), is the second term of step 6, in slot 13. pymars has 12 terms, so it does not search that slot yet (FAST-4); earth, with its hidden term, has 13 and does. A scratch copy of the reference that adds one empty queue entry (FAST-1) after the linear option of step 5 follows earth's whole path in this draw."
     },
     {
       "id": "E6",
@@ -125,7 +131,7 @@
         148.705730583402
       ],
       "rss_before": 154.94244645559493,
-      "note": "The DGP D6, degree 2, matched mode. As in E5: the linear option of step 4 added earth's hidden term, and earth's parent at step 7, h(2.03371-x2), the second term of step 6, is in slot 13, which pymars, with 12 terms, does not search yet (FAST-4)."
+      "note": "The DGP D6, degree 2, matched mode. As in E5: the linear option of step 4 added earth's hidden term, and earth's parent at step 7, h(2.03371-x2), the second term of step 6, is in slot 13, which pymars, with 12 terms, does not search yet (FAST-4). A scratch copy of the reference that adds one empty queue entry (FAST-1) after the linear option of step 4 follows earth's whole path in this draw."
     },
     {
       "id": "E7",
@@ -152,7 +158,7 @@
         119.36386027987149
       ],
       "rss_before": 123.536576669401,
-      "note": "The DGP D6, degree 2, matched mode. As in E5: the linear options of steps 2 and 6 added two hidden terms, and earth's parent at step 10, h(x9-0.537277), the second term of step 9, is in slot 18, which pymars, with 17 terms, does not search yet (FAST-4)."
+      "note": "The DGP D6, degree 2, matched mode. The fit has linear options at steps 2 and 6, and one of them added earth's hidden term; these data do not say which. earth's parent at step 10, h(x9-0.537277), is the first term of step 9, in slot 18. pymars, with 17 terms, does not search slot 18 yet (FAST-4); earth, with 18 terms, searches slot 18 but not slot 19. A scratch copy of the reference with one empty queue entry after step 2, or after step 6, follows earth's whole path in this draw; with entries after both, it searches slot 19 and takes the linear option h(x5-0.00182745)*h(0.537277-x9), whose RSS on the common basis, 119.08, is below earth's choice, 119.36. So in this fit one linear option added a hidden term and the other did not (OQ-6)."
     }
   ]
 }

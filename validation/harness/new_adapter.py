@@ -35,6 +35,12 @@ compare the two sides directly:
   linear term), ``best_rss`` and ``second_best_rss`` (from the candidate
   log, or None without one), ``rss_before`` and ``flags`` (None: earth's
   flags come from its trace only).
+
+For a linear term, ``compare.steps_from_trace`` gives earth's stored cut
+(the smallest x) as the knot, not None, so ``compare_forward_steps`` on the
+two logs reports every linear-term step as a mismatch. A caller compares the
+knot only where the codes are 1 or -1 (TERM-2), as tests/test_conformance.py
+does.
 """
 
 from __future__ import annotations

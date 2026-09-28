@@ -12,10 +12,11 @@ forward paths differ), with the subsets exact down to the first size where
 they differ; and the selected terms, coefficients, GCV, RSq, GRSq, fitted
 values and predictions, by ``compare.compare_fit`` with kappa(B).
 
-A differing choice is a near-tie, labeled ``tie``, when the RSS values of
-the two choices differ by less than 1e-7 of the RSS before the step (plan:
-Ties); for two subsets of one size, by at most 1e-7 of the lower RSS (the
-threshold of OQ-2). The comparison of the structure stops at the first
+A differing choice is a near-tie, labeled ``tie``, when the two choices are
+different candidates with columns that are not bitwise equal, and their RSS
+values differ by less than 1e-7 of the RSS before the step (plan: Ties); two
+subsets of one size, when their RSS values differ by at most 1e-7 of the
+lower one (the threshold of OQ-2). The comparison of the structure stops at the first
 differing choice. Every other difference must be listed in
 ``validation/differences.json`` with its label and rules;
 ``validation/DIFFERENCES.md`` explains the entries and the special cases of
@@ -282,6 +283,46 @@ def _terms(dirs, cuts, rows) -> list[tuple]:
     ]
 
 
+def _sources(dirs, cuts, rows) -> dict:
+    """The (parent, covariate) pairs that the terms of a step can come from,
+    each with the step's knot there, or None for a linear term (FWD-6). The
+    parent is the first row without the covariate (TERM-6), and a pair's
+    covariate is the column where its two rows differ."""
+    first = rows[0]
+    columns = np.flatnonzero(dirs[first])
+    if len(rows) == 2:
+        columns = np.flatnonzero(dirs[rows[0]] != dirs[rows[1]])
+    out = {}
+    for v in columns:
+        parent_dirs, parent_cuts = dirs[first].copy(), cuts[first].copy()
+        parent_dirs[v], parent_cuts[v] = 0, 0.0
+        hinge = {int(dirs[r, v]) for r in rows} <= {1, -1}
+        key = (*_terms([parent_dirs], [parent_cuts], [0]), int(v))
+        out[key] = float(cuts[first, v]) if hinge else None
+    return out
+
+
+def _near_tie(a: tuple, b: tuple, band: float) -> bool:
+    """Whether two differing steps are a near-tie: different candidates
+    (another parent or covariate, or hinges at another knot; not another
+    kind or order of the terms of one candidate, FWD-3, FWD-6, LA-7) whose
+    new columns are not bitwise equal (FWD-5 breaks those ties by its
+    order, as earth does, bb18.1) and whose RSS values are within ``band``.
+    ``a`` and ``b`` are (dirs, cuts, rows, B, rss) of each side."""
+    (dirs_a, cuts_a, rows_a, B_a, rss_a), (dirs_b, cuts_b, rows_b, B_b, rss_b) = a, b
+    if not rows_a or not rows_b:  # FWD-11 dropped every term of a step
+        return False
+    src_a, src_b = _sources(dirs_a, cuts_a, rows_a), _sources(dirs_b, cuts_b, rows_b)
+    same = any(
+        None in (src_a[k], src_b[k]) or src_a[k] == src_b[k]
+        for k in src_a.keys() & src_b.keys()
+    )
+    equal = len(rows_a) == len(rows_b) and np.array_equal(
+        B_a[:, rows_a], B_b[:, rows_b]
+    )
+    return not same and not equal and abs(rss_a - rss_b) < band
+
+
 def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
     """The forward steps and the RSS path; also whether the whole forward
     path matched (module docstring)."""
@@ -302,6 +343,11 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
             done_b = [0, *(r for rows in steps_b[: s - 1] for r in rows)]
             rss_a = _wrss(B_a[:, done_a + rows_a], case.Y, case.w)
             rss_b = _wrss(B_b[:, done_b + rows_b], case.Y, case.w)
+            tie = _near_tie(
+                (dirs_a, cuts_a, rows_a, B_a, rss_a),
+                (dirs_b, cuts_b, rows_b, B_b, rss_b),
+                NEAR_TIE * before,
+            )
             diffs.append(
                 compare.Difference(
                     field="forward",
@@ -309,7 +355,7 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
                     a=[_label(dirs_a[r], cuts_a[r]) for r in rows_a],
                     b=[_label(dirs_b[r], cuts_b[r]) for r in rows_b],
                     candidate_rss=(rss_a, rss_b),
-                    label="tie" if abs(rss_a - rss_b) < NEAR_TIE * before else None,
+                    label="tie" if tie else None,
                     detail=f"the RSS before the step is {before!r}",
                 )
             )
@@ -497,18 +543,16 @@ def conform(impl: Any, case: Case, fit: dict | None = None) -> list:
         ours = new_adapter.mars_fit_to_common(fit)
         if ours["termcond"] == ref.DEGENERATE:  # EDGE-1, GCV-7
             keys = ("selected_terms", "coef")
-            stats = ("gcv", "rsq", "grsq", "termcond")
-            return [
-                compare.Difference(
-                    field="degenerate",
-                    a=[ours[k] for k in stats],
-                    b=[earth[k] for k in stats],
-                    detail="gcv, rsq, grsq and the termination code",
-                ),
-                *compare.compare_fit(
-                    {k: ours[k] for k in keys}, {k: earth[k] for k in keys}
-                ),
-            ]
+            stats = [ours[k] for k in ("gcv", "rsq", "grsq", "termcond")]
+            diffs = compare.compare_fit(
+                {k: ours[k] for k in keys}, {k: earth[k] for k in keys}
+            )
+            if stats != [math.inf, 0.0, 0.0, 0]:  # not EDGE-1's values
+                diffs.append(compare.Difference(field="edge_1", a=stats, b=None))
+            earths = [earth[k] for k in ("gcv", "rsq", "grsq", "termcond")]
+            if earths != stats:
+                diffs.append(compare.Difference(field="degenerate", a=stats, b=earths))
+            return diffs
         diffs, matched = _forward(impl, case, ours)
     else:
         diffs, matched = [], False
@@ -563,6 +607,7 @@ def check(differences: list, implementation: str, case: str, entries: list) -> N
         for e in found:
             used.add(e["id"])
             assert (e.get("pymars", d.a), e.get("earth", d.b)) == (d.a, d.b), e["id"]
+            assert d.label != "tie" or e["label"] == "tie", f"{e['id']} is a near-tie"
             if "candidate_rss" in e:
                 np.testing.assert_allclose(
                     d.candidate_rss, e["candidate_rss"], rtol=1e-8
@@ -665,72 +710,107 @@ def _reference_fit(name: str) -> dict:
     return ref.fit_mars(case.X, case.Y, None, case.params, record_candidates=True)
 
 
-def _move(path: str, index, amount=None):
-    """A change to one entry of a fit dict: ``path`` names the field (such
-    as ``forward.rss``); ``amount(values)`` is added at ``index``, or the
-    subset at row ``index`` trades its last term for the first term that it
-    lacks."""
+def _set(path: str, index, new):
+    """A change to a fit dict: the entries ``index`` of the field ``path``
+    (such as ``forward.rss``) become ``new(values)``."""
 
     def change(fit: dict) -> None:
         *outer, last = path.split(".")
         record = functools.reduce(lambda d, k: d[k], outer, fit)
         values = np.array(record[last])
-        if amount is None:
-            row = values[index]
-            row[np.flatnonzero(row)[-1]], row[np.flatnonzero(~row)[0]] = False, True
-        else:
-            values[index] += amount(values)
+        values[index] = new(values)
         record[last] = values
 
     return change
 
 
+def _other_term(row):
+    """A subset with its last term traded for the first term that it lacks."""
+    row = row.copy()
+    row[np.flatnonzero(row)[-1]], row[np.flatnonzero(~row)[0]] = False, True
+    return row
+
+
+def _move_pair(columns: int) -> list:
+    """The pair of step 1 moved ``columns`` covariates to the right."""
+    return [
+        _set(f"forward.{k}", slice(1, 3), lambda v: np.roll(v[1:3], columns, axis=1))
+        for k in ("dirs", "cuts")
+    ]
+
+
+S01, S10 = "S01_matched_d1", "S10_matched_d1"
+
+
 @pytest.mark.parametrize(
-    ("change", "found"),
+    ("name", "changes", "found"),
     [
         # the knot of the pair of step 2 moved by 0.25
-        (_move("forward.cuts", (slice(3, 5), 0), lambda c: 0.25), [("forward", 2)]),
+        (S01, [_set("forward.cuts", (slice(3, 5), 0), lambda c: c[3:5, 0] + 0.25)],
+         [("forward", 2, None)]),
+        # the pair of step 1 in the order (-1, +1) (FWD-6)
+        (S01, [_set("forward.dirs", slice(1, 3), lambda d: d[[2, 1]])],
+         [("forward", 1, None)]),
+        # step 1 on the duplicate x1, a column bitwise equal to x0 (FWD-5)
+        (S10, _move_pair(1), [("forward", 1, None)]),
+        # step 1 on x2, x0 plus noise of 1e-9: a near-tie
+        (S10, _move_pair(2), [("forward", 1, "tie")]),
         # the RSS after step 2 off by 2e-8, and by 5e-9, of the RSS before it
-        (_move("forward.rss", 2, lambda r: 2e-8 * r[1]), [("forward_rss", 2)]),
-        (_move("forward.rss", 2, lambda r: 5e-9 * r[1]), []),
+        (S01, [_set("forward.rss", 2, lambda r: r[2] + 2e-8 * r[1])],
+         [("forward_rss", 2, None)]),
+        (S01, [_set("forward.rss", 2, lambda r: r[2] + 5e-9 * r[1])], []),
+        (S01, [_set("forward.termination", (), lambda t: 5)],
+         [("termination", None, None)]),
         # the subset of size 3 with another term
-        (_move("pruning.subsets", 2), [("pruning", 3)]),
+        (S01, [_set("pruning.subsets", 2, lambda s: _other_term(s[2]))],
+         [("pruning", 3, None)]),
         # rss.per.subset of size 5 off by a relative 2e-8, and by 5e-9
-        (
-            _move("pruning.rss_per_size", 4, lambda r: 2e-8 * r[4]),
-            [("rss_per_subset", 5)],
-        ),
-        (_move("pruning.rss_per_size", 4, lambda r: 5e-9 * r[4]), []),
-        # the second coefficient off by a relative 1e-4
-        (
-            _move("coef", (1, 0), lambda c: 1e-4 * c[1, 0]),
-            [("coef", None), ("fitted", None), ("pred_test", None)],
-        ),
+        (S01, [_set("pruning.rss_per_size", 4, lambda r: r[4] * (1 + 2e-8))],
+         [("rss_per_subset", 5, None)]),
+        (S01, [_set("pruning.rss_per_size", 4, lambda r: r[4] * (1 + 5e-9))], []),
+        # the final model: a coefficient off by a relative 1e-4, the
+        # intercept by 2e-8 sd(y), gcv by a relative 2e-8, rsq by 2e-8
+        (S01, [_set("coef", (1, 0), lambda c: c[1, 0] * (1 + 1e-4))],
+         [("coef", None, None), ("fitted", None, None), ("pred_test", None, None)]),
+        (S01, [_set("coef", (0, 0), lambda c: c[0, 0] + 2e-8 * _sd(load_case(S01)))],
+         [("fitted", None, None), ("pred_test", None, None)]),
+        (S01, [_set("gcv", (), lambda g: g * (1 + 2e-8))], [("gcv", None, None)]),
+        (S01, [_set("rsq", (), lambda r: r + 2e-8)], [("rsq", None, None)]),
     ],
-)
-def test_a_new_difference_fails_until_it_is_labeled(change, found):
+)  # fmt: skip
+def test_a_new_difference_fails_until_it_is_labeled(name, changes, found):
     # The suite fails on a difference that the list does not label, and
-    # passes once an entry labels it (brief T07, item 3). Each case plants
-    # one change in the reference's fit of S01_matched_d1, which matches
-    # earth, at or just past a tolerance of the plan's table.
-    name = "S01_matched_d1"
+    # passes once an entry labels it (brief T07, item 3); a near-tie passes
+    # unlisted, but not under an entry of another label. Each case plants
+    # changes in the reference's fit of a fixture that matches earth, at or
+    # just past a tolerance of the plan's table.
     fit = copy.deepcopy(_reference_fit(name))
-    change(fit)
+    for change in changes:
+        change(fit)
 
     class Planted(Reference):
         def fit(self, X, Y, w, params):
             return fit
 
     differences = conform(Planted(), load_case(name))
-    assert [(d.field, d.step) for d in differences] == found
+    assert [(d.field, d.step, d.label) for d in differences] == found
+    entries = [
+        {"id": f"X{i}", "cases": [name], "field": f, "step": s, "label": "rule"}
+        for i, (f, s, _) in enumerate(found)
+    ]
+    if found and found[0][2] == "tie":
+        check(differences, "reference", name, [])
+        with pytest.raises(AssertionError, match="near-tie"):
+            check(differences, "reference", name, entries)
+        return
     if not found:
         return
     with pytest.raises(pytest.fail.Exception, match="does not list"):
         check(differences, "reference", name, [])
-    entries = [
-        {"id": f"X{i}", "cases": [name], "field": f, "step": s, "label": "rule"}
-        for i, (f, s) in enumerate(found)
-    ]
     check(differences, "reference", name, entries)
     with pytest.raises(pytest.fail.Exception, match="did not occur"):
         check([], "reference", name, entries)
+    with pytest.raises(pytest.fail.Exception, match="bugs"):
+        check(differences, "reference", name, [{**e, "label": "bug"} for e in entries])
+    with pytest.raises(AssertionError):
+        check(differences, "reference", name, [{**entries[0], "pymars": "?"}])
