@@ -186,11 +186,11 @@ def test_ratio_table_missing_when_no_data_at_all():
 
 def test_main_writes_every_display_when_no_cell_has_run(tmp_path):
     """Before any cell has run, the results folder has no cell folders.
-    ``main`` must still write each display that ``CAPTIONS`` names, and
-    ``captions.md``, and no file without a caption. The appendix table then
-    holds only its header. Before the fix, ``appendix_table`` sorted a frame
-    with no columns and raised ``KeyError: 'dgp'``, so the figures and the
-    captions were never written.
+    ``main`` must still write ``captions.md`` and each display that
+    ``CAPTIONS`` names, and no file without a caption. The appendix table
+    then holds only its header. Before the fix, ``appendix_table`` sorted a
+    frame with no columns and raised ``KeyError: 'dgp'``, so the figures and
+    the captions were never written.
     """
     results = tmp_path / "results"
     results.mkdir()
