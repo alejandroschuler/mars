@@ -196,6 +196,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:12 Merged #63 (the user's summarize fix) after update-check-63's re-approval.
 - 14:18 5-hour 78 %, weekly 13 %: heartbeat set to 18:25 (reset 18:10 plus 15 minutes) by the 70 % rule.
 - 14:19 #66 (T07) round 1 REQUEST_CHANGES: the tie label hides FWD-5 and FWD-6 errors (reversed tie order, wrong kind codes), the degenerate branch always passes, E7's evidence wrong, E1 should be a quirk. Sent to t07-conformance.
+- 14:19 T15 PR #67 ready (1ebabee): the oracle compares fast and reference on fixtures, S15 and 10,000 hypothesis fits (0.7 % near-tie stops); 29 narrow tests deleted, their designs now oracle cases; gate C PASS. Its only disagreement is the pruning centering bug (#69). It had briefly swapped an untracked file in its worktree before the new rule; disclosed. Its dual review waits for the 5-hour reset (18:10), with #70's.
 
 ## Core-hour ledger
 
