@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 14:22 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 14:29 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+PAUSED BY THE USER until the 5-hour reset (18:10 PDT Monday; the user's words at about 14:35: pause all work until the 5 hour limit resets). At 18:12 resume: message t11-stage2, t07-conformance and t06-reference to continue; rerun the stopped #69 adversarial review; start the dual reviews of #70 (T12) and #67 (T15). The heartbeat is 18:25.
 
 RUNNING. The weekly counter reset to 0 % at about 13:00 Monday 2026-09-28 (the reset the user mentioned; the next reset shown is still 2026-10-04 17:00 PDT). BUDGET RULE FROM THE USER (13:25 Monday 2026-09-28): go to 50 % of the new weekly counter (until the reset on 2026-10-04 17:00 PDT), then pause and tell the user. Pacing: from 44 %, only small agents that finish open pull requests; from 48 %, nothing new; at 50 %, pause, set the heartbeat to the weekly reset, and tell the user. The 5-hour limit still applies (no new agents from 80 % of it; the 70 % heartbeat rule; the 5-hour reset is 18:10 PDT). New rule (13:30 Monday): start a full review or a long author task only while the 5-hour window is below 60 %, because the limit killed reviews twice (the #48 adversarial, the #55 round 2) and their work was lost. Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work. Test rules: COMMON.md "Tests" and REVIEWER.md.
 
