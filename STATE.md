@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 12:10 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 12:11 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -41,7 +41,11 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 ## Running agents
 
-- `t11-forward` (opus): idle; #57 fixed, #55 rebased on it. Resumable with SendMessage: `t12-core` (T12 PR after #55), `t06-reference` (done), `t18-legacy` (done), `tools-merge-guard` (TOOLS-2), and older ones.
+- `t11-forward` (opus): #55 round-1 fix (center x, TSS about the centered y, test deletions), then the rebase onto main with only #55's own commits; then T11 stage 2 after #55 merges.
+- `t07-conformance` (opus): T07, issue #9, brief `briefs/T07-conformance.md`, from 12:15 Monday.
+- `t15-oracle` (opus): T15, issue #17, brief `briefs/T15-oracle.md`, from 12:15 Monday; PR after #55 merges.
+- `t13-estimators` (opus): T13, issue #15, brief `briefs/T13-estimators.md`, branch stacked on origin/t12-core, from 12:17 Monday; PR after T12 merges.
+- Idle, resumable: `t12-core` (open its PR after #55 merges), `t06-reference`, `t18-legacy`, `tools-merge-guard`.
 
 ## Running jobs
 
