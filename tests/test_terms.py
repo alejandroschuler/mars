@@ -27,6 +27,8 @@ def _s_fits(*, least_squares: bool) -> list[str]:
     whose predictions are B·coef (no GLM refit, no factor response)."""
     names = []
     for path in sorted(FIXTURES.glob("S*.json")):
+        if not path.name.startswith("S"):  # glob ignores case on Windows
+            continue
         result = json.loads(path.read_text(encoding="utf-8"))["result"]
         if result.get("error") or result.get("dirs") is None:
             continue
