@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 13:18 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 13:21 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING. The weekly counter reset to 0 % at about 13:00 Monday 2026-09-28 (the reset the user mentioned; the next reset shown is still 2026-10-04 17:00 PDT). The user's last rule (12:10 Monday) was to work until 98 % of the week, because a reset was coming. Whether that rule also covers the new counter is not clear, so the executor asked the user; until the user answers, it uses at most 50 % of the new counter. Pacing: from 44 %, only small agents that finish open pull requests; from 48 %, nothing new; at 50 %, pause, set the heartbeat to the weekly reset, and tell the user (unless the user has set another limit). The 5-hour limit still applies (no new agents from 80 % of it; the 70 % heartbeat rule; the 5-hour reset is 18:10 PDT). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work. Test rules: COMMON.md "Tests" and REVIEWER.md.
+RUNNING. The weekly counter reset to 0 % at about 13:00 Monday 2026-09-28 (the reset the user mentioned; the next reset shown is still 2026-10-04 17:00 PDT). BUDGET RULE FROM THE USER (13:25 Monday 2026-09-28): go to 50 % of the new weekly counter (until the reset on 2026-10-04 17:00 PDT), then pause and tell the user. Pacing: from 44 %, only small agents that finish open pull requests; from 48 %, nothing new; at 50 %, pause, set the heartbeat to the weekly reset, and tell the user. The 5-hour limit still applies (no new agents from 80 % of it; the 70 % heartbeat rule; the 5-hour reset is 18:10 PDT). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work. Test rules: COMMON.md "Tests" and REVIEWER.md.
 
 Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #57 round 2 cost about 1 point (earlier full rounds about 3); #57's fix, a narrow check and the merge about 2; the full dual review of #55 (1,349 lines) about 3. The reviewers now sample about 30 mutants, flag performative tests for deletion, and spend most effort on wrong results; both rounds found real numerical bugs.
 

@@ -175,6 +175,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:40 Weekly 60 %, 5-hour 90 % (reset 13:20): heartbeat set to 13:35; no new agents until the reset. Found PRs #61, #63 and #64 from the user's own separate sessions (T03 follow-ups and TOOLS-2); their single reviews come after the reset.
 - 12:52 t13-estimators done up to T12's merge (073811b): EarthRegressor and Earth; scikit-learn checks pass on the reference core; gate B fails only at the smoke fit (defaults need Fast MARS, T11 stage 3). Decision: the smoke fits use fast_k=0 until stage 3, in T13's PR. Its edit of a validation test that asserted the estimator's absence is accepted.
 - 13:18 13:20: the 5-hour limit had stopped t07, t15 and both #55 round-2 reviewers (no posts) at about 13:00. The weekly counter reset to 0 % (the user's announced reset). Interim cap 50 % of the new counter until the user answers. Reran the #55 round 2 (spec opus, adversarial sonnet), resumed t07 and t15, started the single review of #64 (TOOLS-2, sonnet).
+- 13:21 The user set the budget for the new weekly counter: go to 50 % (then pause and tell the user).
 
 ## Core-hour ledger
 
