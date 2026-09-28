@@ -9,7 +9,7 @@ This file describes the legacy code against earth 5.3.4 on the datasets S01 to S
 - **Fits.** Every dataset fixture in `validation/fixtures/` (132 fits of S01 to S20, in the modes that each dataset's purpose needs), S19's factor through the legacy `categorical_features` path, and the 200 S15 draws. earth's side is the fixture's result, or a new black-box run where the fixtures lack the settings: the matched mode at degrees 2 and 3, and the S15 draws in the legacy matched mode.
 - **Matched mode** ("Comparison modes"). Legacy: `allow_linear=False`, `minspan=1`, `endspan=0`, `penalty` half of earth's, `max_terms` equal to `nk`. earth: `Auto.linpreds = FALSE`, `fast.k = 0`, `thresh = 0`, `minspan = 1`, `endspan = 1`, `Adjust.endspan = 0`, `nk = 21`, `penalty = 2`.
 - **Defaults mode.** Each program at its own defaults, at the same degree.
-- **Span grid** (S01, S02). earth at its defaults with `minspan` 1, 5 or automatic and `endspan` 1, 10 or automatic; the legacy code at its defaults with the same spans. earth's automatic span maps to the legacy formula with α = 0.05 (`minspan_alpha`, `endspan_alpha`), and earth endspan e to legacy endspan e − 1, as in the matched mode.
+- **Span grid** (S01, S02). earth at its defaults with `minspan` 1, 5 or automatic and `endspan` 1, 10 or automatic; the legacy code at its defaults with the same spans. earth's automatic span maps to the legacy formula with α = 0.05 (`minspan_alpha`, `endspan_alpha`), and earth endspan e to legacy endspan e − 1, as in the matched mode. This map gives the same knots only at e = 1. At e = 10 the legacy knots start one value lower, at sorted position E where earth's lowest knot is at E + 1, and earth caps its endspan at ⌊n/2⌋ − 1 (SPAN-5), which applies in S02_n020.
 - **Raw** (S12). earth at its defaults on the unscaled inputs, against the legacy defaults on the same inputs. Every other mode uses the fixtures' scaled matrix (each covariate divided by its standard deviation, LA-7).
 - **Weights** (S13, S16). The 1.0.4 wheel's `Earth.fit` takes no `sample_weight`; HEAD's does. So the weighted fits run on HEAD. For integer weights earth's side is its unweighted fit on the repeated rows (frequency weights, as in "Sample weights"); for `S13_nonint` it is earth's weighted fit.
 - **Binary and class responses.** S14 and S20 use `EarthClassifier`, whose inner `Earth` fits the 0/1 response by least squares, as earth does before its `glm` step. S18 uses `EarthClassifier` on the three class labels.
@@ -26,15 +26,15 @@ A term is compared as its set of factors (variable, direction and knot, or a lin
 - **structure**: earth adds one term of the legacy pair, a single hinge or the linear option at the same knot, where the legacy code adds both hinges (F5);
 - **choice**: the programs add different terms. The comparison of the forward pass stops at the first choice divergence.
 
-Along the steps that agree, the RSS after each step is compared at relative 1e-8, scaled by κ(B) above 1e6 ("What is compared, and the tolerances"). When the two forward passes add the same terms throughout, the pruning pass is compared size by size, then the GCVs, the selected terms and, if those agree, the coefficients, the GCV and the predictions, with `compare.py`. When the forward passes differ, the later differences follow from the first one, and only summary numbers are kept: the number of terms, R², GCV and the largest difference in predictions.
+Along the steps that agree, the RSS after each step is compared at relative 1e-8, scaled by κ(B) above 1e6 ("What is compared, and the tolerances"). When the two forward passes add the same terms throughout, the pruning pass is compared size by size, then the GCVs, the selected terms and, if those agree, the coefficients, the GCV and the predictions, with `compare.py`. The pruning differences are listed in the order of their effect on the selected model: the intercept missing from the legacy model (F3); else, when the selected terms differ, other GCVs at a size where both paths keep the same subset (F4), other subsets at a selected size, or a tie between sizes; then the path's other differences, such as the intercept dropped only below the selected size (F3). When the forward passes differ, the later differences follow from the first one, and only summary numbers are kept: the number of terms, R², GCV and the largest difference in predictions.
 
 At the first choice divergence, the script gathers the evidence from both sides:
 
 - the legacy side: its own record of the search at that step, with the chosen candidate, the second best by its criterion, and its own RSS and GCV for earth's choice, or why earth's choice was not a legacy candidate (for example a knot outside the legacy knot set);
-- the earth side: a black-box run with `trace = 9` and `nk` = 2s + 1, so that step s is the last one it searches (LIMIT-2). It says whether earth searched the legacy choice's parent and variable, and whether that search was for a pair or a single hinge (LA-7). It also says whether earth visited and evaluated the legacy knot, and gives earth's four flags there (`bx1G`, `CovColG`, `TolG`, `MaxG`);
+- the earth side: a black-box run with `trace = 9` and `nk` = 2s + 1, so that step s is the last one it searches (LIMIT-2). It says whether earth searched the legacy choice's parent and variable, and whether that search was for a pair or a single hinge (LA-7). It also says whether earth visited and evaluated the legacy knot, and gives earth's four flags there (`bx1G`, `CovColG`, `TolG`, `MaxG`). The script checks that the probe run repeats the full run's first terms (the same `dirs` and `cuts` rows), and all 312 probes do;
 - the RSS of both choices, from a least-squares fit on earth's basis before the step.
 
-The near-tie rule of "Ties" comes first: a divergence is a `tie` when the two choices' RSS are within 1e-7 of the RSS before the step, in the legacy code's full-precision log or on earth's basis. earth's trace prints only 5 or 6 significant digits, so it cannot decide a near-tie. Otherwise the label follows the first cause that the evidence shows:
+The near-tie rule of "Ties" comes first: a divergence is a `tie` when the two choices' RSS are within 1e-7 of the RSS before the step, in the legacy code's full-precision log or on earth's basis. earth's trace prints only 5 or 6 significant digits, so it cannot decide a near-tie. Otherwise the side that passed over the term with the lower RSS, on earth's basis, gives the cause. When earth's choice has the lower RSS, the cause is on the legacy side: earth's knot is not a legacy candidate, or the legacy GCV ranked it lower (F2). When the legacy choice has the lower RSS, the cause is in earth's trace: the collinearity tolerance, a single-hinge search, or a knot outside earth's grid. The table lists the causes:
 
 | Cause at the first divergence | Label | ID |
 |---|---|---|
@@ -47,7 +47,8 @@ The near-tie rule of "Ties" comes first: a divergence is a `tie` when the two ch
 | earth's choice is not a legacy candidate (a knot outside the legacy knot set) | rule | F7 |
 | the legacy code ranks by GCV, and earth's choice had the lower RSS | rule | F2 |
 | every legacy candidate has C ≥ n, or n or more columns, so the legacy code stops | rule | F2 |
-| the best legacy candidate lowers the RSS by less than machine epsilon | rule | F6 |
+| the best legacy candidate by GCV is already in the model's span (its computed gain is rounding), and the legacy code stops on it | rule | F2 |
+| the best legacy candidate lowers the RSS by a positive amount below machine epsilon | rule | F6 |
 | earth stops by its relative rules (`thresh`), which the legacy code lacks | rule | F6 |
 
 The pruning pass (F3, F4), the GLM refit (F9) and the new findings (F17 to F19) get their labels in the sections below. The script also has verdicts for earth rules that no fit here showed (the MaxLegal limit of FWD-4, the slot rule of FAST-4, a better pruning subset by PRUNE-3); they would need new IDs.
@@ -58,19 +59,19 @@ There are 334 cases: 132 fixture fits, S19's factor in 2 codings, and 200 S15 dr
 <!-- generated: conformance_legacy.py report --markdown, the count tables -->
 | Label | First difference of a fit | All |
 |---|---|---|
-| bug | 8 | 111 |
+| bug | 6 | 111 |
 | quirk | 23 | 23 |
-| rule | 316 | 357 |
+| rule | 318 | 357 |
 | tie | 0 | 2 |
 
 | Finding | First difference of a fit | All |
 |---|---|---|
 | F1 | 16 | 16 |
-| F2 | 104 | 105 |
-| F3 | 5 | 104 |
-| F4 | 0 | 5 |
+| F2 | 104 | 108 |
+| F3 | 3 | 104 |
+| F4 | 2 | 5 |
 | F5 | 126 | 158 |
-| F6 | 7 | 10 |
+| F6 | 7 | 7 |
 | F7 | 82 | 82 |
 | F9 | 2 | 6 |
 | F17 | 1 | 1 |
@@ -79,7 +80,7 @@ There are 334 cases: 132 fixture fits, S19's factor in 2 codings, and 200 S15 dr
 | (tie) | 0 | 2 |
 <!-- end generated -->
 
-Most first differences are `rule`: the legacy code lacks a rule of earth's (F2, F5, F6 and F7). The `bug` entries are the intercept that the pruning pass removes (F3), the GLM refit (F9) and the categorical path (F17). The `quirk` entries are earth's knot scan for a hinge parent (F7) and its forward pass on a constant response (F19).
+Most first differences are `rule`: the legacy code lacks a rule of earth's (F2, F5, F6 and F7). The `bug` entries are the intercept that the pruning pass removes (F3), the GLM refit (F9) and the categorical path (F17); as first differences, F3 comes first in 3 fits and F9 in 2. The `quirk` entries are earth's knot scan for a hinge parent (F7) and its forward pass on a constant response (F19).
 
 S15 measures the rates. In the matched mode, 2 of the 100 draws make the same choices at every step (apart from single hinges against pairs, F5). The others diverge at a median of step 3, for these causes: earth's collinearity tolerance (F5) in 81, earth's knot scan for a hinge parent (a quirk, F7) in 16, and a near-tie in 1. At the defaults, every draw diverges at step 1 or 2: the legacy code picks a linear term by GCV (F2) in 82, and a knot outside earth's grid (F7) in 18.
 
@@ -94,11 +95,11 @@ Only 1 of the 200 S15 fits (0.5 percent) stops at a near-tie, below the plan's r
 
 ## The findings
 
-### Confirmed
+### Confirmed in part
 
 **F1, weights.** The 1.0.4 wheel's `Earth.fit` has no `sample_weight`, so its 16 weighted fits fail (`rule`). HEAD takes weights as frequency weights in the forward pass: its 14 fits with integer weights add the same forward terms as the legacy code on the repeated rows in 13 cases. But 8 of the 14 select other terms, and in 6 of them the predictions differ, by up to 14.3 (S13_int_random, matched).
 
-The fits diverge by rounding, in two ways. In S13_unit, with every weight 1, the pruning paths agree down to 13 of 21 terms. At 12, several removals of redundant hinge columns (F5) give the same RSS, 0.839653995611, and rounding picks a different one in the weighted code. In S16_weighted at the defaults, the best candidate by GCV at step 8 is the linear term x0, which is already in the model's span. Its computed gain is exactly 0 with weights and 3.4e-13 without, so the weighted fit stops after 7 steps (F6) and the other goes on to 9. Against earth on the repeated rows, HEAD's weighted fits get the same labels as the unweighted legacy fits.
+The fits diverge by rounding, in two ways. In S13_unit, with every weight 1, the pruning paths agree down to 13 of 21 terms. At 12, several removals of redundant hinge columns (F5) give the same RSS, 0.839653995611, and rounding picks a different one in the weighted code. In S16_weighted at the defaults, the best candidate by GCV at step 8 is the linear term x0, which is already in the model's span. Its computed gain is exactly 0 with weights and 3.4e-13 without, so the weighted fit stops after 7 steps and the other goes on to 9 (F2 with F6: the stop test looks at the best candidate by GCV). Against earth on the repeated rows, HEAD's weighted fits get the same labels as the unweighted legacy fits. So the runs reach part of F1: with integer weights the forward pass mostly matches repeated rows, and unit weights change the pruning by rounding. They do not reach weights that sum to 1, nor the span formulas, because the spans here are 0 or 1.
 
 <!-- generated: the weights table -->
 | HEAD with weights | Steps (weights, repeated) | Same forward terms | Same selected terms | Largest test difference |
@@ -119,17 +120,19 @@ The fits diverge by rounding, in two ways. In S13_unit, with every weight 1, the
 | S16_weighted/matched_d2 | 10, 10 | True | False | 3.27e-11 |
 <!-- end generated -->
 
-**F2, the GCV criterion.** The legacy code picks the candidate with the lowest GCV, so a linear term, which costs one column and no penalty, often beats a pair with the lower RSS. This is the first difference in 101 fits, 82 of them S15 draws at the defaults. In S04 (5 covariates, 200 cases) at the defaults, step 1: the legacy code adds x3, with GCV 16.02 and RSS 3140.3, and earth adds the pair h(x3-1.89005) and h(1.89005-x3), whose RSS is 3127.7 but whose legacy GCV is 17.15. The same rule stops the legacy code at small n: in the 4 fits of S11 in the matched mode, every legacy candidate has C ≥ n, an infinite GCV, or at least n columns, and the legacy forward pass stops while earth's goes on.
+### Confirmed
 
-**F3, the pruned intercept.** The legacy pruning pass protects the intercept only as the last term. 102 of the 332 legacy fits end without an intercept: 63 of 147 at the defaults, 27 of 150 in the matched mode, 11 of 27 in the span grid and 1 of 6 raw. Among the S15 draws it is 43 of 100 at the defaults and 16 of 100 matched. earth keeps the intercept in every fit.
+**F2, the GCV criterion.** The legacy code picks the candidate with the lowest GCV, so a linear term, which costs one column and no penalty, often beats a pair with the lower RSS. This is the first difference in 101 fits, 82 of them S15 draws at the defaults. In S04 (5 covariates, 200 cases) at the defaults, step 1: the legacy code adds x3, with GCV 16.02 and RSS 3140.3, and earth adds the pair h(x3-1.89005) and h(1.89005-x3), whose RSS is 3127.7 but whose legacy GCV is 17.15. The same rule stops the legacy code at small n: in the 4 fits of S11 in the matched mode, every legacy candidate has C ≥ n, an infinite GCV, or at least n columns, and the legacy forward pass stops while earth's goes on. The GCV ranking also stops the legacy code in the three S02 span-grid fits with minspan 1 (50 cases): the best candidate by GCV is the linear term x0, already in the model's span, whose computed gain is ±6e-17. The stop test (F6) looks only at that candidate, so the forward pass ends after 2 steps although a pair would lower the RSS by about 5 percent. These are labeled F2, since no threshold would let a zero gain through.
 
-**F4, the GCV convention.** In 5 fits both programs add the same forward terms, which include linear terms, and their pruning paths have the same subsets. The GCVs still differ, by up to 4.5 percent, and so the selected size differs: 1 term against 3 in S13_int_zeros at the defaults, 2 against 3 in S13_int_random, and 3 against 4 in S19_dummies. The legacy C = M + d·H charges d for each hinge term and nothing for a linear term, where earth charges d/2 for each term after the intercept. For hinge-only models the plan's halved penalty makes the two conventions equal, and no fit here disagrees with that.
+**F3, the pruned intercept.** The legacy pruning pass protects the intercept only as the last term. 102 of the 332 legacy fits end without an intercept: 63 of 147 at the defaults, 27 of 150 in the matched mode, 11 of 27 in the span grid and 1 of 6 raw. Among the S15 draws it is 43 of 100 at the defaults and 16 of 100 matched. In 2 more fits (S13_int_random, on HEAD and on repeated rows) the intercept leaves the legacy path only at size 1, below the selected size, and the selected model keeps it; there F4 comes first. earth keeps the intercept in every fit.
+
+**F4, the GCV convention.** In 5 fits at the defaults both programs add the same forward terms, but at the sizes where both pruning paths keep the same subset, their GCVs differ, by up to 4.5 percent. Two differences add up. The legacy C = M + d·H charges d for each hinge term and nothing for a linear term, where earth charges d/2 for each term after the intercept. And the legacy default d is 3 at every degree, where earth's is 2 at degree 1. In S13_int_random and S13_int_zeros (on HEAD with weights and on repeated rows) the terms are one hinge pair and no linear term: at size 3 the legacy C is 3 + 3·2 = 9 and earth's 3 + 2·2/2 = 5. The selected sizes differ: 2 against 3 in S13_int_random, where F4 comes first, and 1 against 3 in S13_int_zeros, whose legacy model has no intercept (F3 first). In S19_dummies the terms are the three linear dummies: at size 4 the legacy C is 4 and earth's 7, and the selected sizes are 3 against 4 (F3 first). In the matched mode the halved penalty makes the two conventions equal for hinge-only models with an intercept, and no matched fit disagrees with that.
 
 **F5, pairs, single hinges and the collinearity tolerance.** Where earth adds one term, a single hinge in a single-hinge search (LA-7) or the linear option, the legacy code adds a pair whose second hinge is redundant. This happens before any other difference in 37 of the 150 matched fits, most often at step 2. The redundant hinge leaves the span unchanged: along the steps where both programs agree, the RSS agrees to 8e-15 relative. The one exception is S10, with a covariate equal to x0 plus noise of size 1e-9. There the legacy pair adds a column that earth's single-hinge search leaves out, and the RSS after step 2 is 0.53925 against 0.54109.
 
-At a choice divergence, earth's collinearity tolerance (LA-3, `TolG 0`) rejected the legacy knot in all 113 of the F5 choices, 81 of them S15 draws. In S04 (5 covariates, 200 cases) in the matched mode, the legacy code's first knot is x3's 10th-lowest value. With x3, it gives RSS 3119.1, and earth, which rejects it, adds the pair at x3 = 1.89005 with RSS 3127.7. A knot this close to the end of the data can leave a term fitted to a single case. In S15 draw 32 (D5, degree 1), the legacy code selects h(0.0425783-x9), which is positive at 1 of the 200 training cases, with coefficient 114,773; its test error is 126,243 against earth's 0.037.
+At a choice divergence, earth's collinearity tolerance (LA-3, `TolG 0`) rejected the legacy knot in all 113 of the F5 choices, 81 of them S15 draws. In S04 (5 covariates, 200 cases) in the matched mode, the legacy code's first knot is x3's 9th-lowest value (trace case 9). With x3, it gives RSS 3119.1, and earth, which rejects it, adds the pair at x3 = 1.89005 with RSS 3127.7. A knot this close to the end of the data can leave a term fitted to a single case. In S15 draw 32 (D5, degree 1), the legacy code selects h(0.0425783-x9), which is positive at 1 of the 200 training cases, with coefficient 114,773; its test error is 126,243 against earth's 0.037.
 
-**F6, the absolute stop.** The legacy forward pass stops when its best candidate by GCV lowers the RSS by at most machine epsilon. With y times 1e-9 (S12_y_1em9) the RSS starts at 2.6e-17, so the legacy code returns the intercept alone in all three modes, where earth fits the base knot. In the three S02 span-grid fits with minspan 1 (50 cases), the best candidate by GCV is the linear term x0, already in the span, whose gain is ±6e-17. So the legacy code stops after 2 steps although a pair would lower the RSS by about 5 percent. In 4 fits at the defaults (S08, S09 and two of S11), earth stops first, by its relative rules (`thresh`, or GRSq), and the legacy code goes on. On S12 the legacy code is not invariant to the scale of y or of x, while earth is on these data:
+**F6, the absolute stop.** The legacy forward pass stops when its best candidate by GCV lowers the RSS by at most machine epsilon. With y times 1e-9 (S12_y_1em9) the RSS starts at 2.6e-17, so the legacy code returns the intercept alone in all three modes, where earth fits the base knot. In 4 fits at the defaults (S08, S09 and two of S11), earth stops first, by its relative rules (`thresh`, or GRSq), and the legacy code goes on. On S12 the legacy code is not invariant to the scale of y or of x, while earth is on these data:
 
 <!-- generated: the S12 table -->
 | S12 mode | Variant | Legacy: terms, knots | earth: terms, knots |
@@ -164,9 +167,9 @@ At a choice divergence, earth's collinearity tolerance (LA-3, `TolG 0`) rejected
 
 ### Qualified
 
-**F14, the core search.** Where both programs make the same choice, the RSS after each step agrees to 8e-15 relative, at 384 steps. But the choices diverge early. Of the 50 matched fixture fits, 6 make the same choices throughout: S04 with 5 covariates and 1,000 cases, S04 with 10 covariates and 200 cases, S09, S13_nonint, S18 (whose responses differ by design) and S19_dummies. Of the S15 draws, 2 of 100 do. On S04 at degree 1, which is F14's Friedman #1, one fit diverges at step 1 (the collinearity tolerance), two keep all 10 knots, and one diverges at step 6. So F14 holds for the steps before the first knot that earth rejects by a rule that the legacy code lacks.
+**F14, the core search.** Where both programs make the same choice, the RSS after each step agrees to 8e-15 relative, at 383 of the 384 steps compared; the other is step 2 of S10 (F5, above). But the choices diverge early. Of the 50 matched fixture fits, 6 make the same choices throughout: S04 with 5 covariates and 1,000 cases, S04 with 10 covariates and 200 cases, S09, S13_nonint, S18 (whose responses differ by design) and S19_dummies. Of the S15 draws, 2 of 100 do. On S04 at degree 1, which is F14's Friedman #1, one fit diverges at step 1 (the collinearity tolerance), two keep all 10 knots, and one diverges at step 6. So F14 holds for the steps before the first knot that earth rejects by a rule that the legacy code lacks.
 
-**F15, the defaults.** At the defaults every S15 draw diverges at step 1 or 2. The legacy code's test error is lower than earth's in 63 of 100 draws, with a median ratio of 0.905. It is more than 10 times earth's in 1 draw, the largest ratio being 216. In the matched mode it is lower in 39 of 100, with a median ratio of 1.16, and more than 10 times earth's in 10 draws. There, the largest ratio is 3.4e6, from a term fitted to one case (F5). So the fits differ more at the defaults, as F15 says, but the legacy code's test error is not worse there on these draws.
+**F15, the defaults.** The S15 draws were made to measure conformance rates: they pool the DGPs D1 to D6 and D8, both noise levels and degrees 1 and 2, at n = 200. On them, at the defaults, every draw diverges at step 1 or 2. The legacy code's test error, against the true function at 1,000 new points per draw, is lower than earth's in 63 of 100 draws (a binomial standard error of about 5 points), with a median ratio of 0.905. It is more than 10 times earth's in 1 draw, the largest ratio being 216. In the matched mode it is lower in 39 of 100, with a median ratio of 1.16, and more than 10 times earth's in 10 draws; the largest ratio there is 3.4e6, from a term fitted to one case (F5). So the fits differ more at the defaults, as F15 says. Prediction quality is for the simulation study to settle.
 
 ### Not tested here
 
@@ -178,7 +181,7 @@ F8 (missing values) needs inputs that earth does not accept. F11 (the scikit-lea
 |---|---|---|---|
 | F17 | `categorical_features` on a column of strings gives the intercept alone. The candidates are made from the raw values of `X_fit_original` (the strings), but each indicator compares them with the label-encoded values (floats), so every candidate column is zero. With numeric codes the same data give earth's factor fit. | S19's factor: 1 term, fitted values off earth's factor fit by up to 2.04; as codes 0 to 3: 4 terms, fitted values within 3e-14 of earth's. The snippet below, on the wheel and on HEAD. | Wrong result (`bug`) |
 | F18 | Several responses are not supported: `Earth.fit` raises `ValueError: y should be a 1d array` for a 2-D y. earth fits a shared basis. | S17 in both modes; the same on HEAD. | Missing feature (`rule`) |
-| F19 | On a constant response with `thresh = 0`, earth's forward pass runs to the term limit on rounding noise (forward RSS about 1e-28) and its pruning pass removes every term. The legacy code stops at once (F6). Both return the intercept. | S13_constant_y_weighted in the matched mode, on repeated rows and on HEAD with weights. The spec lists earth's other quirks on a constant response (GCV-7, EDGE-1). | earth `quirk` |
+| F19 | On a constant response with `thresh = 0`, earth's forward pass adds terms on rounding noise (a forward RSS of about 1e-28), in S13 up to the term limit, and its pruning pass removes them all; on other data it can stop after one step (code 6). The legacy code stops at once. Both return the intercept. | S13_constant_y_weighted in the matched mode, on repeated rows and on HEAD with weights. The spec lists earth's other quirks on a constant response (GCV-7, EDGE-1). | earth `quirk` |
 
 F17 on the wheel and on HEAD (a checkout of the tag first on `sys.path`):
 
@@ -229,9 +232,9 @@ The table has one row per fit of S01 to S20. "Code" is the version that ran it: 
 | S02_n020/span_mauto_eauto | wheel | choice at step 1 | rule | F7 | none | |  | 2, 2 |
 | S02_n050/defaults_d1 | wheel | choice at step 2 | rule | F7 | pruning | bug | F3 | 2, 3 |
 | S02_n050/matched_d1 | wheel | structure at step 2 | rule | F5 | choice at step 3 | rule | F5 | 2, 3 |
-| S02_n050/span_m1_e1 | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F6 | 2, 3 |
-| S02_n050/span_m1_e10 | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F6 | 2, 3 |
-| S02_n050/span_m1_eauto | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F6 | 2, 3 |
+| S02_n050/span_m1_e1 | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F2 | 2, 3 |
+| S02_n050/span_m1_e10 | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F2 | 2, 3 |
+| S02_n050/span_m1_eauto | wheel | structure at step 2 | rule | F5 | stop at step 3 | rule | F2 | 2, 3 |
 | S02_n050/span_m5_e1 | wheel | choice at step 1 | rule | F7 | pruning | bug | F3 | 2, 3 |
 | S02_n050/span_m5_e10 | wheel | choice at step 1 | rule | F7 | pruning | bug | F3 | 2, 3 |
 | S02_n050/span_m5_eauto | wheel | choice at step 1 | rule | F7 | pruning | bug | F3 | 2, 3 |
@@ -310,10 +313,10 @@ The table has one row per fit of S01 to S20. "Code" is the version that ran it: 
 | S13_equal2_repeated/defaults_d1 | wheel | choice at step 1 | rule | F7 | pruning | bug | F3 | 1, 2 |
 | S13_equal2_repeated/matched_d1 | wheel | structure at step 2 | rule | F5 | choice at step 4 | rule | F5 | 8, 6 |
 | S13_int_random/defaults_d1 | wheel | error | rule | F1 | none | |  |  |
-| S13_int_random/defaults_d1 | head | pruning | bug | F3 | pruning | rule | F4 | 2, 3 |
+| S13_int_random/defaults_d1 | head | pruning | rule | F4 | pruning | bug | F3 | 2, 3 |
 | S13_int_random/matched_d1 | wheel | error | rule | F1 | none | |  |  |
 | S13_int_random/matched_d1 | head | structure at step 2 | rule | F5 | choice at step 5 | rule | F5 | 11, 11 |
-| S13_int_random_repeated/defaults_d1 | wheel | pruning | bug | F3 | pruning | rule | F4 | 2, 3 |
+| S13_int_random_repeated/defaults_d1 | wheel | pruning | rule | F4 | pruning | bug | F3 | 2, 3 |
 | S13_int_random_repeated/matched_d1 | wheel | structure at step 2 | rule | F5 | choice at step 5 | rule | F5 | 7, 11 |
 | S13_int_zeros/defaults_d1 | wheel | error | rule | F1 | none | |  |  |
 | S13_int_zeros/defaults_d1 | head | pruning | bug | F3 | pruning | rule | F4 | 1, 3 |
