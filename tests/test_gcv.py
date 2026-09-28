@@ -153,9 +153,13 @@ def test_gcv_infinite():
         _gcv.gcv(1.0, 2, 2, 0)
 
 
+#: RSS values of 0 or at least 1e-300, so that no GCV below is subnormal.
+RSS_VALUES = st.just(0.0) | st.floats(1e-300, 1e6)
+
+
 @given(
-    st.floats(0, 1e6, allow_subnormal=False),
-    st.floats(0, 1e6, allow_subnormal=False),
+    RSS_VALUES,
+    RSS_VALUES,
     st.integers(1, 41),
     st.sampled_from([-1.0, 0.0, 1.0, 2.0, 3.0, 6.0]),
     st.integers(2, 10_000),
