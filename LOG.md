@@ -162,6 +162,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 09:51 User's rule (2026-09-28): tests must be meaningful, not performative, to save usage and avoid cruft. REVIEWER.md: mutation checks become a sample of about 30 mutants on the changed lines; a surviving mutant blocks only with an input in scope where it changes an observable result; fewest tests; flag performative tests; narrow re-reviews. COMMON.md: a Tests section (behavior tests only, no duplicates, proportion, fewest tests on request). STATE: a pruning pass after T07. Measured on main: package 1,610 lines; fast-code tests 2,422; reference 1,259 with 2,633 lines of tests; validation Python 14,365 lines.
 - 10:09 The user allowed up to 55 % this week (from 46 %) to see whether the meaningful-tests rule makes the work more efficient. Resumed: heartbeat refreshed. Priority: #57 round 2, then #55, then T12's PR.
 - 10:10 Started the round-2 review of #57 (both roles, opus) under the new test rules; weekly 46 % at the start, for the efficiency comparison.
+- 10:55 #57 round 2 (new test rules): both REQUEST_CHANGES on one real finding (extreme-scale underflow makes the scan reject a legal knot for sure); round-1 fixes confirmed; 26-mutant samples (24 killed, 2 harmless); one performative test flagged for deletion. Cost about 1 weekly point (46 % to 47 %) against about 3 per round before. Sent to t11-forward.
 
 ## Core-hour ledger
 
