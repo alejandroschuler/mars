@@ -108,6 +108,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:14 #46 round 3 complete: spec APPROVE (old vs new knot_scan identical on 600 random weighted cases) and adversarial APPROVE at 75a8f55. Integrator rebasing #46 onto main (eabac8c); then rebase-check, retarget #47 to main, merge #46.
 - 19:18 #46 re-approved as a pure rebase (d8a55e8) and merged as 955b44c; #47 retargeted to main. Weekly 12 % at 19:45 Sunday; the #47 dual review waits for Monday's allowance. t10-pruning working.
 - 19:22 t06-reference rebased #47 (94825c1, base main, 292 lines), #48 (d1981bb), #49 (f5f9a83); gate B and CI green. #47's dual review waits for Monday's allowance.
+- 19:30 T10 author done: PR #54 (_pruning.py, f0be830, 796 lines, Closes #12): gate B passed, 100 % coverage; pruning_fixed_basis subsets and selected terms equal (RSS 2.4e-15, GCV 2.6e-15); 136 S fits: subsets equal at every size, RSS 1.5e-14 (5.8e-9 with zero weights, which earth keeps as tiny weights); PRUNE-8 coefficients 8.5e-9; mutants 37 of 40 killed with python -B (3 equivalent). API for T12: pruning_pass(B, Y, w, *, penalty, pmethod, nprune) and final_fit(B, Y, selected, w, *, penalty). Reviews of #54 and #47 wait for Monday's allowance (weekly about 13 %).
 
 ## Core-hour ledger
 
