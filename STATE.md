@@ -41,7 +41,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 ## Running agents
 
-- `t11-forward` (opus): #55 round-1 fix (center x, TSS about the centered y, test deletions), then the rebase onto main with only #55's own commits; then T11 stage 2 after #55 merges.
+- `t11-forward` (opus): #55 round-1 fix (center x, TSS about the centered y, test deletions), then the rebase onto main with only #55's own commits; then T11 stage 2 after #55 merges (when you message it for stage 2, remind it of COMMON.md's new lines: no variants of guarded commands, no trial edits in the worktree, and the Tests rules).
 - `t07-conformance` (opus): T07, issue #9, brief `briefs/T07-conformance.md`, from 12:15 Monday.
 - `t15-oracle` (opus): T15, issue #17, brief `briefs/T15-oracle.md`, from 12:15 Monday; PR after #55 merges.
 - `t13-estimators` (opus): T13, issue #15, brief `briefs/T13-estimators.md`, branch stacked on origin/t12-core, from 12:17 Monday; PR after T12 merges.
