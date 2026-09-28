@@ -553,6 +553,22 @@ def test_the_search_keeps_only_legal_knots(monkeypatch):
     assert st_.search(0, set()) == []
 
 
+def test_max_legal_is_inclusive():
+    """FWD-4: a knot whose reduction equals MaxLegal is legal, in the scan's
+    mask and in the explicit check; with no residual, no candidate is left,
+    not even the linear one."""
+    st_ = _two_covariates()
+    best = st_.search(0, set())[0]
+    assert best.kind == _forward.KIND_PAIR
+    st_.max_legal = lambda: best.reduction
+    assert st_.search(0, set())[0] == best
+    reduction = st_.rss[-1] - st_.check(best).rss
+    st_.max_legal = lambda: reduction
+    assert st_.check(best) is not None
+    x = np.arange(12.0)
+    assert _state(x[:, None], np.zeros(12)).search(0, set()) == []
+
+
 def test_the_explicit_check():
     """The rebuild refuses a zero column, a collinear hinge (KNOT-5: the knot
     at a repeated minimum in a pair), a knot above MaxLegal and a reduction
