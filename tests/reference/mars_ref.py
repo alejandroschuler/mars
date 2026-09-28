@@ -16,6 +16,9 @@ How it computes, and how that differs from the fast code:
 - The collinearity ratio [LA-3] is an explicit regression of the centered
   hinge column on the centered current columns.
 - The pruning pass refits every subset that its rules consider [PRUNE-9].
+- The forward pass evaluates every candidate of every visited parent with
+  its explicit columns, and follows the queue, the slots and the stopping
+  rules of the spec one step at a time.
 - Two knot scans are here: a loop that follows KNOT-3 step by step (unit
   weights), and the cumulative-weight scan of KNOT-6, so that each checks
   the other.
@@ -31,8 +34,11 @@ Bracketed IDs such as [GCV-2] cite the rules of the spec. Indices are
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
+import numbers
+from collections.abc import Mapping
 
 import numpy as np
 import scipy.linalg
@@ -253,7 +259,16 @@ def _smallest_from(guess: int, holds) -> int:
     raise AssertionError(f"the guess {guess} is not within a few steps")
 
 
-def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
+def knot_scan(
+    x,
+    active,
+    w,
+    minspan: int,
+    endspan: int,
+    N: float,
+    tau_N: float,
+    distinct: bool = False,
+):
     """The knot list of KNOT-6 (cumulative weight), in scan order, repeats included.
 
     The scan visits u = N, N - 1, ... while u >= E* + 2 - tau_N; visit k
@@ -265,8 +280,10 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
     reaches 0. The state of the scan takes time O(n log n) and memory O(n),
     whatever N is, so the whole call takes time O(n log n + K) and memory
     O(n + K), where K is the length of the returned list (every listing of a
-    knot is kept). The tests check this form against a loop over single
-    visits.
+    knot is kept). With ``distinct=True`` only the first listing of each
+    value is kept, which is ``distinct_knots`` of the list, and the call takes
+    O(n log n) time and O(n) memory. The tests check this form against a loop
+    over single visits.
     """
     x = np.asarray(x, dtype=np.float64)
     active = np.asarray(active, dtype=bool)
@@ -309,7 +326,10 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
         stretch = end - begin
         hit = c0 + L * max(0, -(-(moves + 1 - c0) // L))  # the next knot's move
         if hit <= moves + stretch:
-            knots += [float(t) + 0.0] * ((moves + stretch - hit) // L + 1)
+            if not distinct:
+                knots += [float(t) + 0.0] * ((moves + stretch - hit) // L + 1)
+            elif not knots or knots[-1] != t:
+                knots.append(float(t) + 0.0)
         moves += stretch
     return knots
 
@@ -637,3 +657,442 @@ def prune(
         "grsq": final_grsq,
         "tss": tss,
     }
+
+
+# ---------------------------------------------------------------------------
+# Parameters [CORE-2]
+
+
+def _is_int(value) -> bool:
+    """An int field takes a Python int or a numpy integer, never a bool [CORE-2]."""
+    return isinstance(value, numbers.Integral) and not isinstance(
+        value, (bool, np.bool_)
+    )
+
+
+def _is_real(value) -> bool:
+    """A float field takes any real number type [CORE-2]."""
+    return isinstance(value, numbers.Real)
+
+
+@dataclasses.dataclass(frozen=True)
+class Params:
+    """The fields of ``MarsParams`` with their defaults, checked as CORE-2 says:
+    the constructor raises ValueError, naming the field, for a value outside
+    its range."""
+
+    max_degree: int = 1
+    max_terms: int | None = None
+    penalty: float | None = None
+    thresh: float = 0.001
+    minspan: int | None = None
+    endspan: int | None = None
+    adjust_endspan: float = 2.0
+    auto_linpreds: bool = True
+    fast_k: int = 20
+    fast_beta: float = 1.0
+    pmethod: str = "backward"
+    nprune: int | None = None
+
+    def __post_init__(self):
+        def whole(v, low, optional=False):
+            return (optional and v is None) or (_is_int(v) and v >= low)
+
+        def real(v, low):
+            return _is_real(v) and math.isfinite(v) and v >= low
+
+        d = self.penalty
+        rules = [
+            ("max_degree", whole(self.max_degree, 1), "an int >= 1"),
+            ("max_terms", whole(self.max_terms, 1, True), "None or an int >= 1"),
+            (
+                "penalty",
+                d is None or real(d, 0) or (_is_real(d) and d == -1),
+                "None, -1 or a finite float >= 0",
+            ),
+            ("thresh", real(self.thresh, 0), "a finite float >= 0"),
+            ("minspan", whole(self.minspan, 1, True), "None or an int >= 1"),
+            ("endspan", whole(self.endspan, 1, True), "None or an int >= 1"),
+            ("adjust_endspan", real(self.adjust_endspan, 0), "a finite float >= 0"),
+            (
+                "auto_linpreds",
+                isinstance(self.auto_linpreds, (bool, np.bool_)),
+                "a bool",
+            ),
+            ("fast_k", whole(self.fast_k, 0), "an int >= 0"),
+            ("fast_beta", real(self.fast_beta, 0), "a finite float >= 0"),
+            (
+                "pmethod",
+                isinstance(self.pmethod, str) and self.pmethod in ("backward", "none"),
+                "'backward' or 'none'",
+            ),
+            ("nprune", whole(self.nprune, 1, True), "None or an int >= 1"),
+        ]
+        for name, ok, allowed in rules:
+            if not ok:
+                raise ValueError(
+                    f"{name} must be {allowed}, not {getattr(self, name)!r}"
+                )
+
+    def resolved_max_terms(self, p: int) -> int:
+        """M_max: the given max_terms, or the default of LIMIT-1."""
+        return default_max_terms(p) if self.max_terms is None else int(self.max_terms)
+
+    def resolved_penalty(self) -> float:
+        """d: the given penalty, or the default of GCV-4."""
+        if self.penalty is None:
+            return default_penalty(self.max_degree)
+        return float(self.penalty)
+
+
+def as_params(params=None) -> Params:
+    """``params`` as Params: None (all defaults), a Params, a mapping of field
+    names, or an object with the fields as attributes (a ``MarsParams``)."""
+    if params is None:
+        return Params()
+    if isinstance(params, Params):
+        return params
+    names = [field.name for field in dataclasses.fields(Params)]
+    if isinstance(params, Mapping):
+        unknown = sorted(set(params) - set(names))
+        if unknown:
+            raise ValueError(f"unknown parameters: {unknown}")
+        return Params(**params)
+    missing = [name for name in names if not hasattr(params, name)]
+    if missing:
+        raise ValueError(f"params has no field {missing}")
+    return Params(**{name: getattr(params, name) for name in names})
+
+
+# ---------------------------------------------------------------------------
+# The forward pass [FWD-1 to FWD-11, STOP-1 to STOP-6, FAST-1 to FAST-6]
+
+# Termination codes [CORE-4]
+DEGENERATE, NO_ROOM, GRSQ_NEG_INF, GRSQ_LOW = 0, 1, 2, 3
+RSQ_CHANGE_SMALL, RSQ_HIGH, NO_GAIN, TERM_LIMIT = 4, 5, 6, 7
+
+# Candidate kinds [CORE-3]
+NO_KIND, PAIR, SINGLE, LINEAR = 0, 1, 2, 3
+
+
+@dataclasses.dataclass(frozen=True)
+class Candidate:
+    """One candidate of a forward step [FWD-3]; two candidates differ when they
+    differ in the parent, the variable, the kind or the knot [CORE-3]."""
+
+    parent: int  # the forward index of the parent term
+    variable: int
+    kind: int  # PAIR, SINGLE or LINEAR
+    knot: float  # NaN for a linear candidate
+    rss: float  # the RSS of LA-2
+
+
+def collinearity_tol(steps_taken: int) -> float:
+    """tau of LA-3: 0.01 while the pass has taken at most 6 steps (so in steps
+    1 to 7), and 1e-5 from step 8 on."""
+    return 0.01 if steps_taken <= 6 else 1e-5
+
+
+def max_legal(rss_path) -> float:
+    """MaxLegal_s = min(1.01 RSS_s, 10 Delta_s), and 1.01 RSS_0 at the first
+    step [FWD-4]; ``rss_path`` is RSS_0, ..., RSS_s."""
+    if len(rss_path) == 1:
+        return 1.01 * rss_path[0]
+    return min(1.01 * rss_path[-1], 10.0 * (rss_path[-2] - rss_path[-1]))
+
+
+def is_legal(kind: int, reduction: float, limit: float) -> bool:
+    """A knot candidate is legal when 0 < reduction <= MaxLegal_s, a linear
+    candidate when its reduction is positive, whatever its size [FWD-4]."""
+    if kind == LINEAR:
+        return reduction > 0
+    return 0 < reduction <= limit
+
+
+def queue_value(candidates, searchable: bool, rss_s: float, limit: float) -> float:
+    """lambda_e of a searched entry [FAST-5]: the largest legal reduction among
+    its candidates, linear candidates of any size included; 0 when none is
+    legal, and -1 when no covariate could be searched."""
+    if not searchable:
+        return -1.0
+    return max(
+        (rss_s - c.rss for c in candidates if is_legal(c.kind, rss_s - c.rss, limit)),
+        default=0.0,
+    )
+
+
+def candidate_key(c) -> tuple:
+    """What tells two candidates apart [CORE-3]: the parent, the variable, the
+    kind and the knot, with None as the knot of a linear candidate."""
+    return (c.parent, c.variable, c.kind, None if c.kind == LINEAR else c.knot)
+
+
+def covariate_variances(X, w, N: float) -> list[float]:
+    """sigma_v^2 of every covariate, with divisor N [Notation, LA-7]."""
+    return [weighted_variance(X[:, j], w, N) for j in range(X.shape[1])]
+
+
+def queue_table(entries, steps_taken: int, fast_beta: float) -> list[int]:
+    """The table of FAST-2: the entry numbers (1-based), in table order.
+
+    ``entries[e - 1]`` is (lambda_e, kappa_e). rank_e is the 0-based place of
+    entry e by lambda, largest first, equal values in increasing entry
+    number; AgedRank_e = rank_e + fast_beta (kappa_prev - kappa_e); the table
+    sorts by AgedRank, smallest first, equal values in increasing rank.
+    Before the first step it holds the intercept alone.
+    """
+    if steps_taken == 0:
+        return [1]
+    kappa_prev = 2 * steps_taken
+    by_value = sorted(range(1, len(entries) + 1), key=lambda e: (-entries[e - 1][0], e))
+    rank = {e: r for r, e in enumerate(by_value)}
+    aged = {e: rank[e] + fast_beta * (kappa_prev - entries[e - 1][1]) for e in by_value}
+    return sorted(by_value, key=lambda e: (aged[e], rank[e]))
+
+
+def window(table, fast_k: int) -> list[int]:
+    """The rows that a step visits [FAST-3]: the first nu = max(3, fast_k), or
+    every row when fast_k = 0 or nu >= M."""
+    if fast_k == 0:
+        return list(table)
+    return list(table[: max(3, fast_k)])
+
+
+def _parent_candidates(
+    k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
+):
+    """The candidates of parent term k (column k of B), in the order of FWD-5,
+    and whether some covariate could be searched for it [FWD-2, FWD-3].
+
+    For each covariate that the parent lacks, in increasing order: the kind
+    of the search by the pymars rule of LA-7; in a pair search the linear
+    candidate, with RSS(B + {b x}); then the knots of KNOT-6 from the
+    largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
+    [LA-2], where G is B, and B with b x in a pair search. Each hinge column
+    is built and projected on G explicitly; its RSS is that of the residual.
+    Cost: up to n knots per covariate, each projected on up to M + 1
+    columns, so O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
+    """
+    p = X.shape[1]
+    b = B[:, k]
+    own = [j for j in range(p) if parent_row[j] != 0]
+    covariates = [j for j in range(p) if parent_row[j] == 0]
+    if not covariates:
+        return [], False
+    active = b > 0  # [KNOT-1]
+    spans = None
+    if active.any():
+        Nb = snap(weight_sum(w[active]), tau_N)
+        spans = search_spans(
+            p,
+            len(own),
+            Nb,
+            N,
+            tau_N,
+            params.minspan,
+            params.endspan,
+            params.adjust_endspan,
+        )
+    out = []
+    for j in covariates:
+        x = X[:, j]
+        bx = b * x
+        V = [*own, j]
+        pair = all(sigma2[v] > 0 for v in V) and (
+            P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
+        )
+        if pair:
+            P_G = Projector(np.column_stack([B, bx]), w)
+            e_G = P_G.residual(Y)
+            out.append(Candidate(k, j, LINEAR, math.nan, float(np.sum(e_G**2))))
+        else:
+            P_G, e_G = P_B, e_B
+        if spans is None:
+            continue
+        knots = knot_scan(x, active, w, *spans, N, tau_N, distinct=True)
+        if not knots:
+            continue
+        t = np.array(knots)
+        H = b[:, None] * np.maximum(x[:, None] - t[None, :], 0.0)
+        H_perp = P_G.residual(H)
+        size = np.sum(H_perp**2, axis=0)
+        spread = np.sum(P_G.scaled(H) ** 2, axis=0)
+        constant = np.all(H[0] == H, axis=0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            accept = ~constant & (size / spread >= tau)  # [LA-3]
+        for i in np.flatnonzero(accept):
+            h = H_perp[:, i]
+            residual = e_G - np.outer(h, (h @ e_G) / size[i])
+            kind = PAIR if pair else SINGLE
+            out.append(Candidate(k, j, kind, float(t[i]), float(np.sum(residual**2))))
+    return out, True
+
+
+def _first_best(candidates, rss_s):
+    """The candidate with the largest reduction; equal reductions go to the one
+    found first [FWD-5]."""
+    best = None
+    for c in candidates:
+        if best is None or rss_s - c.rss > rss_s - best.rss:
+            best = c
+    return best
+
+
+def _new_terms(c, X, columns, dirs, cuts, auto_linpreds):
+    """The terms that candidate c adds, in order, as (dirs row, cuts row,
+    column) [FWD-6, TERM-2, TERM-6]."""
+    b, x = columns[c.parent], X[:, c.variable]
+
+    def term(code, knot):
+        row, cut = dirs[c.parent].copy(), cuts[c.parent].copy()
+        row[c.variable] = code
+        cut[c.variable] = 0.0 if code == 2 else knot
+        return row, cut, b * factor(code, x, knot)
+
+    if c.kind == PAIR:
+        return [term(1, c.knot), term(-1, c.knot)]
+    if c.kind == SINGLE:
+        return [term(1, c.knot)]
+    if auto_linpreds:
+        return [term(2, 0.0)]
+    return [term(1, float(x.min()))]
+
+
+def _candidate_log(log) -> dict:
+    """The CandidateLog of CORE-3 from (chosen, second) pairs, one per step."""
+
+    def field(name, none, dtype):
+        return np.array(
+            [none if s is None else getattr(s, name) for _, s in log], dtype
+        )
+
+    return {
+        "best_rss": np.array([c.rss for c, _ in log], dtype=np.float64),
+        "second_rss": field("rss", math.inf, np.float64),
+        "second_parent": field("parent", -1, np.int64),
+        "second_variable": field("variable", -1, np.int64),
+        "second_knot": np.array(
+            [math.nan if s is None or s.kind == LINEAR else s.knot for _, s in log],
+            dtype=np.float64,
+        ),
+        "second_kind": field("kind", NO_KIND, np.int8),
+    }
+
+
+def forward_pass(
+    X, Y, w, params=None, *, N, tau_N, tss, record_candidates=False, trace=None
+):
+    """The forward pass of a fit that is not degenerate [FWD-1 to FWD-11], with
+    its stopping rules [STOP-1 to STOP-6] and the queue [FAST-1 to FAST-6].
+
+    X is n x p, Y n x K and w the positive weights; N and tau_N are those of
+    W-4, and tss is the RSS of the intercept alone, in the units of Y.
+    Returns (record, B): the fields of ForwardRecord [CORE-3] as a dict, and
+    the n x M_a matrix of the columns of the terms. When ``trace`` is a
+    list, each step appends a dict with its queue table, the visited
+    entries, the searched parents (forward indices), the queue entries after
+    the search, and the chosen candidate. Cost: a step searches up to M
+    parents, so it takes O(p n^2 M^2) time at worst, and O(n (p + M) + n^2)
+    memory.
+    """
+    params = as_params(params)
+    X = np.asarray(X, dtype=np.float64)
+    n, p = X.shape
+    Y = np.asarray(Y, dtype=np.float64).reshape(n, -1)
+    w = np.asarray(w, dtype=np.float64)
+    max_terms = params.resolved_max_terms(p)
+    penalty = params.resolved_penalty()
+    sigma2 = covariate_variances(X, w, N)
+    columns, dirs, cuts = [np.ones(n)], [np.zeros(p, dtype=np.int8)], [np.zeros(p)]
+    parent, step, rss_path = [-1], [0], [float(tss)]
+    slots = {1: 0}  # slot -> forward index of its term [FWD-9]
+    entries = [[math.inf, 0]]  # entry e at index e - 1: [lambda_e, kappa_e]
+    log = []
+    s = 0
+    while True:
+        kappa = 2 * (s + 1)
+        if 1 + 2 * (s + 1) > max_terms:  # [STOP-1]
+            termination = NO_ROOM if s == 0 else TERM_LIMIT
+            break
+        B = np.column_stack(columns)
+        P_B = Projector(B, w)
+        e_B = P_B.residual(Y)
+        rss_s = rss_path[-1]
+        limit = max_legal(rss_path)
+        tau = collinearity_tol(s)
+        table = queue_table(entries, s, params.fast_beta)
+        visited = window(table, params.fast_k)
+        found, searched = [], []
+        for e in visited:
+            k = slots.get(e)
+            if k is None or term_degree(dirs[k]) >= params.max_degree:
+                continue  # skipped; the entry keeps its values [FAST-4]
+            cands, searchable = _parent_candidates(
+                k, dirs[k], X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
+            )
+            entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
+            found.extend(cands)
+            searched.append(k)
+        legal = [c for c in found if is_legal(c.kind, rss_s - c.rss, limit)]
+        chosen = _first_best(legal, rss_s)
+        if trace is not None:
+            trace.append(
+                {
+                    "step": s + 1,
+                    "table": table,
+                    "visited": visited,
+                    "searched": searched,
+                    "entries": [tuple(v) for v in entries],
+                    "chosen": chosen,
+                }
+            )
+        # The stopping rules, in the order STOP-3, STOP-4, STOP-2, STOP-5. A
+        # step without a legal candidate counts as one term and no gain.
+        M = len(columns)
+        if chosen is None:
+            rss_new, M_new = rss_s, M + 1
+        else:
+            rss_new, M_new = chosen.rss, M + (2 if chosen.kind == PAIR else 1)
+        rsq_gain = rsq(rss_new, tss) - rsq(rss_s, tss)
+        grsq_new = grsq(rss_new, M_new, tss, penalty, N, tau_N)
+        if params.thresh > 0 and grsq_new < -10:  # [STOP-3]
+            termination = GRSQ_NEG_INF if grsq_new == -math.inf else GRSQ_LOW
+            break
+        if rsq_gain < params.thresh:  # [STOP-4]
+            termination = RSQ_CHANGE_SMALL
+            break
+        if chosen is None:  # [STOP-2]
+            termination = NO_GAIN
+            break
+        new = _new_terms(chosen, X, columns, dirs, cuts, params.auto_linpreds)
+        for i, (row, cut, column) in enumerate(new):  # [FWD-9, FAST-1, TERM-6]
+            slots[kappa + i] = len(columns)
+            columns.append(column)
+            dirs.append(row)
+            cuts.append(cut)
+            parent.append(chosen.parent)
+            step.append(s + 1)
+            entries.append([math.inf, kappa])
+        s += 1
+        rss_path.append(chosen.rss)
+        if record_candidates:
+            others = [c for c in legal if candidate_key(c) != candidate_key(chosen)]
+            log.append((chosen, _first_best(others, rss_s)))
+        floor = 1e-10 * tss / (N - 1)
+        if rsq(chosen.rss, tss) >= 1 - params.thresh or chosen.rss < floor:
+            termination = RSQ_HIGH  # [STOP-5]
+            break
+    B = np.column_stack(columns)
+    dropped = dependent_columns(B, w)  # [FWD-11]
+    record = {
+        "dirs": np.array(dirs, dtype=np.int8).reshape(-1, p),
+        "cuts": np.array(cuts, dtype=np.float64).reshape(-1, p),
+        "kept": np.flatnonzero(~dropped).astype(np.int64),
+        "dropped": np.flatnonzero(dropped).astype(np.int64),
+        "parent": np.array(parent, dtype=np.int64),
+        "step": np.array(step, dtype=np.int64),
+        "rss": np.array(rss_path, dtype=np.float64),
+        "termination": int(termination),
+        "candidates": _candidate_log(log) if record_candidates else None,
+    }
+    return record, B
