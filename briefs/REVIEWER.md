@@ -23,7 +23,11 @@ You review one pull request in `alejandroschuler/mars` that you did not write. R
 - Scope: matches the brief; touches only the files the brief names; at most about 800 changed lines that are not generated.
 - Spec: each rule cites a spec section, and the spec cites its source.
 - Tests: they fail without the change and cover the edge cases; no new skip or expected failure without an issue; tolerances from the plan's tolerance table.
-- Tests really run: gate B and CI collect the new tests (validation tests are in `testpaths`; tests that need R or the legacy venv carry the marker `external` and run in gate C). Try a few one-token mutations of the code under test (a sign, a constant, a comparison, an index); a surviving mutation of a formula or a rule is a blocking finding.
+- Tests really run: gate B and CI collect the new tests (validation tests are in `testpaths`; tests that need R or the legacy venv carry the marker `external` and run in gate C).
+- Tests are meaningful, not performative (the user's rule, 2026-09-28). A test checks behavior that the spec defines or that a document reports: terms, knots, RSS, GCV, coefficients, predictions, the records the harness compares, published counts. It does not restate the code, assert private details, or duplicate existing coverage. Flag redundant, brittle or performative tests as non-blocking findings, and say which to delete.
+- Mutation checks are a sample, not a campaign: at most about 30 one-token mutants (a sign, a constant, a comparison, an index), on the changed lines, chosen for the rules at risk. A surviving mutant is blocking only when you show an input in the spec's scope on which it changes such an observable result; give that input. Otherwise it is a non-blocking note. Equivalent mutants and mutants that change only intermediate values are not findings.
+- Ask for the fewest tests that pin the rules: one test that pins several rules through an observable comparison (an earth fixture, the reference against the fast code, a hand case with a known answer) is better than one test per mutant.
+- Wrong results matter most: spend most of the review on inputs where the code gives a wrong answer, and less on coverage.
 - Numerics: float64; inputs never changed in place; no absolute epsilons; fixed tie rules; the complexity stated; memory O(n·(p + nk)).
 - scikit-learn: no work in `__init__`; parameters never changed; `validate_data` used; no private scikit-learn API; tags set.
 - The clean room, the docs, no stray files, and a gate B log for the current head.
@@ -31,4 +35,4 @@ You review one pull request in `alejandroschuler/mars` that you did not write. R
 
 ## Re-review
 
-If the executor sends you the author's changes, review only the new head: repeat steps 2 to 7 with the new SHA, and say which earlier findings are fixed.
+If the executor sends you the author's changes, review only the new head: repeat steps 2 to 7 with the new SHA, and say which earlier findings are fixed. A re-review is narrow: check the earlier findings and any new logic, and start no new mutation sample unless the change added new logic.

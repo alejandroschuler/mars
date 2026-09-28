@@ -48,9 +48,18 @@ Simulations, benchmarks and fixture runs that take more than about 10 minutes ru
 
 All agents of this session share one scratchpad folder. Put your scratch files in your own subfolder, named after you (for example `<scratchpad>/rev-47-adversarial/`), so that no agent overwrites another agent's files.
 
+## Tests
+
+Tests must be meaningful, not performative (the user's rule, 2026-09-28). They cost usage to write and review, and every line stays in the repository.
+
+- Each test checks behavior that the spec defines or that a document reports, and its name or docstring says which rule. Tests of private helpers only when no public behavior can pin the rule.
+- No duplicates: extend an existing parametrized test before you add a new one. Prefer one test that pins several rules through an observable comparison (earth fixtures, the reference against the fast code, a hand case with a known answer) over one test per rule or per mutant.
+- Keep tests in proportion. If a pull request adds more than about twice as many test lines as code lines, its body says why.
+- When a reviewer asks for tests, add the fewest that pin the rules the reviewer names; do not add a test for each surviving mutant.
+
 ## Mutation checks
 
-When you check tests with one-token mutations, run Python with `-B` (or `PYTHONDONTWRITEBYTECODE=1`) and use a fresh copy of the code for each mutant, without any `__pycache__` folder. Otherwise a cached bytecode file of an earlier mutant can load, and a kill rate can be wrong.
+Mutation checks are a sample (at most about 30 mutants, on the changed lines), not a campaign. When you check tests with one-token mutations, run Python with `-B` (or `PYTHONDONTWRITEBYTECODE=1`) and use a fresh copy of the code for each mutant, without any `__pycache__` folder. Otherwise a cached bytecode file of an earlier mutant can load, and a kill rate can be wrong.
 
 ## Gates
 
