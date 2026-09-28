@@ -246,8 +246,11 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
     visits of a stretch are counted at once (KNOT-7): the counter moves in
     every visit of a stretch or in none, and a knot is appended at the
     c0-th move and at every L-th move after it, where the counter of KNOT-3
-    reaches 0. Time O(n log n) and memory O(n), whatever N is. The tests
-    check this form against a loop over single visits.
+    reaches 0. The state of the scan takes time O(n log n) and memory O(n),
+    whatever N is, so the whole call takes time O(n log n + K) and memory
+    O(n + K), where K is the length of the returned list (every listing of a
+    knot is kept). The tests check this form against a loop over single
+    visits.
     """
     x = np.asarray(x, dtype=np.float64)
     active = np.asarray(active, dtype=bool)

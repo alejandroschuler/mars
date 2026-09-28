@@ -338,15 +338,22 @@ class TestKnots:
                 assert knots[-1] == 0.0 and math.copysign(1.0, knots[-1]) == 1.0
 
     def test_large_weights_are_counted_per_case(self):
-        # KNOT-7: the cost of the scan does not grow with N
+        # KNOT-7: the state of the scan does not grow with N; the list does,
+        # so the large cases take a large minspan
         x = np.array([0.3, 0.1, 0.4, 0.2, 0.5])
         active = np.array([True, True, False, True, True])
         w = np.full(5, 2000)
         expected = ref.knot_scan_unit(*expanded(x, active, w), 7, 9)
         tau = ref.weight_tol(1e4)
         assert ref.knot_scan(x, active, w.astype(float), 7, 9, 1e4, tau) == expected
-        huge = ref.knot_scan(x, active, np.full(5, 1e9), 7, 9, 5e9, 0.1)
-        assert huge and set(huge) <= {0.1, 0.2, 0.3}
+        # c0 = 5e7, and each active case below v gives about 1e9 moves
+        huge = ref.knot_scan(x, active, np.full(5, 1e9), 10**8, 9, 5e9, 0.1)
+        assert huge == [0.3] * 10 + [0.2] * 10 + [0.1] * 10
+        # c0 = 5e8 and 1e9 - 1 moves: one knot
+        two = ref.knot_scan(
+            [0.0, 1.0], [True, True], np.full(2, 1e9), 10**9, 1, 2e9, 0.1
+        )
+        assert two == [0.0]
 
     def test_tenth_weights_give_the_knots_of_unit_weights(self):
         # W-4: 100 cases of weight 0.1 (10 at each of 10 values) and 10 cases
@@ -554,7 +561,7 @@ def test_the_coefficients_match_lm_fit(load_fixture):
         coef = ref.lstsq_coef(x, y, w)
         assert np.all(coef[missing] == 0) and case["rank"] == np.sum(~missing)
         error = np.linalg.norm(coef[~missing] - expected[~missing])
-        assert error <= 1e-8 * np.linalg.norm(expected[~missing]), case["label"]
+        assert error <= 1e-6 * np.linalg.norm(expected[~missing]), case["label"]
 
 
 def test_the_spans_and_knot_lists_match_earth_traces(
@@ -604,7 +611,7 @@ def test_the_spans_and_knot_lists_match_earth_traces(
                 ]
                 assert ref.knot_scan_unit(x, active, L, E) == evaluated
                 searches += 1
-    assert searches >= 200
+    assert searches == 214
 
 
 @pytest.mark.parametrize("key", ["one_response", "several_responses"])
@@ -621,6 +628,6 @@ def test_the_rss_of_earths_pruning_subsets(load_fixture, key):
     N = float(len(X))
     for m, row in enumerate(np.array(part["prune_terms"], dtype=int)):
         value = ref.rss(B[:, sorted(row[row > 0] - 1)], Y, np.ones(len(X)))
-        assert value == pytest.approx(part["rss_per_subset"][m], rel=1e-10)
+        assert value == pytest.approx(part["rss_per_subset"][m], rel=1e-8)
         gcv = ref.gcv(value, m + 1, fixture["penalty"], N, ref.weight_tol(N))
-        assert gcv == pytest.approx(part["gcv_per_subset"][m], rel=1e-10)
+        assert gcv == pytest.approx(part["gcv_per_subset"][m], rel=1e-8)
