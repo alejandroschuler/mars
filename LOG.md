@@ -135,6 +135,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:27 01:27 check: 5-hour 97 %, weekly 29 %; the limit is near. Resume list written at the top of Next actions. New PR #58 (cc02cc3).
 - 03:23 After the 5-hour reset (limit hit about 01:30; weekly 30 %, 5-hour 1 %; next reset 08:20). The first #48 review lost its adversarial reviewer to the limit (no post); the spec review posted REQUEST_CHANGES: code correct against earth (all matched and defaults fits of S01, S03, S04, S05; 197 of 200 S15; 44 Fast MARS fits), but 33 surviving mutants; recipes (a) to (i). Sent to t06-reference; a new adversarial review of 5756c66 started (wf_0b66106a-7f3). Dual review of #57 started (wf_e0ddfd90-495). rebase-check-56 started. t18-legacy resumed. compare.py _is_mirror_pair bug (spec review item 7) added to the T07 brief.
 - 03:25 Merged #56 (TOOLS-1) as 1918863 after rebase-check-56's re-approval (range-diff all '='). <main> fast-forwarded, so merge_pr.sh now refuses while an open PR is based on the head branch.
+- 03:39 #48 spec-round fixes at 8a56ea3 (the 33 surviving mutants and 2 more now fail; earth step-by-step self-check on 18 fixtures always and 70 in a slow test; helpers queue_value, candidate_key, covariate_variances; gate B PASS; CI 12/12). Waiting for the adversarial review of 5756c66.
 
 ## Core-hour ledger
 
