@@ -1,10 +1,27 @@
 """The core of pymars: the parameters, the fit record and ``fit_mars``.
 
-Spec: ``docs/algorithm.md``, "Core API" (CORE-1 to CORE-7). This part holds
-``MarsParams`` (CORE-2), the records ``MarsFit``, ``ForwardRecord`` and
-``PruningRecord`` (CORE-3), with ``_forward``'s ``CandidateLog`` (CORE-3) and
-``Termination`` (CORE-4), and their dict form (CORE-5). ``fit_mars``
-(CORE-1) comes in part 2 of T12 (issue #14).
+Spec: ``docs/algorithm.md``, "Core API" (CORE-1 to CORE-7), and the rules that
+the core applies itself: W-3 and W-4 (the zero-weight drop and N), LIMIT-1 and
+GCV-4 (the resolved ``max_terms`` and ``penalty``), EDGE-1, EDGE-6 and GCV-7
+(degenerate fits and the power of 2 on Y), FWD-11 (the kept terms), PRUNE-5 to
+PRUNE-8 (``nprune``, ``pmethod`` and the final fit) and RESP-1.
+
+Who does what in ``fit_mars``:
+
+- The core checks the arrays, drops the rows with zero weight (W-3), forms N
+  and τ_N (W-4), resolves ``max_terms`` and ``penalty``, and builds the
+  degenerate fit itself, since the forward pass does not run for it (EDGE-1).
+- ``_forward.forward_pass`` is called through the module attribute, so that a
+  test can replace it. It gets the original Y and the resolved values; it
+  scales Y by its own power of 2 (EDGE-6) and centers it (FWD-10), so the core
+  does neither for it, and its record is on the original scale (LA-6). It
+  also picks the kept terms (FWD-11).
+- ``_pruning.pruning_pass`` and ``_pruning.final_fit`` get the basis of the
+  kept terms and Y times s = 2^j, the power of 2 of EDGE-6, which ``_pruning``
+  leaves to its caller. The core multiplies their sums of squares and GCVs by
+  1/s² and their coefficients by 1/s, which changes no bit unless a value
+  leaves the normal range, and keeps their RSq and GRSq, which come from the
+  scaled values. Pruning index m is forward index ``kept[m]``.
 
 Records. ``MarsFit``, ``ForwardRecord`` and ``PruningRecord`` are frozen
 dataclasses (CORE-3). ``ForwardRecord`` is a frozen dataclass made from
@@ -15,7 +32,8 @@ constructors check the dtypes and shapes of CORE-3 and store new read-only
 arrays, so a fit shares no memory with its inputs. ``to_dict`` and
 ``from_dict`` give the dict form of CORE-5, which the reference returns.
 
-Numerics: float64 throughout; no function writes into its inputs.
+Numerics: float64 throughout; no function writes into its inputs; no absolute
+epsilon; the tie rules are those of ``_forward`` and ``_pruning``.
 """
 
 from __future__ import annotations
@@ -29,7 +47,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from pymars import _pruning
+from pymars import _forward, _gcv, _pruning, _terms
 from pymars._forward import CandidateLog, Termination
 
 __all__ = [
@@ -39,6 +57,7 @@ __all__ = [
     "MarsParams",
     "PruningRecord",
     "Termination",
+    "fit_mars",
 ]
 
 FloatArray = npt.NDArray[np.float64]
@@ -60,6 +79,20 @@ _PARAMS: dict[str, tuple[str, float | None, bool]] = {
     "pmethod": ("str", None, False),
     "nprune": ("int", 1, True),
 }
+#: The fields that go to the forward pass as they are (``max_terms`` and
+#: ``penalty`` go resolved).
+_FORWARD_PARAMS = (
+    "max_degree",
+    "thresh",
+    "minspan",
+    "endspan",
+    "adjust_endspan",
+    "auto_linpreds",
+    "fast_k",
+    "fast_beta",
+)
+#: EDGE-6: the scaled TSS must be at least the smallest positive normal float64.
+_TINY = float(np.finfo(np.float64).tiny)
 
 
 def _param(name: str, value: Any) -> Any:
@@ -380,3 +413,150 @@ def _plain(value: Any) -> Any:
             f.name: _plain(getattr(value, f.name)) for f in dataclasses.fields(value)
         }
     return value
+
+
+def _cases(
+    X: npt.ArrayLike, Y: npt.ArrayLike, w: npt.ArrayLike | None
+) -> tuple[FloatArray, FloatArray, FloatArray | None]:
+    """Check X (n, p), Y (n, K) or (n,) and w (n,) or None, and drop the rows
+    with zero weight (W-3). The inputs are not copied unless rows are dropped
+    or a dtype changes, and never written to. Complexity: O(n·(p + K))."""
+    X = np.asarray(X, dtype=np.float64)
+    Y = np.asarray(Y, dtype=np.float64)
+    Y = Y[:, None] if Y.ndim == 1 else Y
+    if X.ndim != 2 or Y.ndim != 2 or len(X) != len(Y) or 0 in (*X.shape, *Y.shape):
+        raise ValueError(f"X (n, p) and Y (n, K) do not match: {X.shape}, {Y.shape}")
+    if not (np.isfinite(X).all() and np.isfinite(Y).all()):
+        raise ValueError("X and Y must be finite")
+    if w is None:
+        return X, Y, None
+    w = np.asarray(w, dtype=np.float64)
+    if w.shape != (len(X),) or not (np.isfinite(w).all() and (w >= 0.0).all()):
+        raise ValueError(f"w must be finite and at least 0, with shape ({len(X)},)")
+    keep = w > 0.0
+    if not keep.any():
+        raise ValueError("every weight is zero; the weights need a positive sum")
+    return (X, Y, w) if keep.all() else (X[keep], Y[keep], w[keep])
+
+
+def _intercept_record(p: int, tss: float, record: bool) -> ForwardRecord:
+    """The forward record of a degenerate fit: the intercept alone, rss [TSS],
+    code ``DEGENERATE`` and an empty log when one is asked for (EDGE-1)."""
+    dirs, cuts = _terms.intercept_terms(p)
+    none, zero = np.zeros(0, dtype=np.int64), np.zeros(1, dtype=np.int64)
+    empty = np.zeros(0)
+    log = CandidateLog(empty, empty, none, none, empty, np.zeros(0, dtype=np.int8))
+    return ForwardRecord(
+        dirs,
+        cuts,
+        zero,
+        none,
+        np.array([-1]),
+        zero,
+        np.array([tss]),
+        Termination.DEGENERATE,
+        log if record else None,
+    )
+
+
+def fit_mars(
+    X: npt.ArrayLike,
+    Y: npt.ArrayLike,
+    w: npt.ArrayLike | None,
+    params: MarsParams,
+    *,
+    record_candidates: bool = False,
+) -> MarsFit:
+    """Fit a MARS model (CORE-1): the forward pass, the pruning pass and the
+    final weighted least squares.
+
+    X (n, p) and Y (n, K), or (n,) for K = 1, are finite float64 arrays; w is
+    (n,), finite and ≥ 0 with a positive sum, or None for w_i = 1 exactly
+    (W-5). The estimators check the data first (ERR-1); here bad shapes,
+    nonfinite values and weights that are all 0 raise ValueError. The steps:
+
+    1. drop the rows with zero weight (W-3); N = Σw by ``math.fsum``, snapped
+       (W-4), is ``n_eff``;
+    2. resolve ``max_terms`` (LIMIT-1) and ``penalty`` (GCV-4);
+    3. j with D·2^j ∈ [1, 2) for D = max |Y| (EDGE-6); if some response is not
+       constant and the TSS of Y·2^j is not a positive normal float64, raise
+       ValueError (the scale of y or of the weights is out of range);
+    4. a degenerate fit (N ≤ 1 or every response constant, EDGE-1, GCV-7) is
+       the intercept alone, without the forward pass, with code
+       ``DEGENERATE``; otherwise ``_forward.forward_pass`` gives the forward
+       record (module docstring);
+    5. the pruning pass on the kept terms (FWD-11, PRUNE-2), with ``pmethod``
+       and ``nprune`` (PRUNE-5 to PRUNE-7), and the final fit of the selected
+       terms (PRUNE-8), both on Y·2^j and scaled back; ``selected`` is in
+       forward indices, ``kept[m]`` for pruning index m.
+
+    The function is pure: it never writes into its inputs, and its output
+    depends on the order of the rows only at near-ties. ``record_candidates``
+    asks the forward pass for its candidate log (FWD-8). Complexity: the
+    forward pass (CORE-7), plus O(n·(p + K)) for the checks and the scaling,
+    O(n·M_f·max_degree) for the basis of the kept terms, and the pruning pass
+    and the final fit, O(n·M_f·(M_f + K) + M_f³·(M_f + K)) (PRUNE-9); memory
+    O(n·(p + M_max + K)).
+    """
+    if not isinstance(params, MarsParams):
+        raise TypeError(f"params must be a MarsParams, not {type(params).__name__}")
+    X, Y, w = _cases(X, Y, w)
+    n, p = X.shape
+    N, _ = _gcv.total_weight(n, w)
+    max_terms = params.max_terms
+    max_terms = _gcv.default_max_terms(p) if max_terms is None else max_terms
+    penalty = params.penalty
+    penalty = _gcv.default_penalty(params.max_degree) if penalty is None else penalty
+    D = float(np.max(np.abs(Y)))
+    j = 0 if D == 0.0 else 1 - math.frexp(D)[1]
+    Ys = np.ldexp(Y, j)
+    tss = _gcv.tss(Ys, w)
+    if not np.all(Y[0] == Y) and not (math.isfinite(tss) and tss >= _TINY):
+        raise ValueError(
+            "the scale of y or of the weights is out of range: the total sum of "
+            f"squares of y·2^{j} is {tss}, not a positive normal float64 (EDGE-6)"
+        )
+    if _gcv.is_degenerate(Y, N):
+        forward = _intercept_record(p, float(np.ldexp(tss, -2 * j)), record_candidates)
+    else:
+        kw = {name: getattr(params, name) for name in _FORWARD_PARAMS}
+        fp = _forward.forward_pass(
+            X,
+            Y,
+            w,
+            **kw,
+            max_terms=max_terms,
+            penalty=penalty,
+            record_candidates=record_candidates,
+        )
+        forward = ForwardRecord(
+            **{f.name: getattr(fp, f.name) for f in dataclasses.fields(ForwardRecord)}
+        )
+    kept = forward.kept
+    B = _terms.basis_matrix(X, forward.dirs[kept], forward.cuts[kept])
+    pruned = _pruning.pruning_pass(
+        B, Ys, w, penalty=penalty, pmethod=params.pmethod, nprune=params.nprune
+    )
+    final = _pruning.final_fit(B, Ys, pruned.selected, w, penalty=penalty)
+    selected = kept[pruned.selected]
+    return MarsFit(
+        dirs=forward.dirs[selected],
+        cuts=forward.cuts[selected],
+        coef=np.ldexp(final.coef, -j),
+        selected=selected,
+        rss=float(np.ldexp(final.rss, -2 * j)),
+        gcv=float(np.ldexp(final.gcv, -2 * j)),
+        rsq=final.rsq,
+        grsq=final.grsq,
+        n_eff=N,
+        max_terms=max_terms,
+        penalty=penalty,
+        forward=forward,
+        pruning=PruningRecord(
+            removed=pruned.removed,
+            rss_per_size=np.ldexp(pruned.rss_per_size, -2 * j),
+            gcv_per_size=np.ldexp(pruned.gcv_per_size, -2 * j),
+            subsets=pruned.subsets,
+            selected_size=pruned.selected_size,
+        ),
+    )
