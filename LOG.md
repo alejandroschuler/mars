@@ -89,6 +89,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:04 17:03 Sunday: weekly reset (0 %; next reset 2026-10-04 17:00). Started: t09-linalg (fixture test for #45), dual review of #46 (wf_840068d4-87c), t08-terms-gcv-knots (opus), rev-pr41-legacy (sonnet). Pacing target about 14 % per day.
 - 17:07 #45 (T09) rebased with the lm_fit_coefficients fixture test (6 of 6 pass), head e0deb7c, gate B and CI 12 of 12 passed. Its dual review waits for a reviewer slot (limit 3; running: 2 on #46, 1 on #41).
 - 17:14 #41 (T04) APPROVE by rev-pr41-legacy (49,440 rows reconciled with the raw files; table cells and pilot contrasts recomputed exactly). merge_pr.sh refused the non-conventional title; retitled 'feat: legacy simulation run, pilot report and results (T04)' (no head change) and merged as 36ac4ca; T04 (#6) closed. Started the dual review of #45 (wf_3ad9f5a7-ccc). Note: 4 reviewers run for a while (2 on #46, 2 on #45), one over the plan's limit of 3; load is 3.6.
+- 17:35 17:34 Sunday: weekly 4 % after 31 minutes with 5 agents (about 8 % per hour). Pacing decision (the plan's rule: projected use at the reset at most 95 %): after the running agents finish, at most 2 agents at a time; check the projection on every wake. Told the user the remaining work takes about 2 to 3 more weeks at this budget, and asked (not blocking) for a cap if they want budget kept for their own work; default is the plan's 95 %.
 
 ## Core-hour ledger
 
