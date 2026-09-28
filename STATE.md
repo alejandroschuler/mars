@@ -41,7 +41,8 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 ## Running agents
 
-- `t11-forward` (opus): #55 round-1 fix (center x, TSS about the centered y, test deletions), then the rebase onto main with only #55's own commits; then T11 stage 2 after #55 merges (when you message it for stage 2, remind it of COMMON.md's new lines: no variants of guarded commands, no trial edits in the worktree, and the Tests rules).
+- `t11-forward` (opus): done (stage 1 merged); resumable for stage-1 questions.
+- `t11-stage2` (opus): T11 stage 2 (interactions), a fresh author, from about 14:20 Monday.
 - `t07-conformance` (opus): idle; PR #66 ready.
 - `t15-oracle` (opus): T15, issue #17, brief `briefs/T15-oracle.md`, from 12:15 Monday; PR after #55 merges.
 - `t13-estimators` (opus): T13 done up to T12's merge: branch t13-estimators at 073811b (a scaffold merge of main 278fcaf; after T12 merges: `git rebase --onto origin/main 278fcaf`, then the PR with Closes #15). EarthRegressor, Earth, _EarthBase; scikit-learn checks pass on the reference (no expected failures) and 52 on the fast core (7 skips name #13 until T11 stages land); 30 of 30 sampled mutants killed. Decision: the gate B and CI smoke fits use fast_k=0 until T11 stage 3 (restore then; note on #13).
