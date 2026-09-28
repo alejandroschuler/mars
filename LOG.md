@@ -117,6 +117,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:33 Briefs T07-conformance.md and T13-estimators.md written (T07 after #49; T13 after T12 and #49); style scan clean.
 - 23:39 #47 round-1 fixes in (23 listed mutants now fail); #47 to #49 rebased on eec81d2 (range-diff all '='; gate B PASS; CI 12/12). Round-2 dual review of #47 started (wf_d340cde6-e81).
 - 23:40 Started tools-merge-guard (sonnet) for TOOLS-1: the stacked-branch guard in merge_pr.sh and the process decisions (rebase-only and CI-only re-approvals, retarget before merge) in DECISIONS.md.
+- 23:54 00:00 Monday: #56 (TOOLS-1, 35bab0b) ready from tools-merge-guard (14 merge_pr.sh tests pass; gate B PASS); single review started (wf_9a94cef1-865). T11 opened #57 (t11-scan) beside #55.
 
 ## Core-hour ledger
 
