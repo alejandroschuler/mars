@@ -187,6 +187,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:55 Merged #55 as 20cdde0 after recheck-55's narrow re-approvals: T11 stage 1 (the fast forward pass at degree 1) is on main. Asked t12-core to rebase and open T12's PR; told t15-oracle to rebase.
 - 13:55 Started t11-stage2 (fresh opus author for T11 stage 2, interactions), with stage 1's numerical lessons in its prompt. Authors now: t12-core (PR), t15-oracle, t10-pruning (fix), t11-stage2.
 - 13:59 #69 (centering fix for _pruning and _gcv.tss) ready at 2a9edb3; review queued for a free reviewer slot. Told t11-stage2 to adopt the two-step centering of Y in _forward if it touches it.
+- 14:00 #61 APPROVE (sonnet single) at 1ce0685. Updated its branch with gh pr update-branch (a merge commit, not a force-push) to 8df752b; update-check-61 verifies and re-approves.
 
 ## Core-hour ledger
 
