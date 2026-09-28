@@ -122,6 +122,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-09-28
 - 00:10 00:15 Monday: #56 single review REQUEST_CHANGES (the fake gh ignored pr list arguments, so argument mutants survived); sent to tools-merge-guard with the non-blocking notes (two stacked PRs case, reasons in DECISIONS.md, the checker confirms a test-only fix loosens no tolerance and adds no skip).
+- 00:13 00:14: #47 round 2: both roles REQUEST_CHANGES on one gap (the tail of the PRUNE-3 move is untested; two mutants survive); all round-1 findings fixed (spec 61 of 65 killed; adversarial 179 of 194). Sent both reviewers' tests to t06-reference. My round-2 focus text had the seed-9 case reversed (the PR's test was right); both reviewers noticed. 5-hour 57 %, weekly 23 %.
 
 ## Core-hour ledger
 

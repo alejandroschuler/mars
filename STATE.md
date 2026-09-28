@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:10 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 00:13 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -21,7 +21,7 @@ main: eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's te
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
 
 Open pull requests:
-- #47 part 2 pruning (e68354d, rebased on eec81d2, gate B PASS, CI 12/12): round 1 REQUEST_CHANGES (missing tests) answered by t06-reference; round-2 dual review running (workflow wf_d340cde6-e81, task wzorpvw15).
+- #47 part 2 pruning (e68354d, rebased on eec81d2, gate B PASS, CI 12/12): round 1 REQUEST_CHANGES (missing tests) answered by t06-reference; round 2 (wf_d340cde6-e81): both REQUEST_CHANGES, one shared blocking finding (no test covers the tail `+ order[pos:]` of the PRUNE-3 move; mutants `order[pos + 1 :]` and `order[Mf:]` survive); each reviewer gave a test. t06-reference adds both; then a narrow re-approval by a checker (the reviewers wrote the tests), gate B, CI, merge.
 - #48 part 3 forward pass (f19959a) and #49 part 4 fit_mars (fd1a51a, Closes #8): rebased, gate B PASS, CI green; each dual-reviewed after the part below merges (retarget is not needed: all three have base main).
 - #55 T11 stage 1 (t11-forward-stage1, draft) and #57 (t11-scan, draft): `t11-forward` split stage 1; dual review when it reports.
 - #56 TOOLS-1 (35bab0b, gate B PASS): single review running (wf_9a94cef1-865, task wpit93mmr).
@@ -49,7 +49,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Running agents
 
-- `t06-reference` (opus): idle; resumable for #47 round 2 and the #48, #49 reviews.
+- `t06-reference` (opus): adding the two round-2 tests to #47.
 - `t11-forward` (opus): T11 stage 1, PR #55 (draft).
 - `t12-core` (opus): T12, issue #14, from 23:31 Sunday.
 - `t18-legacy` (opus): T18, issue #20, from 23:31 Sunday.
