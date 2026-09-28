@@ -32,6 +32,8 @@ def _s_fits(*, same_tss: bool) -> list[str]:
     (``test_s_fixture_weight_departures`` covers the others)."""
     names = []
     for path in sorted(FIXTURES.glob("S*.json")):
+        if not path.name.startswith("S"):  # glob ignores case on Windows
+            continue
         fixture = json.loads(path.read_text(encoding="utf-8"))
         result, w = fixture["result"], fixture["inputs"]["weights"]
         if result.get("error") or result.get("levels") is not None:
