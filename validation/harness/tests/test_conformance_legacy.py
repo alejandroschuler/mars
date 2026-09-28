@@ -208,6 +208,30 @@ def test_summarize_counts_first_and_all_differences():
     assert s["s15"]["matched"]["causes"] == {"rule F5": 1}
 
 
+def test_markdown_tables():
+    diff = {"kind": "choice", "step": 1, "label": "rule", "finding": "F5", "text": ""}
+    rows = [
+        {"id": "S01/matched_d1", "code": "wheel", "mode": "matched", "diffs": [diff]},
+        {"id": "S15/draw000", "code": "wheel", "mode": "matched", "diffs": [diff]},
+    ]
+    rows[0]["final"] = {"legacy_terms": 8, "earth_terms": 6}
+    result = {"summary": cl.summarize(rows), "cases": rows}
+    result["head_vs_wheel"] = {"identical": 3, "different": []}
+    text = cl.markdown(result)
+    assert (
+        "| S01/matched_d1 | wheel | choice at step 1 | rule | F5 | none | |  | 8, 6 |"
+        in text
+    )
+    assert "S15/draw000" not in text
+    assert "| matched | 1 | 0 | 1: 1 | rule F5: 1 |" in text
+    assert text.endswith("HEAD and the wheel: 3 identical fits; different: none.\n")
+    assert sorted(["F10", "(tie)", "F2"], key=cl._finding_order) == [
+        "F2",
+        "F10",
+        "(tie)",
+    ]
+
+
 @pytest.mark.external
 def test_the_script_runs_end_to_end_on_s01(tmp_path):
     only = "^S01/matched_d1$"

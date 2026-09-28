@@ -130,6 +130,12 @@ VERDICTS: dict[str, Verdict] = {
         "F3",
         "the legacy pruning pass removes the intercept at size {size} of {total}",
     ),
+    "intercept_final": (
+        "bug",
+        "F3",
+        "the legacy final model has {terms} terms and no intercept: its pruning "
+        "pass removed it",
+    ),
     "prune_subset": (
         "rule",
         "F20",

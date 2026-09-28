@@ -742,6 +742,19 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
             float(np.mean((np.ravel(d["pred_test"]) - truth) ** 2))
             for d in (leg, earth)
         ]
+    no_int = [len(sub) for sub in leg["prune_subsets"] if 0 not in sub]
+    fin["intercept_dropped_at"] = max(no_int, default=None)
+    if 0 not in leg["selected"] and not any(d["finding"] == "F3" for d in row["diffs"]):
+        v = lt.verdict("intercept_final", terms=len(leg["selected"]))
+        row["diffs"].append(
+            {
+                "kind": "pruning",
+                "step": None,
+                "label": v[0],
+                "finding": v[1],
+                "text": v[2],
+            }
+        )
     if f.case.dataset in GLM:
         row["diffs"].append(glm_refit(f))
     row["final"] = fin
@@ -852,7 +865,70 @@ def cmd_report(ns: argparse.Namespace) -> None:
     }
     if ns.json:
         write_json(Path(ns.json), result)
+    if ns.markdown:
+        Path(ns.markdown).write_text(markdown(result))
     print(json.dumps(result["summary"], indent=1))
+
+
+def markdown(result: dict[str, Any]) -> str:
+    """The generated tables of DIFFERENCES_legacy.md: one row per fit of S01
+    to S20 (S15 summarized), the counts by label and finding, the S15 rates,
+    and HEAD against the wheel."""
+
+    def cell(d: dict[str, Any] | None) -> str:
+        if d is None:
+            return "none | | "
+        where = d["kind"] if d["step"] is None else f"{d['kind']} at step {d['step']}"
+        return f"{where} | {d['label']} | {d['finding'] or ''}"
+
+    def table(head: list[str], rows: list[list[Any]]) -> list[str]:
+        out = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+        return out + ["| " + " | ".join(str(x) for x in r) + " |" for r in rows]
+
+    fits = []
+    for r in result["cases"]:
+        if not r["id"].startswith("S15/"):
+            d, fin = r["diffs"], r.get("final") or {}
+            terms = ", ".join(
+                str(fin[k]) for k in ("legacy_terms", "earth_terms") if k in fin
+            )
+            nxt = d[1] if len(d) > 1 else None
+            fits.append(
+                [r["id"], r["code"], cell(d[0] if d else None), cell(nxt), terms]
+            )
+    head = ["Fit", "Code", "First difference", "Label", "ID"]
+    lines = table([*head, "Next difference", "Label", "ID", "Terms"], fits)
+    s = result["summary"]
+    by = [(k, s[f"first_by_{k}"], s[f"all_by_{k}"]) for k in ("label", "finding")]
+    for name, first, every in by:
+        keys = sorted(set(first) | set(every), key=_finding_order)
+        rows = [[k, first.get(k, 0), every.get(k, 0)] for k in keys]
+        lines += ["", *table([name.title(), "First difference of a fit", "All"], rows)]
+    rows = []
+    for mode, v in s["s15"].items():
+        steps = sorted(v["first_divergence_step"].items(), key=lambda kv: int(kv[0]))
+        causes = ", ".join(f"{k}: {n}" for k, n in v["causes"].items())
+        steps_txt = ", ".join(f"{k}: {n}" for k, n in steps)
+        rows.append([mode, v["fits"], v["no_choice_divergence"], steps_txt, causes])
+    head = [
+        "S15 mode",
+        "Fits",
+        "No choice divergence",
+        "First divergence: step",
+        "Cause",
+    ]
+    lines += ["", *table(head, rows)]
+    hw = result["head_vs_wheel"]
+    differ = ", ".join(hw["different"]) or "none"
+    lines += [
+        "",
+        f"HEAD and the wheel: {hw['identical']} identical fits; different: {differ}.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _finding_order(key: str) -> tuple:
+    return (key[0] != "F", int(key[1:]) if key[1:].isdigit() else 0, key)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -865,6 +941,7 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--code", choices=("wheel", "head"), default="wheel")
         p.add_argument("--head-path", help="a checkout of legacy-1.0.4-head (run)")
         p.add_argument("--json", help="where to write the summary JSON (report)")
+        p.add_argument("--markdown", help="where to write the tables (report)")
     ns = parser.parse_args(argv)
     {"run": cmd_run, "probe": cmd_probe, "report": cmd_report}[ns.cmd](ns)
 
