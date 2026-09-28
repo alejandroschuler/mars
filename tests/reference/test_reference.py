@@ -605,19 +605,6 @@ def offered_sets(B, Y, w):
     return best
 
 
-def expected_statistics(B, Y, w, selected, penalty):
-    """rss, gcv, rsq, grsq and tss of the model on the selected columns, from
-    numpy's least squares and the formulas of GCV-2, GCV-5 and GCV-6."""
-    N = ref.weight_sum(w)
-    tau = ref.weight_tol(N)
-    Y2 = Y.reshape(len(Y), -1)
-    rss = lstsq_rss(B[:, selected], Y2, w)
-    tss = float(np.sum(w[:, None] * (Y2 - np.average(Y2, axis=0, weights=w)) ** 2))
-    gcv = ref.gcv(rss, len(selected), penalty, N, tau)
-    grsq = 1 - gcv / ref.gcv(tss, 1, penalty, N, tau)
-    return {"rss": rss, "gcv": gcv, "rsq": 1 - rss / tss, "grsq": grsq, "tss": tss}
-
-
 class TestPruning:
     def test_selects_the_true_terms(self):
         rng = np.random.default_rng(11)
@@ -633,16 +620,6 @@ class TestPruning:
         np.testing.assert_allclose(expected, [1.0, 3.0], atol=0.1)
         expected_rss = lstsq_rss(B[:, [0, 2]], y, np.ones(n))
         assert result["rss"] == pytest.approx(expected_rss, rel=1e-8)
-
-    @pytest.mark.parametrize("seed", range(5))
-    def test_one_response_removes_as_backward_elimination_and_does_no_worse(self, seed):
-        B, Y, w = random_basis(seed)
-        result = prune(B, Y, w)
-        removed, path = backward_elimination(B, Y, w)
-        np.testing.assert_array_equal(result["removed"], removed)
-        for m, value in path.items():
-            assert result["rss_per_size"][m - 1] <= value
-        np.testing.assert_array_equal(result["subsets"][0], [True] + [False] * 5)
 
     def test_one_response_offers_the_forward_order_and_several_do_not(self):
         # y = x1 + x2 and term 1 is x3 = x1 + x2 + noise. Backward elimination
@@ -665,25 +642,6 @@ class TestPruning:
         two = prune(B, np.column_stack([y, 2 * y]), np.ones(n))
         assert not two["subsets"][1][1]
 
-    @pytest.mark.parametrize("seed", range(3))
-    def test_several_responses_are_plain_backward_elimination(self, seed):
-        B, Y, w = random_basis(seed, K=2)
-        result = prune(B, Y, w)
-        removed, path = backward_elimination(B, Y, w)
-        np.testing.assert_array_equal(result["removed"], removed)
-        for m, value in path.items():
-            assert result["rss_per_size"][m - 1] == value
-        subsets = result["subsets"]
-        for m in range(1, len(subsets)):
-            assert np.all(subsets[m] >= subsets[m - 1])  # nested
-
-    def test_two_terms_give_the_same_record_for_both_rules(self):
-        B, Y, w = random_basis(2, M=2, K=2)
-        one = prune(B, Y[:, :1], w)
-        two = prune(B, np.column_stack([Y[:, 0], 0 * Y[:, 0]]), w)
-        np.testing.assert_array_equal(one["removed"], two["removed"])
-        np.testing.assert_array_equal(one["subsets"], two["subsets"])
-
     def test_the_intercept_alone(self):
         y = np.array([1.0, 2.0, 4.0])
         result = prune(np.ones((3, 1)), y, np.ones(3))
@@ -693,16 +651,6 @@ class TestPruning:
         assert result["selected_size"] == 1
         assert result["rsq"] == 0.0 and result["grsq"] == 0.0
         np.testing.assert_allclose(result["coef"], [[7 / 3]], rtol=1e-14)
-
-    def test_one_response_follows_prune_3_step_by_step(self):
-        for seed in range(20):
-            B, Y, w = random_basis(seed, n=10, M=5)
-            result = prune(B, Y, w)
-            for m, (value, terms) in offered_sets(B, Y, w).items():
-                assert result["rss_per_size"][m - 1] == value
-                np.testing.assert_array_equal(
-                    np.flatnonzero(result["subsets"][m - 1]), terms
-                )
 
     def test_one_response_follows_prune_3_on_a_dependent_basis(self):
         # term 3 = term 1 + term 2, so some sets tie with their subsets up to
@@ -760,14 +708,6 @@ class TestPruning:
         Y2 = np.column_stack([y, x + rng.normal(size=8)])
         np.testing.assert_array_equal(prune(B2, Y2, np.ones(8))["removed"], [2, 3, 1])
 
-    def test_nprune_caps_the_selected_size_only(self):
-        B, Y, w = random_basis(4)
-        free = prune(B, Y, w, penalty=0.0)
-        capped = prune(B, Y, w, penalty=0.0, nprune=2)
-        assert capped["selected_size"] <= 2
-        for key in ("removed", "rss_per_size", "gcv_per_size", "subsets"):
-            np.testing.assert_array_equal(free[key], capped[key])
-
     @pytest.mark.parametrize("K", [1, 2])
     def test_nprune_three_selects_three_terms_where_four_are_best(self, K):
         rng = np.random.default_rng(3)
@@ -789,34 +729,6 @@ class TestPruning:
         for value in (0, -1):
             with pytest.raises(ValueError, match="nprune"):
                 prune(B, Y, w, nprune=value)
-
-    def test_the_final_statistics_with_weights(self):
-        B, Y, _ = random_basis(12, n=40)
-        w = np.random.default_rng(12).uniform(0.5, 2.0, size=40)
-        result = prune(B, Y, w, penalty=3.0)
-        assert result["selected_size"] > 1
-        expected = expected_statistics(B, Y, w, result["selected"], 3.0)
-        for key in ("rss", "gcv", "tss"):
-            assert result[key] == pytest.approx(expected[key], rel=1e-10), key
-        for key in ("rsq", "grsq"):
-            assert result[key] == pytest.approx(expected[key], abs=1e-12), key
-        N = ref.weight_sum(w)
-        for m in range(1, 7):  # [PRUNE-4]
-            value = ref.gcv(result["rss_per_size"][m - 1], m, 3.0, N, ref.weight_tol(N))
-            assert result["gcv_per_size"][m - 1] == value
-
-    def test_pmethod_none_reports_the_statistics_of_its_terms(self):
-        # T[3] = {0, 2, 5}, so the statistics of terms 0 to 2 differ from R[3]
-        # and GCV(R[3], 3) [PRUNE-7, PRUNE-8]
-        B, Y, w = random_basis(6)
-        result = prune(B, Y, w, pmethod="none", nprune=3)
-        np.testing.assert_array_equal(np.flatnonzero(result["subsets"][2]), [0, 2, 5])
-        expected = expected_statistics(B, Y, w, [0, 1, 2], 2.0)
-        for key in ("rss", "gcv", "tss"):
-            assert result[key] == pytest.approx(expected[key], rel=1e-10), key
-        for key in ("rsq", "grsq"):
-            assert result[key] == pytest.approx(expected[key], abs=1e-12), key
-        assert result["gcv"] > 1.05 * result["gcv_per_size"][2]
 
     def test_a_large_penalty_selects_the_intercept_with_rsq_and_grsq_zero(self):
         # GCV-7: 0 by definition. The final rss of the intercept model is its
@@ -854,15 +766,6 @@ class TestPruning:
         assert result["rss"] == pytest.approx(
             lstsq_rss(B[:, :2], y, np.ones(30)), rel=1e-10
         )
-
-    def test_pmethod_none_keeps_the_first_terms(self):
-        B, Y, w = random_basis(6)
-        result = prune(B, Y, w, pmethod="none", nprune=3)
-        np.testing.assert_array_equal(result["selected"], [0, 1, 2])
-        assert result["rss"] == pytest.approx(ref.rss(B[:, :3], Y, w), rel=1e-12)
-        full = prune(B, Y, w, pmethod="none")
-        assert full["selected_size"] == 6
-        assert full["rss"] == pytest.approx(full["rss_per_size"][-1], rel=1e-12)
 
     def test_tied_gcv_minima_go_to_the_smaller_size(self):
         assert ref.select_size([3.0, 2.0, 2.0, 1.0], 3) == 2

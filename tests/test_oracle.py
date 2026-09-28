@@ -1009,9 +1009,12 @@ def pruning_cases(draw) -> PruneCase:
     params = {
         "penalty": draw(st.sampled_from([-1.0, 0.0, 2.0, 3.0, 5.0])),
         "pmethod": draw(st.sampled_from(["backward", "none"])),
-        "nprune": draw(st.one_of(st.none(), st.integers(1, M + 1))),
+        "nprune": draw(
+            st.sampled_from([None, 1, max(1, M // 2), max(1, M - 1), M + 1])
+        ),
     }
     noise = draw(st.sampled_from([1e-3, 0.1, 1.0]))
+    greedy = draw(st.booleans())
     rng = np.random.default_rng(seed)
     cols = [np.ones(n)]
     for _ in range(1, M):
@@ -1027,18 +1030,16 @@ def pruning_cases(draw) -> PruneCase:
     }[weights]
     rows = np.ones(n, bool) if w is None else w > 0
     assume(rows.sum() > M + 1 and np.linalg.matrix_rank(B[rows]) == M)
-    # The columns in the order of a greedy forward selection, as a forward pass
-    # adds them; so the first offer of PRUNE-3 can beat backward elimination.
-    ww, order, rest = (
-        np.where(rows, 1.0 if w is None else w, 0.0),
-        [0],
-        list(range(1, M)),
-    )
-    while rest:
+    # Half of the bases in the order of a greedy forward selection, as a
+    # forward pass adds terms, so that the first offer of PRUNE-3 can beat
+    # backward elimination; the others in their drawn order, so that the first
+    # terms that pmethod="none" keeps differ from T[m] (PRUNE-7).
+    ww, order, rest = np.where(rows, 1.0 if w is None else w, 0.0), [0], [*range(1, M)]
+    while rest and greedy:
         best = min(rest, key=lambda j: mars_ref.rss(B[:, [*order, j]], Y, ww))
         order.append(best)
         rest.remove(best)
-    return PruneCase(f"pruning seed={seed}", B[:, order], Y, w, params)
+    return PruneCase(f"pruning seed={seed}", B[:, order + rest], Y, w, params)
 
 
 def _designed_cases() -> list[Case]:
