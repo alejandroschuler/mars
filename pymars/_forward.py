@@ -20,8 +20,8 @@ best legal candidate (FWD-4, FWD-5) is built again explicitly
 (``_scan.rebuild``), its hinge is tested again with the explicit ratio of
 LA-3 (``_linalg.collinearity_ratio``), and its reduction is checked against
 FWD-4 with the explicit RSS; a candidate that fails is left out and the step
-is searched again, so the choice never rests on a value that the explicit
-rebuild contradicts.
+is searched again, so the chosen candidate always passes FWD-4 and LA-3 with
+its explicit values.
 
 Numerics. Y is multiplied by a power of 2 first (EDGE-6) and centered (FWD-10,
 LA-6); every RSS in the record is on the original scale. No absolute epsilon.

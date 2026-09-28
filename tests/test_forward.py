@@ -403,7 +403,7 @@ def test_row_order_and_invariants(seed, n, p):
 
 
 def _state(X, y, **kw):
-    """A _Pass for white-box tests of the explicit check."""
+    """A _Pass on centered y, for the white-box tests."""
     params = {"minspan": None, "endspan": None, "adjust_endspan": 2.0}
     params |= {"auto_linpreds": True, "thresh": 0.0, "penalty": 2.0} | kw
     Yc = (y - y.mean())[:, None]
@@ -491,27 +491,66 @@ def test_search_equals_least_squares(step):
         assert c.reduction == pytest.approx(red, rel=1e-9)
 
 
+def _fixed_gain(monkeypatch, gain):
+    """Make the scan accept every knot and give each the share ``gain(split)``
+    of the RSS."""
+    real = _forward._scan.knot_scan
+
+    def fake(x_, b, Q, E, split):
+        out = real(x_, b, Q, E, split)
+        g = gain(np.asarray(split)) * float(np.sum(E**2))
+        return out._replace(ratio=np.ones_like(out.ratio), gain=g)
+
+    monkeypatch.setattr(_forward._scan, "knot_scan", fake)
+
+
+def _two_covariates():
+    x = np.arange(12.0)
+    return _state(np.column_stack((x, x[::-1] ** 2)), np.sin(x), minspan=1, endspan=1)
+
+
 @pytest.mark.parametrize("gain", [0.0, 0.5])
 def test_ties_within_a_search(monkeypatch, gain):
     """FWD-5: equal reductions go to the linear candidate before the knots,
-    and to the larger knot first; an excluded place is left out. Here the
-    scan gives every knot the same gain."""
-    real = _forward._scan.knot_scan
-
-    def flat(x_, b, Q, E, split):
-        out = real(x_, b, Q, E, split)
-        g = np.full_like(out.gain, gain * float(np.sum(E**2)))
-        return out._replace(ratio=np.ones_like(out.ratio), gain=g)
-
-    monkeypatch.setattr(_forward._scan, "knot_scan", flat)
-    x = np.arange(12.0)
-    st_ = _state(x[:, None], np.sin(x), minspan=1, endspan=1)
+    and to the larger knot first; an excluded place is left out, and only on
+    its own covariate. Here the scan gives every knot the same gain."""
+    _fixed_gain(monkeypatch, lambda split: np.full(split.shape, gain))
+    st_ = _two_covariates()
     first = [(0, 0, 0), (0, 0, 1)] if gain == 0.0 else [(0, 0, 1), (0, 0, 2)]
-    assert [c.order for c in st_.search(0, set())] == first
+    got = st_.search(0, set())
+    assert [c.order for c in got] == first
+    assert [(c.parent, c.variable) for c in got] == [(0, 0), (0, 0)]
+    kinds = [_forward.KIND_LINEAR, _forward.KIND_PAIR]
+    assert [c.kind for c in got] == (kinds if gain == 0.0 else kinds[1:] * 2)
     later = [(0, 0, 1), (0, 0, 2)] if gain == 0.0 else [(0, 0, 2), (0, 0, 3)]
     assert [c.order for c in st_.search(0, {first[0]})] == later
     knots = [c.knot for c in st_.search(0, {(0, 0, 0)})]
     assert knots == sorted(knots, reverse=True)
+    other = [c.order for c in st_.search(1, set())]
+    assert [c.order for c in st_.search(1, {(0, 0, 1), (0, 0, 2)})] == other
+
+
+def test_leaving_out_the_linear_candidate_keeps_every_knot(monkeypatch):
+    """The smallest knot, best here, stays when the linear place 0 is left out."""
+    _fixed_gain(monkeypatch, lambda split: np.where(split == split.min(), 0.5, 0.1))
+    st_ = _two_covariates()
+    smallest = st_.search(0, set())[0]
+    assert st_.search(0, {(0, 0, 0)})[0] == smallest
+    assert smallest.knot == 1.0  # x_(E* + 1) with E* = 1 (KNOT-4)
+
+
+def test_the_search_keeps_only_legal_knots(monkeypatch):
+    """FWD-4 in the scan: with MaxLegal below every pair, only the linear
+    candidate is legal; a single-hinge search whose knots gain nothing has no
+    candidate, since a reduction must be positive."""
+    st_ = _two_covariates()
+    st_.rss = [st_.rss[0], (1.0 - 1e-4) * st_.rss[0]]  # MaxLegal = 1e-3·TSS
+    assert [c.kind for c in st_.search(0, set())] == [_forward.KIND_LINEAR]
+    st_ = _two_covariates()
+    st_.add(*st_.best()[:2])  # now x0 is in the span
+    assert st_.search(0, set()) != []
+    _fixed_gain(monkeypatch, lambda split: np.zeros(split.shape))
+    assert st_.search(0, set()) == []
 
 
 def test_the_explicit_check():
