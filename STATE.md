@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 05:41 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 05:44 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -40,7 +40,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 1. #49 (T06 part 4, Closes #8): after t06-reference's rebase, a dual review (spec, adversarial), fixes, merge. That completes T06 and unblocks T07 (brief `briefs/T07-conformance.md`) and T15.
 2. #57 (T11 `_scan.py`): t11-forward fixes the scan accuracy; then a narrow round 2, merge; t11-forward rebases #55 onto main; then the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase, open its PR, `Closes #14`), and T11 stage 2 (interactions).
-3. #58 (T18): narrow round 2 (sonnet) running (wf_f0fee117-267); then merge; then remove the worktrees runner-t18, t18-legacy-head, t18-legacy-gate (keep t18-legacy until the user restores its files, issue #60).
+3. #58 (T18): round 2 APPROVE at 870c482 (wf_f0fee117-267). Merge refused: the head does not contain 0c2a896. After the 5-hour reset: a pure rebase (integrator, sonnet, or t18-legacy), a rebase-check re-approval, then merge; then remove the worktrees runner-t18, t18-legacy-head, t18-legacy-gate (keep t18-legacy until the user restores its files, issue #60).
 4. Later: T13 estimators (brief `briefs/T13-estimators.md`) after T12; T15 oracle tests after T06; T14, T16, T17 after T13; T01 v2 (#44) after T07's triage.
 5. Follow-ups: TOOLS-2 (the fake gh's `pr view` branch ignores its arguments); DECISIONS.md: the legacy matched mode needs Adjust.endspan = 0 (T18); T05 notes PR; T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test); T10 non-blocking notes from #54's reviews. They go on #44 or later PRs.
 6. Housekeeping: issue #60 (needs-user: local cleanup the guard blocked); issue #59 (needs-user, no action needed: auto mode denied new_worktree.sh with a start point); the unused branch origin/t08-terms-gcv and its worktree <S>/.worktrees/t08-terms-gcv-knots.
