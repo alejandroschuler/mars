@@ -523,6 +523,8 @@ def test_ties_within_a_search(monkeypatch, gain):
     assert [(c.parent, c.variable) for c in got] == [(0, 0), (0, 0)]
     kinds = [_forward.KIND_LINEAR, _forward.KIND_PAIR]
     assert [c.kind for c in got] == (kinds if gain == 0.0 else kinds[1:] * 2)
+    linear = [c for c in st_.search(0, set()) if c.kind == _forward.KIND_LINEAR]
+    assert [(c.err, c.sure) for c in linear] == [(0.0, True)]
     later = [(0, 0, 1), (0, 0, 2)] if gain == 0.0 else [(0, 0, 2), (0, 0, 3)]
     assert [c.order for c in st_.search(0, {first[0]})[:2]] == later
     knots = [c.knot for c in st_.search(0, {(0, 0, 0)})]
@@ -647,6 +649,8 @@ def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
     place = int(np.flatnonzero(st_.knots[0].knots == x[7])[0]) + 1
     low = [c for c in kept if c.order == (0, 0, place)]
     assert low and not low[0].sure  # the scan's bound straddles tau
+    _, gain = _scan.exact_knot(st_.Q, st_.E, np.maximum(x - x[7], 0.0))
+    assert abs(low[0].reduction - gain) <= 1e-8 * st_.rss[-1]  # the intercept path
     best = _forward._top_two(st_.refine(kept))[0]
     assert best.order == (0, 0, place) and best.sure and best.err == 0.0
     rho, gain = _scan.exact_knot(st_.Q, st_.E, np.maximum(x - x[7], 0.0))
@@ -656,6 +660,85 @@ def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
     assert second.order == (0, 0, place - 1) and second.err == 0.0
     _, gain2 = _scan.exact_knot(st_.Q, st_.E, np.maximum(x - x[8], 0.0))
     assert second.reduction == gain2
+
+
+def _fixed_passes(monkeypatch, scan, exact, top=None):
+    """A single-hinge search on x = 0..11 (x is in the model), whose knots are
+    10, 9, ..., 1 at places 1 to 10. The scan gives, by place, the tuples
+    (gain, err, ratio, ratio_err) of ``scan``, and ``exact_knot`` the pairs
+    (rho, gain) of ``exact``; places that ``scan`` leaves out get a small gain.
+    The check of the winner accepts. Returns the state and the list of places
+    that pass 2 valued."""
+    x = np.arange(12.0)
+    st_ = _state(x[:, None], 10 * np.sin(x), minspan=1, endspan=1)
+    st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, x).q))
+    st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
+    if top is not None:
+        st_.max_legal = lambda: top
+    st_.check = lambda c: object()  # the check has its own tests
+    rows = [scan.get(i, (0.5, 0.01, 0.5, 0.0)) for i in range(1, 11)]
+    gain, err, ratio, ratio_err = (np.array(c) for c in zip(*rows, strict=True))
+    fake = _scan.KnotScan(ratio, gain, ratio_err, err)
+    monkeypatch.setattr(_forward._scan, "knot_scan", lambda *a, **k: fake)
+    valued = []
+
+    def exact_knot(Q, E, h, w=None):
+        place = 11 - int(x[np.flatnonzero(h)[0] - 1])
+        valued.append(place)
+        return exact.get(place, (0.5, 0.5))
+
+    monkeypatch.setattr(_forward._scan, "exact_knot", exact_knot)
+    return st_, valued
+
+
+def test_pass_2_ranks_by_the_explicit_values(monkeypatch):
+    """Wide bounds: pass 1 keeps the knots whose upper bound reaches the second
+    largest lower bound (9.5), and only those are valued; the explicit values
+    reorder them."""
+    scan = {1: (10.0, 0.5, 0.5, 0.0), 2: (9.8, 0.5, 0.5, 0.0), 3: (9.7, 0.05, 0.5, 0.0)}
+    exact = {1: (0.5, 9.6), 2: (0.5, 9.9), 3: (0.5, 9.72)}
+    st_, valued = _fixed_passes(monkeypatch, scan | {4: (3.0, 0.05, 0.5, 0.0)}, exact)
+    assert [c.order[2] for c in st_.search(0, set())] == [1, 2, 3]
+    chosen, _, second = st_.best()
+    assert (chosen.order[2], second.order[2]) == (2, 3) and sorted(valued) == [1, 2, 3]
+    assert (chosen.reduction, second.reduction) == (9.9, 9.72)
+
+
+def test_an_uncertain_rho_is_decided_in_pass_2(monkeypatch):
+    """The best scan value belongs to a knot whose rho is within its bound of
+    tau; pass 2 finds rho below tau and drops it, and it does not count toward
+    the lower bound that decides which knots pass 2 values."""
+    tau = 0.01
+    scan = {
+        1: (20.0, 0.01, tau * (1 + 1e-9), tau * 1e-8),
+        2: (9.9, 0.01, 0.5, 0.0),
+        3: (9.0, 0.01, 0.5, 0.0),
+    }
+    exact = {1: (tau * (1 - 1e-9), 20.0), 2: (0.5, 9.9), 3: (0.5, 9.0)}
+    st_, valued = _fixed_passes(monkeypatch, scan, exact)
+    kept = st_.search(0, set())
+    assert [(c.order[2], c.sure) for c in kept] == [(1, False), (2, True), (3, True)]
+    chosen, _, second = st_.best()
+    assert (chosen.order[2], second.order[2]) == (2, 3) and sorted(valued) == [1, 2, 3]
+
+
+@pytest.mark.parametrize(("value", "best"), [(10.0, (2, 3)), (9.93, (1, 2))])
+def test_a_reduction_within_its_bound_of_max_legal(monkeypatch, value, best):
+    """FWD-4 in pass 1: a knot with 9.8 ≤ MaxLegal = 9.95 < 10.0 (its bounds) is
+    kept but not sure; pass 2 drops it when its explicit reduction is above
+    MaxLegal, and chooses it when it is below."""
+    scan = {1: (9.9, 0.1, 0.5, 0.0), 2: (9.5, 0.01, 0.5, 0.0), 3: (9.0, 0.01, 0.5, 0.0)}
+    exact = {1: (0.5, value), 2: (0.5, 9.5), 3: (0.5, 9.0)}
+    st_, _ = _fixed_passes(monkeypatch, scan, exact, top=9.95)
+    kept = st_.search(0, set())
+    assert [(c.order[2], c.sure) for c in kept] == [(1, False), (2, True), (3, True)]
+    chosen, _, second = st_.best()
+    assert (chosen.order[2], second.order[2]) == best
+
+
+def test_second_largest():
+    assert _forward._second_largest([1.0, 5.0, 3.0]) == 3.0
+    assert _forward._second_largest([2.0]) == -math.inf
 
 
 def _explicit_best(st_):
