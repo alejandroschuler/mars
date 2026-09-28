@@ -5,6 +5,8 @@ Every input is passed read-only, so a function that writes into its input
 fails. The explicit least-squares answers come from numpy's SVD solver.
 """
 
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from hypothesis import assume, given
@@ -69,6 +71,45 @@ def _unit_orthogonal(rng, G):
     for _ in range(2):
         z = z - Q @ (Q.T @ z)
     return z / np.linalg.norm(z)
+
+
+def _near_dependent(rng, G, eps, w=None):
+    """A column whose part orthogonal to G is eps of its norm, all √w-scaled."""
+    sw = np.ones(G.shape[0]) if w is None else np.sqrt(w)
+    us = sw * (G @ np.array([0.5, 1.0, -2.0]))
+    zs = _unit_orthogonal(rng, sw[:, None] * G)
+    return (us + eps * np.linalg.norm(us) * zs) / sw
+
+
+def _exact_rss(A, y, w, subsets):
+    """The weighted RSS of y on each subset of the columns of A, exactly.
+
+    The normal equations are solved in rational arithmetic, so the only error
+    is the final rounding to float64.
+    """
+    F = [[Fraction(v) for v in row] for row in A]
+    fy, fw = [Fraction(v) for v in y], [Fraction(v) for v in w]
+    m = A.shape[1]
+    G = [
+        [sum(c * r[a] * r[b] for c, r in zip(fw, F, strict=True)) for b in range(m)]
+        for a in range(m)
+    ]
+    g = [sum(c * r[a] * v for c, r, v in zip(fw, F, fy, strict=True)) for a in range(m)]
+    yy = sum(c * v * v for c, v in zip(fw, fy, strict=True))
+    out = []
+    for cols in subsets:
+        rows = [[G[a][b] for b in cols] + [g[a]] for a in cols]
+        k = len(cols)
+        for p in range(k):  # elimination; the pivots of X'WX are positive
+            for r in range(p + 1, k):
+                f = rows[r][p] / rows[p][p]
+                rows[r] = [x - f * v for x, v in zip(rows[r], rows[p], strict=True)]
+        beta = [Fraction(0)] * k
+        for p in reversed(range(k)):
+            tail = sum(rows[p][c] * beta[c] for c in range(p + 1, k))
+            beta[p] = (rows[p][k] - tail) / rows[p][p]
+        out.append(float(yy - sum(beta[p] * g[cols[p]] for p in range(k))))
+    return out
 
 
 # Gram-Schmidt (LA-1; plan: Fast path)
@@ -213,21 +254,43 @@ def test_collinearity_ratio_keeps_the_sums_of_squares_in_range():
     assert la.collinearity_ratio(np.zeros((4, 0)), np.arange(4.0), w) == 0.0
 
 
+def test_collinearity_ratio_ignores_rows_with_zero_weight():
+    # W-3: a row with zero weight is not a case, whatever its value of h.
+    rng = np.random.default_rng(15)
+    G = _basis(rng, 30, 3)
+    h = np.maximum(G[:, 1] - 0.1, 0.0) * G[:, 2]
+    w = rng.uniform(0.5, 2.0, 30)
+    want = la.collinearity_ratio(_qbasis(G, w), h, w)
+    G0, w0 = np.vstack([G[:1], G]), np.append(0.0, w)
+    for value in (1e300, -1e-300):
+        got = la.collinearity_ratio(_qbasis(G0, w0), np.append(value, h), w0)
+        assert got == pytest.approx(want, rel=1e-12)
+
+
 # The kind of a search (LA-7)
 
 
-def test_weighted_variances_use_the_divisor_n_and_exact_zeros():
+def test_weighted_variances_use_the_divisor_n():
     X = np.array([[0.0, 1.0], [2.0, 1.0]])
     np.testing.assert_array_equal(la.weighted_variances(*_frozen(X)), [1.0, 0.0])
     x = np.array([[0.0], [4.0]])
     np.testing.assert_array_equal(la.weighted_variances(x, np.array([1.0, 3.0])), [3.0])
-    # A constant column gets exactly 0, where rounding would leave 1e-33.
-    X = np.column_stack([np.full(7, 0.1), np.arange(7.0)])
-    assert la.weighted_variances(X)[0] == 0.0
-    X = np.array([[5.0], [2.0], [2.0]])
-    assert la.weighted_variances(X, np.array([0.0, 1.0, 1.0]))[0] == 0.0
     with pytest.raises(ValueError, match="positive weight"):
-        la.weighted_variances(X, np.zeros(3))
+        la.weighted_variances(x, np.zeros(2))
+
+
+@pytest.mark.parametrize(("n", "value"), [(3, 0.1), (6, 0.1), (7, 0.3), (3, 0.7)])
+def test_weighted_variance_of_a_constant_column_is_exactly_zero(n, value):
+    # LA-7 needs sigma² = 0 for a constant covariate. The two-pass formula
+    # leaves a rounding residue for these columns in some summation orders,
+    # and for three 0.1s in every order (1.9e-34), so only the exact test of
+    # the values (Conventions) gives 0.
+    x3 = np.full(3, 0.1)
+    assert np.mean((x3 - np.mean(x3)) ** 2) > 0.0
+    X = np.column_stack([np.full(n, value), np.arange(float(n))])
+    assert la.weighted_variances(X)[0] == 0.0
+    Xw, w = np.vstack([[5.0, 0.0], X]), np.append(0.0, np.ones(n))
+    assert la.weighted_variances(Xw, w)[0] == 0.0
 
 
 @given(seed=seeds, n=st.integers(2, 20))
@@ -304,14 +367,57 @@ def test_lm_fit_keeps_the_first_of_two_dependent_columns():
         np.testing.assert_allclose(fit.coef[fit.kept], coef, rtol=1e-10)
 
 
-@pytest.mark.parametrize(("eps", "kept"), [(2e-7, True), (5e-8, False)])
-def test_lm_fit_dependence_threshold_is_1e_7_of_the_norm(eps, kept):
+@pytest.mark.parametrize("weighted", [False, True])
+@pytest.mark.parametrize(("eps", "kept"), [(1.01e-7, True), (0.99e-7, False)])
+def test_la4_threshold_is_1e_7_within_one_percent(eps, kept, weighted):
+    # As bb09.8, which puts R's threshold within 1e-6 relative of 1e-7.
     rng = np.random.default_rng(6)
     G = _basis(rng, 40, 3)
-    u = G @ np.array([0.5, 1.0, -2.0])
-    a = u + eps * np.linalg.norm(u) * _unit_orthogonal(rng, G)
-    fit = la.lm_fit(np.column_stack([G, a]), rng.standard_normal(40))
-    assert fit.kept[3] is np.bool_(kept)
+    w = rng.uniform(0.05, 20.0, 40) if weighted else None
+    A = np.column_stack([G, _near_dependent(rng, G, eps, w)])
+    assert la.independent_columns(A, w)[3] is np.bool_(kept)
+    assert la.lm_fit(A, rng.standard_normal(40), w).kept[3] is np.bool_(kept)
+
+
+def test_la4_tests_the_sqrt_w_scaled_columns():
+    # LA-4 and FWD-11 test √w-scaled columns, as lm.wfit does (bb09.14).
+    rng = np.random.default_rng(0)
+    G = _basis(rng, 40, 3)
+    w = rng.uniform(0.2, 5.0, 40)
+    sw = np.sqrt(w)
+    us = sw * (G @ np.array([0.5, 1.0, -2.0]))
+    zs = _unit_orthogonal(rng, sw[:, None] * G)
+
+    def ratio(a, s):  # the LA-4 ratio of the column a with rows scaled by s
+        Q = np.linalg.qr(s[:, None] * G)[0]
+        return np.linalg.norm(s * a - Q @ (Q.T @ (s * a))) / np.linalg.norm(s * a)
+
+    for eps, kept in [(1.1e-7, True), (0.9e-7, False)]:
+        a = (us + eps * np.linalg.norm(us) * zs) / sw
+        A = np.column_stack([G, a])
+        assert la.independent_columns(A, w)[3] is np.bool_(kept)
+        assert la.lm_fit(A, rng.standard_normal(40), w).kept[3] is np.bool_(kept)
+        # With w in place of √w, or without weights, one of the two flips.
+        wrong = ratio(a, w) < 1e-7 if kept else ratio(a, np.ones(40)) >= 1e-7
+        assert wrong
+    # A column equal to x on the rows with positive weight is dependent (W-3).
+    x = G[:, 1]
+    A = np.column_stack([np.ones(40), x, x + 3.0 * np.eye(40)[0]])
+    w0 = np.append(0.0, np.ones(39))
+    assert la.independent_columns(A).all()
+    np.testing.assert_array_equal(la.independent_columns(A, w0), [True, True, False])
+    np.testing.assert_array_equal(la.lm_fit(A, x, w0).kept, [True, True, False])
+
+
+def test_la4_compares_with_the_kept_earlier_columns_only():
+    # The dropped near-duplicate adds nothing to the span, so its orthogonal
+    # direction, which comes next, is kept, as in R's lm.fit.
+    rng = np.random.default_rng(14)
+    G = _basis(rng, 30, 2)
+    x = G[:, 1]
+    z = np.linalg.norm(x) * _unit_orthogonal(rng, G)
+    A = np.column_stack([G, x + 5e-8 * z, z])
+    np.testing.assert_array_equal(la.independent_columns(A), [True, True, False, True])
 
 
 def test_lm_fit_tests_the_norm_without_centering():
@@ -340,7 +446,7 @@ def test_lm_fit_unit_weights_equal_no_weights_and_zero_weights_drop_rows():
     plain, unit = la.lm_fit(A, y), la.lm_fit(A, y, np.ones(12))
     np.testing.assert_array_equal(plain.coef, unit.coef)
     assert plain.rss == unit.rss
-    A2 = np.vstack([A, [1.0, 1e8, -1e8]])
+    A2 = np.vstack([A, [1.0, 1e160, -1e160]])  # W-3: not read into the RSS
     fit = la.lm_fit(A2, np.append(y, 1e9), np.append(np.ones(12), 0.0))
     np.testing.assert_allclose(fit.coef, plain.coef, rtol=1e-12)
     assert fit.rss == pytest.approx(plain.rss, rel=1e-12)
@@ -474,6 +580,36 @@ def test_pruning_factor_scales_exactly_with_a_power_of_two_in_y():
     np.testing.assert_array_equal(
         la.prefix_rss(Z8, f8.rss), la.prefix_rss(Z, f.rss) * 2.0**-80
     )
+
+
+def test_drop_costs_do_not_depend_on_the_scale_of_a_column():
+    A, Y, w = _case(16, 30, 5, 2, True)
+    f = la.r_factor(A, Y, w)
+    want = la.drop_costs(f.R, f.Z, 5)
+    for c in (1e160, 1e-160):
+        f2 = la.r_factor(A * np.array([1.0, 1.0, c, 1.0, 1.0]), Y, w)
+        np.testing.assert_allclose(la.drop_costs(f2.R, f2.Z, 5), want, rtol=1e-12)
+
+
+def test_pruning_factor_near_the_la4_limit_matches_exact_refits():
+    # kappa above 1e6: a hinge and its copy with noise of relative size 1e-6,
+    # against refits in exact rational arithmetic (LA-5 allows 1e-8).
+    rng = np.random.default_rng(17)
+    x1, x2 = rng.standard_normal((2, 24))
+    h = np.maximum(x1 - 0.2, 0.0)
+    near = h + 1e-6 * rng.standard_normal(24)
+    A = np.column_stack([np.ones(24), x1, h, near, x2, np.maximum(x2, 0.0)])
+    y = A @ rng.standard_normal(6) + rng.standard_normal(24)
+    w = rng.uniform(0.5, 2.0, 24)
+    assert np.linalg.cond(np.sqrt(w)[:, None] * A) > 1e6
+    f = la.r_factor(A, y, w)
+    prefix = la.prefix_rss(f.Z, f.rss)
+    want = _exact_rss(A, y, w, [list(range(m)) for m in range(1, 7)])
+    np.testing.assert_allclose(prefix, want, rtol=1e-10)
+    for pos in range(2, 7):
+        got = prefix[pos - 1] + la.drop_costs(f.R, f.Z, pos)
+        rest = [[c for c in range(pos) if c != i] for i in range(pos)]
+        np.testing.assert_allclose(got, _exact_rss(A, y, w, rest), rtol=1e-10)
 
 
 def test_r_factor_edge_cases():

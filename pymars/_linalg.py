@@ -18,7 +18,12 @@ Numerics. float64 throughout; no function writes into its inputs; every
 tolerance is relative to a scale that its rule names, and a test whether data
 are constant or zero compares the values exactly ("Conventions for all rules").
 Y enters only through products and sums, so multiplying Y by a power of 2, as
-EDGE-6 does, changes no bit of a result beyond that factor. Memory is
+EDGE-6 does, changes no bit of a result beyond that factor. EDGE-6 scales Y
+only: the covariates and the columns of B must lie within about 1e-150 to 1e150
+in absolute value, so that their squares stay in the normal range of float64;
+``collinearity_ratio`` and ``drop_costs`` also scale by powers of 2 inside. N is
+the ``math.fsum`` of the weights, not snapped to an integer (W-4); the
+difference is at most 1e-8 relative, inside the bands of LA-5. Memory is
 O(n·(M + K)) for n rows, M columns and K responses.
 
 Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
@@ -31,6 +36,14 @@ Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
   of LA-4, the analogue of R's ``lm.fit`` (FWD-11, PRUNE-8).
 - ``r_factor``, ``prefix_rss``, ``drop_costs``, ``move_column``: the R factor of
   the pruning pass and its downdates (PRUNE-3, PRUNE-9).
+
+One PRUNE-3 stage at position pos (counted from 1, as in the spec) with
+``R, Z, rss = r_factor(A, Y, w)`` for the columns in the working order: the RSS
+without the column at 0-based index i, for i = 1, …, pos - 1, is
+``prefix_rss(Z, rss)[pos - 1] + drop_costs(R, Z, pos)[i]``; after the tie rule,
+``R, Z = move_column(R, Z, i, pos - 1)`` moves the removed term to position pos,
+and ``prefix_rss(Z, rss)`` offers the new order. With several responses the
+calls are the same, and pos shrinks by one after each removal.
 """
 
 from __future__ import annotations
@@ -148,7 +161,9 @@ def gram_schmidt(Q: npt.ArrayLike, v: npt.ArrayLike) -> GramSchmidt:
     [plan: Fast path]. With v = √w·(b·x), ``norm``² is A_w of LA-7, the weighted
     RSS of b·x regressed on B. The function does not decide whether v is
     dependent: FWD-11 applies LA-4 (``independent_columns``) when the pass
-    stops. Complexity: O(n·r) time, O(n) memory.
+    stops. A v in the span of Q leaves a v⊥ of rounding noise, of norm about
+    1e-16·‖v‖, and then ``q`` is a unit vector in a random direction: never
+    append it. Complexity: O(n·r) time, O(n) memory.
     """
     v = np.asarray(v, dtype=np.float64)
     if v.ndim != 1:
@@ -197,7 +212,8 @@ def collinearity_ratio(
     cases = h if w is None else h[wv > 0.0]
     if cases.size == 0 or np.all(cases == cases[0]):
         return 0.0
-    hs = np.ldexp(h, -int(np.frexp(np.max(np.abs(h)))[1]))
+    h = h if w is None else np.where(wv > 0.0, h, 0.0)  # W-3: not a case
+    hs = np.ldexp(h, -int(np.frexp(np.max(np.abs(cases)))[1]))
     d = hs - float(wv @ hs) / math.fsum(wv)
     centered = float(wv @ (d * d))
     if centered == 0.0:  # only by underflow, with weights that EDGE-6 rejects
@@ -317,7 +333,8 @@ def lm_fit(A: npt.ArrayLike, Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -
         Qk, Rk = np.linalg.qr(As[:, kept])
         coef[kept] = scipy.linalg.solve_triangular(Rk, Qk.T @ (sw * Y2))
     residuals = Y2 - A @ coef
-    rss = float(np.sum(wv[:, None] * np.square(residuals)))
+    pos = wv > 0.0  # W-3: a row with zero weight adds nothing to the RSS
+    rss = float(np.sum(wv[pos, None] * np.square(residuals[pos])))
     if one_d:
         return LmFit(coef[:, 0], kept, residuals[:, 0], rss)
     return LmFit(coef, kept, residuals, rss)
@@ -368,14 +385,19 @@ def drop_costs(R: npt.ArrayLike, Z: npt.ArrayLike, pos: int) -> FloatArray:
     PRUNE-3 stage compares these after the intercept. With R_p the leading
     pos x pos block of R and β = R_p⁻¹·Z[:pos], the increase is
     Σ_k β_ik² / [(R_pᵀR_p)⁻¹]_ii, where [(R_pᵀR_p)⁻¹]_ii is the squared norm of
-    row i of R_p⁻¹; R_p must be nonsingular. Complexity: O(pos³ + pos²·K).
+    row i of R_p⁻¹; R_p must be nonsingular. Each column of R_p is first
+    multiplied by a power of 2, which changes no increase and keeps the squares
+    in range when the columns of B differ widely in scale.
+    Complexity: O(pos³ + pos²·K).
     """
     R = _matrix(R, "R")
     Z = np.asarray(Z, dtype=np.float64)
     pos = operator.index(pos)
     if not 1 <= pos <= R.shape[1]:
         raise ValueError(f"pos must be in 1..{R.shape[1]}, not {pos}")
-    Rinv = scipy.linalg.solve_triangular(R[:pos, :pos], np.eye(pos))
+    Rp = R[:pos, :pos]
+    Rp = np.ldexp(Rp, -np.frexp(np.max(np.abs(Rp), axis=0))[1])
+    Rinv = scipy.linalg.solve_triangular(Rp, np.eye(pos))
     beta = Rinv @ Z[:pos]
     num = np.square(beta) if beta.ndim == 1 else np.sum(np.square(beta), axis=1)
     return num / np.sum(np.square(Rinv), axis=1)
@@ -386,12 +408,14 @@ def move_column(
 ) -> tuple[FloatArray, FloatArray]:
     """Return new R and Z for the order with column i moved to position j.
 
-    The columns between positions i and j shift one place toward i, as in step
-    2 of a PRUNE-3 stage, which moves the removed term to position pos. Only
-    rows min(i, j) to max(i, j) change: a Householder QR of that block restores
-    the triangle, and its orthogonal factor turns the same rows of Z, so every
-    prefix RSS is that of the new order (PRUNE-9, a downdate in place of a
-    refit). Complexity: O(h²·(M + K)) with h = |i - j| + 1.
+    i and j are 0-based; the columns between them shift one place toward i. In
+    step 2 of a PRUNE-3 stage, whose positions count from 1, the removed term
+    goes to position pos, so j = pos - 1. Only rows min(i, j) to max(i, j)
+    change: a Householder QR of that block restores the triangle, and its
+    orthogonal factor turns the same rows of Z, so every prefix RSS is that of
+    the new order (PRUNE-9, a downdate in place of a refit).
+    Complexity: O(M² + M·K) for the copies of R and Z, and O(h²·(M + K)) for the
+    QR, with h = |i - j| + 1.
     """
     R = _matrix(R, "R")
     Z = np.asarray(Z, dtype=np.float64)
