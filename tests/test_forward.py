@@ -563,7 +563,8 @@ def test_max_legal_is_inclusive():
     assert best.kind == _forward.KIND_PAIR and best.err == 0.0 and best.sure
     st_.max_legal = lambda: best.reduction
     assert st_.refine([best._replace(err=1.0, sure=False)]) == [best]
-    reduction = st_.rss[-1] - st_.check(best).rss
+    del st_.max_legal  # the check's reduction comes from the rebuilt RSS, which
+    reduction = st_.rss[-1] - st_.check(best).rss  # can differ in the last bits
     st_.max_legal = lambda: reduction
     assert st_.check(best) is not None
     x = np.arange(12.0)
