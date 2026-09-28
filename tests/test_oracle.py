@@ -640,6 +640,17 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     Mf, several = B.shape[1], Y.shape[1] >= 2
     rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
     floor = 1e-10 * ref["rss_per_size"][0] / (float(np.sum(w)) - 1)
+    for rec, who in ((fast, "fast"), (ref, "reference")):
+        for key, (dtype, shape) in {
+            "removed": (np.int64, (Mf - 1,)),
+            "rss_per_size": (np.float64, (Mf,)),
+            "gcv_per_size": (np.float64, (Mf,)),
+            "subsets": (np.bool_, (Mf, Mf)),
+            "coef": (np.float64, (rec["selected_size"], Y.shape[1])),
+        }.items():
+            a = np.asarray(rec[key])
+            if a.dtype != dtype or a.shape != shape:
+                _fail(case, f"the {who} {key} is {a.dtype} {a.shape} (CORE-3, PRUNE-8)")
 
     def same(a, b, rtol) -> bool:  # two RSS values
         return (a <= floor and b <= floor) or abs(a - b) <= rtol * max(a, b)
@@ -714,6 +725,8 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
         _rel(case, fast["gcv"], ref["gcv"], LA5, "final gcv")
     for key in ("rsq", "grsq"):
         _close(case, fast[key], ref[key], 1e-8, f"final {key}")
+        if m == 1 and not fast[key] == ref[key] == 0.0:  # by definition (GCV-7)
+            _fail(case, f"{key} of the intercept alone: {fast[key]!r}, {ref[key]!r}")
 
 
 # ---------------------------------------------------------------------------
