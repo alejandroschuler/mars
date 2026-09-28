@@ -155,6 +155,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 06:10 #49 round-1 fixes at 9dd16fa (all 26 listed mutants fail; np.errstate for the TSS; gate B PASS; CI 12/12). 5-hour 91 %, weekly 45 %: the #49 checker, the #58 rebase and its checker wait for the 08:20 reset.
 - 06:23 No agents running. Heartbeat stays at 08:35 (future, by the 70 % rule). One timer until 08:22, just after the 5-hour reset; then the #49 checker, the #58 rebase and checker, and merges, within the weekly 50 %.
 - 08:23 08:22 after the 5-hour reset (2 %; next reset 13:20); weekly 45 %. Started recheck-49 and rebase-58 (both sonnet). The #57 round 2 waits for the user's answer on budget beyond 50 % (asked in the session at the user's summary request).
+- 08:33 Merged #58 (T18) as 62f5b6a after rebase-58 (all 13 commits '=') and rebase-check-58's re-approval; issue #20 closed; <main> fast-forwarded. Removed the clean worktrees t18-legacy-head and t18-legacy-gate; runner-t18 holds a modified output file, so its forced removal is on issue #60 for the user. #49 now needs a pure rebase onto 62f5b6a after recheck-49.
 
 ## Core-hour ledger
 
