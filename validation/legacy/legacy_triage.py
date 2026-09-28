@@ -166,8 +166,9 @@ VERDICTS: dict[str, Verdict] = {
     "glm": (
         "bug",
         "F9",
-        "GLM refit: the legacy logistic fit is L2-penalized (C = 1); fitted "
-        "probabilities off earth's glm by up to {diff}{same}",
+        "GLM refit: the legacy logistic fit is L2-penalized (C = 1); its fitted "
+        "probabilities differ by up to {diff_own} from an unpenalized refit on "
+        "the same basis, and by up to {diff} from earth's glm on {same} terms",
     ),
     "categorical": (
         "bug",

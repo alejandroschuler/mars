@@ -124,7 +124,7 @@ def test_verdict_fills_every_template():
     fields = {"head", "rss", "where", "max_legal", "why", "gcv_a", "rss_a", "gcv_e"}
     fields |= {"rss_e", "status", "code", "step", "earth", "legacy", "rss_l", "rel"}
     fields |= {"kappa", "size", "total", "field", "detail", "metric", "tol"}
-    fields |= {"err", "diff", "same", "terms"}
+    fields |= {"err", "diff", "diff_own", "same", "terms"}
     for key in lt.VERDICTS:
         label, _, text = lt.verdict(key, **dict.fromkeys(fields, 1.5), label="rule")
         assert label in {"rule", "bug", "quirk", "tie", "numeric", "unexplained"}
@@ -162,8 +162,9 @@ def test_build_cases_covers_s01_to_s20():
     assert datasets == {f"S{i:02d}" for i in range(1, 21)}
     assert sum(c.dataset == "S15" for c in cases.values()) == 200
     d2 = cases["S04_p10_n1000/matched_d2"]
-    assert d2.earth_args["Adjust.endspan"] == 1 and d2.legacy["penalty"] == 1.0
-    assert "S05/matched_d2" not in cases and "S05/matched_d2_adjust1" in cases
+    assert d2.earth_args["Adjust.endspan"] == 0 and d2.legacy["penalty"] == 1.0
+    assert cases["S05/matched_d2"].earth_args["Adjust.endspan"] == 0
+    assert "S05/matched_d2_adjust1" not in cases
     weighted = cases["S13_int_zeros/matched_d1"]
     assert (
         weighted.weighted and weighted.reference == "S13_int_zeros_repeated_matched_d1"

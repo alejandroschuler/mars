@@ -115,7 +115,7 @@ def build_cases() -> list[Case]:
     pat = re.compile(r"^(S\d\d\w*?)_(matched_d\d\w*|defaults_d\d|span_\w+|raw_d1)$")
     for path in sorted(FIXTURES.glob("S*.json")):
         m = pat.match(path.stem)
-        if m is None or path.stem == "S05_matched_d2":  # S05 has matched_d2_adjust1
+        if m is None or path.stem == "S05_matched_d2_adjust1":  # a new run instead
             continue
         dataset, mode = m.groups()
         fx = fixture(path.stem)
@@ -124,8 +124,8 @@ def build_cases() -> list[Case]:
         c.fixture, c.reference, c.weighted = path.stem, path.stem, weighted
         if c.mode == "matched":
             c.legacy = legacy_matched(args)
-            if args["degree"] > 1 and "Adjust.endspan" not in args:
-                c.earth_args = {**args, "Adjust.endspan": 1}
+            if args["degree"] > 1:  # Adjust.endspan = 0: no larger endspan (SPAN-4)
+                c.earth_args = {**args, "Adjust.endspan": 0}
         elif c.mode == "span":
             c.legacy = legacy_spans(args)
         else:
@@ -147,7 +147,7 @@ def build_cases() -> list[Case]:
     matched = fixture("S01_matched_d1")["earth_args"]
     for d in fixture("s15_draws")["draws"]:
         if d["mode_family"] == "matched":
-            args = {**matched, "degree": d["degree"], "Adjust.endspan": 1}
+            args = {**matched, "degree": d["degree"], "Adjust.endspan": 0}
             legacy, mode = legacy_matched(args), "matched"
         else:
             args, legacy, mode = (
@@ -330,7 +330,7 @@ def cmd_probe(ns: argparse.Namespace) -> None:
     for c in select(ns.only):
         leg_path, probe_path = (
             out / ns.code / f"{slug(c.id)}.json",
-            out / "probes" / f"{slug(c.id)}.json",
+            out / "probes" / ns.code / f"{slug(c.id)}.json",
         )
         if (
             probe_path.exists()
@@ -363,7 +363,7 @@ def cmd_probe(ns: argparse.Namespace) -> None:
             probe = probe_choice(
                 trace, results[slug(c.id)], leg, step, reference_inputs(c)
             )
-            write_json(out / "probes" / f"{slug(c.id)}.json", probe)
+            write_json(out / "probes" / ns.code / f"{slug(c.id)}.json", probe)
             print(f"probe {c.id} step {step}: {probe['status']}", flush=True)
 
 
@@ -743,31 +743,35 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
             for d in (leg, earth)
         ]
     if f.case.dataset in GLM:
-        diff = float(
-            np.max(
-                np.abs(
-                    np.asarray(leg["proba_train"])[:, 1] - np.ravel(earth["pred_train"])
-                )
-            )
-        )
-        l_sel = sorted(
-            lt.sig_from_json(leg["terms"][i]["sig"]) for i in leg["selected"]
-        )
-        same = l_sel == sorted(f.e_sigs[r - 1] for r in earth["selected_terms"])
-        label, finding, text = lt.verdict(
-            "glm", diff=diff, same=" on the same terms" * same
-        )
-        row["diffs"].append(
-            {
-                "kind": "glm",
-                "step": None,
-                "label": label,
-                "finding": finding,
-                "text": text,
-            }
-        )
+        row["diffs"].append(glm_refit(f))
     row["final"] = fin
     return row
+
+
+def glm_refit(f: Fit) -> dict[str, Any]:
+    """F9 on a binary fit: the legacy logistic refit (L2 penalty, C = 1)
+    against an unpenalized refit on the legacy code's own selected basis,
+    and against earth's glm (whose basis may differ)."""
+    import warnings
+
+    from sklearn.linear_model import LogisticRegression
+
+    leg, X = f.leg, case_inputs(f.case)["X"]
+    sel = [lt.sig_from_json(leg["terms"][i]["sig"]) for i in leg["selected"]]
+    p_leg = np.asarray(leg["proba_train"])[:, 1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        unpen = LogisticRegression(C=np.inf, fit_intercept=False, max_iter=100000)
+        B = lt.basis_matrix(sel, X)
+        p_unpen = unpen.fit(B, case_inputs(f.case)["y"]).predict_proba(B)[:, 1]
+    same = sorted(sel) == sorted(f.e_sigs[r - 1] for r in f.earth["selected_terms"])
+    v = lt.verdict(
+        "glm",
+        diff_own=float(np.max(np.abs(p_leg - p_unpen))),
+        diff=float(np.max(np.abs(p_leg - np.ravel(f.earth["pred_train"])))),
+        same="the same" if same else "other",
+    )
+    return {"kind": "glm", "step": None, "label": v[0], "finding": v[1], "text": v[2]}
 
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -802,11 +806,12 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def head_vs_wheel(out: Path, cases: list[Case]) -> dict[str, Any]:
-    """Whether HEAD and the wheel give the same fit, on the cases run with both."""
+    """Whether HEAD and the wheel give the same fit, on the unweighted cases
+    run with both (the wheel takes no weights)."""
     same, differ = [], []
     for c in cases:
         paths = [out / code / f"{slug(c.id)}.json" for code in ("wheel", "head")]
-        if all(p.exists() for p in paths):
+        if not c.weighted and all(p.exists() for p in paths):
             a, b = (json.loads(p.read_text()) for p in paths)
             keys = (
                 "terms",
@@ -827,7 +832,7 @@ def cmd_report(ns: argparse.Namespace) -> None:
         for code in ("wheel", "head"):
             path = out / code / f"{slug(c.id)}.json"
             if path.exists() and (code == "wheel" or c.weighted):
-                probe_path = out / "probes" / f"{slug(c.id)}.json"
+                probe_path = out / "probes" / code / f"{slug(c.id)}.json"
                 probe = (
                     json.loads(probe_path.read_text()) if probe_path.exists() else None
                 )
