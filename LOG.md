@@ -178,6 +178,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:21 The user set the budget for the new weekly counter: go to 50 % (then pause and tell the user).
 - 13:28 Pacing rule added: full reviews and long author tasks start only while the 5-hour window is below 60 % (two reviews lost to the limit so far).
 - 13:31 T07 PR #66 ready (80bd7f5): the reference agrees with earth on 124 of 133 dataset fixtures and 197 of 200 S15 draws; 7 labeled entries (4 rule, 3 quirk), no bug; OQ-2 threshold decided; 4 questions on #44. Its single review waits for a reviewer slot. Weekly 3 %, 5-hour 16 %.
+- 13:34 #64 (the user's TOOLS-2 PR) APPROVE at 6e15ed4; rebase-64 started. Started the single review of #66 (T07, opus). TOOLS-3 noted (the fake gh never fails a pr view call).
 
 ## Core-hour ledger
 
