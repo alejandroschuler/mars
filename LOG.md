@@ -181,6 +181,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:34 #64 (the user's TOOLS-2 PR) APPROVE at 6e15ed4; rebase-64 started. Started the single review of #66 (T07, opus). TOOLS-3 noted (the fake gh never fails a pr view call).
 - 13:40 rebase-64: pure rebase of #64 to 99f1eee (gate B PASS), but auto mode denied the force-push to tools-fake-gh-pr-view (the user's branch) as Git Destructive; no workaround; needs-user issue with the exact command.
 - 13:41 #55 round 2: adversarial APPROVE; spec asks for one test case (the centered linear-candidate column unpinned; revert gives 4.2e-7 of the RSS); code right. Sent to t11-forward (tests only). Removed the clean worktree review-55-spec-r2 left by the failed first attempt.
+- 13:45 t15-oracle found a real bug in merged _pruning.py: Y is not centered before the QR, so a large-mean response misses LA-5 (1.2e-6 relative at y + 1e10); the reference is exact. t10-pruning resumed for a small fix PR (_pruning.py and _gcv.tss). T15 adds the failing draws after the fix merges (no red commits).
 
 ## Core-hour ledger
 
