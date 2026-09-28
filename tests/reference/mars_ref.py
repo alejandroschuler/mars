@@ -1105,8 +1105,9 @@ def forward_pass(
 
 
 def _unscale(value, power: int):
-    """``value`` times 2**power, exactly; an overflow gives inf and an
-    underflow 0, as the arithmetic without the scaling would [EDGE-6]."""
+    """``value`` times 2**power [EDGE-6]: exact while the result is a normal
+    float64, rounded in the subnormal range, 0 below it and inf above the
+    largest float64, as the arithmetic without the scaling would give."""
     with np.errstate(over="ignore", under="ignore"):
         out = np.ldexp(np.asarray(value, dtype=np.float64), power)
     return float(out) if out.ndim == 0 else out
@@ -1146,7 +1147,10 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     constant = bool(np.all(Y[0] == Y))  # every response is constant
     tss = 0.0  # by definition when every response is constant [GCV-7]
     if not constant:
-        tss = rss(np.ones((n, 1)), Ys, w)
+        # the scaled Y is below 2 in absolute value, so only the weights can
+        # make the TSS overflow; that is the error below, not a warning
+        with np.errstate(over="ignore", invalid="ignore"):
+            tss = rss(np.ones((n, 1)), Ys, w)
         if not (math.isfinite(tss) and tss >= np.finfo(np.float64).tiny):
             raise ValueError(
                 "the scale of y or of the weights is out of range: the weighted "
@@ -1158,7 +1162,7 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         "penalty": params.resolved_penalty(),
     }
     if N <= 1 or constant:
-        return _degenerate_fit(Ys, w, j, constant, tss, p, record_candidates, common)
+        return _degenerate_fit(Y, Ys, w, j, constant, tss, p, record_candidates, common)
     forward, B = forward_pass(
         X,
         Ys,
@@ -1210,23 +1214,24 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     }
 
 
-def _degenerate_fit(Ys, w, j, constant, tss, p, record_candidates, common) -> dict:
+def _degenerate_fit(Y, Ys, w, j, constant, tss, p, record_candidates, common) -> dict:
     """The intercept alone, when N <= 1 or every response is constant [EDGE-1,
     GCV-7]: its coefficient is the weighted mean of each response, gcv is
     +inf, rsq and grsq are 0, and TSS and rss are 0 exactly when every
     response is constant, else computed."""
     n = Ys.shape[0]
     if constant:
-        coef = Ys[:1].copy()  # the weighted mean of a constant is its value
+        coef = Y[:1].copy()  # the weighted mean of a constant is its value
         final_rss = 0.0
     else:
-        coef = lstsq_coef(np.ones((n, 1)), Ys, w)
-        final_rss = float(np.sum(w[:, None] * (Ys - coef) ** 2))
+        scaled = lstsq_coef(np.ones((n, 1)), Ys, w)
+        coef = _unscale(scaled, -j)
+        final_rss = float(np.sum(w[:, None] * (Ys - scaled) ** 2))
     tss_row = np.array([_unscale(tss, -2 * j)])
     return {
         "dirs": np.zeros((1, p), dtype=np.int8),
         "cuts": np.zeros((1, p)),
-        "coef": _unscale(coef, -j),
+        "coef": coef,
         "selected": np.array([0], dtype=np.int64),
         "rss": _unscale(final_rss, -2 * j),
         "gcv": math.inf,

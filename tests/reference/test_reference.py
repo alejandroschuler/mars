@@ -1596,10 +1596,43 @@ PRUNING_FIELDS = {
 }
 
 
+FIT_KEYS = {
+    "dirs",
+    "cuts",
+    "coef",
+    "selected",
+    "rss",
+    "gcv",
+    "rsq",
+    "grsq",
+    "n_eff",
+    "max_terms",
+    "penalty",
+    "forward",
+    "pruning",
+}
+FORWARD_KEYS = {
+    "dirs",
+    "cuts",
+    "kept",
+    "dropped",
+    "parent",
+    "step",
+    "rss",
+    "termination",
+    "candidates",
+}
+PRUNING_KEYS = {"removed", "rss_per_size", "gcv_per_size", "subsets", "selected_size"}
+
+
 def check_fields(fit, p, K):
-    """The keys, dtypes and shapes of CORE-3."""
+    """The keys (exactly), dtypes and shapes of CORE-3 and CORE-5."""
     M = len(fit["selected"])
     fwd, pr = fit["forward"], fit["pruning"]
+    assert set(fit) == FIT_KEYS and set(fwd) == FORWARD_KEYS
+    assert set(pr) == PRUNING_KEYS
+    if fwd["candidates"] is not None:
+        assert set(fwd["candidates"]) == set(LOG_FIELDS)
     Ma, S, Mf = len(fwd["dirs"]), len(fwd["rss"]) - 1, len(fwd["kept"])
     shapes = {
         "dirs": (M, p),
@@ -1737,6 +1770,77 @@ class TestFit:
         assert scaled["rss"] == pytest.approx(scale**2 * base["rss"], rel=1e-9)
         assert scaled["grsq"] == pytest.approx(base["grsq"], rel=1e-9)
 
+    def test_a_dropped_term_before_kept_ones(self):
+        # FWD-11 in the fit: x0 = 1e7 + (k mod 2) makes the linear term of x0
+        # dependent by LA-4 (5e-8 of its norm outside the intercept), so the
+        # pruning pass gets the terms of kept, and pruning index m is forward
+        # index kept[m] [CORE-3]
+        rng = np.random.default_rng(5)
+        n = 60
+        X = np.column_stack([1e7 + (np.arange(n) % 2), rng.uniform(size=n)])
+        noise = rng.normal(scale=0.05, size=n)
+        y = 2 * (X[:, 0] - 1e7) + 3 * np.maximum(X[:, 1] - 0.5, 0) + noise
+        result = fit(X, y)
+        fwd, pr = result["forward"], result["pruning"]
+        assert fwd["dropped"].size and fwd["dropped"].min() < fwd["kept"].max()
+        check_fields(result, 2, 1)
+        size = pr["selected_size"]
+        np.testing.assert_array_equal(
+            result["selected"], fwd["kept"][np.flatnonzero(pr["subsets"][size - 1])]
+        )
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        np.testing.assert_allclose(
+            result["coef"], ref.lstsq_coef(B, y[:, None], np.ones(n)), rtol=1e-10
+        )
+
+    def test_the_bound_of_edge_1_and_the_degenerate_record(self):
+        # N = 1 exactly is degenerate [EDGE-1]; D = 10 gives j = -3, so every
+        # value on the scale of y is scaled back [EDGE-6, GCV-7]
+        X, y = np.array([[0.0], [1.0]]), np.array([0.0, 10.0])
+        one = fit(X, y, np.array([0.5, 0.5]))
+        check_fields(one, 1, 1)
+        assert one["forward"]["termination"] == ref.DEGENERATE
+        for value in (
+            one["rss"],
+            one["forward"]["rss"][0],
+            one["pruning"]["rss_per_size"][0],
+        ):
+            assert value == pytest.approx(25.0, rel=1e-14)
+        np.testing.assert_array_equal(one["coef"], [[5.0]])
+        assert one["forward"]["parent"].tolist() == [-1]
+        assert one["forward"]["step"].tolist() == [0]
+        assert one["pruning"]["subsets"].tolist() == [[True]]
+        # N = 1 + 2^-52 is within tau_N of 1, so it is 1 [W-4]
+        near = fit(X, y, np.array([0.5, 0.5 + 2.0**-52]))
+        assert near["forward"]["termination"] == ref.DEGENERATE and near["n_eff"] == 1.0
+        # N = 2 has no special case [EDGE-2]
+        assert fit(X, y)["forward"]["termination"] != ref.DEGENERATE
+        # N = 0.4 with y in the thousands: weighted mean 2250, RSS 475000
+        tiny = fit(
+            np.array([[0.0], [1.0], [2.0]]),
+            np.array([1000.0, 2000.0, 4000.0]),
+            np.array([0.1, 0.2, 0.1]),
+        )
+        assert tiny["forward"]["termination"] == ref.DEGENERATE
+        assert tiny["rss"] == pytest.approx(475000.0, rel=1e-14)
+        assert tiny["forward"]["rss"][0] == pytest.approx(475000.0, rel=1e-14)
+        np.testing.assert_allclose(tiny["coef"], [[2250.0]], rtol=1e-14)
+
+    def test_the_passes_get_the_resolved_penalty_and_the_snapped_n(self):
+        # weights 1 + 1e-10: the sum 60 + 6e-9 snaps to 60 [W-4]; max_degree 2
+        # gives d = 3 [GCV-4]; the pruning pass uses both [PRUNE-4]
+        X, y = noisy_data(11, p=3)
+        result = fit(X, y, np.full(60, 1.0 + 1e-10), max_degree=2)
+        assert result["penalty"] == 3.0 and result["n_eff"] == 60.0
+        pr = result["pruning"]
+        tau = ref.weight_tol(60.0)
+        for m in range(1, len(pr["rss_per_size"]) + 1):
+            expected = ref.gcv(pr["rss_per_size"][m - 1], m, 3.0, 60.0, tau)
+            assert pr["gcv_per_size"][m - 1] == expected
+        # weights 1 - 1e-9 sum to 19.99999998, which snaps to 20
+        X, y = noisy_data(12, n=20)
+        assert fit(X, y, np.full(20, 1 - 1e-9))["n_eff"] == 20.0
+
     def test_a_power_of_two_changes_no_bit(self):
         # [EDGE-6]: Y is scaled to D in [1, 2) before any sum
         X, y = noisy_data(18)
@@ -1746,6 +1850,16 @@ class TestFit:
             scaled["forward"]["rss"], 2.0**-80 * base["forward"]["rss"]
         )
         assert scaled["rsq"] == base["rsq"] and scaled["grsq"] == base["grsq"]
+        # the candidate log is on the scale of Y too, and best_rss is rss[s]
+        # [CORE-3]; here max |y| is outside [1, 2), so j is not 0
+        for result in (base, scaled):
+            log = result["forward"]["candidates"]
+            np.testing.assert_array_equal(log["best_rss"], result["forward"]["rss"][1:])
+        assert ref.y_scale_power(2.0**-40 * y) != 0
+        np.testing.assert_array_equal(
+            scaled["forward"]["candidates"]["second_rss"],
+            2.0**-80 * base["forward"]["candidates"]["second_rss"],
+        )
 
     def test_a_tiny_response_has_a_positive_tss(self):
         # seven 0s and one 1e-170: the fit is not degenerate, although its TSS
@@ -1763,6 +1877,10 @@ class TestFit:
         X = np.arange(4.0)[:, None]
         with pytest.raises(ValueError, match="scale of y or of the weights"):
             fit(X, [0.0, 1.0, 0.0, 1.0], np.full(4, 1e-310))
+        # weights 8e307 keep N finite, but the scaled TSS overflows; under the
+        # repository's filterwarnings = error a warning would fail this test
+        with pytest.raises(ValueError, match="scale of y or of the weights"):
+            fit(np.array([[0.0], [1.0]]), np.array([-1.9, 1.9]), np.full(2, 8e307))
 
     def test_several_responses_share_one_basis(self):
         X, y = noisy_data(19, p=3)
@@ -1817,9 +1935,9 @@ class TestFit:
 
 @pytest.mark.parametrize("name", ["S01_matched_d1", "S01_defaults_d1"])
 def test_the_fit_matches_earth_on_s01(name, load_fixture):
-    # One covariate at degree 1, so earth's rule for the kind of a search
-    # and the pymars rule agree here although the fixture's x is not scaled
-    # by its standard deviation [LA-7]. Tolerances from the plan's table.
+    # The harness divides the fixture's x by its standard deviation, so
+    # earth's rule for the kind of a search and the pymars rule agree
+    # [LA-7]. Tolerances from the plan's table.
     fixture = load_fixture(name)
     earth = fixture["result"]
     X = np.array(fixture["inputs"]["X"])
