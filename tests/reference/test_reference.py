@@ -1149,6 +1149,21 @@ class TestForwardPass:
         np.testing.assert_array_equal(hinge["dirs"], [[0], [1]])
         np.testing.assert_array_equal(hinge["cuts"], [[0.0], [0.0]])  # min x
 
+    def test_at_an_exact_fit_the_second_best_may_round_below_the_best(self):
+        # y = 1 + 2x: the linear candidate and many knots reduce the RSS to
+        # rounding noise, with equal reductions in float64; FWD-5 takes the
+        # linear candidate, and the logged second best (a knot) may have an
+        # RSS a few 1e-31 below it, far inside 1e-12 of the RSS before the step
+        x = np.arange(32.0) / 32
+        rec = run_forward(x[:, None], 1 + 2 * x, minspan=1, endspan=1)
+        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+        log = rec["candidates"]
+        assert log["second_kind"][0] == ref.PAIR
+        assert log["second_rss"][0] >= log["best_rss"][0] - 1e-12 * rec["rss"][0]
+        assert (
+            rec["rss"][0] - log["second_rss"][0] == rec["rss"][0] - log["best_rss"][0]
+        )
+
     def test_a_binary_covariate_offers_only_its_linear_term(self):
         # its one knot is the repeated minimum, which LA-3 rejects [KNOT-5]
         rng = np.random.default_rng(0)
@@ -1158,7 +1173,11 @@ class TestForwardPass:
         )
         np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
         assert rec["termination"] == ref.TERM_LIMIT
-        assert rec["candidates"]["second_kind"][0] == ref.NO_KIND
+        log = rec["candidates"]
+        assert log["second_kind"][0] == ref.NO_KIND
+        assert log["second_rss"][0] == math.inf  # CORE-3: no second candidate
+        assert log["second_parent"][0] == log["second_variable"][0] == -1
+        assert math.isnan(log["second_knot"][0])
 
     def test_constant_and_duplicate_covariates_never_enter_at_degree_one(self):
         X, y = noisy_data(1)
@@ -1726,6 +1745,15 @@ def test_the_pruning_pass_matches_earth_on_its_forward_basis(load_fixture, name)
     assert result["grsq"] == pytest.approx(earth["grsq"], abs=1e-8)
 
 
+def slot_of(record, k):
+    """The slot of forward term k [FWD-9]: 1 for the intercept, and 2j or
+    2j + 1 for the first or second term of step j."""
+    if k == 0:
+        return 1
+    j = int(record["step"][k])
+    return 2 * j + int(k != np.flatnonzero(record["step"] == j)[0])
+
+
 def same_pass(a, b):
     """Two forward records with the same terms, parents, steps and code."""
     for key in ("dirs", "cuts", "parent", "step", "termination"):
@@ -1756,6 +1784,42 @@ class TestForwardPassRules:
             entries = [list(e) for e in trace[s - 1]["entries"]]
             entries += [[math.inf, 2 * s]] * int(np.sum(rec["step"] == s))
             assert trace[s]["table"] == ref.queue_table(entries, s, beta)
+        # FAST-5: the lambda that each searched parent stores is the largest
+        # legal reduction among its own candidates, or 0 when there is none
+        w, N, Y = np.ones(80), 80.0, y[:, None]
+        params = ref.Params(max_degree=2, fast_k=3, fast_beta=beta, thresh=0.0)
+        sigma2 = ref.covariate_variances(X, w, N)
+        for s, step in enumerate(trace):
+            terms = np.flatnonzero(rec["step"] <= s)
+            B = ref.basis_matrix(X, rec["dirs"][terms], rec["cuts"][terms])
+            P_B = ref.Projector(B, w)
+            rss_s = rec["rss"][s]
+            limit = ref.max_legal(list(rec["rss"][: s + 1]))
+            for k in step["searched"]:
+                cands, searchable = ref._parent_candidates(
+                    k,
+                    rec["dirs"][k],
+                    X,
+                    Y,
+                    w,
+                    B,
+                    P_B,
+                    P_B.residual(Y),
+                    sigma2,
+                    N,
+                    ref.weight_tol(N),
+                    params,
+                    ref.collinearity_tol(s),
+                )
+                gains = [
+                    rss_s - c.rss
+                    for c in cands
+                    if ref.is_legal(c.kind, rss_s - c.rss, limit)
+                ]
+                expected = max(gains, default=0.0) if searchable else -1.0
+                lam, kappa = step["entries"][slot_of(rec, k) - 1]
+                assert kappa == 2 * (s + 1)
+                assert lam == pytest.approx(expected, rel=1e-10, abs=1e-300)
 
     def test_the_second_best_of_step_one_is_a_brute_force_second(self):
         # CORE-3: a second best with parent 0 and variable 1, so that the two
@@ -2143,3 +2207,11 @@ def test_the_second_best_candidate_where_the_limit_binds(load_fixture):
         cands += found
     assert any(not ref.is_legal(c.kind, rss_s - c.rss, limit) for c in cands)
     check_best_and_second(record["candidates"], 7, cands, rss_s, limit)
+    # FAST-5: the intercept, the one parent searched, stores its largest legal
+    # reduction (0.00288), not the larger reduction of an illegal knot (0.0213)
+    assert trace[7]["searched"] == [0]
+    gains = [rss_s - c.rss for c in cands if ref.is_legal(c.kind, rss_s - c.rss, limit)]
+    lam, kappa = trace[7]["entries"][0]
+    assert kappa == 16
+    assert lam == pytest.approx(max(gains), rel=1e-10)
+    assert max(rss_s - c.rss for c in cands) > 5 * lam
