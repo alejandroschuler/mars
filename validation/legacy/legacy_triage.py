@@ -23,6 +23,9 @@ from typing import Any
 import numpy as np
 
 NEAR_TIE_REL = 1e-7  # VALIDATION_PLAN.md, "Ties"
+# A gain within this fraction of the RSS is rounding: the candidate is in the
+# model's span already (several orders of magnitude above u = 1.1e-16).
+ZERO_GAIN_REL = 1e-10
 
 Factor = tuple[int, int, Any]
 Sig = tuple[Factor, ...]
@@ -116,6 +119,14 @@ VERDICTS: dict[str, Verdict] = {
         "{head}; every legacy candidate would make n or more columns, and the "
         "legacy code skips such candidates (its GCV would be infinite)",
     ),
+    "stop_zero_gain": (
+        "rule",
+        "F2",
+        "{head}; the best legacy candidate by GCV, {chosen}, is already in the "
+        "model's span (its computed gain is {gain} of {rss_before}), and the "
+        "legacy code stops on it: its stop test (F6) looks at the best candidate "
+        "by GCV, and the next one lowers the RSS by {gain2}",
+    ),
     "stop_eps": (
         "rule",
         "F6",
@@ -147,16 +158,17 @@ VERDICTS: dict[str, Verdict] = {
         None,
         "step {step}: RSS {rss_l} against {rss_e}, relative {rel}, kappa {kappa}",
     ),
-    "intercept": (
-        "bug",
-        "F3",
-        "the legacy pruning pass removes the intercept at size {size} of {total}",
-    ),
     "intercept_final": (
         "bug",
         "F3",
         "the legacy final model has {terms} terms and no intercept: its pruning "
-        "pass removed it",
+        "pass removed the intercept at size {size}",
+    ),
+    "intercept_path": (
+        "bug",
+        "F3",
+        "the legacy pruning path drops the intercept at size {size} and below; "
+        "the selected model, with {selected} terms, keeps it",
     ),
     "prune_subset": (
         "rule",
@@ -174,16 +186,18 @@ VERDICTS: dict[str, Verdict] = {
     "gcv_convention": (
         "rule",
         "F4",
-        "the same subsets but GCVs up to {rel} apart (relative), and {legacy} "
-        "selected terms against {earth}: the legacy C = M + d*H charges d per "
-        "hinge term and nothing for a linear term, earth d/2 per term",
+        "at size {size} both pruning paths keep the same subset, with {h} hinge "
+        "and {lin} linear terms, but the legacy C = M + d*H = {c_l} (d = {d_l} "
+        "for each hinge term, none for a linear term) and earth's C = M + "
+        "d*(M - 1)/2 = {c_e} (d = {d_e}), GCV {gcv_l} against {gcv_e}; the legacy "
+        "code selects {legacy} terms and earth {earth}",
     ),
     "constant_y": (
         "quirk",
         "F19",
-        "a constant response: at thresh = 0 earth's forward pass takes {n_earth} "
-        "steps on rounding noise (its forward RSS is about 1e-28) and the "
-        "pruning pass removes them all; the legacy code takes {n_legacy}",
+        "a constant response: at thresh = 0 earth's forward pass adds terms on "
+        "rounding noise (forward steps here: earth {n_earth}, the legacy code "
+        "{n_legacy}), and its pruning pass removes them all",
     ),
     "final": ("{label}", None, "{field}: {detail} {metric} above {tol}"),
     "weights": (
@@ -376,6 +390,31 @@ def classify_choice(ev: dict[str, Any]) -> Verdict:
         return verdict("tie", **{**ev, "rss": rss})
     probe = ev.get("probe") or {}
     status = probe.get("status")
+    e_a, e_e = ev.get("e_rss_a"), ev.get("e_rss_e")
+    if (
+        not ev.get("earth_stopped")
+        and e_a is not None
+        and e_e is not None
+        and e_e < e_a
+    ):
+        # earth's choice has the lower RSS, so the legacy code passed over it
+        if ev.get("leg_rss_e") is None:
+            key = "inactive_earth" if ev.get("e_knot_inactive") else "not_legacy"
+            return verdict(key, why=ev.get("leg_knot") or "no matching candidate", **ev)
+        if not ev.get("same_cost") and ev["leg_rss_e"] < (
+            ev.get("leg_rss_a") or np.inf
+        ):
+            return verdict(
+                "gcv_rank",
+                gcv_a=_g(ev.get("leg_gcv_a")),
+                rss_a=_g(ev.get("leg_rss_a")),
+                gcv_e=_g(ev.get("leg_gcv_e")),
+                rss_e=_g(ev["leg_rss_e"]),
+                **ev,
+            )
+        return verdict("unexplained_choice", status=f"{status}, earth's lower", **ev)
+    # the legacy choice has the lower RSS (or earth stopped): why earth passed
+    # over it is in earth's trace
     if status == "parent_not_in_earth":
         return verdict("mirror_parent", **ev)
     if status == "parent_not_searched":
@@ -392,27 +431,10 @@ def classify_choice(ev: dict[str, Any]) -> Verdict:
     # beats earth's traced single-hinge RSS for that knot (5 digits in the
     # trace): otherwise the second hinge is redundant and the RSS the same.
     single_rss = probe.get("earth_rss") or 0.0
-    if status == "single_search" and (ev.get("e_rss_a") or np.inf) < single_rss * (
-        1 - 1e-4
-    ):
+    if status == "single_search" and (e_a or np.inf) < single_rss * (1 - 1e-4):
         return verdict("single", **ev)
     if ev.get("earth_stopped"):
         return verdict("unexplained_choice", status=f"{status}, earth stopped", **ev)
-    if ev.get("leg_rss_e") is None and ev.get("e_knot_inactive"):
-        return verdict("inactive_earth", **ev)
-    if ev.get("leg_rss_e") is None:
-        return verdict(
-            "not_legacy", why=ev.get("leg_knot") or "no matching candidate", **ev
-        )
-    if not ev.get("same_cost") and ev["leg_rss_e"] < (ev.get("leg_rss_a") or np.inf):
-        return verdict(
-            "gcv_rank",
-            gcv_a=_g(ev.get("leg_gcv_a")),
-            rss_a=_g(ev.get("leg_rss_a")),
-            gcv_e=_g(ev.get("leg_gcv_e")),
-            rss_e=_g(ev["leg_rss_e"]),
-            **ev,
-        )
     return verdict("unexplained_choice", status=status, **ev)
 
 
@@ -422,6 +444,9 @@ def classify_stop(ev: dict[str, Any]) -> Verdict:
     head = f"forward steps: legacy {ev['n_legacy']}, earth {ev['n_earth']}"
     why, code = ev.get("legacy_stop"), ev.get("termcond")
     if ev["first"] == "legacy" and why in ("gcv_inf", "eps", "no_candidate"):
+        gain, before = ev.get("gain"), ev.get("rss_before")
+        if why == "eps" and gain is not None and abs(gain) <= ZERO_GAIN_REL * before:
+            why = "zero_gain"  # a term already in the span; not an epsilon matter
         fmt = {k: _g(ev.get(k)) for k in ("gain", "gain2", "rss_before")}
         return verdict(f"stop_{why}", head=head, chosen=ev.get("chosen"), **fmt)
     if ev["first"] == "earth" and code in (2, 3, 4, 5):

@@ -360,11 +360,25 @@ def cmd_probe(ns: argparse.Namespace) -> None:
         results = driver.run_earth(jobs, workdir=Path(tmp)) if jobs else {}
         for c, step, leg in metas:
             trace = Path(tmp) / f"{slug(c.id)}_trace.txt"
+            check_probe_prefix(results[slug(c.id)], earth_result(c, out), c.id)
             probe = probe_choice(
                 trace, results[slug(c.id)], leg, step, reference_inputs(c)
             )
             write_json(out / "probes" / ns.code / f"{slug(c.id)}.json", probe)
             print(f"probe {c.id} step {step}: {probe['status']}", flush=True)
+
+
+def check_probe_prefix(
+    probe: dict[str, Any], full: dict[str, Any], case_id: str
+) -> None:
+    """The probe run (``nk = 2s + 1``) must repeat the full run's first terms:
+    its ``dirs`` and ``cuts`` are the first rows of the full run's, exactly."""
+    rows = len(probe["dirs"])
+    same = probe["dirs"] == full["dirs"][:rows] and probe["cuts"] == full["cuts"][:rows]
+    if not same:
+        raise RuntimeError(
+            f"{case_id}: the probe's first {rows} terms differ from the full run's"
+        )
 
 
 def probe_choice(
@@ -452,17 +466,21 @@ def probe_choice(
 
 @dataclass
 class Fit:
-    """One fit's data for the analysis: both sides' steps, and earth's
-    reference inputs (repeated rows for integer weights)."""
+    """One fit's data for the analysis: both sides' steps, earth's inputs
+    ``ref`` (repeated rows for integer weights) and the legacy code's own
+    inputs ``own``; both default to the case's fixtures."""
 
     case: Case
     earth: dict[str, Any]
     leg: dict[str, Any]
     probe: dict[str, Any] | None
+    ref: dict[str, Any] | None = None
+    own: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
-        inp = reference_inputs(self.case)
-        self.X, self.y, self.w = inp["X"], inp["y"], inp["weights"]
+        self.ref = self.ref if self.ref is not None else reference_inputs(self.case)
+        self.own = self.own if self.own is not None else case_inputs(self.case)
+        self.X, self.y, self.w = self.ref["X"], self.ref["y"], self.ref["weights"]
         self.e_sigs = lt.earth_signatures(self.earth["dirs"], self.earth["cuts"])
         self.e_groups = lt.earth_steps(self.earth["dirs"])
         self.e_steps = earth_step_terms(self.earth)
@@ -477,7 +495,12 @@ class Fit:
 
 
 def analyze(
-    case: Case, earth: dict[str, Any], leg: dict[str, Any], probe: dict[str, Any] | None
+    case: Case,
+    earth: dict[str, Any],
+    leg: dict[str, Any],
+    probe: dict[str, Any] | None,
+    ref: dict[str, Any] | None = None,
+    own: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compare one fit and label its differences ("Triage of differences").
     Each entry of ``diffs`` has a kind (error, design, structure, rss,
@@ -509,14 +532,15 @@ def analyze(
     if case.dataset == "S19_factor":
         diff = float(np.max(np.abs(np.subtract(leg["pred_train"], earth["fitted"]))))
         row["final"] = {"legacy_terms": len(leg["selected"]), "max_fitted_diff": diff}
-        if diff > 1e-8 * float(np.std(case_inputs(case)["y"])):
+        y = (own or case_inputs(case))["y"]
+        if diff > 1e-8 * float(np.std(y)):
             add(
                 "final",
                 None,
                 lt.verdict("categorical", terms=len(leg["selected"]), diff=diff),
             )
         return row
-    f = Fit(case, earth, leg, probe)
+    f = Fit(case, earth, leg, probe, ref, own)
     fc = f.fc
     row["forward"] = {
         "legacy": fc["n_legacy"],
@@ -557,9 +581,13 @@ def analyze(
                 compare.FWD_RSS_REL, kappa, compare.KAPPA_RSS_LIMIT
             )
             rel = abs(rss_l - rss_e) / abs(rss_e) if rss_e else abs(rss_l)
-            row["forward"]["rss_rel_max"] = max(
-                rel, row["forward"].get("rss_rel_max", 0)
-            )
+            steps = row["forward"].setdefault("rss_steps", [0, 0])  # compared, agree
+            steps[0] += 1
+            if rel <= tol:
+                steps[1] += 1
+                row["forward"]["rss_rel_max"] = max(
+                    rel, row["forward"].get("rss_rel_max", 0.0)
+                )
             if rel > tol:
                 span = (
                     fc["first_subset"] is not None
@@ -632,10 +660,19 @@ def evidence(f: Fit, k: int) -> dict[str, Any]:
         "e_knot_inactive": bool(e_step) and inactive_knot(f, k, e_step),
         "earth_stopped": not e_step,
         "probe": f.probe,
-        "fast_k": (f.case.earth_args or fixture(f.case.reference)["earth_args"]).get(
-            "fast.k"
-        ),
+        "fast_k": earth_args(f.case).get("fast.k"),
     }
+
+
+def earth_args(case: Case) -> dict[str, Any]:
+    """earth's arguments for the case: a new run's, or the reference fixture's."""
+    return case.earth_args or fixture(case.reference)["earth_args"]
+
+
+def earth_penalty(case: Case) -> float:
+    """earth's GCV penalty d: its argument, or its default (GCV-4)."""
+    args = earth_args(case)
+    return float(args.get("penalty", 2 if args["degree"] == 1 else 3))
 
 
 def inactive_knot(f: Fit, k: int, e_step: frozenset[lt.Sig]) -> bool:
@@ -681,50 +718,112 @@ def legacy_stop(f: Fit) -> str:
     return "eps" if last["chosen"]["rss"] >= last["rss_before"] - EPS else "other"
 
 
+def newest_codes(leg: dict[str, Any]) -> list[int | None]:
+    """The code of each legacy term's newest factor (the term minus its
+    parent): the legacy C counts the terms whose newest factor is a hinge."""
+    sigs = [lt.sig_from_json(t["sig"]) for t in leg["terms"]]
+    out: list[int | None] = []
+    for sig, t in zip(sigs, leg["terms"], strict=True):
+        parent = sigs[t["parent"]] if t["parent"] is not None else ()
+        new = [factor[1] for factor in sig if factor not in parent]
+        out.append(new[0] if new else None)
+    return out
+
+
 def pruning(add: Any, row: dict[str, Any], f: Fit) -> None:
     """When both forward passes added the same terms: the pruning path size
     by size in earth's term numbering (the legacy path gives one subset per
-    size), its GCVs, the selected terms, and, when those agree, the final
-    model through compare_fit."""
+    size), with its GCVs, and the selected terms. The difference that decides
+    the selected model comes first: the intercept missing from it (F3); else,
+    when the selections differ, other GCVs at a size where both paths keep
+    the same subset (F4), other subsets at a selected size, or a tie between
+    sizes. Then the path's other differences: the intercept dropped below the
+    selected size (F3), other subsets at other sizes. When the selected terms
+    agree, the final model goes through compare_fit."""
     leg, earth = f.leg, f.earth
     to_earth = [f.e_sigs.index(lt.sig_from_json(t["sig"])) + 1 for t in leg["terms"]]
-    subsets = zip(leg["prune_subsets"], leg["prune_rss"], leg["prune_gcv"], strict=True)
-    by_size = {
-        len(sub): (frozenset(to_earth[i] for i in sub), r, g) for sub, r, g in subsets
-    }
+    codes = newest_codes(leg)
+    path = zip(leg["prune_subsets"], leg["prune_rss"], leg["prune_gcv"], strict=True)
+    by_size = {len(sub): (sub, r, g) for sub, r, g in path}
+    mine = {m: frozenset(to_earth[i] for i in v[0]) for m, v in by_size.items()}
     theirs = {
-        m + 1: frozenset(t for t in terms if t)
-        for m, terms in enumerate(earth["prune_terms"])
+        m + 1: frozenset(t for t in ts if t)
+        for m, ts in enumerate(earth["prune_terms"])
     }
-    no_int = [m for m in by_size if 1 not in by_size[m][0]]
-    if no_int:
+    sel_l = frozenset(to_earth[i] for i in leg["selected"])
+    sel_e = frozenset(earth["selected_terms"])
+    counts = {"legacy": len(sel_l), "earth": len(sel_e)}
+    no_int = sorted(m for m in mine if 1 not in mine[m])
+    other = sorted(m for m in mine if m not in no_int and mine[m] != theirs.get(m))
+    apart = {}
+    for m in mine:
+        if m in no_int or m in other or not np.isfinite(by_size[m][2]):
+            continue
+        g_e = earth["gcv_per_subset"][m - 1]
+        if abs(by_size[m][2] - g_e) > compare.GCV_REL * (abs(g_e) or 1.0):
+            apart[m] = g_e
+
+    def subset_verdict(m: int) -> lt.Verdict:
+        rss_l, rss_e = by_size[m][1], earth["rss_per_subset"][m - 1]
+        key = "prune_subset" if rss_l > rss_e * (1 + lt.NEAR_TIE_REL) else "prune_tie"
+        return lt.verdict(key, size=m, rss_l=rss_l, rss_e=rss_e)
+
+    def gcv_verdict(m: int) -> lt.Verdict:
+        sub = by_size[m][0]
+        h = sum(codes[i] in (1, -1) for i in sub)
+        lin = sum(codes[i] == 2 for i in sub)
+        d_l, d_e = float(f.case.legacy.get("penalty", 3.0)), earth_penalty(f.case)
+        c_l, c_e = m + d_l * h, m + d_e * (m - 1) / 2
+        return lt.verdict(
+            "gcv_convention",
+            size=m,
+            h=h,
+            lin=lin,
+            d_l=d_l,
+            d_e=d_e,
+            c_l=c_l,
+            c_e=c_e,
+            gcv_l=by_size[m][2],
+            gcv_e=apart[m],
+            **counts,
+        )
+
+    done = set()
+    if 1 not in sel_l:
         add(
             "pruning",
             None,
-            lt.verdict("intercept", size=max(no_int), total=len(to_earth)),
+            lt.verdict("intercept_final", terms=len(sel_l), size=max(no_int)),
         )
-    other = [m for m in by_size if m not in no_int and by_size[m][0] != theirs.get(m)]
-    if other:
-        m = max(other)  # the pruning pass runs from the largest size down
-        rss_l, rss_e = by_size[m][1], earth["rss_per_subset"][m - 1]
-        key = "prune_subset" if rss_l > rss_e * (1 + lt.NEAR_TIE_REL) else "prune_tie"
-        add("pruning", None, lt.verdict(key, size=m, rss_l=rss_l, rss_e=rss_e))
-    same = [m for m in by_size if m not in no_int and m not in other]
-    pairs = [(by_size[m][2], earth["gcv_per_subset"][m - 1]) for m in same]
-    rel = [abs(a - b) / (abs(b) or 1.0) for a, b in pairs if np.isfinite(a)]
-    sel = sorted(to_earth[i] for i in leg["selected"])
-    counts = {"legacy": len(sel), "earth": len(earth["selected_terms"])}
-    if rel and max(rel) > compare.GCV_REL:
-        add("pruning", None, lt.verdict("gcv_convention", rel=max(rel), **counts))
-    if sel != sorted(earth["selected_terms"]):
-        if not row["diffs"]:
+    elif sel_l != sel_e:
+        chosen = [m for m in (len(sel_e), len(sel_l)) if m in apart]
+        at = [m for m in (len(sel_e), len(sel_l)) if m in other]
+        if chosen or apart:
+            m = (chosen or sorted(apart, reverse=True))[0]
+            add("pruning", None, gcv_verdict(m))
+            done.add("gcv")
+        elif at:
+            add("pruning", None, subset_verdict(at[0]))
+            done.add(at[0])
+        else:
             add("pruning", None, lt.verdict("size_tie", **counts))
+    if no_int and 1 in sel_l:
+        add(
+            "pruning",
+            None,
+            lt.verdict("intercept_path", size=max(no_int), selected=len(sel_l)),
+        )
+    rest = [m for m in other if m not in done]
+    if rest:
+        add("pruning", None, subset_verdict(max(rest)))
+    if apart and "gcv" not in done:
+        add("pruning", None, gcv_verdict(max(apart)))
+    if sel_l != sel_e:
         return
     order = np.argsort([to_earth[i] for i in leg["selected"]])
-    ours = {
-        "coef": np.asarray(leg["coef"])[order].reshape(-1, 1).tolist(),
-        "gcv": leg["gcv"],
-    }
+    ours = {"coef": np.asarray(leg["coef"])[order].reshape(-1, 1).tolist()}
+    if not apart:  # other GCVs are F4, reported above
+        ours["gcv"] = leg["gcv"]
     if f.case.dataset not in GLM:  # there, earth's fitted values are glm probabilities
         if f.case.reference == f.case.fixture:  # else earth fits repeated rows
             ours["fitted"] = np.reshape(leg["pred_train"], (-1, 1)).tolist()
@@ -732,15 +831,17 @@ def pruning(add: Any, row: dict[str, Any], f: Fit) -> None:
             ours["pred_test"] = np.reshape(leg["pred_test"], (-1, 1)).tolist()
     B = lt.basis_matrix([f.e_sigs[r - 1] for r in earth["selected_terms"]], f.X)
     sd = float(np.std(f.y)) or float(np.max(np.abs(f.y))) or 1.0  # a constant y
+    theirs_fit = {k: earth.get(k) for k in ours}
     diffs = compare.compare_fit(
-        ours, {k: earth.get(k) for k in ours}, kappa=float(np.linalg.cond(B)), sd_y=sd
+        ours, theirs_fit, kappa=float(np.linalg.cond(B)), sd_y=sd
     )
     row["pruning"] = [d.field for d in diffs]
     for d in diffs[:1]:
         metric = "" if d.metric is None else f"{d.metric:.3g}"
+        label = d.label or "unexplained"
         v = lt.verdict(
             "final",
-            label=d.label or "unexplained",
+            label=label,
             field=d.field,
             detail=d.detail,
             metric=metric,
@@ -773,11 +874,11 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
                 np.abs(np.ravel(leg["pred_test"]) - np.ravel(earth["pred_test"]))
                 / y.std()
             )
-            X, X_test = f.X, reference_inputs(f.case)["X_test"]
+            X, X_test = f.X, f.ref["X_test"]
             box = (X_test >= X.min(axis=0)) & (X_test <= X.max(axis=0))
             inside = diff[np.all(box, axis=1)]
             fin["pred_diff_sd"] = [float(inside.max(initial=0)), float(diff.max())]
-    truth = case_inputs(f.case)["truth"]
+    truth = f.own.get("truth")
     if truth is not None:
         fin["test_mse"] = [
             float(np.mean((np.ravel(d["pred_test"]) - truth) ** 2))
@@ -788,7 +889,7 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
     fin["intercept"] = 0 in leg["selected"]
     fin["fit_time"] = leg.get("fit_time")
     if 0 not in leg["selected"] and not any(d["finding"] == "F3" for d in row["diffs"]):
-        v = lt.verdict("intercept_final", terms=len(leg["selected"]))
+        v = lt.verdict("intercept_final", terms=len(leg["selected"]), size=max(no_int))
         row["diffs"].append(
             {
                 "kind": "pruning",
@@ -804,29 +905,32 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
     return row
 
 
-def glm_refit(f: Fit) -> dict[str, Any]:
-    """F9 on a binary fit: the legacy logistic refit (L2 penalty, C = 1)
-    against an unpenalized refit on the legacy code's own selected basis,
-    and against earth's glm (whose basis may differ)."""
+def glm_numbers(f: Fit) -> tuple[float, float, bool]:
+    """F9 on a binary fit: the largest difference of the legacy fitted
+    probabilities from an unpenalized logistic refit on the legacy code's own
+    selected basis, the largest from earth's glm, and whether the two
+    programs selected the same terms."""
     import warnings
 
     from sklearn.linear_model import LogisticRegression
 
-    leg, X = f.leg, case_inputs(f.case)["X"]
+    leg, X = f.leg, f.own["X"]
     sel = [lt.sig_from_json(leg["terms"][i]["sig"]) for i in leg["selected"]]
     p_leg = np.asarray(leg["proba_train"])[:, 1]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         unpen = LogisticRegression(C=np.inf, fit_intercept=False, max_iter=100000)
         B = lt.basis_matrix(sel, X)
-        p_unpen = unpen.fit(B, case_inputs(f.case)["y"]).predict_proba(B)[:, 1]
+        p_unpen = unpen.fit(B, f.own["y"]).predict_proba(B)[:, 1]
     same = sorted(sel) == sorted(f.e_sigs[r - 1] for r in f.earth["selected_terms"])
-    v = lt.verdict(
-        "glm",
-        diff_own=float(np.max(np.abs(p_leg - p_unpen))),
-        diff=float(np.max(np.abs(p_leg - np.ravel(f.earth["pred_train"])))),
-        same="the same" if same else "other",
-    )
+    own = float(np.max(np.abs(p_leg - p_unpen)))
+    return own, float(np.max(np.abs(p_leg - np.ravel(f.earth["pred_train"])))), same
+
+
+def glm_refit(f: Fit) -> dict[str, Any]:
+    """The F9 difference of a binary fit (glm_numbers), as a diff entry."""
+    own, diff, same = glm_numbers(f)
+    v = lt.verdict("glm", diff_own=own, diff=diff, same="the same" if same else "other")
     return {"kind": "glm", "step": None, "label": v[0], "finding": v[1], "text": v[2]}
 
 
@@ -855,7 +959,9 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         r["forward"]["rss_rel_max"]
         for r in rows
         if "rss_rel_max" in r.get("forward", {})
-        and not any(d["kind"] == "rss" for d in r["diffs"])
+    ]
+    rss_steps = [
+        r["forward"]["rss_steps"] for r in rows if "rss_steps" in r.get("forward", {})
     ]
     for mode in s15:
         mse = [
@@ -893,6 +999,8 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "fits_by_mode": lt.count_by(
             ({"mode": r["mode"]} for r in rows if r.get("final")), "mode"
         ),
+        "rss_steps_compared": sum(c for c, _ in rss_steps),
+        "rss_steps_agree": sum(a for _, a in rss_steps),
         "rss_rel_max_agreeing_steps": max(agree, default=None),
         "slowest_legacy_fits": times[:4],
         "first_by_label": lt.count_by(first, "label"),
@@ -1030,10 +1138,26 @@ def cmd_report(ns: argparse.Namespace) -> None:
         "cases": rows,
     }
     if ns.json:
-        write_json(Path(ns.json), _rounded(result))
+        write_report(Path(ns.json), _rounded(result))
     if ns.markdown:
         Path(ns.markdown).write_text(markdown(result))
     print(json.dumps(result["summary"], indent=1))
+
+
+def write_report(path: Path, result: dict[str, Any]) -> None:
+    """The summary JSON with one case per line, so that diffs stay readable;
+    written atomically, as write_json."""
+    parts = []
+    for key, value in result.items():
+        if key == "cases":
+            body = ",\n".join(json.dumps(r) for r in value)
+            parts.append(f'"cases": [\n{body}\n]')
+        else:
+            parts.append(f"{json.dumps(key)}: {json.dumps(value)}")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        fh.write("{\n" + ",\n".join(parts) + "\n}\n")
+    os.replace(tmp, path)
 
 
 def _rounded(obj: Any) -> Any:
