@@ -51,6 +51,7 @@ import functools
 import json
 import math
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -770,7 +771,14 @@ class PruneCase:
 # ---------------------------------------------------------------------------
 # The fixture datasets (validation/fixtures), in the supported settings
 
-FIXTURES_DIR = Path(__file__).resolve().parents[1] / "validation" / "fixtures"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FIXTURES_DIR = REPO_ROOT / "validation" / "fixtures"
+# The fixture cases import the harness and the simulation code in validation/.
+# pytest collects tests/ before validation/, and an installed pymars (the CI
+# job with the lowest dependencies) leaves the repository root off sys.path;
+# appending it keeps the installed pymars first.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
 
 
 def _earth_params(args: dict) -> dict:
