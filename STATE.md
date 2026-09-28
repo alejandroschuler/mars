@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 05:24 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 05:28 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -17,11 +17,11 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 RUNNING (week 2). Weekly 30 % at 03:22 Monday 2026-09-28 (5-hour 1 %, next reset 08:20 PDT); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Pacing to stop cleanly at 50 %: from 44 % weekly, start only small agents that finish open pull requests (checkers, narrow re-reviews, preferably sonnet), and no new author work; from 48 %, start nothing and ask running agents to push a checkpoint and stop; at 50 %, pause and tell the user. The burn is about 8 points per hour with 5 to 7 agents (34 % at 03:52 Monday). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
 
-main: 1918863 (#56 TOOLS-1 merge guard), 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
+main: 0c2a896 (#48 T06 part 3, forward pass), 1918863 (#56 TOOLS-1 merge guard), 77b6692 (#47 T06 part 2, pruning), eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
 Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
 
 Open pull requests:
-- #48 part 3 forward pass: round 1 done. Spec (on 5756c66): 33 surviving mutants, fixed in 8a56ea3. Adversarial (on 8a56ea3): pass right against earth (2320 fresh fits; 2237 exact, the rest explained); 8 more surviving mutants, and the reviewer's 16 killer tests (scratchpad rev-48-adversarial-2/test_killers2.py) go in now; spec questions (code 2 for GRSq' < -1000 in earth; second_rss below best_rss by rounding) go to #44. Batch 2 done at c2fbfbc (rebased on 1918863; the 8 mutants fail; knot_scan(distinct=True); spec questions on #44; gate B PASS; CI 12/12). Round 2: adversarial APPROVE on c2fbfbc; spec REQUEST_CHANGES (the FAST-5 call of queue_value is unpinned; the reviewer gave the exact test). t06-reference adds that test and small ones (tests only); then a checker's narrow re-approval for both roles, merge, then #49.
+- #49 part 4 fit_mars (Closes #8): t06-reference rebases it onto 0c2a896 and removes the duplicates now in #48 (EARTH_NAMES, params_from_earth); then its dual review.
 - #57 round 1 (wf_e0ddfd90-495): both REQUEST_CHANGES. Blocking: knot_scan misses LA-5 at large n (cancellation in D = ||h||^2 - (q0'h)^2 and n·u error in the cumsum of q0'h; errors up to 650x the bound; a knot near tau can be wrongly rejected, and the driver never rechecks it); CI red (lstsq rcond). All 227 mutants killed. Sent to t11-forward (fix design: cancellation-free sums plus a per-knot error bound with explicit recomputation). #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
 - TOOLS-2 (later, small): the `pr view` branch of the fake gh in test_merge_pr.sh also ignores its arguments.
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
@@ -48,7 +48,7 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Running agents
 
-- `t06-reference` (opus): #48 round-2 test (FAST-5 lambda).
+- `t06-reference` (opus): rebasing #49 onto 0c2a896.
 - `t11-forward` (opus): #57 round-1 fix (scan accuracy), then the #55 rebase.
 - `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
 - `t18-legacy` (opus): idle; #58 round 2 in review.
