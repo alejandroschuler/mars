@@ -124,6 +124,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:10 00:15 Monday: #56 single review REQUEST_CHANGES (the fake gh ignored pr list arguments, so argument mutants survived); sent to tools-merge-guard with the non-blocking notes (two stacked PRs case, reasons in DECISIONS.md, the checker confirms a test-only fix loosens no tolerance and adds no skip).
 - 00:13 00:14: #47 round 2: both roles REQUEST_CHANGES on one gap (the tail of the PRUNE-3 move is untested; two mutants survive); all round-1 findings fixed (spec 61 of 65 killed; adversarial 179 of 194). Sent both reviewers' tests to t06-reference. My round-2 focus text had the seed-9 case reversed (the PR's test was right); both reviewers noticed. 5-hour 57 %, weekly 23 %.
 - 00:19 00:25: #47 head 81c5341 adds both reviewers' tests (the two tail-of-move mutants now fail; gate B PASS; CI 12/12). Started recheck-47 (sonnet) for the narrow re-approval. Note: dcg blocked a heredoc with shutil.rmtree in t06-reference's own mutation script; it dropped the deletion and used new folder names (nothing deleted, no workaround). Scratch copies grow; for the user to clean later.
+- 00:23 00:30: #56 round-1 fixes at 032ad32 (the fake gh pins --repo, --state, --base; two-stacked case; DECISIONS.md reasons). Narrow round 2 with a sonnet single reviewer (the review workflow now takes an optional model). Follow-up TOOLS-2 noted: the fake gh's pr view branch has the same unpinned-argument gap.
 
 ## Core-hour ledger
 
