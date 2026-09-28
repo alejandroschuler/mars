@@ -114,8 +114,10 @@ class ForwardPass(NamedTuple):
 
 
 class _Candidate(NamedTuple):
-    """One legal candidate of a step: its reduction on the scaled Y, its place
-    in the order of FWD-5, and what it adds."""
+    """A candidate of a step: its reduction on the scaled Y, with a bound
+    ``err`` on its error (0.0 for an explicit value), whether it is legal for
+    sure (``sure``: no error within the bounds can change its LA-3 and FWD-4
+    decisions), its place in the order of FWD-5, and what it adds."""
 
     reduction: float
     order: tuple[int, int, int]  # (parent rank, covariate, place in the search)
@@ -123,12 +125,37 @@ class _Candidate(NamedTuple):
     variable: int
     kind: int
     knot: float  # NaN for a linear term
+    err: float = 0.0
+    sure: bool = True
+
+
+class _Search(NamedTuple):
+    """The search of one covariate x on the parent b: its kind (LA-7), the
+    linear candidate's reduction (0.0 in a single-hinge search), and the
+    orthonormal basis and residuals on G (B, and b·x in a pair search)."""
+
+    x: FloatArray
+    b: FloatArray
+    pair: bool
+    lin: float
+    Q: FloatArray
+    E: FloatArray
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
     """Return the best two, by reduction and then by the order of FWD-5.
-    Complexity: O(c·log c) for c candidates, here c ≤ 5."""
-    return sorted(candidates, key=lambda c: (-c.reduction, c.order))[:2]
+    Complexity: O(c·log c) for c candidates."""
+    return _ranked(candidates)[:2]
+
+
+def _ranked(candidates: list[_Candidate]) -> list[_Candidate]:
+    """The candidates by reduction, then by the order of FWD-5."""
+    return sorted(candidates, key=lambda c: (-c.reduction, c.order))
+
+
+def _second_largest(values: list[float]) -> float:
+    """The second largest value, or -inf when there are fewer than two."""
+    return sorted(values, reverse=True)[1] if len(values) > 1 else -math.inf
 
 
 class _Pass:
@@ -172,40 +199,76 @@ class _Pass:
             return MAX_LEGAL_RSS * rss[0]
         return min(MAX_LEGAL_RSS * rss[-1], MAX_LEGAL_DELTA * (rss[-2] - rss[-1]))
 
-    def search(self, j: int, excluded: set) -> list[_Candidate]:
-        """Return the best two legal candidates of the search of covariate j on
-        the intercept (FWD-3, FWD-4, LA-3, LA-7), leaving out the places in
-        ``excluded``. Complexity: O(n·r)."""
+    def setup(self, j: int) -> _Search:
+        """The search of covariate j on the intercept: Gram-Schmidt of b·x gives
+        A of LA-7, and so the kind; a pair search adds b·x to G.
+        Complexity: O(n·r)."""
         x, b = self.X[:, j], self.ones
         gs = _linalg.gram_schmidt(self.Q, b * x)
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[[j]])
-        Q, E, lin = self.Q, self.E, 0.0
-        if pair:  # G = B and b·x (LA-3, LA-7)
-            proj = gs.q @ E
-            lin = float(np.sum(proj**2))
-            Q, E = np.column_stack((Q, gs.q)), E - np.outer(gs.q, proj)
+        if not pair:
+            return _Search(x, b, False, 0.0, self.Q, self.E)
+        proj = gs.q @ self.E
+        E = self.E - np.outer(gs.q, proj)
+        return _Search(
+            x, b, True, float(np.sum(proj**2)), np.column_stack((self.Q, gs.q)), E
+        )
+
+    def search(self, j: int, excluded: set) -> list[_Candidate]:
+        """Pass 1 for covariate j: every candidate that can be one of the step's
+        best two by the scan's values and error bounds (FWD-3, FWD-4, LA-3),
+        ranked, leaving out the places in ``excluded``. A knot is dropped when
+        its bounds make it illegal for sure, and kept when its upper bound
+        reaches the second largest lower bound of the sure candidates.
+        Complexity: O(n·r)."""
+        sr = self.setup(j)
         o, kc = self.order[:, j], self.knots[j]
-        scan = _scan.knot_scan(x[o], b[o], Q[o], E[o], kc.split)
-        reduction = scan.gain + lin
-        s = len(self.rss)  # this is step s, counted from 1
-        legal = ~_linalg.knot_rejected(scan.ratio, s)
-        legal &= (reduction > 0.0) & (reduction <= self.max_legal())
+        scan = _scan.knot_scan(
+            sr.x[o], sr.b[o], sr.Q[o], sr.E[o], kc.split, intercept=True
+        )
+        red, err = scan.gain + sr.lin, scan.gain_err
+        tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
+        top = self.max_legal()
+        possible = (scan.ratio + scan.ratio_err >= tau) & (red + err > 0.0)
+        possible &= red - err <= top
+        sure = (scan.ratio - scan.ratio_err >= tau) & (red - err > 0.0)
+        sure &= red + err <= top
         for parent, var, place in excluded:
             if (parent, var) == (0, j) and place > 0:
-                legal[place - 1] = False
+                possible[place - 1] = False
         found = []
-        if pair and lin > 0.0 and (0, j, 0) not in excluded:
-            found.append(_Candidate(lin, (0, j, 0), 0, j, KIND_LINEAR, math.nan))
-        kind = KIND_PAIR if pair else KIND_HINGE
-        score = np.where(legal, reduction, -np.inf)
-        for _ in range(min(2, score.size)):  # the first maximum: the larger knot
-            i = int(np.argmax(score))
-            if score[i] == -np.inf:
-                break
-            t = float(kc.knots[i])
-            found.append(_Candidate(float(reduction[i]), (0, j, i + 1), 0, j, kind, t))
-            score[i] = -np.inf
-        return _top_two(found)
+        if sr.pair and sr.lin > 0.0 and (0, j, 0) not in excluded:
+            found.append(_Candidate(sr.lin, (0, j, 0), 0, j, KIND_LINEAR, math.nan))
+        floor = _second_largest(
+            [*(red - err)[possible & sure], *(c.reduction for c in found)]
+        )
+        kind = KIND_PAIR if sr.pair else KIND_HINGE
+        for i in np.flatnonzero(possible & (red + err >= floor)):
+            t, e = float(kc.knots[i]), float(err[i])
+            c = _Candidate(
+                float(red[i]), (0, j, i + 1), 0, j, kind, t, e, bool(sure[i])
+            )
+            found.append(c)
+        return _ranked(found)
+
+    def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
+        """Pass 2: the explicit values of the knots (``_scan.exact_knot``), with
+        LA-3 and FWD-4 decided on them; the illegal ones are left out, and the
+        linear candidates, whose values are explicit already, stay.
+        Complexity: O(n·r) per covariate and O(n·(r + K)) per knot."""
+        out = [c for c in cands if c.kind == KIND_LINEAR]
+        s, top = len(self.rss), self.max_legal()
+        for j in sorted({c.variable for c in cands if c.kind != KIND_LINEAR}):
+            sr = self.setup(j)
+            for c in cands:
+                if c.variable != j or c.kind == KIND_LINEAR:
+                    continue
+                h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
+                rho, gain = _scan.exact_knot(sr.Q, sr.E, h)
+                red = gain + sr.lin
+                if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
+                    out.append(c._replace(reduction=red, err=0.0, sure=True))
+        return out
 
     def columns(self, c: _Candidate) -> tuple[FloatArray, FloatArray | None]:
         """Return the columns that span the candidate's terms (b·x before the
@@ -238,13 +301,19 @@ class _Pass:
 
     def best(self) -> tuple[_Candidate | None, _scan.Rebuild | None, _Candidate | None]:
         """Search the step and return the chosen candidate, its rebuild and the
-        second-best candidate (FWD-2 to FWD-5, FWD-8). Complexity: O(p·n·r)
-        for each search of the step, repeated only when a check fails."""
+        second-best candidate (FWD-2 to FWD-5, FWD-8). Pass 1 scans every
+        covariate; every candidate whose upper bound reaches the second largest
+        lower bound of the sure ones is then valued explicitly (pass 2), so the
+        best two and every LA-3 and FWD-4 decision about them rest on explicit
+        values. Complexity: O(p·n·r) for pass 1, repeated only when a check
+        fails, and O(n·r) for each covariate and knot of pass 2."""
         excluded: set = set()
         while True:
-            top: list[_Candidate] = []
-            for j in range(self.X.shape[1]):  # FWD-2: covariates in order
-                top = _top_two(top + self.search(j, excluded))
+            kept = [c for j in range(self.X.shape[1]) for c in self.search(j, excluded)]
+            floor = _second_largest([c.reduction - c.err for c in kept if c.sure])
+            top = _top_two(
+                self.refine([c for c in kept if c.reduction + c.err >= floor])
+            )
             if not top:
                 return None, None, None
             rb = self.check(top[0])

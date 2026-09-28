@@ -21,7 +21,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pymars import _forward, _gcv, _knots, _linalg, _terms
+from pymars import _forward, _gcv, _knots, _linalg, _scan, _terms
 from pymars._forward import Termination
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "validation" / "fixtures"
@@ -485,7 +485,7 @@ def test_search_equals_least_squares(step):
         if rho >= _linalg.collinearity_tolerance(step) and red <= st_.max_legal():
             want.append((red, (0, 0, i + 1)))
     want = sorted(want, key=lambda c: (-c[0], c[1]))[:2]
-    got = st_.search(0, set())
+    got = _forward._top_two(st_.refine(st_.search(0, set())))
     assert [c.order for c in got] == [c[1] for c in want]
     for c, (red, _) in zip(got, want, strict=True):
         assert c.reduction == pytest.approx(red, rel=1e-9)
@@ -493,13 +493,14 @@ def test_search_equals_least_squares(step):
 
 def _fixed_gain(monkeypatch, gain):
     """Make the scan accept every knot and give each the share ``gain(split)``
-    of the RSS."""
+    of the RSS, as exact values (bounds of 0)."""
     real = _forward._scan.knot_scan
 
-    def fake(x_, b, Q, E, split):
-        out = real(x_, b, Q, E, split)
+    def fake(x_, b, Q, E, split, **kw):
+        out = real(x_, b, Q, E, split, **kw)
         g = gain(np.asarray(split)) * float(np.sum(E**2))
-        return out._replace(ratio=np.ones_like(out.ratio), gain=g)
+        zero = np.zeros_like(out.ratio)
+        return _forward._scan.KnotScan(np.ones_like(out.ratio), g, zero, zero)
 
     monkeypatch.setattr(_forward._scan, "knot_scan", fake)
 
@@ -517,13 +518,13 @@ def test_ties_within_a_search(monkeypatch, gain):
     _fixed_gain(monkeypatch, lambda split: np.full(split.shape, gain))
     st_ = _two_covariates()
     first = [(0, 0, 0), (0, 0, 1)] if gain == 0.0 else [(0, 0, 1), (0, 0, 2)]
-    got = st_.search(0, set())
+    got = st_.search(0, set())[:2]  # every knot ties, so every knot is kept
     assert [c.order for c in got] == first
     assert [(c.parent, c.variable) for c in got] == [(0, 0), (0, 0)]
     kinds = [_forward.KIND_LINEAR, _forward.KIND_PAIR]
     assert [c.kind for c in got] == (kinds if gain == 0.0 else kinds[1:] * 2)
     later = [(0, 0, 1), (0, 0, 2)] if gain == 0.0 else [(0, 0, 2), (0, 0, 3)]
-    assert [c.order for c in st_.search(0, {first[0]})] == later
+    assert [c.order for c in st_.search(0, {first[0]})[:2]] == later
     knots = [c.knot for c in st_.search(0, {(0, 0, 0)})]
     assert knots == sorted(knots, reverse=True)
     other = [c.order for c in st_.search(1, set())]
@@ -554,14 +555,14 @@ def test_the_search_keeps_only_legal_knots(monkeypatch):
 
 
 def test_max_legal_is_inclusive():
-    """FWD-4: a knot whose reduction equals MaxLegal is legal, in the scan's
-    mask and in the explicit check; with no residual, no candidate is left,
-    not even the linear one."""
+    """FWD-4: a knot whose explicit reduction equals MaxLegal is legal, in pass
+    2 and in the explicit check; with no residual, no candidate is left, not
+    even the linear one."""
     st_ = _two_covariates()
-    best = st_.search(0, set())[0]
-    assert best.kind == _forward.KIND_PAIR
+    best = _forward._top_two(st_.refine(st_.search(0, set())))[0]
+    assert best.kind == _forward.KIND_PAIR and best.err == 0.0 and best.sure
     st_.max_legal = lambda: best.reduction
-    assert st_.search(0, set())[0] == best
+    assert st_.refine([best._replace(err=1.0, sure=False)]) == [best]
     reduction = st_.rss[-1] - st_.check(best).rss
     st_.max_legal = lambda: reduction
     assert st_.check(best) is not None
@@ -586,10 +587,10 @@ def test_the_explicit_check():
     assert st_.check(_cand(_forward.KIND_LINEAR, math.nan)) is None  # 0 exactly
 
 
-def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
-    """The scan's winner is built again; if the explicit values refuse it, the
-    step is searched again without it (here a scan that accepts every knot and
-    favors the collinear knot at the repeated minimum)."""
+def test_a_scan_value_that_the_explicit_values_refuse_is_left_out(monkeypatch):
+    """Pass 2 values the scan's best explicitly; here a scan that accepts every
+    knot and favors the collinear knot at the repeated minimum, with bounds of
+    0, loses that knot in pass 2, and the fit is the honest one."""
     x = np.array([0.0, 0.0, 1.0, 2.0, 3.5, 5.0, 6.0, 8.0, 9.0, 11.0])
     y = np.array([1.0, 0.0, 2.0, 1.0, 4.0, 3.0, 7.0, 9.0, 8.0, 12.0])
     kw = {"max_terms": 3, "minspan": 1, "endspan": 1}
@@ -597,16 +598,99 @@ def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
     real = _forward._scan.knot_scan
     calls = []
 
-    def lying(x_, b, Q, E, split):
-        out = real(x_, b, Q, E, split)
+    def lying(x_, b, Q, E, split, **kw):
+        out = real(x_, b, Q, E, split, **kw)
         calls.append(1)
         gain = np.where(np.asarray(split) == 2, float(np.sum(E**2)), out.gain)
-        return out._replace(ratio=np.ones_like(out.ratio), gain=gain)
+        zero = np.zeros_like(out.ratio)
+        return _forward._scan.KnotScan(np.ones_like(out.ratio), gain, zero, zero)
 
     monkeypatch.setattr(_forward._scan, "knot_scan", lying)
     fp = _fit(x[:, None], y, **kw)
-    assert len(calls) == 2
+    assert len(calls) == 1
     np.testing.assert_array_equal(fp.cuts, honest.cuts)
+
+
+def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
+    """When the explicit rebuild of the chosen candidate fails its check, the
+    step is searched again without it, and the second best is chosen."""
+    st_ = _two_covariates()
+    _, _, second = st_.best()
+    real = _forward._scan.rebuild
+    calls = []
+
+    def failing(Q, Y, columns):
+        calls.append(1)
+        return None if len(calls) == 1 else real(Q, Y, columns)
+
+    monkeypatch.setattr(_forward._scan, "rebuild", failing)
+    chosen, _, _ = st_.best()
+    assert chosen.order == second.order and len(calls) == 2
+
+
+def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
+    """The adversarial review's case: 15 low values below a cluster at 50, a
+    pair at the median in the model, step 8 (tau = 1e-5) and the knot x[7]
+    with rho = tau + 5e-11, within the scan's bound of tau. Pass 2 decides
+    LA-3 with the explicit rho, keeps the knot, and it is the best."""
+    rng = np.random.default_rng(0)
+    n, beta = 10_000, 0.5991315689034221
+    x = np.sort(np.r_[beta * rng.uniform(0, 1, 15), 50 + rng.uniform(size=n - 15)])
+    y = np.maximum(x - x[7], 0) + 1e-3 * rng.normal(size=n)
+    st_ = _state(x[:, None], y, minspan=1, endspan=7)
+    for v in (np.maximum(x - x[n // 2], 0), np.maximum(x[n // 2] - x, 0)):
+        st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, v).q))
+    st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
+    st_.rss = [st_.rss[0]] * 7 + [float(np.sum(st_.E**2))]  # this is step 8
+    kept = st_.search(0, set())
+    place = int(np.flatnonzero(st_.knots[0].knots == x[7])[0]) + 1
+    low = [c for c in kept if c.order == (0, 0, place)]
+    assert low and not low[0].sure  # the scan's bound straddles tau
+    best = _forward._top_two(st_.refine(kept))[0]
+    assert best.order == (0, 0, place) and best.sure and best.err == 0.0
+    rho, gain = _scan.exact_knot(st_.Q, st_.E, np.maximum(x - x[7], 0.0))
+    assert 0.0 < rho - 1e-5 < 1e-10
+    chosen, _, second = st_.best()  # the whole step, with its check
+    assert chosen == best and chosen.reduction == gain
+    assert second.order == (0, 0, place - 1) and second.err == 0.0
+    _, gain2 = _scan.exact_knot(st_.Q, st_.E, np.maximum(x - x[8], 0.0))
+    assert second.reduction == gain2
+
+
+def _explicit_best(st_):
+    """The best two of a step by the explicit values of every candidate: the
+    spec's rules (FWD-3 to FWD-5, LA-3, LA-7) with no scan."""
+    s, top, found = len(st_.rss), st_.max_legal(), []
+    for j in range(st_.X.shape[1]):
+        sr = st_.setup(j)
+        if sr.pair and sr.lin > 0.0:
+            found.append((sr.lin, (0, j, 0)))
+        for i, t in enumerate(st_.knots[j].knots):
+            rho, gain = _scan.exact_knot(sr.Q, sr.E, np.maximum(sr.x - t, 0.0))
+            red = gain + sr.lin
+            if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
+                found.append((red, (0, j, i + 1)))
+    return sorted(found, key=lambda c: (-c[0], c[1]))[:2]
+
+
+def test_every_step_equals_the_explicit_choice():
+    """A covariate with a few low values far below a tight cluster, next to an
+    ordinary one: at each of 9 steps the chosen and the second candidate are
+    those of the explicit values of every candidate, apart from near-ties."""
+    rng = np.random.default_rng(11)
+    n = 2000
+    x0 = np.r_[rng.uniform(0, 1, 12), 40 + rng.uniform(size=n - 12)]
+    X = np.column_stack((x0, rng.uniform(size=n)))
+    y = np.maximum(x0 - 0.5, 0) + np.sin(6 * X[:, 1]) + 0.05 * rng.normal(size=n)
+    st_ = _state(X, y)
+    for _ in range(9):
+        chosen, rb, second = st_.best()
+        want = _explicit_best(st_)
+        if want[0][0] - want[1][0] > 1e-7 * st_.rss[-1]:
+            assert chosen.order == want[0][1]
+            assert chosen.reduction == pytest.approx(want[0][0], rel=1e-12)
+            assert second.reduction == pytest.approx(want[1][0], rel=1e-12)
+        st_.add(chosen, rb)
 
 
 @pytest.mark.parametrize(
