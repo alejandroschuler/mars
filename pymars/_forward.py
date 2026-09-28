@@ -14,17 +14,22 @@ several responses in stage 3.
 Method. Each column of X is sorted once, and the knots of the intercept are
 found once per covariate (KNOT-7). The pass keeps an orthonormal basis Q of
 the current columns (column 0 the intercept direction) and the residuals E.
-A step searches each covariate: Gram-Schmidt of b·x gives A of LA-7, and so
-the kind of the search; ``_scan.knot_scan`` scores every knot at once. The
-best legal candidate (FWD-4, FWD-5) is built again explicitly
-(``_scan.rebuild``), its hinge is tested again with the explicit ratio of
-LA-3 (``_linalg.collinearity_ratio``), and its reduction is checked against
-FWD-4 with the explicit RSS; a candidate that fails is left out and the step
-is searched again, so the chosen candidate always passes FWD-4 and LA-3 with
-its explicit values.
+A step searches each covariate: Gram-Schmidt of b·(x - c) gives A of LA-7,
+and so the kind of the search, where c is the covariate's middle value (the
+plan's "Fast path": center x before the sums; the span does not change, since
+b is in B, and the term added stays b·x). Centering keeps the rounding of
+Q·(Qᵀx) at the size of the spread of x, not of its mean, so a shifted
+covariate gives the fit of the unshifted one. ``_scan.knot_scan`` scores every
+knot at once, with error bounds, and pass 2 values explicitly every knot
+whose bounds could change the step's best two (``best``). The chosen
+candidate is built again (``_scan.rebuild``), and its reduction is checked
+against FWD-4 with the rebuilt RSS; a candidate that fails is left out and
+the step is searched again.
 
 Numerics. Y is multiplied by a power of 2 first (EDGE-6) and centered (FWD-10,
-LA-6); every RSS in the record is on the original scale. No absolute epsilon.
+LA-6), and the TSS comes from the centered Y; every RSS in the record is on
+the original scale, where one can underflow to 0 or, for |y|·√n above about
+1e154, overflow to +inf (EDGE-6 names the underflow). No absolute epsilon.
 Ties follow FWD-5. No input is written to. Complexity: O(p·n·log n) for the
 sorts, O(p·n·r) per step for rank r, O(n·M²) for FWD-11; memory
 O(n·(p + M_max)).
@@ -167,6 +172,7 @@ class _Pass:
         self.N, self.tau = _gcv.total_weight(n)
         self.variances = _linalg.weighted_variances(X)
         self.order = np.argsort(X, axis=0, kind="stable")
+        self.center = X[self.order[n // 2], np.arange(p)]  # a data value (FWD-10)
         self.ones = np.ones(n)  # the intercept, the only parent in stage 1
         L, E = _knots.search_spans(
             p,
@@ -200,19 +206,18 @@ class _Pass:
         return min(MAX_LEGAL_RSS * rss[-1], MAX_LEGAL_DELTA * (rss[-2] - rss[-1]))
 
     def setup(self, j: int) -> _Search:
-        """The search of covariate j on the intercept: Gram-Schmidt of b·x gives
-        A of LA-7, and so the kind; a pair search adds b·x to G.
-        Complexity: O(n·r)."""
+        """The search of covariate j on the intercept: Gram-Schmidt of
+        b·(x - c) gives A of LA-7, and so the kind; a pair search adds b·x to G,
+        and its residuals are orthogonalized twice against G, as
+        ``_scan.knot_scan`` requires. Complexity: O(n·r·K)."""
         x, b = self.X[:, j], self.ones
-        gs = _linalg.gram_schmidt(self.Q, b * x)
+        gs = _linalg.gram_schmidt(self.Q, b * (x - self.center[j]))
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[[j]])
         if not pair:
             return _Search(x, b, False, 0.0, self.Q, self.E)
-        proj = gs.q @ self.E
-        E = self.E - np.outer(gs.q, proj)
-        return _Search(
-            x, b, True, float(np.sum(proj**2)), np.column_stack((self.Q, gs.q)), E
-        )
+        Q = np.column_stack((self.Q, gs.q))
+        lin = float(np.sum((gs.q @ self.E) ** 2))
+        return _Search(x, b, True, lin, Q, _linalg.orthogonalize(Q, self.E)[0])
 
     def search(self, j: int, excluded: set) -> list[_Candidate]:
         """Pass 1 for covariate j: every candidate that can be one of the step's
@@ -275,23 +280,22 @@ class _Pass:
         hinge of a pair, FWD-6) and its hinge column, or None. Complexity:
         O(n)."""
         x = self.X[:, c.variable]
+        xc = x - self.center[c.variable]  # centered, as in setup
         h = None if c.kind == KIND_LINEAR else _terms.factor(_terms.PLUS, x, c.knot)
-        cols = {KIND_PAIR: (x, h), KIND_HINGE: (h,), KIND_LINEAR: (x,)}[c.kind]
+        cols = {KIND_PAIR: (xc, h), KIND_HINGE: (h,), KIND_LINEAR: (xc,)}[c.kind]
         return np.column_stack(cols), h
 
     def check(self, c: _Candidate) -> _scan.Rebuild | None:
-        """Build the candidate again explicitly and apply LA-3 and FWD-4 to it
-        with the explicit values; return the rebuild, or None when it fails.
-        Complexity: O(n·r·K)."""
-        cols, h = self.columns(c)
+        """Build the candidate again (``_scan.rebuild``) and apply FWD-4 to its
+        rebuilt RSS; return the rebuild, or None when it fails. LA-3 is not
+        tested again: pass 2 decided it on the same Gram-Schmidt of the same
+        columns, so the ratio would be the same bit for bit. The rebuilt RSS and
+        pass 2's reduction can differ in the last bits, so a knot at MaxLegal
+        can fail here. Complexity: O(n·r·K)."""
+        cols, _ = self.columns(c)
         rb = _scan.rebuild(self.Q, self.Yc, cols)
         if rb is None:
             return None
-        if h is not None:
-            r = self.Q.shape[1]
-            G = rb.Q[:, : r + 1 if c.kind == KIND_PAIR else r]
-            if _linalg.knot_rejected(_linalg.collinearity_ratio(G, h), len(self.rss)):
-                return None
         reduction = self.rss[-1] - rb.rss
         if reduction <= 0.0:
             return None
@@ -306,7 +310,10 @@ class _Pass:
         lower bound of the sure ones is then valued explicitly (pass 2), so the
         best two and every LA-3 and FWD-4 decision about them rest on explicit
         values. Complexity: O(p·n·r) for pass 1, repeated only when a check
-        fails, and O(n·r) for each covariate and knot of pass 2."""
+        fails, and O(n·r) for each covariate and knot of pass 2. Pass 2 values
+        about two knots in an ordinary step; in the worst case, when y is (nearly)
+        linear in one covariate, every pair knot of it reaches the floor and
+        pass 2 values them all, O(n²·r/L) for that step (L the minspan)."""
         excluded: set = set()
         while True:
             kept = [c for j in range(self.X.shape[1]) for c in self.search(j, excluded)]
@@ -406,7 +413,8 @@ def _log(rss: FloatArray, log: list, shift: int) -> CandidateLog:
     second_kind = np.zeros(S, dtype=np.int8)
     for i, (rss_before, c) in enumerate(log):
         if c is not None:
-            second_rss[i] = np.ldexp(rss_before - c.reduction, shift)
+            with np.errstate(over="ignore"):  # EDGE-6: can pass the range
+                second_rss[i] = np.ldexp(rss_before - c.reduction, shift)
             second_parent[i], second_variable[i] = c.parent, c.variable
             second_knot[i], second_kind[i] = c.knot, c.kind
     return CandidateLog(
@@ -478,10 +486,12 @@ def forward_pass(
         )
     shift = 1 - int(np.frexp(np.max(np.abs(Y)))[1])  # EDGE-6: D·2^shift in [1, 2)
     Ys = np.ldexp(Y, shift)
-    st = _Pass(X, Ys - Ys.mean(axis=0), _gcv.tss(Ys), params)
+    Yc = Ys - Ys.mean(axis=0)  # FWD-10; the TSS too comes from Yc (CORE-3: rss[0])
+    st = _Pass(X, Yc, _gcv.tss(Yc), params)
     log: list = []
     termination = _run(st, max_terms, log)
-    rss = np.ldexp(np.array(st.rss), -2 * shift)
+    with np.errstate(over="ignore"):  # EDGE-6: an RSS above the range is inf
+        rss = np.ldexp(np.array(st.rss), -2 * shift)
     B = _terms.basis_matrix(X, st.dirs, st.cuts)
     kept = _linalg.independent_columns(B)  # FWD-11
     return ForwardPass(

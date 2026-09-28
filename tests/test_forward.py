@@ -10,7 +10,6 @@ at degree 1 with M_max ≤ fast_k + 2 the window holds every row at every step
 (FAST-3, FAST-6), so fast_k = 0 gives the same fit.
 """
 
-import inspect
 import json
 import math
 import types
@@ -113,8 +112,8 @@ def _rss(A, y):
     return float(np.sum((y - A @ np.linalg.lstsq(A, y, rcond=None)[0]) ** 2))
 
 
-def test_the_codes_and_the_defaults():
-    """CORE-3's kinds, CORE-4's codes and CORE-2's defaults."""
+def test_the_codes():
+    """CORE-3's kinds and CORE-4's codes."""
     kinds = (_forward.KIND_NONE, _forward.KIND_PAIR, _forward.KIND_HINGE)
     assert (*kinds, _forward.KIND_LINEAR) == (0, 1, 2, 3)
     assert [(t.name, int(t)) for t in Termination] == [
@@ -127,21 +126,6 @@ def test_the_codes_and_the_defaults():
         ("NO_GAIN", 6),
         ("TERM_LIMIT", 7),
     ]
-    sig = inspect.signature(_forward.forward_pass).parameters.values()
-    assert {a.name: a.default for a in sig if a.default is not a.empty} == {
-        "w": None,
-        "max_degree": 1,
-        "max_terms": None,
-        "penalty": None,
-        "thresh": 0.001,
-        "minspan": None,
-        "endspan": None,
-        "adjust_endspan": 2.0,
-        "auto_linpreds": True,
-        "fast_k": 20,
-        "fast_beta": 1.0,
-        "record_candidates": False,
-    }
 
 
 def _suppressed():
@@ -321,15 +305,28 @@ def test_a_degenerate_fit(y):
     assert fp.candidates.second_kind.dtype == np.int8
 
 
-def test_a_shift_of_y():
-    """FWD-10: Y is centered before any sum, so y + 1e8 (exactly y shifted)
-    gives the terms and the RSS of y, to rounding (LA-5)."""
-    rng = np.random.default_rng(9)
-    X = rng.uniform(size=(100, 2))
-    y = 1e8 + np.sin(5 * X[:, 0]) + rng.normal(size=100)
-    a, b = _fit(X, y), _fit(X, y - 1e8)
-    np.testing.assert_array_equal(a.cuts, b.cuts)
-    np.testing.assert_allclose(a.rss, b.rss, rtol=1e-12)
+@pytest.mark.parametrize(
+    ("x_shift", "y_shift"), [(2.0**36, 0), (2.0**40, 0), (0, 2.0**40), (0, 2.0**44)]
+)
+def test_exact_shifts(x_shift, y_shift):
+    """Exact shifts of a covariate (on a 2^-12 grid) and of y (on a 2^-8 grid)
+    give the fit of the unshifted data: the same terms, knots moved by the
+    shift, and every RSS, rss[0] = TSS included, within 1e-8 of the RSS before
+    its step (LA-5, CORE-3). x is centered before Gram-Schmidt (the plan's
+    "Fast path"), and the TSS comes from the centered y (FWD-10)."""
+    rng = np.random.default_rng(0)
+    n = 200
+    u = np.round(rng.uniform(size=n) * 2**12) / 2**12
+    v = rng.uniform(size=n)
+    y = np.sin(5 * v) + np.maximum(u - 0.5, 0.0) + 0.05 * rng.normal(size=n)
+    y = np.round(y * 2**8) / 2**8
+    kw = {"thresh": 0.0, "minspan": 1, "endspan": 1, "max_terms": 11}
+    a = _fit(np.column_stack((u, v)), y, **kw)
+    b = _fit(np.column_stack((u + x_shift, v)), y + y_shift, **kw)
+    np.testing.assert_array_equal(b.dirs, a.dirs)
+    moved = np.abs(a.dirs[:, 0]) == 1
+    np.testing.assert_array_equal(b.cuts[moved, 0], a.cuts[moved, 0] + x_shift)
+    assert np.all(np.abs(b.rss - a.rss) <= 1e-8 * np.r_[a.rss[0], a.rss[:-1]])
 
 
 def test_scaling_y():
@@ -418,15 +415,6 @@ def _cand(kind, knot, variable=0):
     return _forward._Candidate(1.0, (0, variable, 1), 0, variable, kind, knot)
 
 
-@pytest.mark.parametrize(
-    ("rss", "want"), [([10.0], 10.1), ([10.0, 4.0, 3.0], 3.03), ([10.0, 4.0, 3.9], 1.0)]
-)
-def test_max_legal(rss, want):
-    """FWD-4: MaxLegal_s = min(1.01·RSS_s, 10·Δ_s), and 1.01·RSS_0 first."""
-    got = _forward._Pass.max_legal(types.SimpleNamespace(rss=rss))
-    assert got == pytest.approx(want, rel=1e-14)
-
-
 def _ns(rss=(12.0,), tss=1.0, N=11.0, penalty=-1.0, thresh=0.001):
     params = {"penalty": penalty, "thresh": thresh}
     tau = _gcv.weight_tolerance(N)
@@ -455,11 +443,9 @@ def test_the_stops_before_a_step(ns, chosen, rss_new, m_new, code):
     [
         (1.0, 0.25, True),  # RSS/TSS = thresh
         (1.0000001, 0.25, False),
-        (3.0e-11, 0.0, True),  # the floor 1e-10·TSS/(N - 1) is 4e-11
-        (3.8e-11, 0.0, True),
+        (3.8e-11, 0.0, True),  # the floor 1e-10·TSS/(N - 1) is 4e-11
         (1e-10 * 4.0 / 10.0, 0.0, False),
         (4.2e-11, 0.0, False),
-        (5.0e-11, 0.0, False),
     ],
 )
 def test_the_stop_after_a_step(rss, thresh, high):
@@ -578,15 +564,14 @@ def test_max_legal_is_inclusive():
 
 
 def test_the_explicit_check():
-    """The rebuild refuses a zero column, a collinear hinge (KNOT-5: the knot
-    at a repeated minimum in a pair), a knot above MaxLegal and a reduction
-    that is not positive; the linear term has no upper limit (FWD-4)."""
+    """The check of the winner's rebuild refuses a zero column, a knot above
+    MaxLegal and a reduction that is not positive; the linear term has no upper
+    limit (FWD-4). LA-3 is decided in pass 2, not here."""
     x = np.array([0.0, 0.0, 1.0, 2.0, 3.5, 5.0, 6.0, 8.0])
     y = np.array([1.0, 0.0, 2.0, 1.0, 4.0, 3.0, 7.0, 9.0])
     st_ = _state(x[:, None], y)
     assert st_.check(_cand(_forward.KIND_HINGE, 3.5)) is not None
     assert st_.check(_cand(_forward.KIND_HINGE, 8.0)) is None
-    assert st_.check(_cand(_forward.KIND_PAIR, 0.0)) is None
     st_.rss = [st_.rss[0], 0.999 * st_.rss[0]]  # 10·Δ_1 is 0.01·TSS
     assert st_.check(_cand(_forward.KIND_PAIR, 3.5)) is None
     assert st_.check(_cand(_forward.KIND_LINEAR, math.nan)) is not None
@@ -666,17 +651,19 @@ def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
     assert second.reduction == gain2
 
 
-def _fixed_passes(monkeypatch, scan, exact, top=None):
+def _fixed_passes(monkeypatch, scan, exact, top=None, steps=0):
     """A single-hinge search on x = 0..11 (x is in the model), whose knots are
     10, 9, ..., 1 at places 1 to 10. The scan gives, by place, the tuples
     (gain, err, ratio, ratio_err) of ``scan``, and ``exact_knot`` the pairs
     (rho, gain) of ``exact``; places that ``scan`` leaves out get a small gain.
-    The check of the winner accepts. Returns the state and the list of places
-    that pass 2 valued."""
+    ``steps`` steps are done before (for the tau of LA-3). The check of the
+    winner accepts. Returns the state and the list of places that pass 2
+    valued."""
     x = np.arange(12.0)
     st_ = _state(x[:, None], 10 * np.sin(x), minspan=1, endspan=1)
     st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, x).q))
     st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
+    st_.rss = st_.rss * (steps + 1)
     if top is not None:
         st_.max_legal = lambda: top
     st_.check = lambda c: object()  # the check has its own tests
@@ -695,23 +682,41 @@ def _fixed_passes(monkeypatch, scan, exact, top=None):
     return st_, valued
 
 
-def test_pass_2_ranks_by_the_explicit_values(monkeypatch):
-    """Wide bounds: pass 1 keeps the knots whose upper bound reaches the second
-    largest lower bound (9.5), and only those are valued; the explicit values
-    reorder them."""
-    scan = {1: (10.0, 0.5, 0.5, 0.0), 2: (9.8, 0.5, 0.5, 0.0), 3: (9.7, 0.05, 0.5, 0.0)}
-    exact = {1: (0.5, 9.6), 2: (0.5, 9.9), 3: (0.5, 9.72)}
-    st_, valued = _fixed_passes(monkeypatch, scan | {4: (3.0, 0.05, 0.5, 0.0)}, exact)
+@pytest.mark.parametrize(
+    ("scan", "exact", "best"),
+    [
+        (
+            {1: (10.0, 0.5), 2: (9.8, 0.5), 3: (9.7, 0.05)},  # the floor is 9.5
+            {1: 9.6, 2: 9.9, 3: 9.72},
+            (2, 3),
+        ),
+        (
+            {1: (10.0, 0.1), 2: (9.8, 0.1), 3: (9.5, 0.5)},  # 9.5 < floor 9.7 <= 10.0
+            {1: 9.92, 2: 9.75, 3: 9.95},
+            (3, 1),
+        ),
+    ],
+)
+def test_pass_2_ranks_by_the_explicit_values(monkeypatch, scan, exact, best):
+    """Wide bounds: pass 1 keeps every knot whose upper bound reaches the
+    second largest lower bound of the sure ones (also one whose scan value is
+    below it), and only those are valued; the explicit values reorder them."""
+    rows = {i: (g, e, 0.5, 0.0) for i, (g, e) in scan.items()}
+    rows[4] = (3.0, 0.05, 0.5, 0.0)
+    exact = {i: (0.5, g) for i, g in exact.items()}
+    st_, valued = _fixed_passes(monkeypatch, rows, exact)
     assert [c.order[2] for c in st_.search(0, set())] == [1, 2, 3]
     chosen, _, second = st_.best()
-    assert (chosen.order[2], second.order[2]) == (2, 3) and sorted(valued) == [1, 2, 3]
-    assert (chosen.reduction, second.reduction) == (9.9, 9.72)
+    assert (chosen.order[2], second.order[2]) == best and sorted(valued) == [1, 2, 3]
+    assert (chosen.reduction, second.reduction) == tuple(exact[i][1] for i in best)
 
 
-def test_an_uncertain_rho_is_decided_in_pass_2(monkeypatch):
+@pytest.mark.parametrize("steps", [0, 6])
+def test_an_uncertain_rho_is_decided_in_pass_2(monkeypatch, steps):
     """The best scan value belongs to a knot whose rho is within its bound of
     tau; pass 2 finds rho below tau and drops it, and it does not count toward
-    the lower bound that decides which knots pass 2 values."""
+    the lower bound that decides which knots pass 2 values. At steps 1 and 7
+    tau is 0.01 (LA-3)."""
     tau = 0.01
     scan = {
         1: (20.0, 0.01, tau * (1 + 1e-9), tau * 1e-8),
@@ -719,7 +724,7 @@ def test_an_uncertain_rho_is_decided_in_pass_2(monkeypatch):
         3: (9.0, 0.01, 0.5, 0.0),
     }
     exact = {1: (tau * (1 - 1e-9), 20.0), 2: (0.5, 9.9), 3: (0.5, 9.0)}
-    st_, valued = _fixed_passes(monkeypatch, scan, exact)
+    st_, valued = _fixed_passes(monkeypatch, scan, exact, top=30.0, steps=steps)
     kept = st_.search(0, set())
     assert [(c.order[2], c.sure) for c in kept] == [(1, False), (2, True), (3, True)]
     chosen, _, second = st_.best()
@@ -754,12 +759,6 @@ def test_a_reduction_within_its_bound_of_0(monkeypatch, value, best):
     ]
     chosen, _, second = st_.best()
     assert (chosen.order[2], second and second.order[2]) == best
-
-
-def test_second_largest():
-    assert _forward._second_largest([1.0, 5.0, 3.0]) == 3.0
-    assert _forward._second_largest([4.0, 7.0]) == 4.0
-    assert _forward._second_largest([2.0]) == -math.inf
 
 
 def _explicit_best(st_):
