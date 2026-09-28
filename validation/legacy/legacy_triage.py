@@ -9,8 +9,10 @@ category). The intercept is ``()``. Both programs' terms are compared as
 signatures, so the comparison needs no row or slot numbers.
 
 The labels and finding IDs follow VALIDATION_PLAN.md, "Triage of differences"
-and "Preliminary findings" (F1 to F16); the IDs from F17 on are this task's.
-earth's rules are cited by their docs/algorithm.md IDs.
+and "Preliminary findings" (F1 to F16); F17 to F19 are this task's
+(validation/DIFFERENCES_legacy.md). A verdict whose ID is None names an earth
+rule that no fit of S01 to S20 showed; it would need a new ID. earth's rules
+are cited by their docs/algorithm.md IDs.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ VERDICTS: dict[str, Verdict] = {
         "{head}; the legacy parent is the redundant second hinge of an "
         "earlier pair, which earth never added",
     ),
-    "slot": ("quirk", "F21", "{head}; earth did not search that parent (FAST-4)"),
+    "slot": ("quirk", None, "{head}; earth did not search that parent (FAST-4)"),
     "queue": (
         "rule",
         "F10",
@@ -80,7 +82,7 @@ VERDICTS: dict[str, Verdict] = {
     ),
     "maxlegal": (
         "quirk",
-        "F19",
+        None,
         "{head}; the legacy knot lowers the RSS by more than earth's limit "
         "MaxLegal {max_legal} (MaxG 0); {rss}",
     ),
@@ -158,7 +160,7 @@ VERDICTS: dict[str, Verdict] = {
     ),
     "prune_subset": (
         "rule",
-        "F20",
+        None,
         "size {size}: earth's subset has RSS {rss_e}, the legacy path's {rss_l}",
     ),
     "prune_tie": ("tie", None, "size {size}: the subsets differ with RSS within 1e-7"),
@@ -178,9 +180,10 @@ VERDICTS: dict[str, Verdict] = {
     ),
     "constant_y": (
         "quirk",
-        "F22",
-        "a constant response: earth's forward pass adds {n_earth} steps at thresh "
-        "= 0 although the RSS is 0 (all pruned), the legacy code {n_legacy}",
+        "F19",
+        "a constant response: at thresh = 0 earth's forward pass takes {n_earth} "
+        "steps on rounding noise (its forward RSS is about 1e-28) and the "
+        "pruning pass removes them all; the legacy code takes {n_legacy}",
     ),
     "final": ("{label}", None, "{field}: {detail} {metric} above {tol}"),
     "weights": (

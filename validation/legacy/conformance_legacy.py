@@ -785,6 +785,8 @@ def final(row: dict[str, Any], f: Fit) -> dict[str, Any]:
         ]
     no_int = [len(sub) for sub in leg["prune_subsets"] if 0 not in sub]
     fin["intercept_dropped_at"] = max(no_int, default=None)
+    fin["intercept"] = 0 in leg["selected"]
+    fin["fit_time"] = leg.get("fit_time")
     if 0 not in leg["selected"] and not any(d["finding"] == "F3" for d in row["diffs"]):
         v = lt.verdict("intercept_final", terms=len(leg["selected"]))
         row["diffs"].append(
@@ -848,9 +850,51 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 ({"key": str(d["step"])} for d in div), "key"
             ),
         }
+    no_int = [r for r in rows if r.get("final", {}).get("intercept") is False]
+    agree = [
+        r["forward"]["rss_rel_max"]
+        for r in rows
+        if "rss_rel_max" in r.get("forward", {})
+        and not any(d["kind"] == "rss" for d in r["diffs"])
+    ]
+    for mode in s15:
+        mse = [
+            r["final"]["test_mse"]
+            for r in rows
+            if r["id"].startswith("S15/")
+            and r["mode"] == mode
+            and "test_mse" in r.get("final", {})
+        ]
+        ratio = np.array([a / b for a, b in mse])
+        s15[mode]["test_mse_ratio"] = (
+            {
+                "median": float(np.median(ratio)),
+                "legacy_lower": int(np.sum(ratio < 1)),
+                "above_10": int(np.sum(ratio > 10)),
+                "max": float(ratio.max()),
+            }
+            if len(ratio)
+            else {}
+        )
+    times = sorted(
+        (
+            (r["final"]["fit_time"], r["id"])
+            for r in rows
+            if r.get("final", {}).get("fit_time")
+        ),
+        reverse=True,
+    )
     return {
         "fits": len(rows),
         "fits_with_differences": len(first),
+        "final_without_intercept": lt.count_by(
+            ({"mode": r["mode"]} for r in no_int), "mode"
+        ),
+        "fits_by_mode": lt.count_by(
+            ({"mode": r["mode"]} for r in rows if r.get("final")), "mode"
+        ),
+        "rss_rel_max_agreeing_steps": max(agree, default=None),
+        "slowest_legacy_fits": times[:4],
         "first_by_label": lt.count_by(first, "label"),
         "first_by_finding": lt.count_by(first, "finding"),
         "all_by_label": lt.count_by(diffs, "label"),
@@ -907,6 +951,37 @@ def s12_invariance(out: Path) -> dict[str, Any]:
     return table
 
 
+def weights_vs_repeated(out: Path, cases: list[Case]) -> list[dict[str, Any]]:
+    """F1 inside the legacy code: HEAD with integer weights against the
+    legacy code (the wheel) without weights on the repeated rows."""
+    rows = []
+    for c in cases:
+        a = out / "head" / f"{slug(c.id)}.json"
+        b = (
+            out
+            / "wheel"
+            / f"{slug(c.id.replace(c.dataset, c.dataset + '_repeated'))}.json"
+        )
+        if c.weighted and c.reference != c.fixture and a.exists() and b.exists():
+            wa, wb = json.loads(a.read_text()), json.loads(b.read_text())
+            sa, sb = legacy_step_terms(wa), legacy_step_terms(wb)
+            sel = [
+                sorted(lt.sig_from_json(d["terms"][i]["sig"]) for i in d["selected"])
+                for d in (wa, wb)
+            ]
+            diff = np.max(np.abs(np.subtract(wa["pred_test"], wb["pred_test"])))
+            rows.append(
+                {
+                    "id": c.id,
+                    "steps": [len(sa), len(sb)],
+                    "same_forward": sa == sb,
+                    "same_selected": sel[0] == sel[1],
+                    "max_pred_diff": float(diff),
+                }
+            )
+    return rows
+
+
 def head_vs_wheel(out: Path, cases: list[Case]) -> dict[str, Any]:
     """Whether HEAD and the wheel give the same fit, on the unweighted cases
     run with both (the wheel takes no weights)."""
@@ -951,6 +1026,7 @@ def cmd_report(ns: argparse.Namespace) -> None:
         "summary": summarize(rows),
         "head_vs_wheel": head_vs_wheel(out, cases),
         "s12_invariance": s12_invariance(out),
+        "weights_vs_repeated": weights_vs_repeated(out, cases),
         "cases": rows,
     }
     if ns.json:
@@ -1033,6 +1109,24 @@ def markdown(result: dict[str, Any]) -> str:
             ["S12 mode", "Variant", "Legacy: terms, knots", "earth: terms, knots"], rows
         ),
     ]
+    rows = [
+        [
+            w["id"],
+            ", ".join(map(str, w["steps"])),
+            w["same_forward"],
+            w["same_selected"],
+            f"{w['max_pred_diff']:.3g}",
+        ]
+        for w in result.get("weights_vs_repeated", [])
+    ]
+    head = [
+        "HEAD with weights",
+        "Steps (weights, repeated)",
+        "Same forward terms",
+        "Same selected terms",
+        "Largest test difference",
+    ]
+    lines += ["", *table(head, rows)]
     hw = result["head_vs_wheel"]
     differ = ", ".join(hw["different"]) or "none"
     lines += [

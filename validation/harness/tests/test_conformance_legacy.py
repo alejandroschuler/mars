@@ -82,7 +82,7 @@ def _ev(**kw):
         (_ev(e_rss_e=1.0 + 1e-7), ("tie", None)),
         (_ev(leg_rss_e=1.0 + 1e-7, same_cost=True), ("tie", None)),
         (_ev(probe={"status": "parent_not_in_earth"}), ("rule", "F5")),
-        (_ev(probe={"status": "parent_not_searched"}, fast_k=0), ("quirk", "F21")),
+        (_ev(probe={"status": "parent_not_searched"}, fast_k=0), ("quirk", None)),
         (_ev(probe={"status": "parent_not_searched"}, fast_k=20), ("rule", "F10")),
         (_ev(probe={"status": "knot_not_evaluated", "where": "top"}), ("rule", "F7")),
         (
@@ -96,7 +96,7 @@ def _ev(**kw):
         ),
         (_ev(probe={"status": "legal"}, e_knot_inactive=True), ("quirk", "F7")),
         (_ev(probe={"status": "tol"}), ("rule", "F5")),
-        (_ev(probe={"status": "maxlegal", "max_legal": 3.0}), ("quirk", "F19")),
+        (_ev(probe={"status": "maxlegal", "max_legal": 3.0}), ("quirk", None)),
         (_ev(probe={"status": "single_search", "earth_rss": 1.1}), ("rule", "F5")),
         (
             _ev(probe={"status": "single_search", "earth_rss": 1.0}, leg_rss_e=1.2),
