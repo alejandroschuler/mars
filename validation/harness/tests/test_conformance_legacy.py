@@ -120,6 +120,13 @@ def test_classify_choice(ev, expected):
     assert text.startswith("step 3: legacy A, earth E")
 
 
+def test_a_tie_shows_the_values_that_make_it():
+    text = lt.classify_choice(_ev(leg_rss_e=1.0 + 1e-8, same_cost=True))[2]
+    assert "the legacy code's RSS 1 (its choice) against 1.00000001" in text
+    text = lt.classify_choice(_ev(e_rss_e=1.0 + 1e-7))[2]
+    assert "RSS 1 (legacy choice) against 1.0000001 (earth's) on earth's basis" in text
+
+
 def test_classify_stop():
     ev = {"n_legacy": 2, "n_earth": 4, "first": "legacy"}
     assert lt.classify_stop({**ev, "legacy_stop": "gcv_inf"})[:2] == ("rule", "F2")

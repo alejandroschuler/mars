@@ -364,10 +364,16 @@ def classify_choice(ev: dict[str, Any]) -> Verdict:
     legacy_tie = ev.get("same_cost") and is_near_tie(
         ev.get("leg_rss_a"), ev.get("leg_rss_e"), ev.get("leg_before")
     )
-    if legacy_tie or is_near_tie(
-        ev.get("e_rss_a"), ev.get("e_rss_e"), ev.get("e_before")
-    ):
-        return verdict("tie", **ev)
+    if legacy_tie:  # show the values that make the tie, at 10 digits
+        a, e = ev.get("leg_rss_a"), ev.get("leg_rss_e")
+        rss = f"the legacy code's RSS {a:.10g} (its choice) against {e:.10g} (earth's)"
+        return verdict("tie", **{**ev, "rss": rss})
+    if is_near_tie(ev.get("e_rss_a"), ev.get("e_rss_e"), ev.get("e_before")):
+        a, e = ev["e_rss_a"], ev["e_rss_e"]
+        rss = (
+            f"RSS {a:.10g} (legacy choice) against {e:.10g} (earth's) on earth's basis"
+        )
+        return verdict("tie", **{**ev, "rss": rss})
     probe = ev.get("probe") or {}
     status = probe.get("status")
     if status == "parent_not_in_earth":
