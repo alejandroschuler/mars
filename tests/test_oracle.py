@@ -609,14 +609,18 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     PRUNE_TIE of the larger); then only the sizes m >= pos, which the earlier
     stages fix, are compared. An offer can tie as well: two subsets of one
     size within PRUNE_TIE. The selected size and the final fit are compared
-    when no removal tied.
+    when no removal tied. An RSS below STOP-5's floor 1e-10 TSS / (N - 1) is an
+    exact fit, whose value is rounding: two such values count as equal.
     """
     Mf, several = B.shape[1], Y.shape[1] >= 2
     rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
+    floor = 1e-10 * ref["rss_per_size"][0] / (float(np.sum(w)) - 1)
+
+    def same(a, b, rtol) -> bool:  # two RSS values
+        return (a <= floor and b <= floor) or abs(a - b) <= rtol * max(a, b)
 
     def tied(Ta, Tb) -> bool:
-        ra, rb = rss_of(frozenset(Ta)), rss_of(frozenset(Tb))
-        return abs(ra - rb) <= PRUNE_TIE * max(ra, rb)
+        return same(rss_of(frozenset(Ta)), rss_of(frozenset(Tb)), PRUNE_TIE)
 
     first, near_tie = 1, None  # the smallest size that the compared stages fix
     stages = _working_sets(ref["removed"], Mf, several)
@@ -637,30 +641,35 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
             if not tied(Tf, Tr):
                 _fail(case, f"size {m}: fast {sorted(Tf)}, reference {sorted(Tr)}")
             near_tie, tol = near_tie or f"subset of size {m}", PRUNE_TIE
-        for key in ("rss_per_size", "gcv_per_size"):
-            _rel(case, fast[key][m - 1], ref[key][m - 1], tol, f"{key}[{m - 1}]")
+        rf, rr = fast["rss_per_size"][m - 1], ref["rss_per_size"][m - 1]
+        if not same(rf, rr, tol):
+            _fail(case, f"rss_per_size[{m - 1}]: fast {rf!r}, reference {rr!r}")
+        gf, gr = fast["gcv_per_size"][m - 1], ref["gcv_per_size"][m - 1]
+        if not same(rf, rr, 0.0) or np.isinf(gf) or np.isinf(gr):
+            _rel(case, gf, gr, tol, f"gcv_per_size[{m - 1}]")
     if first > 1:
         return Outcome(Mf - first, near_tie, Mf - first + 1)
     mf, mr = fast["selected_size"], ref["selected_size"]
     if mf != mr:
         gf, gr = ref["gcv_per_size"][mf - 1], ref["gcv_per_size"][mr - 1]
-        if not abs(gf - gr) <= PRUNE_TIE * max(gf, gr):
+        exact = same(*(ref["rss_per_size"][m - 1] for m in (mf, mr)), 0.0)
+        if not (exact or abs(gf - gr) <= PRUNE_TIE * max(gf, gr)):
             _fail(case, f"selected size: fast {mf}, reference {mr}")
         return Outcome(Mf - 1, "selected size", Mf)
     if not np.array_equal(fast["selected"], ref["selected"]):
         if near_tie is None:
             _fail(case, f"selected: fast {fast['selected']}, ref {ref['selected']}")
         return Outcome(Mf - 1, near_tie, Mf)
-    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w)
+    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w, same)
     return Outcome(Mf - 1, near_tie, None if near_tie is None else Mf)
 
 
-def _compare_final(case, fast: dict, ref: dict, BS, Y, w) -> None:
+def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
     """The final fit of the same terms (PRUNE-8), by the plan's tolerance
     table: per response, the coefficients normwise within 1e-6 where
     kappa(B) <= 1e5, and the fitted values within 1e-8 sd(y), scaled by
-    kappa / 1e6 above 1e6; RSS and GCV within a relative 1e-8; RSq and GRSq
-    within 1e-8."""
+    kappa / 1e6 above 1e6; RSS and GCV within a relative 1e-8 (``same``, for
+    exact fits); RSq and GRSq within 1e-8."""
     m, sw = BS.shape[1], np.sqrt(w)[:, None]
     kappa = np.linalg.cond(BS * sw) if m > 1 else 1.0
     cf = np.asarray(fast["coef"], dtype=float).reshape(m, -1)
@@ -673,8 +682,10 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w) -> None:
     sd = np.sqrt(np.average((Y - mean) ** 2, axis=0, weights=w))
     if np.any(np.max(np.abs(BS @ (cf - cr)), axis=0) > 1e-8 * sd * max(1, kappa / 1e6)):
         _fail(case, f"fitted values: kappa {kappa:.3g}, sd(y) {sd.tolist()}")
-    _rel(case, fast["rss"], ref["rss"], LA5, "final rss")
-    _rel(case, fast["gcv"], ref["gcv"], LA5, "final gcv")
+    if not same(fast["rss"], ref["rss"], LA5):
+        _fail(case, f"final rss: fast {fast['rss']!r}, reference {ref['rss']!r}")
+    if not same(fast["rss"], ref["rss"], 0.0) or np.isinf(ref["gcv"]):
+        _rel(case, fast["gcv"], ref["gcv"], LA5, "final gcv")
     for key in ("rsq", "grsq"):
         _close(case, fast[key], ref[key], 1e-8, f"final {key}")
 
@@ -716,6 +727,21 @@ def compare_fits(case: Case, fast_fit, ref_fit) -> Outcome:
     return Outcome(out.steps, pr.near_tie, pr.step)
 
 
+@dataclasses.dataclass
+class PruneCase:
+    """A random basis for the pruning pass: B (n, M) with the intercept first,
+    Y (n, K), w (n,) with zeros allowed or None, and the pass's settings."""
+
+    name: str
+    B: np.ndarray
+    Y: np.ndarray
+    w: np.ndarray | None
+    params: dict
+
+    def reproduction(self) -> str:
+        return _reproduction(self.params, B=self.B, Y=self.Y, w=self.w)
+
+
 # ---------------------------------------------------------------------------
 # The fixture datasets (validation/fixtures), in the supported settings
 
@@ -755,35 +781,64 @@ def _in_supported(name: str, X, Y, w, params: dict) -> list[Case]:
     return [Case(f"{name}[y{k}]", X, Y[:, [k]], w, params) for k in range(Y.shape[1])]
 
 
-def _fixture_cases() -> list[Case]:
+def _basis_case(name: str, X, Y, w, dirs, cuts, args: dict) -> PruneCase | None:
+    """earth's forward basis of one fixture fit (every term it added, TERM-3),
+    with 0.0 where earth stores the smallest x at a linear factor (TERM-2),
+    and earth's pruning settings; None for a constant response (EDGE-1),
+    which the pruning pass does not receive."""
+    Y = np.asarray(Y, dtype=float).reshape(len(X), -1)
+    if np.all(Y[0] == Y):
+        return None
+    dirs, cuts = np.asarray(dirs), np.array(cuts, dtype=float)
+    cuts[(dirs == 0) | (dirs == 2)] = 0.0
+    B = mars_ref.basis_matrix(np.asarray(X, dtype=float), dirs, cuts)
+    params = _earth_params(args)
+    params = {
+        "penalty": float(
+            params.get("penalty", mars_ref.default_penalty(params.get("max_degree", 1)))
+        ),
+        "pmethod": params.get("pmethod", "backward"),
+        "nprune": params.get("nprune"),
+    }
+    return PruneCase(name, B, Y, w, params)
+
+
+def _fixture_cases() -> tuple[list[Case], list[PruneCase]]:
     """Every S dataset fixture, and every S15 draw rebuilt from the simulation
-    DGPs (``gen_fixtures.s15_draws``), in the supported settings, without
-    repeats. String labels (S18) become one 0/1 response per class, as the
-    classifier's passes see them (GLM-1)."""
+    DGPs (``gen_fixtures.s15_draws``): the forward cases, in the supported
+    settings and without repeats, and earth's forward basis of each fit, in
+    its own settings, for the pruning pass. String labels (S18) become one 0/1
+    response per class, as the classifier's passes see them (GLM-1)."""
     from validation.harness import gen_fixtures
     from validation.sims import dgps, seeds
 
-    cases, seen = [], set()
+    cases, bases, seen = [], [], set()
 
-    def add(new):
+    def add(new, basis):
         for c in new:
             w = None if c.w is None else c.w.tobytes()
             key = (c.X.tobytes(), c.Y.tobytes(), w, tuple(sorted(c.params.items())))
             if key not in seen:
                 seen.add(key)
                 cases.append(c)
+        if basis is not None:
+            bases.append(basis)
 
     for path in sorted(FIXTURES_DIR.glob("S*.json")):
         if not path.name.startswith("S"):  # a case-insensitive file system
             continue
         d = json.loads(path.read_text(encoding="utf-8"))
-        inputs, y = d["inputs"], d["inputs"]["y"]
+        inputs, y, r = d["inputs"], d["inputs"]["y"], d["result"]
         if isinstance(y[0], str):
             classes = sorted(set(y))
             y = [[float(v == c) for c in classes] for v in y]
         w = inputs["weights"]
         w = None if w is None else np.asarray(w, dtype=float)
-        add(_in_supported(path.stem, inputs["X"], y, w, _earth_params(d["earth_args"])))
+        args, X = d["earth_args"], inputs["X"]
+        basis = None
+        if "error" not in r:
+            basis = _basis_case(path.stem, X, y, w, r["dirs"], r["cuts"], args)
+        add(_in_supported(path.stem, X, y, w, _earth_params(args)), basis)
     diagnostics = dgps.load_diagnostics()
     draws = json.loads((FIXTURES_DIR / "s15_draws.json").read_text(encoding="utf-8"))
     for draw in draws["draws"]:
@@ -792,11 +847,13 @@ def _fixture_cases() -> list[Case]:
         X, y, _ = dgps.generate(dgps.REGISTRY[name], rng, draw["n"], noise, diagnostics)
         X, _ = gen_fixtures.scaled_matrix(X)
         args = gen_fixtures._s15_earth_args(draw["degree"], draw["mode_family"])
-        add(_in_supported(f"S15_draw{rep:03d}", X, y, None, _earth_params(args)))
-    return cases
+        tag = f"S15_draw{rep:03d}"
+        basis = _basis_case(tag, X, y, None, draw["dirs"], draw["cuts"], args)
+        add(_in_supported(tag, X, y, None, _earth_params(args)), basis)
+    return cases, bases
 
 
-FIXTURE_CASES = _fixture_cases()
+FIXTURE_CASES, BASIS_CASES = _fixture_cases()
 
 
 # ---------------------------------------------------------------------------
@@ -878,21 +935,6 @@ def forward_cases(draw, kind: str) -> Case:
     return Case(f"hypothesis {kind} seed={seed}", X, Y, w, params)
 
 
-@dataclasses.dataclass
-class PruneCase:
-    """A random basis for the pruning pass: B (n, M) with the intercept first,
-    Y (n, K), w (n,) with zeros allowed or None, and the pass's settings."""
-
-    name: str
-    B: np.ndarray
-    Y: np.ndarray
-    w: np.ndarray | None
-    params: dict
-
-    def reproduction(self) -> str:
-        return _reproduction(self.params, B=self.B, Y=self.Y, w=self.w)
-
-
 @st.composite
 def pruning_cases(draw) -> PruneCase:
     """An intercept, then hinge and linear columns of Gaussian covariates, as
@@ -924,7 +966,18 @@ def pruning_cases(draw) -> PruneCase:
     }[weights]
     rows = np.ones(n, bool) if w is None else w > 0
     assume(rows.sum() > M + 1 and np.linalg.matrix_rank(B[rows]) == M)
-    return PruneCase(f"pruning seed={seed}", B, Y, w, params)
+    # The columns in the order of a greedy forward selection, as a forward pass
+    # adds them; so the first offer of PRUNE-3 can beat backward elimination.
+    ww, order, rest = (
+        np.where(rows, 1.0 if w is None else w, 0.0),
+        [0],
+        list(range(1, M)),
+    )
+    while rest:
+        best = min(rest, key=lambda j: mars_ref.rss(B[:, [*order, j]], Y, ww))
+        order.append(best)
+        rest.remove(best)
+    return PruneCase(f"pruning seed={seed}", B[:, order], Y, w, params)
 
 
 # ---------------------------------------------------------------------------
@@ -951,21 +1004,34 @@ def test_forward_pass_on_the_fixture_datasets(case):
     _count(f"forward, {group}", check_forward(case))
 
 
+def check_pruning(case: PruneCase) -> Outcome:
+    """Run both pruning passes and final fits on the case and compare them."""
+    B, Y, w = case.B, case.Y, case.w
+    ww = np.ones(len(B)) if w is None else w
+    N0 = mars_ref.weight_sum(ww[ww > 0])
+    tau_N = mars_ref.weight_tol(N0)
+    ref = mars_ref.prune(
+        B, Y, ww, N=mars_ref.snap(N0, tau_N), tau_N=tau_N, **case.params
+    )
+    Yf = Y[:, 0] if Y.shape[1] == 1 else Y
+    pp = _pruning.pruning_pass(B, Yf, w, **case.params)
+    ff = _pruning.final_fit(B, Yf, pp.selected, w, penalty=case.params["penalty"])
+    return compare_pruning(case, {**pp._asdict(), **ff._asdict()}, ref, B, Y, ww)
+
+
 @given(pruning_cases())
 def test_pruning_pass_on_random_bases(case):
     """The fast pruning pass and final fit equal the reference's on random
     bases, with and without weights, for one and several responses (PRUNE-2
     to PRUNE-8, GCV-2, GCV-5, GCV-6, W-3, RESP-1), up to the first near-tie."""
-    B, Y, w = case.B, case.Y, case.w
-    ww = np.ones(len(B)) if w is None else w
-    N0 = mars_ref.weight_sum(ww[ww > 0])
-    tau_N = mars_ref.weight_tol(N0)
-    N = mars_ref.snap(N0, tau_N)
-    ref = mars_ref.prune(B, Y, ww, N=N, tau_N=tau_N, **case.params)
-    Yf = Y[:, 0] if Y.shape[1] == 1 else Y
-    pp = _pruning.pruning_pass(B, Yf, w, **case.params)
-    ff = _pruning.final_fit(B, Yf, pp.selected, w, penalty=case.params["penalty"])
-    group = f"pruning, K {'= 1' if Y.shape[1] == 1 else '>= 2'}"
-    _count(
-        group, compare_pruning(case, {**pp._asdict(), **ff._asdict()}, ref, B, Y, ww)
-    )
+    group = f"pruning, random, K {'= 1' if case.Y.shape[1] == 1 else '>= 2'}"
+    _count(group, check_pruning(case))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("case", BASIS_CASES, ids=lambda c: c.name)
+def test_pruning_pass_on_earth_forward_bases(case):
+    """The same comparison on earth's forward basis of every fixture fit, at
+    degrees 1 to 3, with the fixtures' weights and several responses."""
+    group = "S15" if case.name.startswith("S15") else "S01 to S20"
+    _count(f"pruning, earth bases, {group}", check_pruning(case))
