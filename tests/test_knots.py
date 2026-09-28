@@ -231,6 +231,17 @@ def test_knot_at_minimum():
     assert not run([0.0, 0.5, 1.0, 2.0, 3.0], np.ones(5), 1, 1).at_minimum
 
 
+def test_zero_knot_sign():
+    """Conventions: -0.0 and 0.0 are equal x values, and a knot of zero is
+    +0.0 whichever comes first, so the knots do not depend on the row order."""
+    for x in ([-0.0, 0.0, 1.0, 2.0, 3.0], [0.0, -0.0, 1.0, 2.0, 3.0]):
+        knots = run(x, np.ones(5), 1, 1).knots
+        assert knots.tolist() == [2.0, 1.0, 0.0]
+        assert math.copysign(1.0, knots[-1]) == 1.0
+        for m in (_knots.linear_option_knot(x), _knots.linear_option_knot(x[::-1])):
+            assert m == 0.0 and math.copysign(1.0, m) == 1.0
+
+
 def test_linear_option_knot():
     """FWD-6, KNOT-5: m is the smallest x over all n cases, not the active ones."""
     assert _knots.linear_option_knot([3.0, -1.0, 2.0]) == -1.0

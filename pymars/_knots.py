@@ -220,7 +220,8 @@ def candidate_knots(
     it reaches 0, t is listed and the counter restarts at L. The knots are
     the distinct listed values, so no knot is at or above v, none is below
     x_(E*+1), and a knot can be the value of an inactive case (KNOT-4). With
-    no active case there is no knot.
+    no active case there is no knot. A knot of zero is +0.0, so that no
+    result depends on the row order (Conventions).
 
     Cases with equal x and equal activity are merged, since the scan does
     not tell them apart; the merged cases hold whole intervals of u, and each
@@ -310,7 +311,9 @@ def candidate_knots(
     hit = c0 + L * ((first_step - c0 + L - 1) // L)
     listed = (counted > 0) & (hit <= before + counted)
     knot_seg = run_seg[listed]
-    t = seg_x[knot_seg]  # non-increasing along the scan
+    # Non-increasing along the scan; + 0.0 makes a zero knot +0.0, since the
+    # sign of a zero in x can depend on the row order among equal values.
+    t = seg_x[knot_seg] + 0.0
     distinct = np.ones(t.shape[0], dtype=bool)
     distinct[1:] = t[1:] != t[:-1]
     knots, split = t[distinct], seg_end[knot_seg][distinct].astype(np.int64)
@@ -323,9 +326,10 @@ def linear_option_knot(x: npt.ArrayLike) -> float:
     With ``auto_linpreds=False`` the linear candidate b·x adds the hinge
     b·(x - m)₊ with this knot, which equals b·x - m·b on the training data;
     the active cases of b play no part. The linear option is not a scan
-    candidate. Complexity: O(n).
+    candidate. A zero is returned as +0.0 (Conventions: the row order must
+    not matter). Complexity: O(n).
     """
     x = np.asarray(x, dtype=np.float64)
     if x.ndim != 1 or x.shape[0] < 1 or not np.isfinite(x).all():
         raise ValueError("x must be a nonempty, finite 1-D array")
-    return float(x.min())
+    return float(x.min()) + 0.0
