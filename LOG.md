@@ -104,6 +104,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:00 #46 round 3: spec APPROVE (rev46-r3-spec), adversarial REQUEST_CHANGES (rev46-r3-adv): the stretch-boundary mutant at mars_ref.py:303 survives the large-N tests (5 other tests catch it). Asked t06-reference for one exact boundary case; rev46-r3-adv re-checks.
 - 19:02 #52 rebased (82b65f4), re-approved by rebase-check-45, merged. T08 complete on main (_terms, _gcv, _knots).
 - 19:03 Started t10-pruning (opus) for T10 (#12). Weekly 11 %; after this, hold new starts until the cumulative allowance allows (14 % by Monday 17:00).
+- 19:07 #46 round-3 fix: head 75a8f55 (two hand-derived large-N boundary cases; bounded first-guess loops); #47 f591dde, #48 b308184, #49 620e01b rebased. Sent to rev46-r3-adv and rev46-r3-spec for re-check of the small diff.
 
 ## Core-hour ledger
 
