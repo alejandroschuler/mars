@@ -147,9 +147,7 @@ def _suffix(a: FloatArray) -> FloatArray:
     array.
     """
     m = a.shape[0]
-    if m == 0:
-        return np.zeros_like(a)
-    B = math.isqrt(m - 1) + 1
+    B = math.isqrt(max(m - 1, 0)) + 1
     nb = -(-m // B)
     rest = a.shape[1:]
     rev = np.concatenate((a[::-1], np.zeros((nb * B - m, *rest))))
