@@ -680,6 +680,39 @@ class TestPruning:
                     np.flatnonzero(result["subsets"][m - 1]), terms
                 )
 
+    def test_one_response_follows_prune_3_on_a_dependent_basis(self):
+        # term 3 = term 1 + term 2, so some sets tie with their subsets up to
+        # rounding; T[m] still holds m terms [PRUNE-2, PRUNE-3]
+        for seed in range(10):
+            rng = np.random.default_rng(seed)
+            x1, x2 = rng.normal(size=(2, 10))
+            B = np.column_stack([np.ones(10), x1, x2, x1 + x2])
+            y = x1 - x2 + rng.normal(size=10)
+            result = prune(B, y, np.ones(10))
+            np.testing.assert_array_equal(result["subsets"].sum(axis=1), [1, 2, 3, 4])
+            for m, (value, terms) in offered_sets(B, y, np.ones(10)).items():
+                assert result["rss_per_size"][m - 1] == value
+                np.testing.assert_array_equal(
+                    np.flatnonzero(result["subsets"][m - 1]), terms
+                )
+
+    def test_a_pure_linear_truth_keeps_m_terms_in_each_set(self):
+        # y = 1 + 2 x1 exactly, so every set with terms 0 and 1 has an RSS at
+        # the level of rounding, and a smaller set can compute below a larger
+        # one. The order keeps all M_f terms, so T[m] still has m terms
+        # [PRUNE-2, PRUNE-3 step 2].
+        for seed in range(5):
+            rng = np.random.default_rng(seed)
+            B = np.column_stack([np.ones(10), rng.normal(size=(10, 3))])
+            Y = (1 + 2 * B[:, 1])[:, None]
+            result = prune(B, Y, np.ones(10))
+            np.testing.assert_array_equal(result["subsets"].sum(axis=1), [1, 2, 3, 4])
+            for m, (value, terms) in offered_sets(B, Y, np.ones(10)).items():
+                assert result["rss_per_size"][m - 1] == value
+                np.testing.assert_array_equal(
+                    np.flatnonzero(result["subsets"][m - 1]), terms
+                )
+
     def test_a_removed_term_moves_to_position_pos(self):
         # T[2] = {0, 1}. A move of the removed term to the end of the order
         # would offer {0, 2} (RSS 11.97), which PRUNE-3 does not offer here.
@@ -770,6 +803,9 @@ class TestPruning:
         result = prune(B, y, np.ones(n), penalty=1000.0)
         assert result["selected_size"] == 1
         assert result["rsq"] == 0.0 and result["grsq"] == 0.0
+        # This only checks that the case still needs the GCV-7 rule: if it
+        # fails after a change of rounding elsewhere, pick a new case; the
+        # code of prune need not change.
         assert 1 - result["rss"] / result["tss"] != 0.0
 
     def test_two_equal_selected_columns(self):
