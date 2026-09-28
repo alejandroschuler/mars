@@ -1,58 +1,28 @@
 """Conformance of the new fitting code with earth (VALIDATION_PLAN.md,
 "Correctness against earth"; T07).
 
-Each implementation of docs/algorithm.md in ``IMPLEMENTATIONS`` fits every
-earth fixture in validation/fixtures/: the datasets S01 to S20 in each of
-their modes, and the 200 draws of S15. The comparison follows the plan's
-tolerance table ("What is compared, and the tolerances") and its section
-"Ties":
+Each implementation in ``IMPLEMENTATIONS`` fits every earth fixture: the
+datasets S01 to S20 in their modes, and the 200 draws of S15. The test
+compares, by the plan's tolerance table: the forward steps (the terms that
+each step adds, exactly) up to the first step where the choices differ, and
+the RSS after each step within 1e-8 of the RSS before it (LA-5); the
+termination code; the pruning record on the same forward basis (the fit's
+own, or the implementation's pruning pass on earth's forward basis when the
+forward paths differ), with the subsets exact down to the first size where
+they differ; and the selected terms, coefficients, GCV, RSq, GRSq, fitted
+values and predictions, by ``compare.compare_fit`` with kappa(B).
 
-- the forward steps, compared by the terms that each step adds (the codes
-  exactly, the knots bit for bit), up to the first step where the two
-  choices differ, and the RSS after each matching step, within 1e-8 of the
-  RSS before it (LA-5), with the tolerance scaled above kappa(B) = 1e6;
-- the termination code, when the whole forward path matches;
-- the pruning record on the same forward basis: the implementation's own
-  fit when its forward basis is earth's, else its pruning pass on earth's
-  forward basis. The subsets T[m] exactly, from the largest size down to the
-  first size where they differ, and ``rss.per.subset`` and
-  ``gcv.per.subset`` within a relative 1e-8 above that size;
-- the selected terms, the coefficients, GCV, RSq, GRSq, the fitted values
-  and the predictions at new points, by ``compare.compare_fit`` with
-  kappa(B) of the selected basis.
-
-A step where the two choices differ is a near-tie when their RSS values on
-the basis before the step differ by less than 1e-7 of the RSS before the
-step (plan: Ties). A size where the two pruning subsets differ is a near-tie
-when their RSS values differ by at most 1e-7 of the lower one: this is the
-threshold that OQ-2 leaves to T07, the forward rule with the lower RSS as
-the scale, since each program's RSS of a subset is within 1e-8 of that
-RSS. A near-tie is labeled ``tie`` and passes, and the comparison of the
-structure stops there, because the paths after two different choices cannot
-be compared. A near-tie in the implementation's own log at a step where
-both programs chose the same term does not stop the comparison.
-
-Every other difference must be listed, with its label and its rules, in
-``validation/differences.json``, which ``validation/DIFFERENCES.md``
-explains: an unlisted difference fails, and so does a listed one that did
-not occur (a ``tie`` entry may be absent) or a ``bug`` entry. Where the plan
-compares a fixture otherwise, the comparison follows the plan:
-
-- integer weights (S13, S16): pymars with the weights against earth without
-  weights on the repeated rows, the ``_repeated`` fixture (W-1);
-- non-integer weights (S13_nonint, whose weights sum to n): only the pruning
-  pass on earth's weighted forward basis, against weighted earth; the
-  forward passes have no counterpart (W-2, KNOT-6, OQ-3);
-- earth reports sums of squares below about 1e-10 as 0 (bb26.4, bb26.9, the
-  Departures table under PRUNE-4 and PRUNE-8): its zeroed per-size values
-  are not compared, and its rss, gcv, rsq and grsq are computed from its
-  residuals by GCV-2, GCV-5 and GCV-6;
-- the binary responses (S14, S20): the least-squares passes only; earth's
-  fitted values there are GLM probabilities, which T14 compares.
-
-Adding an implementation is one line in ``IMPLEMENTATIONS``. The reference
-fits the fixtures with 1,000 cases in seconds, so those are ``slow`` for
-it, as is S15.
+A differing choice is a near-tie, labeled ``tie``, when the RSS values of
+the two choices differ by less than 1e-7 of the RSS before the step (plan:
+Ties); for two subsets of one size, by at most 1e-7 of the lower RSS (the
+threshold of OQ-2). The comparison of the structure stops at the first
+differing choice. Every other difference must be listed in
+``validation/differences.json`` with its label and rules;
+``validation/DIFFERENCES.md`` explains the entries and the special cases of
+the plan: integer weights against the repeated rows (W-1), non-integer
+weights through the fixed basis only (OQ-3), earth's zeroing of small sums
+of squares (PRUNE-4, PRUNE-8), and the least-squares passes only for the
+binary responses. Adding an implementation is one line.
 """
 
 from __future__ import annotations
@@ -84,23 +54,6 @@ import new_adapter  # noqa: E402
 NEAR_TIE = compare.NEAR_TIE_REL  # 1e-7 (plan: Ties)
 ZEROED_BELOW = 1e-9  # earth reports 0 below about 1e-10 (bb26.4: up to 4.83e-11)
 LABELS = ("rule", "bug", "quirk", "tie", "numeric")
-FIELDS = (
-    "forward",
-    "forward_rss",
-    "termination",
-    "pruning",
-    "rss_per_subset",
-    "gcv_per_subset",
-    "selected_terms",
-    "coef",
-    "gcv",
-    "rsq",
-    "grsq",
-    "fitted",
-    "pred_test",
-    "earth_zeroing",
-    "degenerate",
-)
 PYMARS_NAMES = {earth: pymars for pymars, earth in names_map.EARTH_NAMES.items()}
 
 
@@ -638,6 +591,23 @@ def test_the_fit_conforms_to_earth(implementation, name):
     check(differences, implementation, name, expected_differences())
 
 
+def _linear_options(fit: dict, X: np.ndarray) -> list[int]:
+    """The steps whose one term is the hinge at the smallest value of its
+    covariate over all cases, the linear option with auto_linpreds=False
+    (FWD-6)."""
+    forward = fit["forward"]
+    dirs, cuts, parent = forward["dirs"], forward["cuts"], forward["parent"]
+    out = []
+    for s in range(1, len(forward["rss"])):
+        (terms,) = np.nonzero(forward["step"] == s)
+        if len(terms) == 1:
+            k = terms[0]
+            v = np.flatnonzero(dirs[k] != dirs[parent[k]])[0]
+            if dirs[k, v] == 1 and cuts[k, v] == X[:, v].min():
+                out.append(s)
+    return out
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 def test_the_s15_draws_conform_to_earth(implementation):
@@ -653,9 +623,14 @@ def test_the_s15_draws_conform_to_earth(implementation):
             check(differences, implementation, case.name, entries)
         except pytest.fail.Exception as error:
             failures.append(str(error))
-        for e in entries:  # FWD-11: the quirk needs earth's rank fix
+        for e in entries:  # FWD-11: the quirk needs earth's rank fix and a
+            # linear option before the step (the note in the body of #44)
             if case.name in e["cases"] and "FWD-11" in e["rules"]:
-                assert draw["rank_fix"] and draw["mode_family"] == "matched", e["id"]
+                linear = _linear_options(fit, case.X)
+                assert draw["rank_fix"] and not case.params.get(
+                    "auto_linpreds", True
+                ), e["id"]
+                assert linear and linear[0] < e["step"], e["id"]
         log, rss = fit["forward"]["candidates"], fit["forward"]["rss"]
         steps = [d.step for d in differences if d.field == "forward"]
         first = min(steps, default=len(rss) - 1)
@@ -666,9 +641,9 @@ def test_the_s15_draws_conform_to_earth(implementation):
 
 
 def test_the_list_of_differences_is_complete_and_documented():
-    # Every entry names existing cases, a field of this comparison, a label
-    # of the plan's triage, spec rules that exist, and a note; and
-    # DIFFERENCES.md describes every entry by its id.
+    # Every entry names existing cases, a label of the plan's triage, spec
+    # rules that exist, and a note, and DIFFERENCES.md describes it by its id.
+    # (An entry with a wrong field or step never matches, so it fails above.)
     spec = (ROOT / "docs" / "algorithm.md").read_text(encoding="utf-8")
     rules = set(re.findall(r"\*\*([A-Z]+-\d+)\*\*", spec))
     report = (ROOT / "validation" / "DIFFERENCES.md").read_text(encoding="utf-8")
@@ -677,7 +652,7 @@ def test_the_list_of_differences_is_complete_and_documented():
     assert len({e["id"] for e in entries}) == len(entries)
     for e in entries:
         assert set(e["cases"]) <= set(DATASETS) | draws, e["id"]
-        assert e["field"] in FIELDS and e["label"] in LABELS, e["id"]
+        assert e["label"] in LABELS, e["id"]
         assert e["rules"] and set(e["rules"]) <= rules, e["id"]
         assert e["note"] and f"| {e['id']} |" in report, e["id"]
 

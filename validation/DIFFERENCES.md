@@ -2,11 +2,11 @@
 
 This file triages every difference between the new fitting code (pymars 2.0) and earth 5.3.4 on the fixtures in `validation/fixtures/` (VALIDATION_PLAN.md, "Triage of differences"). The machine-readable list is `validation/differences.json`; `tests/test_conformance.py` compares each implementation with earth and fails on a difference that the list does not hold, or on an entry that no longer occurs. Each row below is one entry of that list, by its id.
 
-Status: the reference implementation (`tests/reference/mars_ref.py`) at commit 2a00063 of `main`, with R 4.4.3 and earth 5.3.4 on macOS (arm64). The fast code joins the comparison when `pymars._core.fit_mars` lands (T12); the entries hold for every implementation unless they name one.
+The results below are for the reference implementation (`tests/reference/mars_ref.py`) at commit 2a00063 of `main`, with R 4.4.3 and earth 5.3.4 on macOS (arm64). The fast code joins the comparison when `pymars._core.fit_mars` lands (T12). An entry holds for every implementation unless it names some.
 
 ## What is compared
 
-The test module's docstring gives the rules. In short:
+The docstring of `tests/test_conformance.py` states the rules. The test compares:
 
 - Every dataset fixture (133 files: S01 to S20 in their modes) and the 200 draws of S15. The fixtures give earth the covariates divided by their standard deviation (LA-7), except S12's raw mode.
 - The forward steps: the terms that each step adds, exactly, up to the first step where the two choices differ; the RSS after each matching step within 1e-8 of the RSS before it (LA-5); the termination code.
@@ -17,13 +17,13 @@ Where the plan compares a fixture otherwise:
 
 - Integer weights (S13 and S16): pymars with the weights against earth without weights on the repeated rows, the `_repeated` fixtures (W-1). The 12 such fits whose response is not constant agree with earth. earth's own weighted fits of these data are not compared, because earth counts cases and ignores the weights in its spans and knots (W-2, W-3).
 - Non-integer weights (S13_nonint, weights that sum to n): only the pruning pass on earth's weighted forward basis, against weighted earth (OQ-3). Both modes agree.
-- The binary responses (S14, S20): the least-squares passes. The GLM refit and its probabilities are T14's (`s18_multinom.json` too).
+- The binary responses (S14, S20): the least-squares passes only. T14 compares the GLM refit and its probabilities, and uses `s18_multinom.json` for three classes.
 
 ## Near-ties
 
 A step where the two choices differ is a near-tie when their RSS values on the basis before the step differ by less than 1e-7 of the RSS before the step (plan: Ties). A size where the pruning subsets differ is a near-tie when their RSS values differ by at most 1e-7 of the lower one. This is the threshold that OQ-2 asks T07 to fix: each program's RSS of one subset is within 1e-8 of that RSS (the tolerance for `rss.per.subset`), so a flip needs a gap below about 2e-8, and 1e-7 covers it five times over, as in the forward pass. A near-tie is labeled `tie` and passes, and the comparison of that fit's structure stops there.
 
-A near-tie in the implementation's own candidate log at a step where both programs chose the same term does not stop the comparison, since the paths after the same choice can still be compared. This matters: in S10_matched_d1 the duplicated column makes the best and the second-best candidate tie exactly at 6 of its 10 steps, and within 1e-7 at the other 4, and both programs break these ties the same way (FWD-5, bb18.1). In all, 8 of the 131 whole fits have such a step in the reference's log (S04 with 1,000 cases, S07 matched, S10), and all 8 agree with earth.
+A near-tie in the implementation's own candidate log at a step where both programs chose the same term does not stop the comparison, since the paths after the same choice can still be compared. S10_matched_d1 shows why this matters. There the duplicated column makes the best and the second-best candidate tie exactly at 6 of its 10 steps, and within 1e-7 at the other 4, and both programs break these ties the same way (FWD-5, bb18.1). In all, 8 of the 131 whole fits have such a step in the reference's log (S04 with 1,000 cases, S07 matched, S10), and all 8 agree with earth.
 
 No difference on the fixtures is a near-tie. The near-ties of LA-5 and STOP-7 (a collinearity ratio or a pair-rule value at its threshold, a reduction at MaxLegal, a stopping rule at its bound) need values that the candidate log does not hold, so a difference of that kind fails the test and gets its label here by hand. None occurred.
 
@@ -67,7 +67,7 @@ y is 3 at every case, so the pymars fit is degenerate: the intercept alone, gcv 
 
 ### E5 to E7: earth's hidden term (quirk, FWD-11 and OQ-6)
 
-All three are S15 draws at degree 2 in the matched mode (`Auto.linpreds = FALSE`), and earth's trace prints the rank fix. FWD-11 says that T07 labels such a difference `quirk`. The mechanism is the same in all three. A linear-option step (the hinge at the smallest x, FWD-6) made earth add its hidden term, which fills the empty second slot of that step (FWD-9). A later step then adds a pair whose second term sits in a slot above the number of pymars's terms, so pymars does not search it as a parent yet (FAST-4), while earth, with its hidden term, has one term more and does. earth's choice has the lower RSS on the common basis in all three.
+All three are S15 draws at degree 2 in the matched mode (`Auto.linpreds = FALSE`), and earth's trace prints the rank fix. FWD-11 says that T07 labels such a difference `quirk`, and each first divergence comes after the first linear-option step of its fit, as a note in #44 asks. The S15 test checks both conditions for every entry that cites FWD-11. The mechanism is the same in all three. A linear-option step (the hinge at the smallest x, FWD-6) made earth add its hidden term, which fills the empty second slot of that step (FWD-9). A later step then adds a pair whose second term sits in a slot above the number of pymars's terms, so pymars does not search it as a parent yet (FAST-4), while earth, with its hidden term, has one term more and does. earth's choice has the lower RSS on the common basis in all three.
 
 - E5 (the DGP D1 at the high noise level): the linear option of step 5; earth's parent at step 7 is h(3.24208-x7), the second term of step 6, in slot 13, while pymars has 12 terms.
 - E6 (the DGP D6): the linear option of step 4; earth's parent at step 7 is h(2.03371-x2), the second term of step 6, in slot 13, while pymars has 12 terms.
@@ -83,4 +83,9 @@ The 200 draws come from the simulation DGPs D1 to D6 and D8 (n = 200, p = 10), a
 
 ## Spec questions
 
-Raised on #44 (spec v2), one comment each: the pruning near-tie threshold that closes OQ-2; the reading that only a near-tie with different choices stops the comparison; a record of the LA-5 and STOP-7 near-ties in the candidate log, so that the tests can label them; and the S15 evidence on the hidden term (OQ-6) together with the slot rule (FAST-4, OQ-4).
+Raised on #44 (spec v2), one comment each:
+
+- [the pruning near-tie threshold](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877383632), which could close OQ-2;
+- [the reading that only a near-tie with different choices stops the comparison](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384033);
+- [a record of the LA-5 and STOP-7 near-ties in the candidate log](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384385), so that the tests can label them;
+- [the S15 evidence on the hidden term](https://github.com/alejandroschuler/mars/issues/44#issuecomment-5877384746) (OQ-6), together with the slot rule (FAST-4, OQ-4).
