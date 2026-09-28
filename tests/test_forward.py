@@ -10,8 +10,10 @@ at degree 1 with M_max ≤ fast_k + 2 the window holds every row at every step
 (FAST-3, FAST-6), so fast_k = 0 gives the same fit.
 """
 
+import inspect
 import json
 import math
+import types
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +21,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pymars import _forward, _gcv, _knots, _terms
+from pymars import _forward, _gcv, _knots, _linalg, _terms
 from pymars._forward import Termination
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "validation" / "fixtures"
@@ -102,6 +104,42 @@ def _fit(X, y, **kw):
     return _forward.forward_pass(np.asarray(X, float), np.asarray(y, float), **KW, **kw)
 
 
+def _rss(A, y):
+    A = np.column_stack(A)
+    return float(np.sum((y - A @ np.linalg.lstsq(A, y)[0]) ** 2))
+
+
+def test_the_codes_and_the_defaults():
+    """CORE-3's kinds, CORE-4's codes and CORE-2's defaults."""
+    kinds = (_forward.KIND_NONE, _forward.KIND_PAIR, _forward.KIND_HINGE)
+    assert (*kinds, _forward.KIND_LINEAR) == (0, 1, 2, 3)
+    assert [(t.name, int(t)) for t in Termination] == [
+        ("DEGENERATE", 0),
+        ("NO_ROOM", 1),
+        ("GRSQ_NEG_INF", 2),
+        ("GRSQ_LOW", 3),
+        ("RSQ_CHANGE_SMALL", 4),
+        ("RSQ_HIGH", 5),
+        ("NO_GAIN", 6),
+        ("TERM_LIMIT", 7),
+    ]
+    sig = inspect.signature(_forward.forward_pass).parameters.values()
+    assert {a.name: a.default for a in sig if a.default is not a.empty} == {
+        "w": None,
+        "max_degree": 1,
+        "max_terms": None,
+        "penalty": None,
+        "thresh": 0.001,
+        "minspan": None,
+        "endspan": None,
+        "adjust_endspan": 2.0,
+        "auto_linpreds": True,
+        "fast_k": 20,
+        "fast_beta": 1.0,
+        "record_candidates": False,
+    }
+
+
 def _suppressed():
     """x1 is x0 plus noise, and y a difference of their hinges: one hinge alone
     explains little, and the two together much. Step 1 takes a small pair on
@@ -134,6 +172,7 @@ def test_the_limit_on_knots_leaves_the_linear_term_free():
         return float(np.sum((y - A @ np.linalg.lstsq(A, y)[0]) ** 2))
 
     assert fp.rss[1] - min(rss(t) for t in knots) > delta2
+    assert fp.candidates.second_rss[1] >= fp.candidates.best_rss[1]  # legal only
 
 
 @pytest.mark.parametrize(("auto", "code"), [(True, _terms.LINEAR), (False, 1)])
@@ -191,13 +230,62 @@ def test_the_stopping_rules(n, kw, code):
 
 @pytest.mark.parametrize(
     ("n", "thresh", "code"),
-    [(30, 0.001, Termination.RSQ_CHANGE_SMALL), (30, 0.0, Termination.NO_GAIN)],
+    [
+        (30, 0.001, Termination.RSQ_CHANGE_SMALL),
+        (30, 0.0, Termination.NO_GAIN),
+        (3, 0.001, Termination.GRSQ_NEG_INF),
+    ],
 )
 def test_a_step_without_a_legal_candidate(n, thresh, code):
-    """STOP-4 before STOP-2: a constant covariate gives no candidate (EDGE-3)."""
+    """STOP-4 before STOP-2: a constant covariate gives no candidate (EDGE-3);
+    STOP-3 counts such a step as M + 1 = 2 terms, so C = 3 ≥ N at n = 3."""
     y = np.random.default_rng(3).normal(size=n)
     fp = _fit(np.ones((n, 1)), y, thresh=thresh)
     assert fp.termination == code and fp.dirs.shape == (1, 1)
+
+
+def _eight():
+    rng = np.random.default_rng(8)
+    return rng.uniform(size=(8, 3)), rng.normal(size=8)
+
+
+@pytest.mark.parametrize(
+    ("data", "steps"), [(([[0.0], [0.0], [1.0]], [0.0, 1.0, 5.0]), 0), (_eight(), 1)]
+)
+def test_grsq_counts_the_real_terms(data, steps):
+    """STOP-3 with M' = M + 1 for a linear term (the only candidate at n = 3:
+    LA-3 rejects the knot at the repeated minimum) and M + 2 for a pair (the
+    second pair at n = 8 has C = 5 + 2·2 = 9 ≥ N)."""
+    fp = _fit(*data)
+    assert fp.termination == Termination.GRSQ_NEG_INF and len(fp.rss) == steps + 1
+
+
+def test_a_step_with_one_legal_candidate():
+    """The only knot is at the repeated minimum (KNOT-5), so the linear term is
+    the only candidate and the log has no second (CORE-3); then no candidate
+    is left at all (NO_GAIN at thresh 0)."""
+    fp = _fit([[0.0], [0.0], [1.0], [1.0]], [0.0, 1.0, 2.0, 3.0], thresh=0.0)
+    assert fp.dirs.tolist() == [[0], [2]] and fp.termination == Termination.NO_GAIN
+    log = fp.candidates
+    second = (log.second_rss, log.second_parent, log.second_variable)
+    assert [a.tolist() for a in second] == [[math.inf], [-1], [-1]]
+    assert np.isnan(log.second_knot[0]) and log.second_kind[0] == _forward.KIND_NONE
+
+
+@pytest.mark.parametrize(("sd", "pair"), [(4e-3, True), (1e-3, False)])
+def test_the_pair_rule(sd, pair):
+    """LA-7: x0 is x1 plus noise. After a pair on x1, A of x0 lies above
+    0.01·sigma² for sd 4e-3 and below it for sd 1e-3, so its search at step 2
+    is a pair search or a single-hinge search."""
+    rng = np.random.default_rng(7)
+    x0 = rng.uniform(size=200)
+    X = np.column_stack((x0, x0 + sd * rng.normal(size=200)))
+    fp = _fit(X, np.maximum(x0 - 0.5, 0) + 5 * X[:, 1], thresh=0.0, max_terms=5)
+    ratio = _rss([_terms.basis_matrix(X, fp.dirs[:3], fp.cuts[:3])], x0) / (
+        0.01 * _linalg.weighted_variances(X)[0]
+    )
+    assert (ratio > 2.0) if pair else (ratio < 0.5)
+    assert fp.dirs[3:, 0].tolist() == ([1, -1] if pair else [1])
 
 
 def test_an_exact_fit_stops_before_the_term_limit():
@@ -221,8 +309,23 @@ def test_a_degenerate_fit(y):
     """EDGE-1, GCV-7: a constant response or a single case."""
     fp = _fit(np.arange(len(y), dtype=float)[:, None], y)
     assert fp.termination == Termination.DEGENERATE
+    assert fp.dirs.tolist() == [[0]] and fp.cuts.tolist() == [[0.0]]
     assert fp.rss.tolist() == [0.0] and fp.kept.tolist() == [0]
-    assert fp.candidates.best_rss.shape == (0,)
+    assert fp.dropped.shape == (0,) and fp.dropped.dtype == np.int64
+    assert fp.parent.tolist() == [-1] and fp.step.tolist() == [0]
+    assert all(a.shape == (0,) for a in fp.candidates)
+    assert fp.candidates.second_kind.dtype == np.int8
+
+
+def test_a_shift_of_y():
+    """FWD-10: Y is centered before any sum, so y + 1e8 (exactly y shifted)
+    gives the terms and the RSS of y, to rounding (LA-5)."""
+    rng = np.random.default_rng(9)
+    X = rng.uniform(size=(100, 2))
+    y = 1e8 + np.sin(5 * X[:, 0]) + rng.normal(size=100)
+    a, b = _fit(X, y), _fit(X, y - 1e8)
+    np.testing.assert_array_equal(a.cuts, b.cuts)
+    np.testing.assert_allclose(a.rss, b.rss, rtol=1e-12)
 
 
 def test_scaling_y():
@@ -265,6 +368,8 @@ def test_the_record():
     assert np.all(log.second_rss >= log.best_rss - 1e-7 * fp.rss[:-1])
     linear = (log.second_kind == _forward.KIND_LINEAR) | (log.second_kind == 0)
     assert np.all(np.isnan(log.second_knot) == linear)
+    assert np.all(log.second_kind > 0) and np.all(log.second_parent == 0)
+    assert np.all(log.second_rss < fp.rss[:-1])
     for s in range(S):
         rows = np.flatnonzero(fp.step == s + 1)
         v = int(np.flatnonzero(fp.dirs[rows[0]])[0])
@@ -309,6 +414,106 @@ def _cand(kind, knot, variable=0):
     return _forward._Candidate(1.0, (0, variable, 1), 0, variable, kind, knot)
 
 
+@pytest.mark.parametrize(
+    ("rss", "want"), [([10.0], 10.1), ([10.0, 4.0, 3.0], 3.03), ([10.0, 4.0, 3.9], 1.0)]
+)
+def test_max_legal(rss, want):
+    """FWD-4: MaxLegal_s = min(1.01·RSS_s, 10·Δ_s), and 1.01·RSS_0 first."""
+    got = _forward._Pass.max_legal(types.SimpleNamespace(rss=rss))
+    assert got == pytest.approx(want, rel=1e-14)
+
+
+def _ns(rss=(12.0,), tss=1.0, N=11.0, penalty=-1.0, thresh=0.001):
+    params = {"penalty": penalty, "thresh": thresh}
+    tau = _gcv.weight_tolerance(N)
+    return types.SimpleNamespace(rss=list(rss), tss=tss, N=N, tau=tau, params=params)
+
+
+@pytest.mark.parametrize(
+    ("ns", "chosen", "rss_new", "m_new", "code"),
+    [
+        (_ns(), True, 11.0, 3, None),  # GRSq' = -10 exactly: not below
+        (_ns(), True, 11.5, 3, Termination.GRSQ_LOW),
+        (_ns(thresh=0.0), True, 11.5, 3, None),  # STOP-3 needs thresh > 0
+        (_ns(penalty=2.0), True, 1.0, 11, Termination.GRSQ_NEG_INF),
+        (_ns((1.0,), thresh=0.25), True, 0.75, 3, None),  # a change of thresh
+        (_ns((1.0,), thresh=0.25), True, 0.76, 3, Termination.RSQ_CHANGE_SMALL),
+        (_ns((1.0,), thresh=0.0), None, 1.0, 2, Termination.NO_GAIN),
+    ],
+)
+def test_the_stops_before_a_step(ns, chosen, rss_new, m_new, code):
+    """STOP-3, STOP-4 and STOP-2 at their bounds (penalty -1: GRSq = RSq)."""
+    assert _forward._stop(ns, chosen, rss_new, m_new) == code
+
+
+@pytest.mark.parametrize(
+    ("rss", "thresh", "high"),
+    [
+        (1.0, 0.25, True),  # RSS/TSS = thresh
+        (1.0000001, 0.25, False),
+        (3.0e-11, 0.0, True),  # the floor 1e-10·TSS/(N - 1) is 4e-11
+        (3.8e-11, 0.0, True),
+        (1e-10 * 4.0 / 10.0, 0.0, False),
+        (4.2e-11, 0.0, False),
+        (5.0e-11, 0.0, False),
+    ],
+)
+def test_the_stop_after_a_step(rss, thresh, high):
+    """STOP-5 at its bounds."""
+    assert _forward._rsq_high(_ns(tss=4.0, thresh=thresh), rss) is high
+
+
+@pytest.mark.parametrize("step", [1, 2])
+def test_search_equals_least_squares(step):
+    """FWD-3, FWD-4, LA-2, LA-3, LA-7: the best two legal candidates of one
+    search against least squares on explicit columns. Step 1 is a pair search
+    on x; step 2, after a pair on x, a single-hinge search."""
+    rng = np.random.default_rng(10)
+    x = np.round(rng.uniform(size=40), 2)
+    y = np.sin(4 * x) + 0.3 * rng.normal(size=40)
+    st_ = _state(x[:, None], y, minspan=1, endspan=1)
+    if step == 2:
+        st_.add(*st_.best()[:2])
+    B = _terms.basis_matrix(x[:, None], st_.dirs, st_.cuts)
+    G, base = ([B, x] if step == 1 else [B]), _rss([B], y)
+    want = [(base - _rss([B, x], y), (0, 0, 0))] if step == 1 else []
+    knots = _knots.candidate_knots(np.sort(x), np.ones(40, bool), 1, 1).knots
+    for i, t in enumerate(knots):
+        h = np.maximum(x - t, 0.0)
+        red = base - _rss([*G, h], y)
+        rho = _rss(G, h) / np.sum((h - h.mean()) ** 2)
+        if rho >= _linalg.collinearity_tolerance(step) and red <= st_.max_legal():
+            want.append((red, (0, 0, i + 1)))
+    want = sorted(want, key=lambda c: (-c[0], c[1]))[:2]
+    got = st_.search(0, set())
+    assert [c.order for c in got] == [c[1] for c in want]
+    for c, (red, _) in zip(got, want, strict=True):
+        assert c.reduction == pytest.approx(red, rel=1e-9)
+
+
+@pytest.mark.parametrize("gain", [0.0, 0.5])
+def test_ties_within_a_search(monkeypatch, gain):
+    """FWD-5: equal reductions go to the linear candidate before the knots,
+    and to the larger knot first; an excluded place is left out. Here the
+    scan gives every knot the same gain."""
+    real = _forward._scan.knot_scan
+
+    def flat(x_, b, Q, E, split):
+        out = real(x_, b, Q, E, split)
+        g = np.full_like(out.gain, gain * float(np.sum(E**2)))
+        return out._replace(ratio=np.ones_like(out.ratio), gain=g)
+
+    monkeypatch.setattr(_forward._scan, "knot_scan", flat)
+    x = np.arange(12.0)
+    st_ = _state(x[:, None], np.sin(x), minspan=1, endspan=1)
+    first = [(0, 0, 0), (0, 0, 1)] if gain == 0.0 else [(0, 0, 1), (0, 0, 2)]
+    assert [c.order for c in st_.search(0, set())] == first
+    later = [(0, 0, 1), (0, 0, 2)] if gain == 0.0 else [(0, 0, 2), (0, 0, 3)]
+    assert [c.order for c in st_.search(0, {first[0]})] == later
+    knots = [c.knot for c in st_.search(0, {(0, 0, 0)})]
+    assert knots == sorted(knots, reverse=True)
+
+
 def test_the_explicit_check():
     """The rebuild refuses a zero column, a collinear hinge (KNOT-5: the knot
     at a repeated minimum in a pair), a knot above MaxLegal and a reduction
@@ -322,8 +527,8 @@ def test_the_explicit_check():
     st_.rss = [st_.rss[0], 0.999 * st_.rss[0]]  # 10·Δ_1 is 0.01·TSS
     assert st_.check(_cand(_forward.KIND_PAIR, 3.5)) is None
     assert st_.check(_cand(_forward.KIND_LINEAR, math.nan)) is not None
-    st_.rss = [st_.rss[0], 0.0]
-    assert st_.check(_cand(_forward.KIND_LINEAR, math.nan)) is None
+    st_.rss = [st_.rss[0], st_.check(_cand(_forward.KIND_LINEAR, math.nan)).rss]
+    assert st_.check(_cand(_forward.KIND_LINEAR, math.nan)) is None  # 0 exactly
 
 
 def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
@@ -373,6 +578,7 @@ def test_stage_1_limits(kw):
         (np.ones(3), np.ones(3)),
         (np.full((3, 1), np.inf), np.ones(3)),
         (np.ones((3, 1)), [0.0, np.nan, 1.0]),
+        (np.ones((0, 1)), np.ones(0)),
     ],
 )
 def test_bad_input(X, y):
