@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-27 19:02 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 19:03 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,16 +15,15 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING since the weekly reset at 17:00 PDT Sunday 2026-09-27 (weekly 0 %; next reset 2026-10-04 17:00 PDT). Pace at about 14 % of the weekly limit per day; sonnet for mechanical work.
+RUNNING (week 2). Weekly 11 % at 19:05 Sunday 2026-09-27; reset 2026-10-04 17:00 PDT. Daily allowance: cumulative 14 % per day (14 % by Monday 17:00, 28 % by Tuesday 17:00, ...). The user has not set a cap for week 2; default is the plan's rule (projected use at the reset at most 95 %). At most 2 to 3 agents at a time; sonnet for mechanical work (integrator, checkers).
 
-main: d6cac73 (#43 T05 datasets), 288d93c (#42 T05 components), a8dd024 (#37 spec part 2), b0d642d (#34 spec part 1), d4f74f4 (#38 T02), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
-Done: T00 (#2), T01 v1 (#3; v2 is #44), T02 (#4), T03 (#5), T05 (#7).
+main: eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
+Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11.
 
-Open pull requests, all waiting for reviews after the reset:
-- #45 T09 `_linalg.py` (head 4958fd0; gate B passed; 100 % coverage; 35 of 35 mutants caught). First: `t09-linalg` adds the lm_fit_coefficients fixture test (its code is in PR comment 5848489320) and rebases on main; then the dual review (spec, adversarial).
-- #46 to #49 T06 reference, stacked: #46 part 1 (4c6f6e2, base main), #47 part 2 (3868316), #48 part 3 (403ed6a), #49 part 4 (4080a44, Closes #8). `t06-reference` rebases after each merge and adds a committed test on the component fixtures (now on main). Dual review each; before merging a part, retarget the next part to main.
-- #41 T04 draft: the run configuration and `pilot_legacy.md` (head 9855f80). Ready when the legacy run ends and the results are collected (T04 step 6).
-Board: T04 #6, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 #15, T14 #16, T15 #17, T16 #18, T17 #19, T18 #20, T19 #21, T20 #22, T21 #23, T22 #24, T23 #25, T24 #26, T01 v2 #44; later #27 to #33.
+Open pull requests:
+- #46 T06 reference part 1 (head 06bac02 plus a boundary test in progress by t06-reference). Round 3: spec APPROVE (rev46-r3-spec, sonnet) on 06bac02; adversarial (rev46-r3-adv, sonnet) asked for one exact large-N test at a stretch boundary (mars_ref.py:303). After the fix: send the new head to rev46-r3-adv for re-check, and to rev46-r3-spec (or a checker) for the spec re-approval of the small diff; then the integrator rebases onto main, a checker re-approves, merge. Before merging #46, retarget #47 to main.
+- #47 part 2 pruning (4bf9e43), #48 part 3 forward pass (804ea69), #49 part 4 fit_mars (37df4c3, Closes #8): stacked; each needs a dual review after the part below merges and `t06-reference` rebases it.
+Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
 ## Done in P0
 
@@ -38,23 +37,19 @@ Board: T04 #6, T06 #8, T07 #9, T08 #10, T09 #11, T10 #12, T11 #13, T12 #14, T13 
 
 ## Next actions
 
-Until the reset: a wake every 50 minutes to refresh the heartbeat and check the legacy run; no agents.
-After the reset (Sunday 17:00 PDT), at most 4 authors and 3 reviewers:
-1. `t09-linalg`: add the fixture test to #45, rebase; then the dual review of #45; merge.
-2. Dual review of #46 (T06 part 1); merge (retarget #47 to main first); then #47, #48, #49 in order, each after `t06-reference` rebases it.
-3. T08 (opus, `briefs/T08-T10-components.md`, issue #10) at once; T10 when T08 and T09 are merged.
-4. When the legacy run ends: T04 step 6 (sonnet): collect, summarize, mark #41 ready; one reviewer.
-5. T07 conformance (brief not written; needs T06 and T05, both near): write the brief after #46 merges. T18 legacy description (brief not written; sonnet). T01 v2 (#44) after T07.
-6. Small follow-up PRs: T05 notes (X_test outside the training range; the missing-file skip in the pair test; the multinom stability bar and docstring; a README sentence that T10 compares rss_per_subset, gcv_per_subset and prune_terms at every size); tooling (merge_pr.sh refuses while another open PR uses the head branch as its base; accepts a rebase-only re-approval by range-diff; the sims README pgrep pattern and stale run.lock steps; a DECISIONS.md line for rebase-only re-approvals).
-Pacing: this week (bootstrap to now) cost about 51 weekly points for T00 to T03, T05, spec v1, T06 and T09 authoring. Keep sonnet for mechanical work.
+1. #46: finish round 3 (above); merge; then dual reviews of #47, #48, #49 in order (each after the part below merges and is rebased).
+2. T10 `_pruning.py` (opus author, brief `briefs/T08-T10-components.md`, issue #12) can start now: T08 and T09 are merged.
+3. T11 `_scan.py`, `_forward.py` (opus, staged: degree 1; interactions, linear option, collinearity; Fast MARS, weights, several responses): brief to write; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
+4. T07 conformance (brief to write) after #49 merges. T12 core after T10. T13 estimators after T12. T18 legacy description (brief to write; sonnet).
+5. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test). All go on #44 (spec v2) or later PRs.
+6. Housekeeping: the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove).
 
 ## Running agents
 
-- `t09-linalg` (opus): adding the lm_fit_coefficients fixture test to #45 and rebasing; then the dual review of #45.
-- Workflow run wf_840068d4-87c: dual review of #46 (T06 part 1). Before merging #46, retarget #47 to main; then `t06-reference` rebases #47 and so on.
-- `t08-terms-gcv-knots` (opus): T08, issue #10.
-- `rev-pr41-legacy` (sonnet): single review of #41 (T04 results).
-- Resumable: `t06-reference` (for review fixes and rebases of #47 to #49), `t05-fixtures` (T05 follow-up PR), `t01-spec` (spec v2, #44).
+- `t06-reference` (opus): adding the #46 large-N boundary test.
+- `rev46-r3-adv`, `rev46-r3-spec` (sonnet): #46 round-3 reviewers, resumable for the re-check.
+- `integrator` (sonnet): pure rebases; `rebase-check-45` (sonnet): rebase-only re-approvals.
+- Resumable authors: `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
 
 ## Running jobs
 
