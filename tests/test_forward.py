@@ -1,13 +1,13 @@
-"""Tests of pymars/_forward.py, stage 1 of T11: degree 1, one response, no
-weights and fast_k = 0.
+"""Tests of pymars/_forward.py, stages 1 and 2 of T11: every degree, one
+response, no weights and fast_k = 0.
 
 The earth fixtures (T05) are compared in the matched and the earth-compatible
-(defaults) modes at degree 1 by the plan's rules ("What is compared, and the
-tolerances", "Ties"): the steps exactly up to the first near-tie, the RSS
-after each step within 1e-8 of the RSS before it (LA-5), and the termination
-code when the whole path matched. The defaults mode runs earth's fast.k = 20:
-at degree 1 with M_max ≤ fast_k + 2 the window holds every row at every step
-(FAST-3, FAST-6), so fast_k = 0 gives the same fit.
+(defaults) modes at degrees 1 to 3 by the plan's rules ("What is compared,
+and the tolerances", "Ties"): the steps exactly up to the first near-tie, the
+RSS after each step within 1e-8 of the RSS before it (LA-5), and the
+termination code when the whole path matched. The defaults mode runs earth's
+fast.k = 20: with M_max ≤ fast_k + 2 the window holds every row at every step
+(FAST-3), so fast_k = 0 gives the same fit.
 """
 
 import json
@@ -30,21 +30,23 @@ KW = {"fast_k": 0, "record_candidates": True}
 def _params(a):
     """earth's arguments (API-7) as forward_pass keywords."""
     return {
+        "max_degree": a.get("degree", 1),
         "max_terms": a.get("nk"),
         "penalty": a.get("penalty"),
         "thresh": a.get("thresh", 0.001),
         "minspan": a.get("minspan") or None,
         "endspan": a.get("endspan") or None,
+        "adjust_endspan": a.get("Adjust.endspan", 2.0),
         "auto_linpreds": a.get("Auto.linpreds", True),
     }
 
 
-def _stage1(name):
-    """Degree 1, earth's scaled X, no weights, one numeric response that is not
-    constant, and a queue that cannot matter (module docstring)."""
+def _selected(name):
+    """Earth's scaled X, no weights, one numeric response that is not constant,
+    and a queue whose window holds every row (module docstring)."""
     d = json.loads((FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
     a, y = d["earth_args"], d["inputs"]["y"]
-    if a.get("degree") != 1 or d.get("scale") is None or "error" in d["result"]:
+    if d.get("scale") is None or "error" in d["result"]:
         return False
     if d["inputs"]["weights"] is not None or not isinstance(y[0], float):
         return False
@@ -57,19 +59,28 @@ def _stage1(name):
 # The dataset fixtures are S01 to S20; the lowercase names are extras, which a
 # case-insensitive glob (Windows) would also match.
 FIXTURES = sorted(
-    f.stem for f in FIXTURES_DIR.glob("S*.json") if f.name[0] == "S" and _stage1(f.stem)
+    f.stem
+    for f in FIXTURES_DIR.glob("S*.json")
+    if f.name[0] == "S" and _selected(f.stem)
 )
 
 
 def test_the_fixture_selection():
-    assert len(FIXTURES) == 88
+    at = [sum(f"_d{d}" in name for name in FIXTURES) for d in (2, 3)]
+    assert len(FIXTURES) == 105 and at == [15, 2]
 
 
 def _steps(dirs, cuts):
-    """The terms of each step: a row with code -1 closes a pair (FWD-6)."""
+    """The terms of each step (FWD-6): row k + 1 closes a pair when it differs
+    from row k only in one covariate, where row k has +1 and row k + 1 has -1,
+    with the same knots."""
     dirs, cuts, out, k = np.asarray(dirs), np.asarray(cuts), [], 1
     while k < len(dirs):
-        m = 2 if k + 1 < len(dirs) and (dirs[k + 1] == _terms.MINUS).any() else 1
+        m = 1
+        if k + 1 < len(dirs):
+            diff = np.flatnonzero(dirs[k] != dirs[k + 1])
+            pair = len(diff) == 1 and np.array_equal(cuts[k], cuts[k + 1])
+            m = 2 if pair and (dirs[k, diff[0]], dirs[k + 1, diff[0]]) == (1, -1) else 1
         d = np.asarray(dirs[k : k + m])
         out.append(
             (d.tolist(), np.where(np.abs(d) == 1, cuts[k : k + m], 0.0).tolist())
@@ -431,7 +442,8 @@ def test_row_order_and_invariants(seed, n, p):
 def _state(X, y, **kw):
     """A _Pass on centered y, for the white-box tests."""
     params = {"minspan": None, "endspan": None, "adjust_endspan": 2.0}
-    params |= {"auto_linpreds": True, "thresh": 0.0, "penalty": 2.0} | kw
+    params |= {"auto_linpreds": True, "thresh": 0.0, "penalty": 2.0}
+    params |= {"max_degree": 1, "fast_beta": 1.0} | kw
     Yc = (y - y.mean())[:, None]
     return _forward._Pass(X, Yc, float(np.sum(Yc**2)), params)
 
@@ -500,7 +512,7 @@ def test_search_equals_least_squares(step):
         if rho >= _linalg.collinearity_tolerance(step) and red <= st_.max_legal():
             want.append((red, (0, 0, i + 1)))
     want = sorted(want, key=lambda c: (-c[0], c[1]))[:2]
-    got = _forward._top_two(st_.refine(st_.search(0, set())))
+    got = _forward._top_two(st_.refine(st_.search(0, 0, set())))
     assert [c.order for c in got] == [c[1] for c in want]
     for c, (red, _) in zip(got, want, strict=True):
         assert c.reduction == pytest.approx(red, rel=1e-9)
@@ -533,27 +545,27 @@ def test_ties_within_a_search(monkeypatch, gain):
     _fixed_gain(monkeypatch, lambda split: np.full(split.shape, gain))
     st_ = _two_covariates()
     first = [(0, 0, 0), (0, 0, 1)] if gain == 0.0 else [(0, 0, 1), (0, 0, 2)]
-    got = st_.search(0, set())[:2]  # every knot ties, so every knot is kept
+    got = st_.search(0, 0, set())[:2]  # every knot ties, so every knot is kept
     assert [c.order for c in got] == first
     assert [(c.parent, c.variable) for c in got] == [(0, 0), (0, 0)]
     kinds = [_forward.KIND_LINEAR, _forward.KIND_PAIR]
     assert [c.kind for c in got] == (kinds if gain == 0.0 else kinds[1:] * 2)
-    linear = [c for c in st_.search(0, set()) if c.kind == _forward.KIND_LINEAR]
+    linear = [c for c in st_.search(0, 0, set()) if c.kind == _forward.KIND_LINEAR]
     assert [(c.err, c.sure) for c in linear] == [(0.0, True)]
     later = [(0, 0, 1), (0, 0, 2)] if gain == 0.0 else [(0, 0, 2), (0, 0, 3)]
-    assert [c.order for c in st_.search(0, {first[0]})[:2]] == later
-    knots = [c.knot for c in st_.search(0, {(0, 0, 0)})]
+    assert [c.order for c in st_.search(0, 0, {first[0]})[:2]] == later
+    knots = [c.knot for c in st_.search(0, 0, {(0, 0, 0)})]
     assert knots == sorted(knots, reverse=True)
-    other = [c.order for c in st_.search(1, set())]
-    assert [c.order for c in st_.search(1, {(0, 0, 1), (0, 0, 2)})] == other
+    other = [c.order for c in st_.search(0, 1, set())]
+    assert [c.order for c in st_.search(0, 1, {(0, 0, 1), (0, 0, 2)})] == other
 
 
 def test_leaving_out_the_linear_candidate_keeps_every_knot(monkeypatch):
     """The smallest knot, best here, stays when the linear place 0 is left out."""
     _fixed_gain(monkeypatch, lambda split: np.where(split == split.min(), 0.5, 0.1))
     st_ = _two_covariates()
-    smallest = st_.search(0, set())[0]
-    assert st_.search(0, {(0, 0, 0)})[0] == smallest
+    smallest = st_.search(0, 0, set())[0]
+    assert st_.search(0, 0, {(0, 0, 0)})[0] == smallest
     assert smallest.knot == 1.0  # x_(E* + 1) with E* = 1 (KNOT-4)
 
 
@@ -563,12 +575,12 @@ def test_the_search_keeps_only_legal_knots(monkeypatch):
     candidate, since a reduction must be positive."""
     st_ = _two_covariates()
     st_.rss = [st_.rss[0], (1.0 - 1e-4) * st_.rss[0]]  # MaxLegal = 1e-3·TSS
-    assert [c.kind for c in st_.search(0, set())] == [_forward.KIND_LINEAR]
+    assert [c.kind for c in st_.search(0, 0, set())] == [_forward.KIND_LINEAR]
     st_ = _two_covariates()
     st_.add(*st_.best()[:2])  # now x0 is in the span
-    assert st_.search(0, set()) != []
+    assert st_.search(0, 0, set()) != []
     _fixed_gain(monkeypatch, lambda split: np.zeros(split.shape))
-    assert st_.search(0, set()) == []
+    assert st_.search(0, 0, set()) == []
 
 
 def test_max_legal_is_inclusive():
@@ -576,7 +588,7 @@ def test_max_legal_is_inclusive():
     2 and in the explicit check; with no residual, no candidate is left, not
     even the linear one."""
     st_ = _two_covariates()
-    best = _forward._top_two(st_.refine(st_.search(0, set())))[0]
+    best = _forward._top_two(st_.refine(st_.search(0, 0, set())))[0]
     assert best.kind == _forward.KIND_PAIR and best.err == 0.0 and best.sure
     st_.max_legal = lambda: best.reduction
     assert st_.refine([best._replace(err=1.0, sure=False)]) == [best]
@@ -585,7 +597,7 @@ def test_max_legal_is_inclusive():
     st_.max_legal = lambda: reduction
     assert st_.check(best) is not None
     x = np.arange(12.0)
-    assert _state(x[:, None], np.zeros(12)).search(0, set()) == []
+    assert _state(x[:, None], np.zeros(12)).search(0, 0, set()) == []
 
 
 def test_the_explicit_check():
@@ -659,7 +671,7 @@ def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
         st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, v).q))
     st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
     st_.rss = [st_.rss[0]] * 7 + [float(np.sum(st_.E**2))]  # this is step 8
-    kept = st_.search(0, set())
+    kept = st_.search(0, 0, set())
     place = int(np.flatnonzero(st_.knots[0].knots == x[7])[0]) + 1
     low = [c for c in kept if c.order == (0, 0, place)]
     assert low and not low[0].sure  # the scan's bound straddles tau
@@ -730,7 +742,7 @@ def test_pass_2_ranks_by_the_explicit_values(monkeypatch, scan, exact, best):
     rows[4] = (3.0, 0.05, 0.5, 0.0)
     exact = {i: (0.5, g) for i, g in exact.items()}
     st_, valued = _fixed_passes(monkeypatch, rows, exact)
-    assert [c.order[2] for c in st_.search(0, set())] == [1, 2, 3]
+    assert [c.order[2] for c in st_.search(0, 0, set())] == [1, 2, 3]
     chosen, _, second = st_.best()
     assert (chosen.order[2], second.order[2]) == best and sorted(valued) == [1, 2, 3]
     assert (chosen.reduction, second.reduction) == tuple(exact[i][1] for i in best)
@@ -750,7 +762,7 @@ def test_an_uncertain_rho_is_decided_in_pass_2(monkeypatch, steps):
     }
     exact = {1: (tau * (1 - 1e-9), 20.0), 2: (0.5, 9.9), 3: (0.5, 9.0)}
     st_, valued = _fixed_passes(monkeypatch, scan, exact, top=30.0, steps=steps)
-    kept = st_.search(0, set())
+    kept = st_.search(0, 0, set())
     assert [(c.order[2], c.sure) for c in kept] == [(1, False), (2, True), (3, True)]
     chosen, _, second = st_.best()
     assert (chosen.order[2], second.order[2]) == (2, 3) and sorted(valued) == [1, 2, 3]
@@ -764,7 +776,7 @@ def test_a_reduction_within_its_bound_of_max_legal(monkeypatch, value, best):
     scan = {1: (9.9, 0.1, 0.5, 0.0), 2: (9.5, 0.01, 0.5, 0.0), 3: (9.0, 0.01, 0.5, 0.0)}
     exact = {1: (0.5, value), 2: (0.5, 9.5), 3: (0.5, 9.0)}
     st_, _ = _fixed_passes(monkeypatch, scan, exact, top=9.95)
-    kept = st_.search(0, set())
+    kept = st_.search(0, 0, set())
     assert [(c.order[2], c.sure) for c in kept] == [(1, False), (2, True), (3, True)]
     chosen, _, second = st_.best()
     assert (chosen.order[2], second.order[2]) == best
@@ -778,7 +790,7 @@ def test_a_reduction_within_its_bound_of_0(monkeypatch, value, best):
     zero = dict.fromkeys(range(3, 11), (0.0, 0.0, 0.5, 0.0))
     scan = zero | {1: (0.0, 0.1, 0.5, 0.0), 2: (0.02, 0.001, 0.5, 0.0)}
     st_, _ = _fixed_passes(monkeypatch, scan, {1: (0.5, value), 2: (0.5, 0.02)})
-    assert [(c.order[2], c.sure) for c in st_.search(0, set())] == [
+    assert [(c.order[2], c.sure) for c in st_.search(0, 0, set())] == [
         (2, True),
         (1, False),
     ]
@@ -788,17 +800,18 @@ def test_a_reduction_within_its_bound_of_0(monkeypatch, value, best):
 
 def _explicit_best(st_):
     """The best two of a step by the explicit values of every candidate: the
-    spec's rules (FWD-3 to FWD-5, LA-3, LA-7) with no scan."""
-    s, top, found = len(st_.rss), st_.max_legal(), []
+    spec's rules (FWD-3 to FWD-5, LA-3, LA-7) with no scan. The intercept
+    is the only parent, in the table row of the step's search."""
+    s, top, found, row = len(st_.rss), st_.max_legal(), [], st_.rows[0]
     for j in range(st_.X.shape[1]):
-        sr = st_.setup(j)
+        sr = st_.setup(0, j)
         if sr.pair and sr.lin > 0.0:
-            found.append((sr.lin, (0, j, 0)))
+            found.append((sr.lin, (row, j, 0)))
         for i, t in enumerate(st_.knots[j].knots):
             rho, gain = _scan.exact_knot(sr.Q, sr.E, np.maximum(sr.x - t, 0.0))
             red = gain + sr.lin
             if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
-                found.append((red, (0, j, i + 1)))
+                found.append((red, (row, j, i + 1)))
     return sorted(found, key=lambda c: (-c[0], c[1]))[:2]
 
 
@@ -822,20 +835,13 @@ def test_every_step_equals_the_explicit_choice():
         st_.add(chosen, rb)
 
 
-@pytest.mark.parametrize(
-    "kw",
-    [
-        {"max_degree": 2},
-        {"w": np.ones(4)},
-        {"fast_k": 20},
-    ],
-)
-def test_stage_1_limits(kw):
+@pytest.mark.parametrize("kw", [{"w": np.ones(4)}, {"fast_k": 20}])
+def test_stage_2_limits(kw):
     X, y = np.arange(8.0).reshape(4, 2), np.arange(4.0)
     args = {"fast_k": 0} | kw
-    with pytest.raises(NotImplementedError, match="stage 1"):
+    with pytest.raises(NotImplementedError, match="stage 2"):
         _forward.forward_pass(X, y, **args)
-    with pytest.raises(NotImplementedError, match="stage 1"):
+    with pytest.raises(NotImplementedError, match="stage 2"):
         _forward.forward_pass(X, np.ones((4, 2)), fast_k=0)
 
 
