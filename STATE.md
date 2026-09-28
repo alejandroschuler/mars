@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:31 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 00:33 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -40,17 +40,17 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 1. #47: when `t06-reference` reports, run the narrow round 2 (tools/dual_review.js, focus on the round-1 findings), then merge; then #48 and #49 in order (rebase, dual review, merge).
 2. #55 (T11 stage 1): dual review when `t11-forward` reports; then stages 2 and 3.
-3. T12 `_core.py` (#14): `t12-core` started 23:31 Sunday, brief `briefs/T12-core.md`; branch t12-core stacked on t11-forward-stage1; PR after #55 merges.
+3. T12 `_core.py` (#14): branch origin/t12-core (e040a86 types, 0659fcd fit_mars; on T11 head f564cd5; gate B PASS on both). Decision: one PR with two commits (1354 lines, over the 800 guide). When #55 merges, message t12-core: rebase, gate B, open PR (Closes #14), ready. Then the dual review, commit by commit. Earth: 129 of 131 S fits match through a stub forward pass (2 constant-y fits are the GCV-7 departure); end to end at degree 1 S01 and S04 match. Mutants 291 of 314 killed.
 4. T18 `DIFFERENCES_legacy.md` (#20): `t18-legacy` started 23:31 Sunday, brief `briefs/T18-legacy.md`; 1 reviewer (`single`).
 5. T07 conformance (brief to write) after #49 merges. T13 estimators after T12 (built against the reference through CORE-6 until the fast core is in). T15 oracle tests after T06 completes. T14, T16, T17 after T13.
 6. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test); T10 non-blocking notes from #54's reviews. All go on #44 (spec v2) or later PRs.
-7. Housekeeping: the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove). Note: two #54 reviewers shared one scratchpad mutate.py; #54 is merged, so this is a note only (COMMON.md now gives each agent its own subfolder).
+7. Housekeeping: issue #59 (needs-user, no action needed: auto mode denied new_worktree.sh with a start point). 124 MB of mutant copies in <scratchpad>/t12-core/ for the user to remove. the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove). Note: two #54 reviewers shared one scratchpad mutate.py; #54 is merged, so this is a note only (COMMON.md now gives each agent its own subfolder).
 
 ## Running agents
 
 - `t06-reference` (opus): idle; resumable for #48 review fixes and the #49 rebase.
 - `t11-forward` (opus): T11 stage 1, PR #55 (draft).
-- `t12-core` (opus): T12, issue #14, from 23:31 Sunday.
+- `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
 - `t18-legacy` (opus): T18, issue #20, from 23:31 Sunday.
 - `tools-merge-guard` (sonnet): TOOLS-1 (brief `briefs/TOOLS-1-merge-guard.md`): merge_pr.sh refuses while an open PR is based on the head branch; DECISIONS.md process entries. 1 reviewer (`single`). After it merges, sync `<main>` (the executor runs `<main>/dev/tools/merge_pr.sh`).
 - Resumable: `t10-pruning` (#54 follow-ups), `integrator` (sonnet, pure rebases), `rebase-check-45` (sonnet, rebase-only re-approvals), `rev46-r3-adv`, `rev46-r3-spec`, `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
