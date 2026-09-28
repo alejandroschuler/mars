@@ -398,10 +398,11 @@ class TestLinearAlgebra:
             ref.rss(B, Y, w), rel=1e-12
         )
 
-    @pytest.mark.parametrize("distance", [1e-6, 1e-9])
-    def test_a_column_close_to_the_span_still_counts(self, design, distance):
+    @pytest.mark.parametrize(("distance", "rel"), [(1e-6, 1e-7), (1e-9, 1e-4)])
+    def test_a_column_close_to_the_span_still_counts(self, design, distance, rel):
         # [LA-1] the direction of a column at relative distance 1e-6 or 1e-9
-        # from the span of the others is kept, as numpy's lstsq keeps it
+        # from the span of the others is kept, as numpy's lstsq keeps it; the
+        # two agree to about 10 eps / distance, the conditioning of the fit
         B, _, w = design
         z = np.random.default_rng(4).normal(size=len(w))
         u = ref.Projector(B[:, :2], w).residual(z) / np.sqrt(w)
@@ -410,7 +411,7 @@ class TestLinearAlgebra:
         cols = np.column_stack([B[:, :2], B[:, 1] + distance * u])
         noise = 0.01 * np.random.default_rng(5).normal(size=len(w))
         y = 1 + B[:, 1] + 3 * u / size + noise
-        assert ref.rss(cols, y, w) == pytest.approx(lstsq_rss(cols, y, w), rel=1e-6)
+        assert ref.rss(cols, y, w) == pytest.approx(lstsq_rss(cols, y, w), rel=rel)
         assert ref.rss(cols, y, w) < 0.01 * ref.rss(cols[:, :2], y, w)
 
     def test_a_large_shift_of_a_linear_column_keeps_the_rss(self, design):
