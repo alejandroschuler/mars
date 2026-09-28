@@ -372,7 +372,8 @@ def test_the_record():
     assert fp.parent.tolist() == [-1] + [0] * (M - 1)
     assert fp.step[0] == 0 and np.all(np.diff(fp.step) >= 0) and fp.step[-1] == S
     assert fp.kept.tolist() == list(range(M)) and fp.dropped.shape == (0,)
-    assert np.all(np.diff(fp.rss) < 0) and fp.rss[0] == _gcv.tss(y)
+    assert np.all(np.diff(fp.rss) < 0)
+    assert abs(fp.rss[0] - _gcv.tss(y)) <= 1e-8 * fp.rss[0]  # LA-5
     log = fp.candidates
     np.testing.assert_array_equal(log.best_rss, fp.rss[1:])
     assert np.all(log.second_rss >= log.best_rss - 1e-7 * fp.rss[:-1])
