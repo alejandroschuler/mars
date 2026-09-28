@@ -54,6 +54,19 @@ VERDICTS: dict[str, Verdict] = {
         "{head}; earth's lower endspan counts cases where the parent is zero "
         "(KNOT-4), which the legacy knot set does not",
     ),
+    "inactive": (
+        "quirk",
+        "F7",
+        "{head}; earth evaluates a knot only just below a case where the parent "
+        "is positive (KNOT-3), and the case above the legacy knot has the parent "
+        "at zero",
+    ),
+    "inactive_earth": (
+        "quirk",
+        "F7",
+        "{head}; earth's knot is the value of a case where the parent is zero "
+        "(KNOT-4), which the legacy knot set leaves out",
+    ),
     "grid": (
         "rule",
         "F7",
@@ -104,8 +117,9 @@ VERDICTS: dict[str, Verdict] = {
     "stop_eps": (
         "rule",
         "F6",
-        "{head}; the best legacy candidate lowers the RSS by less than machine "
-        "epsilon, an absolute test",
+        "{head}; the best legacy candidate by GCV, {chosen}, lowers the RSS by "
+        "{gain} of {rss_before}, not more than machine epsilon, an absolute test "
+        "(the next best lowers it by {gain2})",
     ),
     "stop_earth_rules": (
         "rule",
@@ -359,17 +373,24 @@ def classify_choice(ev: dict[str, Any]) -> Verdict:
         return verdict("slot" if ev.get("fast_k") == 0 else "queue", **ev)
     if status == "knot_not_evaluated":
         where = probe.get("where")
-        return verdict(
-            where if where in ("top", "bottom_inactive") else "grid", where=where, **ev
-        )
+        key = where if where in ("top", "bottom_inactive", "inactive") else "grid"
+        return verdict(key, where=where, **ev)
     if status == "tol":
         return verdict("tol", **ev)
     if status == "maxlegal":
         return verdict("maxlegal", max_legal=_g(probe.get("max_legal")), **ev)
-    if status == "single_search":
+    # A single-hinge search explains the divergence only when the legacy pair
+    # beats earth's traced single-hinge RSS for that knot (5 digits in the
+    # trace): otherwise the second hinge is redundant and the RSS the same.
+    single_rss = probe.get("earth_rss") or 0.0
+    if status == "single_search" and (ev.get("e_rss_a") or np.inf) < single_rss * (
+        1 - 1e-4
+    ):
         return verdict("single", **ev)
     if ev.get("earth_stopped"):
         return verdict("unexplained_choice", status=f"{status}, earth stopped", **ev)
+    if ev.get("leg_rss_e") is None and ev.get("e_knot_inactive"):
+        return verdict("inactive_earth", **ev)
     if ev.get("leg_rss_e") is None:
         return verdict(
             "not_legacy", why=ev.get("leg_knot") or "no matching candidate", **ev
@@ -392,7 +413,8 @@ def classify_stop(ev: dict[str, Any]) -> Verdict:
     head = f"forward steps: legacy {ev['n_legacy']}, earth {ev['n_earth']}"
     why, code = ev.get("legacy_stop"), ev.get("termcond")
     if ev["first"] == "legacy" and why in ("gcv_inf", "eps", "no_candidate"):
-        return verdict(f"stop_{why}", head=head)
+        fmt = {k: _g(ev.get(k)) for k in ("gain", "gain2", "rss_before")}
+        return verdict(f"stop_{why}", head=head, chosen=ev.get("chosen"), **fmt)
     if ev["first"] == "earth" and code in (2, 3, 4, 5):
         return verdict("stop_earth_rules", head=head, code=code)
     return verdict("stop_other", head=head, why=why, code=code)

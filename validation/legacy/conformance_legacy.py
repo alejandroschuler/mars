@@ -427,6 +427,8 @@ def probe_choice(
         visited = [xs[c.case - 1] for c in search.cases if 1 <= c.case <= len(xs)]
         active = X[lt.term_column(parent, X) > 0, var]
         where = "span" if hits else "grid"
+        if hits and all(c.bx1 == 0 for c in hits):  # the case above is inactive
+            where = "inactive"
         if active.size and knot >= active.max():
             where = "top"
         elif visited and knot < min(visited):
@@ -555,6 +557,9 @@ def analyze(
                 compare.FWD_RSS_REL, kappa, compare.KAPPA_RSS_LIMIT
             )
             rel = abs(rss_l - rss_e) / abs(rss_e) if rss_e else abs(rss_l)
+            row["forward"]["rss_rel_max"] = max(
+                rel, row["forward"].get("rss_rel_max", 0)
+            )
             if rel > tol:
                 span = (
                     fc["first_subset"] is not None
@@ -581,7 +586,7 @@ def analyze(
         add(
             "stop",
             fc["n_legacy"] + 1,
-            lt.classify_stop({**ev, "legacy_stop": legacy_stop(f)}),
+            lt.classify_stop({**ev, **stop_evidence(f)}),
         )
     elif fc["n_legacy"] > fc["n_earth"]:
         ev = {"first": "earth", "n_legacy": fc["n_legacy"], "n_earth": fc["n_earth"]}
@@ -624,11 +629,43 @@ def evidence(f: Fit, k: int) -> dict[str, Any]:
         "e_rss_a": f.rss_with(k, f.l_steps[k]),
         "e_rss_e": f.rss_with(k, e_step) if e_step else None,
         "leg_knot": why,
+        "e_knot_inactive": bool(e_step) and inactive_knot(f, k, e_step),
         "earth_stopped": not e_step,
         "probe": f.probe,
         "fast_k": (f.case.earth_args or fixture(f.case.reference)["earth_args"]).get(
             "fast.k"
         ),
+    }
+
+
+def inactive_knot(f: Fit, k: int, e_step: frozenset[lt.Sig]) -> bool:
+    """Whether earth's knot at the 0-based step k is the value of no case
+    where its parent (a term of earth's basis before the step) is positive."""
+    rows = [0] + [r for g in f.e_groups[:k] for r in g]
+    before = {f.e_sigs[r] for r in rows}
+    for sig in e_step:
+        for var, code, knot in sig:
+            parent = tuple(g for g in sig if g[0] != var)
+            if code in (1, -1) and parent in before:
+                active = f.X[lt.term_column(parent, f.X) > 0, var]
+                return bool(parent) and not np.any(active == knot)
+    return False
+
+
+def stop_evidence(f: Fit) -> dict[str, Any]:
+    """Why the legacy forward pass stopped, and its best candidate then."""
+    last = f.leg["searches"][-1]
+    chosen = last["chosen"] or {}
+    new = frozenset(lt.sig_from_json(s) for s in chosen.get("new", []))
+    gain = last["rss_before"] - chosen["rss"] if chosen else None
+    second = last.get("second") or {}
+    gain2 = last["rss_before"] - second["rss"] if second else None
+    return {
+        "legacy_stop": legacy_stop(f),
+        "chosen": lt.terms_label(new) or "none",
+        "gain": gain,
+        "gain2": gain2,
+        "rss_before": last["rss_before"],
     }
 
 
@@ -689,7 +726,8 @@ def pruning(add: Any, row: dict[str, Any], f: Fit) -> None:
         "gcv": leg["gcv"],
     }
     if f.case.dataset not in GLM:  # there, earth's fitted values are glm probabilities
-        ours["fitted"] = np.reshape(leg["pred_train"], (-1, 1)).tolist()
+        if f.case.reference == f.case.fixture:  # else earth fits repeated rows
+            ours["fitted"] = np.reshape(leg["pred_train"], (-1, 1)).tolist()
         if leg["pred_test"] is not None:
             ours["pred_test"] = np.reshape(leg["pred_test"], (-1, 1)).tolist()
     B = lt.basis_matrix([f.e_sigs[r - 1] for r in earth["selected_terms"]], f.X)
@@ -821,6 +859,54 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+S12_BACK = {  # a knot of each S12 variant, in the base variant's units
+    "S12_base": lambda k: k,
+    "S12_x_1e8": lambda k: k / 1e8,
+    "S12_x_1em8": lambda k: k / 1e-8,
+    "S12_x_plus_1e6": lambda k: k - 1e6,
+    "S12_y_1e9": lambda k: k,
+    "S12_y_1em9": lambda k: k,
+}
+
+
+def s12_invariance(out: Path) -> dict[str, Any]:
+    """S12's purpose: per mode, whether each variant selects the same terms
+    as the base variant, with the knots in the base units (relative 1e-8),
+    for the legacy code and for earth."""
+
+    def knots(sigs: list[lt.Sig], stem: str, back: Any) -> list[float]:
+        scale = np.asarray(fixture(stem)["scale"] or [1.0])
+        hinge = [(f[0], f[2]) for s in sigs for f in s if f[1] in (1, -1)]
+        return sorted(back(k * scale[v]) for v, k in hinge)
+
+    table: dict[str, Any] = {}
+    for mode in ("raw_d1", "defaults_d1", "matched_d1"):
+        base: dict[str, Any] = {}
+        for ds, back in S12_BACK.items():
+            stem = f"{ds}_{mode}"
+            path = out / "wheel" / f"{slug(f'{ds}/{mode}')}.json"
+            if not path.exists():
+                continue
+            leg, res = json.loads(path.read_text()), fixture(stem)["result"]
+            e_sigs = lt.earth_signatures(res["dirs"], res["cuts"])
+            sides = {
+                "legacy": [
+                    lt.sig_from_json(leg["terms"][i]["sig"]) for i in leg["selected"]
+                ],
+                "earth": [e_sigs[r - 1] for r in res["selected_terms"]],
+            }
+            for side, sigs in sides.items():
+                k = knots(sigs, stem, back)
+                ref = base.setdefault(side, (len(sigs), k))
+                same = ref[0] == len(sigs) and len(k) == len(ref[1])
+                same = same and bool(np.allclose(k, ref[1], rtol=1e-8, atol=0))
+                table.setdefault(mode, {}).setdefault(ds, {})[side] = {
+                    "terms": len(sigs),
+                    "same": same,
+                }
+    return table
+
+
 def head_vs_wheel(out: Path, cases: list[Case]) -> dict[str, Any]:
     """Whether HEAD and the wheel give the same fit, on the unweighted cases
     run with both (the wheel takes no weights)."""
@@ -864,13 +950,25 @@ def cmd_report(ns: argparse.Namespace) -> None:
         "command": "conformance_legacy.py " + " ".join(sys.argv[1:]),
         "summary": summarize(rows),
         "head_vs_wheel": head_vs_wheel(out, cases),
+        "s12_invariance": s12_invariance(out),
         "cases": rows,
     }
     if ns.json:
-        write_json(Path(ns.json), result)
+        write_json(Path(ns.json), _rounded(result))
     if ns.markdown:
         Path(ns.markdown).write_text(markdown(result))
     print(json.dumps(result["summary"], indent=1))
+
+
+def _rounded(obj: Any) -> Any:
+    """Floats to 6 significant digits, to keep the summary JSON small."""
+    if isinstance(obj, float):
+        return float(f"{obj:.6g}")
+    if isinstance(obj, dict):
+        return {k: _rounded(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_rounded(v) for v in obj]
+    return obj
 
 
 def markdown(result: dict[str, Any]) -> str:
@@ -921,6 +1019,20 @@ def markdown(result: dict[str, Any]) -> str:
         "Cause",
     ]
     lines += ["", *table(head, rows)]
+    rows = []
+    for mode, variants in result.get("s12_invariance", {}).items():
+        for ds, sides in variants.items():
+            cells = [
+                f"{v['terms']}, {'same' if v['same'] else 'differs'}"
+                for v in sides.values()
+            ]
+            rows.append([mode, ds, *cells])
+    lines += [
+        "",
+        *table(
+            ["S12 mode", "Variant", "Legacy: terms, knots", "earth: terms, knots"], rows
+        ),
+    ]
     hw = result["head_vs_wheel"]
     differ = ", ".join(hw["different"]) or "none"
     lines += [

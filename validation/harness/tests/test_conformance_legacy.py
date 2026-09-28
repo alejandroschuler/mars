@@ -90,9 +90,18 @@ def _ev(**kw):
             ("quirk", "F7"),
         ),
         (_ev(probe={"status": "knot_not_evaluated", "where": "span"}), ("rule", "F7")),
+        (
+            _ev(probe={"status": "knot_not_evaluated", "where": "inactive"}),
+            ("quirk", "F7"),
+        ),
+        (_ev(probe={"status": "legal"}, e_knot_inactive=True), ("quirk", "F7")),
         (_ev(probe={"status": "tol"}), ("rule", "F5")),
         (_ev(probe={"status": "maxlegal", "max_legal": 3.0}), ("quirk", "F19")),
-        (_ev(probe={"status": "single_search"}), ("rule", "F5")),
+        (_ev(probe={"status": "single_search", "earth_rss": 1.1}), ("rule", "F5")),
+        (
+            _ev(probe={"status": "single_search", "earth_rss": 1.0}, leg_rss_e=1.2),
+            ("unexplained", None),
+        ),
         (_ev(probe={"status": "legal"}, leg_rss_e=None), ("rule", "F7")),
         (
             _ev(probe={"status": "linear"}, leg_rss_e=0.5, same_cost=False),
@@ -127,6 +136,7 @@ def test_verdict_fills_every_template():
     fields |= {"rss_e", "status", "code", "step", "earth", "legacy", "rss_l", "rel"}
     fields |= {"kappa", "size", "total", "field", "detail", "metric", "tol"}
     fields |= {"err", "diff", "diff_own", "same", "terms", "n_earth", "n_legacy"}
+    fields |= {"chosen", "gain", "gain2", "rss_before"}
     for key in lt.VERDICTS:
         label, _, text = lt.verdict(key, **dict.fromkeys(fields, 1.5), label="rule")
         assert label in {"rule", "bug", "quirk", "tie", "numeric", "unexplained"}
