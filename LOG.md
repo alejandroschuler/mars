@@ -85,6 +85,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:38 Started t04-collect (sonnet) for T04 step 6 (collect, summarize, mark #41 ready). Weekly 96 %.
 - 16:57 T04 step 6 (t04-collect): #41 ready at eba26af (gate B, CI 12 of 12; Closes #6). 0 failures of 49,440 fits; EarthClassifier equals GLMEarth exactly on 40 shared repetitions. Ratio table at 200 cases, low noise: P-cur/E-def 0.79 (D1) to 1.58 (D2); at 1,000 cases 0.76 (D5) to 1.38 (D3); binary excess log loss ratio of the 1.0.4 classifier to E-def 0.52 (D3-bin) and 0.365 (D4-bin). Gap: E-def was never run on D7 (the driver's cheap blocks ran E-def only on the legacy cells), so E-pym/E-def on D7 is missing; add E-def on D7 with the new-code run (T21), or a short earth-only run. The single review of #41 waits for the reset.
 
+## 2026-09-27
+- 17:04 17:03 Sunday: weekly reset (0 %; next reset 2026-10-04 17:00). Started: t09-linalg (fixture test for #45), dual review of #46 (wf_840068d4-87c), t08-terms-gcv-knots (opus), rev-pr41-legacy (sonnet). Pacing target about 14 % per day.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

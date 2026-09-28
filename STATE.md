@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-26 16:57 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 17:04 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED again at 11:55 Saturday 2026-09-26: weekly usage 96 % (the user allowed up to 99 %; the rest is the reserve for heartbeat wakes and watchdog runs). Weekly reset 2026-09-27 17:00 PDT. Only the detached legacy run and the heartbeat wakes continue.
+RUNNING since the weekly reset at 17:00 PDT Sunday 2026-09-27 (weekly 0 %; next reset 2026-10-04 17:00 PDT). Pace at about 14 % of the weekly limit per day; sonnet for mechanical work.
 
 main: d6cac73 (#43 T05 datasets), 288d93c (#42 T05 components), a8dd024 (#37 spec part 2), b0d642d (#34 spec part 1), d4f74f4 (#38 T02), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
 Done: T00 (#2), T01 v1 (#3; v2 is #44), T02 (#4), T03 (#5), T05 (#7).
@@ -50,7 +50,11 @@ Pacing: this week (bootstrap to now) cost about 51 weekly points for T00 to T03,
 
 ## Running agents
 
-None at work. Resumable: `t06-reference` (opus; knows the reference), `t09-linalg` (opus), `t05-fixtures` (sonnet; for the T05 follow-up PR), `t01-spec` (opus; spec v2 on #44), `t04-legacy` and `t04-pilot` (sonnet), `rev-t02-harness`, `rev-pr35-sims1` (opus reviewers). The dual-review workflow script is `tools/dual_review.js`; for a rebase-only re-approval use a small sonnet checker as for #40 and #43.
+- `t09-linalg` (opus): adding the lm_fit_coefficients fixture test to #45 and rebasing; then the dual review of #45.
+- Workflow run wf_840068d4-87c: dual review of #46 (T06 part 1). Before merging #46, retarget #47 to main; then `t06-reference` rebases #47 and so on.
+- `t08-terms-gcv-knots` (opus): T08, issue #10.
+- `rev-pr41-legacy` (sonnet): single review of #41 (T04 results).
+- Resumable: `t06-reference` (for review fixes and rebases of #47 to #49), `t05-fixtures` (T05 follow-up PR), `t01-spec` (spec v2, #44).
 
 ## Running jobs
 
