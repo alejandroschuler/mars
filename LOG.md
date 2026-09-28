@@ -165,6 +165,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:55 #57 round 2 (new test rules): both REQUEST_CHANGES on one real finding (extreme-scale underflow makes the scan reject a legal knot for sure); round-1 fixes confirmed; 26-mutant samples (24 killed, 2 harmless); one performative test flagged for deletion. Cost about 1 weekly point (46 % to 47 %) against about 3 per round before. Sent to t11-forward.
 - 11:13 #57 round-2 fix at 2b5d35f (on 5ff189f; gate B PASS; CI 12/12), #55 rebased to 5399a75. recheck-57 (sonnet) started for the narrow re-approval.
 - 11:13 Started the dual review of #55 (5399a75, only the _forward.py commits after 2b5d35f) under the new test rules, in parallel with recheck-57; weekly about 48 % at the start.
+- 11:32 Merged #57 (_scan.py) as 2a00063 after recheck-57's re-approvals (the extra refactor checked bit for bit on 410 outputs). Weekly 51 %, 5-hour 39 %. The #55 dual review runs; after it, only work that finishes open PRs, and a pause at 55 %.
 
 ## Core-hour ledger
 
