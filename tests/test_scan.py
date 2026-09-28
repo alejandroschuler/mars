@@ -387,6 +387,11 @@ def test_hinge_products_checks_its_input(x, b, V, split, match):
         _scan.hinge_products(x, b, V, split)
 
 
+def test_one_case_has_no_knot():
+    HV, F = _scan.hinge_products([0.0], [1.0], np.ones((1, 2)), [])
+    assert HV.shape == (0, 2) and F.shape == (0,)
+
+
 @pytest.mark.parametrize(
     ("Q", "E"),
     [
