@@ -151,6 +151,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:33 #49 rebased to f6c481d on 0c2a896 (duplicates of #48 removed; gate B PASS; CI 12/12). Dual review started: spec with opus, adversarial with sonnet (to save weekly budget; 43 %).
 - 05:41 t11-forward fixed #57 round 1: #57 754c4bf and #55 071d181 (block sums, Welford D, per-knot error bounds, explicit valuation of uncertain knots in the driver; all bounds hold on 11904 random knots; the 88 fixtures still equal the reference). Weekly 43 %, 5-hour 83 %: no new agents until the 5-hour reset (08:20).
 - 05:44 #58 round 2 APPROVE (sonnet) at 870c482. merge_pr.sh refuses: head behind 0c2a896 (#48). The rebase and its re-approval wait for the 5-hour reset (83 % now).
+- 06:01 #49 round 1: both REQUEST_CHANGES on missing tests (FWD-11 in the fit, the candidate log's scale, the EDGE-1 bound and degenerate record, the inputs to the passes, the EDGE-6 overflow side needing np.errstate); code agrees with earth on 123 fixtures. Sent to t06-reference. Weekly 45 %, 5-hour about 87 %.
 
 ## Core-hour ledger
 
