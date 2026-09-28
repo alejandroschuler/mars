@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 10:55 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 11:13 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -29,7 +29,7 @@ RUNNING (week 2). BUDGET RULE FROM THE USER (10:05 Monday 2026-09-28): use up to
 
 ## Next actions (on resume)
 
-1. #57 (T11 `_scan.py`, head 754c4bf) and #55 (`_forward.py`, 071d181, on #57): round 2 of #57 done (wf_3eeced04-77a; weekly 46 % to 47 %, about 1 point for 2 opus reviewers, against about 3 points per round before the new rules): both REQUEST_CHANGES on one shared finding (underflow at extreme scales, gaps spanning more than 2^510: a zero-column test on a computed sum rejects a legal knot for sure); round-1 findings fixed; sample 26 mutants, 24 killed, 2 harmless; one performative test flagged for deletion. t11-forward fixes it; then a checker's narrow re-approval for both roles (the fix is the one the reviewers specified), then merge (opus: the error bounds of the fix need a strong check; the round-1 comments are https://github.com/alejandroschuler/mars/pull/57#issuecomment-5868460714 and #issuecomment-5868616482; the author's reply #issuecomment-5870015920), merge; t11-forward rebases #55 onto main; the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase onto main, open its PR with `Closes #14`, ready) and start T11 stage 2 (interactions).
+1. #57 (T11 `_scan.py`, head 754c4bf) and #55 (`_forward.py`, 071d181, on #57): round 2 of #57 done (wf_3eeced04-77a; weekly 46 % to 47 %, about 1 point for 2 opus reviewers, against about 3 points per round before the new rules): both REQUEST_CHANGES on one shared finding (underflow at extreme scales, gaps spanning more than 2^510: a zero-column test on a computed sum rejects a legal knot for sure); round-1 findings fixed; sample 26 mutants, 24 killed, 2 harmless; one performative test flagged for deletion. Fixed at 2b5d35f (on 5ff189f; exact zero-column test by a suffix count, infinite bounds below 2^-900, the flagged tests deleted or fixed; 24 of 30 sampled mutants killed, the rest keep the bound valid; gate B PASS; CI 12/12); #55 rebased on it (5399a75). recheck-57 (sonnet) running for the narrow re-approval of both roles; then merge (opus: the error bounds of the fix need a strong check; the round-1 comments are https://github.com/alejandroschuler/mars/pull/57#issuecomment-5868460714 and #issuecomment-5868616482; the author's reply #issuecomment-5870015920), merge; t11-forward rebases #55 onto main; the dual review of #55 (only the `_forward.py` commits), merge; then message t12-core (rebase onto main, open its PR with `Closes #14`, ready) and start T11 stage 2 (interactions).
 2. T07 conformance (brief `briefs/T07-conformance.md`; T06 is done, so it can start now; add the fast implementation when T12 merges).
 3. T15 oracle tests (brief to write; needs T06, done, and the fast code as it lands).
 4. T13 estimators (brief `briefs/T13-estimators.md`) after T12; then T14, T16, T17.
@@ -39,7 +39,7 @@ RUNNING (week 2). BUDGET RULE FROM THE USER (10:05 Monday 2026-09-28): use up to
 
 ## Running agents
 
-- `t11-forward` (opus): #57 round-2 fix (underflow), then the #55 rebase. Resumable with SendMessage: `t12-core` (T12 PR after #55), `t06-reference` (done), `t18-legacy` (done), `tools-merge-guard` (TOOLS-2), and older ones.
+- `t11-forward` (opus): idle; #57 fixed, #55 rebased on it. `recheck-57` (sonnet): narrow re-approval of #57. Resumable with SendMessage: `t12-core` (T12 PR after #55), `t06-reference` (done), `t18-legacy` (done), `tools-merge-guard` (TOOLS-2), and older ones.
 
 ## Running jobs
 
