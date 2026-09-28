@@ -114,6 +114,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:22 #54 (T10) both APPROVE at f0be830 (adversarial: 4,107 exact-oracle bases and 1,500 fresh bases against earth:::pruning.pass, no defect); merged. Notes for a follow-up: an ill-conditioned whole-pass test; cast selected to int64; the independence check only catches an exact zero pivot; rounding decides exact rational ties (raise on #44); test skips for rss 0 fits; weighted kappa gate; oracle tests at interpolating sizes need a bound relative to TSS.
 - 23:23 #47 (T06 part 2) round 1: both REQUEST_CHANGES on missing tests (final statistics, PRUNE-3 move and tie rules, PRUNE-5 nprune range, weights in final stats; 15 real survivors); the code is correct (T[m] equals earth in all 133 fixture cases; agrees with #54 on 3,000 random bases). Sent to t06-reference. Process: two reviewers overwrote each other's scratchpad mutate.py; COMMON.md now asks each agent to use its own scratchpad subfolder.
 - 23:32 23:45 Sunday: answered the user's question on the rewrite scope; weekly 17 %, 5-hour 24 %. Wrote briefs T12-core.md and T18-legacy.md; started t12-core (opus, #14, branch stacked on t11-forward-stage1) and t18-legacy (opus, #20). #55 (T11 stage 1) is open as a draft.
+- 23:33 Briefs T07-conformance.md and T13-estimators.md written (T07 after #49; T13 after T12 and #49); style scan clean.
 
 ## Core-hour ledger
 
