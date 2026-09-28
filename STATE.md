@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-27 23:23 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-27 23:32 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,14 +15,15 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING (week 2). Weekly 11 % at 19:05 Sunday 2026-09-27; reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
+RUNNING (week 2). Weekly 17 % at 23:25 Sunday 2026-09-27 (5-hour 24 %); reset 2026-10-04 17:00 PDT. BUDGET RULE FROM THE USER (22:05 Sunday 2026-09-27): use up to 50 % of this week's weekly limit (reset 2026-10-04 17:00 PDT), with no daily pacing: burn it now if useful. When the work pauses at 50 %, CHECK BACK IN WITH THE USER in the session (tell them it paused and ask whether more budget may be used). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work (integrator, checkers).
 
-main: 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
-Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11.
+main: eec81d2 (#54 T10 _pruning.py), 955b44c (#46 T06 part 1, the reference's terms to linear algebra), eabac8c (#52 _terms), f9cfc5a (#45 _linalg), 85ac0e6 (#51 _gcv and _knots), 36ac4ca (#41 T04 results), d6cac73 (#43), 288d93c (#42), a8dd024 (#37), b0d642d (#34), d4f74f4 (#38), 8760cee (#40), dbe5794 (#35), 31e6c13 (#1).
+Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T09 #11, T10 #12.
 
 Open pull requests:
-- #46 merged as 955b44c (T06 part 1). #47 retargeted to main.
-- #47 part 2 pruning (94825c1, base main, 292 lines, ready for its dual review), #48 part 3 forward pass (d1981bb), #49 part 4 fit_mars (f5f9a83, Closes #8): stacked; each needs a dual review after the part below merges and `t06-reference` rebases it.
+- #47 part 2 pruning (d3b3423, base main): round 1 REQUEST_CHANGES from both roles (missing tests; the code is correct). `t06-reference` adds the tests, then a narrow round 2.
+- #48 part 3 forward pass (3414260) and #49 part 4 fit_mars (f5f9a83, Closes #8): after #47, each rebased and dual-reviewed in order.
+- #55 T11 stage 1 (t11-forward-stage1, 48adca8, draft): `t11-forward` finishes it; dual review when ready.
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
 ## Done in P0
@@ -37,22 +38,21 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 
 ## Next actions
 
-1. #47 (T06 part 2, pruning, head 94825c1, rebased on main 955b44c): its dual review (tools/dual_review.js) when the daily allowance allows (after Monday 17:00 if the weekly is near 14 %); then #48 and #49 the same way; before merging a part, retarget the next part to main.
-2. T10 `_pruning.py`: PR #54 ready (head f0be830, base main 955b44c, Closes #12; gate B passed; 100 % coverage; subsets equal to earth at every size in pruning_fixed_basis and in 136 S fits; RSS within 1.5e-14; python -B mutants 37 of 40 killed, 3 equivalent). Dual review when the allowance allows (with #47's).
-3. T11 `_scan.py`, `_forward.py`: brief `briefs/T11-forward.md`; stage 1 author `t11-forward` started 22:12 Sunday; needs T08, T09 (merged); gated on the oracle tests, so it needs the reference (#46 to #49) merged for its oracle tests (T15), or it tests against the reference branch.
-4. T07 conformance (brief to write) after #49 merges. T12 core after T10. T13 estimators after T12. T18 legacy description (brief to write; sonnet).
-5. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test). All go on #44 (spec v2) or later PRs.
-6. Housekeeping: the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove).
+1. #47: when `t06-reference` reports, run the narrow round 2 (tools/dual_review.js, focus on the round-1 findings), then merge; then #48 and #49 in order (rebase, dual review, merge).
+2. #55 (T11 stage 1): dual review when `t11-forward` reports; then stages 2 and 3.
+3. T12 `_core.py` (#14): `t12-core` started 23:40 Sunday, brief `briefs/T12-core.md`; branch t12-core stacked on t11-forward-stage1; PR after #55 merges.
+4. T18 `DIFFERENCES_legacy.md` (#20): `t18-legacy` started 23:40 Sunday, brief `briefs/T18-legacy.md`; 1 reviewer (`single`).
+5. T07 conformance (brief to write) after #49 merges. T13 estimators after T12 (built against the reference through CORE-6 until the fast core is in). T15 oracle tests after T06 completes. T14, T16, T17 after T13.
+6. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test); T10 non-blocking notes from #54's reviews. All go on #44 (spec v2) or later PRs.
+7. Housekeeping: the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove). Note: two #54 reviewers shared one scratchpad mutate.py; #54 is merged, so this is a note only (COMMON.md now gives each agent its own subfolder).
 
 ## Running agents
 
-- `t06-reference` (opus): done for now; resumable for #47 to #49 review fixes and rebases.
-- `t10-pruning` (opus): done; PR #54 ready; resumable for review fixes.
-- Workflow wf_f0e82287-f9e: dual review of #54 (T10). Workflow wf_bfe992ce-cec: dual review of #47 (T06 part 2).
-- `t11-forward` (opus): T11 stage 1 (degree 1), issue #13, brief `briefs/T11-forward.md`, started 22:12 Sunday.
-- `rev46-r3-adv`, `rev46-r3-spec` (sonnet): #46 round-3 reviewers, resumable for the re-check.
-- `integrator` (sonnet): pure rebases; `rebase-check-45` (sonnet): rebase-only re-approvals.
-- Resumable authors: `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
+- `t06-reference` (opus): #47 round-1 fixes (tests for the listed mutants), then rebases of #48 and #49.
+- `t11-forward` (opus): T11 stage 1, PR #55 (draft).
+- `t12-core` (opus): T12, issue #14, from 23:40 Sunday.
+- `t18-legacy` (opus): T18, issue #20, from 23:40 Sunday.
+- Resumable: `t10-pruning` (#54 follow-ups), `integrator` (sonnet, pure rebases), `rebase-check-45` (sonnet, rebase-only re-approvals), `rev46-r3-adv`, `rev46-r3-spec`, `t08-terms-gcv-knots`, `t09-linalg`, `t05-fixtures`, `t01-spec` (spec v2).
 
 ## Running jobs
 
