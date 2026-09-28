@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:42 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 00:44 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -22,7 +22,7 @@ Done: T00 #2, T01 v1 #3 (v2 is #44), T02 #4, T03 #5, T04 #6, T05 #7, T08 #10, T0
 
 Open pull requests:
 - #48 part 3 forward pass (5756c66, rebased on 77b6692, gate B PASS, CI 12/12): dual review running (wf_595b6a8e-4a7, task wkg8gboi5). #49 part 4 fit_mars (Closes #8) after #48 merges.
-- #55 T11 stage 1 (t11-forward-stage1, draft) and #57 (t11-scan, draft): `t11-forward` split stage 1; dual review when it reports.
+- #57 T11 stage 1 part 1 `_scan.py` (10c6e8e, 321 lines, on 77b6692, base main) and #55 part 2 `_forward.py` (8f0e178, 1091 lines, contains #57's commits, base main): both ready, gate B PASS. Earth: 82 of 88 degree-1 fixtures match the whole forward path, 6 stop at a near-tie (match past it); the reference (#49) gives identical records on all 88; mutants 459 of 463. After the reset: dual review of #57, merge, t11-forward rebases #55, then dual review of #55 (review only the _forward.py commits), merge; then message t12-core.
 - #56 TOOLS-1: round 2 APPROVE at 032ad32 (wf_e417c814-a4d). Rebased to 02d28ad (range-diff all '=', gate B PASS, CI 12/12). Next, after the 5-hour reset (no new agents at 81 %): a rebase-check agent (sonnet) posts `REVIEW single 02d28ad...: APPROVE` citing the old approval, then merge_pr.sh 56 single, then fast-forward <main>. Follow-up TOOLS-2: the `pr view` branch of the fake gh also ignores its arguments (older gap; tools-merge-guard made a task chip for it).
 Process for merges since main moves: the `integrator` agent (sonnet) does pure rebases; a checker (`rebase-check-45`, sonnet) verifies range-diff and posts both roles' re-approvals; merge_pr.sh then merges. CI-only test fixes of about 20 lines or less get a narrow re-approval the same way.
 
@@ -39,17 +39,17 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 ## Next actions
 
 1. #47: when `t06-reference` reports, run the narrow round 2 (tools/dual_review.js, focus on the round-1 findings), then merge; then #48 and #49 in order (rebase, dual review, merge).
-2. #55 (T11 stage 1): dual review when `t11-forward` reports; then stages 2 and 3.
+2. T11: reviews of #57 then #55 after the 03:20 reset (no new agents at 81 %); stage 2 (interactions) after the stage-1 review, by `t11-forward` (resumable).
 3. T12 `_core.py` (#14): branch origin/t12-core (e040a86 types, 0659fcd fit_mars; on T11 head f564cd5; gate B PASS on both). Decision: one PR with two commits (1354 lines, over the 800 guide). When #55 merges, message t12-core: rebase, gate B, open PR (Closes #14), ready. Then the dual review, commit by commit. Earth: 129 of 131 S fits match through a stub forward pass (2 constant-y fits are the GCV-7 departure); end to end at degree 1 S01 and S04 match. Mutants 291 of 314 killed.
 4. T18 `DIFFERENCES_legacy.md` (#20): `t18-legacy` started 23:31 Sunday, brief `briefs/T18-legacy.md`; 1 reviewer (`single`).
 5. T07 conformance (brief to write) after #49 merges. T13 estimators after T12 (built against the reference through CORE-6 until the fast core is in). T15 oracle tests after T06 completes. T14, T16, T17 after T13.
 6. Follow-ups: T05 notes PR; tooling PR (merge_pr.sh: refuse while another open PR uses the head branch as its base; accept rebase-only re-approvals); T08 non-blocking notes (child_term validation; bool for penalty and adjust_endspan per CORE-2; the tie-order knife edge in _knots run sums; tss ZeroDivisionError; OverflowError at extreme values; SPAN-4 test at bb06.12's values); T09 notes (the scale range must include weights and products for LA-7; the LA-4 <= fixed-point test); T10 non-blocking notes from #54's reviews. All go on #44 (spec v2) or later PRs.
-7. Housekeeping: issue #59 (needs-user, no action needed: auto mode denied new_worktree.sh with a start point). 124 MB of mutant copies in <scratchpad>/t12-core/ for the user to remove. the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove). Note: two #54 reviewers shared one scratchpad mutate.py; #54 is merged, so this is a note only (COMMON.md now gives each agent its own subfolder).
+7. Housekeeping: a git-ignored venv at <S>/.venv made by t11-forward by mistake (for the user: rm -rf <S>/.venv). Issue #59 (needs-user, no action needed: auto mode denied new_worktree.sh with a start point). 124 MB of mutant copies in <scratchpad>/t12-core/ for the user to remove. the unused branch origin/t08-terms-gcv and worktree <S>/.worktrees/t08-terms-gcv-knots; about 100 MB of reviewer mutation copies in this session's scratchpad (rev46spec_mut, rev46spec_base) that the guard blocked from deletion (for the user to remove). Note: two #54 reviewers shared one scratchpad mutate.py; #54 is merged, so this is a note only (COMMON.md now gives each agent its own subfolder).
 
 ## Running agents
 
 - `t06-reference` (opus): idle; resumable for #48 review fixes and the #49 rebase.
-- `t11-forward` (opus): T11 stage 1, PR #55 (draft).
+- `t11-forward` (opus): idle; stage 1 ready (#57, #55); resumable for review fixes, the #55 rebase and stage 2.
 - `t12-core` (opus): idle until #55 merges (then rebase and open the PR).
 - `t18-legacy` (opus): T18, issue #20, from 23:31 Sunday.
 - `tools-merge-guard` (sonnet): TOOLS-1 (brief `briefs/TOOLS-1-merge-guard.md`): merge_pr.sh refuses while an open PR is based on the head branch; DECISIONS.md process entries. 1 reviewer (`single`). After it merges, sync `<main>` (the executor runs `<main>/dev/tools/merge_pr.sh`).
