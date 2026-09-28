@@ -95,6 +95,12 @@ VERDICTS: dict[str, Verdict] = {
         "{head}; every legacy candidate has C = M + d*H >= n, so an infinite "
         "GCV, and the legacy code stops (earth's forward pass ignores the GCV)",
     ),
+    "stop_no_candidate": (
+        "rule",
+        "F2",
+        "{head}; every legacy candidate would make n or more columns, and the "
+        "legacy code skips such candidates (its GCV would be infinite)",
+    ),
     "stop_eps": (
         "rule",
         "F6",
@@ -152,8 +158,15 @@ VERDICTS: dict[str, Verdict] = {
     "gcv_convention": (
         "rule",
         "F4",
-        "the same subsets but other GCVs, so {legacy} selected terms against "
-        "{earth}: the legacy C = M + d*H charges no penalty for linear terms",
+        "the same subsets but GCVs up to {rel} apart (relative), and {legacy} "
+        "selected terms against {earth}: the legacy C = M + d*H charges d per "
+        "hinge term and nothing for a linear term, earth d/2 per term",
+    ),
+    "constant_y": (
+        "quirk",
+        "F22",
+        "a constant response: earth's forward pass adds {n_earth} steps at thresh "
+        "= 0 although the RSS is 0 (all pruned), the legacy code {n_legacy}",
     ),
     "final": ("{label}", None, "{field}: {detail} {metric} above {tol}"),
     "weights": (
@@ -378,7 +391,7 @@ def classify_stop(ev: dict[str, Any]) -> Verdict:
     step agreed; ``ev["first"]`` is the side that stopped first."""
     head = f"forward steps: legacy {ev['n_legacy']}, earth {ev['n_earth']}"
     why, code = ev.get("legacy_stop"), ev.get("termcond")
-    if ev["first"] == "legacy" and why in ("gcv_inf", "eps"):
+    if ev["first"] == "legacy" and why in ("gcv_inf", "eps", "no_candidate"):
         return verdict(f"stop_{why}", head=head)
     if ev["first"] == "earth" and code in (2, 3, 4, 5):
         return verdict("stop_earth_rules", head=head, code=code)

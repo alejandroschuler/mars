@@ -115,6 +115,8 @@ def test_classify_stop():
     ev = {"n_legacy": 2, "n_earth": 4, "first": "legacy"}
     assert lt.classify_stop({**ev, "legacy_stop": "gcv_inf"})[:2] == ("rule", "F2")
     assert lt.classify_stop({**ev, "legacy_stop": "eps"})[:2] == ("rule", "F6")
+    assert lt.classify_stop({**ev, "legacy_stop": "no_candidate"})[:2] == ("rule", "F2")
+    assert lt.classify_stop({**ev, "legacy_stop": "term_limit"})[0] == "unexplained"
     earth = {"n_legacy": 4, "n_earth": 2, "first": "earth"}
     assert lt.classify_stop({**earth, "termcond": 4})[:2] == ("rule", "F6")
     assert lt.classify_stop({**earth, "termcond": 6})[0] == "unexplained"
@@ -124,7 +126,7 @@ def test_verdict_fills_every_template():
     fields = {"head", "rss", "where", "max_legal", "why", "gcv_a", "rss_a", "gcv_e"}
     fields |= {"rss_e", "status", "code", "step", "earth", "legacy", "rss_l", "rel"}
     fields |= {"kappa", "size", "total", "field", "detail", "metric", "tol"}
-    fields |= {"err", "diff", "diff_own", "same", "terms"}
+    fields |= {"err", "diff", "diff_own", "same", "terms", "n_earth", "n_legacy"}
     for key in lt.VERDICTS:
         label, _, text = lt.verdict(key, **dict.fromkeys(fields, 1.5), label="rule")
         assert label in {"rule", "bug", "quirk", "tie", "numeric", "unexplained"}
