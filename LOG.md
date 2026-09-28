@@ -132,6 +132,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:37 #56 round 2 APPROVE (sonnet single reviewer, gate B rerun). Merge refused: head does not contain 77b6692. Asked tools-merge-guard for a pure rebase.
 - 00:42 5-hour 81 %, weekly 27 %: no new agents until the reset at 03:20 (plan rule at 80 %). #56 rebased to 02d28ad (all '='; gate B PASS; CI 12/12); its rebase-check waits for the reset.
 - 00:44 t11-forward reports stage 1 ready as #57 (_scan.py, 10c6e8e) and #55 (_forward.py, 8f0e178, stacked by content, base main): 82 of 88 earth fixtures match the whole forward path, 6 near-ties; identical to the reference on all 88; 1958 of 2000 random fits identical (42 at ties below 3.3e-13); mutants 459 of 463. Reviews wait for the 5-hour reset. It made a git-ignored venv in <S> by mistake (housekeeping for the user).
+- 01:27 01:27 check: 5-hour 97 %, weekly 29 %; the limit is near. Resume list written at the top of Next actions. New PR #58 (cc02cc3).
 
 ## Core-hour ledger
 

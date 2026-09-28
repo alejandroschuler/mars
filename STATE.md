@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 00:44 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 01:27 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -37,6 +37,8 @@ Process for merges since main moves: the `integrator` agent (sonnet) does pure r
 - Watchdog task `pymars-executor-watchdog` created (cron `17 * * * *`, the app shows 25 past the hour; notifyOnCompletion false). Its folder and mode are not checked yet: `run_scheduled_task` was denied by the auto-mode classifier, so the user was asked to click Run now once.
 
 ## Next actions
+
+On resume after the 5-hour reset (03:20 PDT Monday): (a) heartbeat (normal again), a new timer, get_usage; (b) the #48 review (workflow wf_595b6a8e-4a7, task wkg8gboi5): if it was cut by the limit, resume it with Workflow({scriptPath: <the dual-review script>, resumeFromRunId: "wf_595b6a8e-4a7"}); (c) a rebase-check agent for #56 at 02d28ad, then merge_pr.sh 56 single, then fast-forward <main>; (d) the dual review of #57, then of #55; (e) SendMessage to each author that a limit cut off (t18-legacy; #58 cc02cc3 is new, probably T18's draft).
 
 1. #47: when `t06-reference` reports, run the narrow round 2 (tools/dual_review.js, focus on the round-1 findings), then merge; then #48 and #49 in order (rebase, dual review, merge).
 2. T11: reviews of #57 then #55 after the 03:20 reset (no new agents at 81 %); stage 2 (interactions) after the stage-1 review, by `t11-forward` (resumable).
