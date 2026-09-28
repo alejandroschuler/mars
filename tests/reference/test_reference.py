@@ -330,6 +330,27 @@ class TestKnots:
         distinct = ref.distinct_knots(knots)
         assert distinct == sorted(set(knots), reverse=True)
 
+    @given(scans(weights=True), st.booleans())
+    def test_the_distinct_scan_keeps_the_first_listing_of_each_value(
+        self, case, tenths
+    ):
+        x, active, L, E, w = case
+        w = w * 0.1 if tenths else w.astype(float)
+        N0 = ref.weight_sum(w)
+        tau = ref.weight_tol(N0)
+        N = ref.snap(N0, tau)
+        full = ref.knot_scan(x, active, w, L, E, N, tau)
+        assert ref.knot_scan(x, active, w, L, E, N, tau, distinct=True) == (
+            ref.distinct_knots(full)
+        )
+
+    def test_the_distinct_scan_does_not_grow_with_n(self):
+        # N = 5e9 and L = 7 list the three knots about 4.3e8 times in all
+        x = np.array([0.3, 0.1, 0.4, 0.2, 0.5])
+        active = np.array([True, True, False, True, True])
+        knots = ref.knot_scan(x, active, np.full(5, 1e9), 7, 9, 5e9, 0.1, distinct=True)
+        assert knots == [0.3, 0.2, 0.1]
+
     def test_a_zero_knot_has_no_sign(self):
         x = np.array([-0.0, 0.0, 1.0, 2.0, 3.0, 4.0])
         for rows in (x, x[::-1]):
@@ -1257,7 +1278,9 @@ class TestForwardPass:
             np.isnan(log["second_knot"]), np.isin(kinds, [0, 3])
         )
         np.testing.assert_array_equal(log["second_parent"] == -1, kinds == 0)
-        assert np.all(log["second_rss"] >= log["best_rss"])
+        # up to rounding: at an exact fit a second best can compute lower
+        tolerance = 1e-12 * rec["rss"][:-1]
+        assert np.all(log["second_rss"] >= log["best_rss"] - tolerance)
         for k in range(1, M):  # column k is the parent's column times the new factor
             assert (
                 ref.term_degree(rec["dirs"][k])
@@ -1701,6 +1724,259 @@ def test_the_pruning_pass_matches_earth_on_its_forward_basis(load_fixture, name)
     assert result["gcv"] == pytest.approx(earth["gcv"], rel=1e-8)
     assert result["rsq"] == pytest.approx(earth["rsq"], abs=1e-8)
     assert result["grsq"] == pytest.approx(earth["grsq"], abs=1e-8)
+
+
+def same_pass(a, b):
+    """Two forward records with the same terms, parents, steps and code."""
+    for key in ("dirs", "cuts", "parent", "step", "termination"):
+        np.testing.assert_array_equal(a[key], b[key])
+
+
+class TestForwardPassRules:
+    """Rules of the pass that the adversarial review of #48 found open, with
+    its cases."""
+
+    @pytest.mark.parametrize("beta", [0.0, 0.5, 2.0])
+    def test_the_table_of_each_step_uses_fast_beta(self, beta):
+        # FAST-2: the table of step s + 1 is queue_table of the entries after
+        # step s, with the given fast_beta
+        rng = np.random.default_rng(21)
+        X = rng.uniform(size=(80, 3))
+        y = (
+            np.abs(X[:, 0] - 0.4)
+            + X[:, 0] * np.maximum(X[:, 1] - 0.5, 0)
+            + X[:, 2]
+            + rng.normal(scale=0.05, size=80)
+        )
+        trace = []
+        rec = run_forward(
+            X, y, trace=trace, max_degree=2, fast_k=3, fast_beta=beta, thresh=0.0
+        )
+        for s in range(1, len(trace)):
+            entries = [list(e) for e in trace[s - 1]["entries"]]
+            entries += [[math.inf, 2 * s]] * int(np.sum(rec["step"] == s))
+            assert trace[s]["table"] == ref.queue_table(entries, s, beta)
+
+    def test_the_second_best_of_step_one_is_a_brute_force_second(self):
+        # CORE-3: a second best with parent 0 and variable 1, so that the two
+        # fields cannot be swapped unseen
+        x = np.arange(41.0) / 40
+        X = np.column_stack([np.cos(7 * x), x])
+        y = 2 * np.maximum(x - 0.5, 0) + 0.01 * np.sin(13 * x)
+        rec = run_forward(X, y, minspan=1, endspan=1)
+        log = rec["candidates"]
+        w = np.ones(41)
+        B = np.ones((41, 1))
+        P = ref.Projector(B, w)
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(2, np.int8),
+            X,
+            y[:, None],
+            w,
+            B,
+            P,
+            P.residual(y[:, None]),
+            ref.covariate_variances(X, w, 41.0),
+            41.0,
+            ref.weight_tol(41.0),
+            ref.Params(minspan=1, endspan=1),
+            0.01,
+        )
+        tss = rec["rss"][0]
+        legal = sorted((c for c in cands if tss - c.rss > 0), key=lambda c: c.rss)
+        best, second = legal[0], legal[1]
+        assert (best.variable, best.knot) == (1, 0.5)
+        assert log["second_parent"][0] == second.parent == 0
+        assert log["second_variable"][0] == second.variable == 1
+        assert log["second_knot"][0] == second.knot
+        assert log["second_kind"][0] == second.kind
+
+    def test_every_candidate_rss_sums_over_several_responses(self):
+        # RESP-1: the RSS of a candidate is summed over the responses
+        rng = np.random.default_rng(22)
+        X = rng.uniform(size=(40, 2))
+        Y = np.column_stack([np.abs(X[:, 0] - 0.3), 5 * np.maximum(X[:, 1] - 0.6, 0)])
+        Y = Y + rng.normal(scale=0.05, size=Y.shape)
+        w = np.ones(40)
+        B = np.ones((40, 1))
+        P = ref.Projector(B, w)
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(2, np.int8),
+            X,
+            Y,
+            w,
+            B,
+            P,
+            P.residual(Y),
+            ref.covariate_variances(X, w, 40.0),
+            40.0,
+            ref.weight_tol(40.0),
+            ref.Params(),
+            0.01,
+        )
+        kinds = set()
+        for c in cands:
+            x = X[:, c.variable]
+            cols = [B, x]
+            if c.kind != ref.LINEAR:
+                cols.append(np.maximum(x - c.knot, 0))
+            expected = lstsq_rss(np.column_stack(cols), Y, w)
+            assert c.rss == pytest.approx(expected, rel=1e-10)
+            kinds.add(c.kind)
+        assert kinds == {ref.PAIR, ref.LINEAR}
+
+    def test_the_larger_response_decides_the_first_knot(self):
+        # RESP-1, RESP-3: the responses are not scaled to a common variance
+        x = np.arange(41.0) / 40
+        Y = np.column_stack([np.maximum(x - 0.3, 0), 10 * np.maximum(x - 0.7, 0)])
+        rec = run_forward(x[:, None], Y, minspan=1, endspan=1, max_terms=3)
+        np.testing.assert_array_equal(rec["cuts"][1:, 0], [0.7, 0.7])
+        one = run_forward(x[:, None], Y[:, 1], minspan=1, endspan=1, max_terms=3)
+        np.testing.assert_array_equal(one["cuts"], rec["cuts"])
+
+    def test_the_floor_uses_the_weight_sum(self):
+        # W-2 in STOP-5: with weight 2 on 21 rows, RSS_1 is 1.5 times the
+        # floor 1e-10 TSS / (N - 1) with N = 42, so the pass goes on, as it
+        # does on the 42 repeated rows
+        x = np.arange(21.0) / 20
+        B1 = np.column_stack(
+            [np.ones(21), np.maximum(x - 0.5, 0), np.maximum(0.5 - x, 0)]
+        )
+        v = np.sin(9 * x)
+        v = v - B1 @ np.linalg.lstsq(B1, v, rcond=None)[0]
+        y0 = 2 * np.maximum(x - 0.5, 0)
+        tss0 = float(np.sum((y0 - y0.mean()) ** 2))
+        eps = math.sqrt(1.5 * 1e-10 * tss0 / 41 / float(v @ v))
+        y = y0 + eps * v
+        opts = {"minspan": 1, "endspan": 1, "thresh": 0.0}
+        weighted = run_forward(x[:, None], y, w=np.full(21, 2.0), **opts)
+        repeated = run_forward(np.repeat(x, 2)[:, None], np.repeat(y, 2), **opts)
+        assert len(repeated["rss"]) > 2
+        same_pass(weighted, repeated)
+
+    def test_the_automatic_minspan_uses_the_weight_of_the_cases(self):
+        # SPAN-1: weight 2 on 30 cases gives N_b = 60 and L = 4; the count 30
+        # would give L = 3, whose list holds the kink at 22/29
+        x = np.arange(30.0) / 29
+        y = 3 * np.abs(x - 22 / 29)
+        weighted = run_forward(x[:, None], y, w=np.full(30, 2.0), max_terms=3)
+        repeated = run_forward(np.repeat(x, 2)[:, None], np.repeat(y, 2), max_terms=3)
+        same_pass(weighted, repeated)
+        assert weighted["cuts"][1, 0] != 22 / 29
+
+    def test_grsq_after_a_linear_step_counts_the_real_terms(self):
+        # STOP-3: M' counts the real terms, not the slots, after a one-term step
+        n = 20
+        x0 = (np.arange(n) % 2).astype(float)
+        x1 = (np.arange(n) * 7 % n) / (n - 1)
+        noise = 0.01 * np.random.default_rng(0).normal(size=n)
+        y = 3 * x0 + 2 * np.maximum(x1 - 0.5, 0) + noise
+        rec = run_forward(
+            np.column_stack([x0, x1]),
+            y,
+            penalty=9.0,
+            minspan=1,
+            endspan=1,
+            max_terms=11,
+        )
+        np.testing.assert_array_equal(rec["dirs"], [[0, 0], [2, 0], [0, 1], [0, -1]])
+        assert rec["termination"] == ref.RSQ_HIGH
+
+    def test_the_linear_option_knot_is_the_smallest_x(self):
+        # FWD-6 with auto_linpreds=False
+        x = 2 + np.arange(21.0) / 20
+        rec = run_forward(x[:, None], 1 + 2 * x, auto_linpreds=False)
+        np.testing.assert_array_equal(rec["dirs"], [[0], [1]])
+        np.testing.assert_array_equal(rec["cuts"], [[0.0], [2.0]])
+
+    def test_max_legal_uses_the_last_reduction(self):
+        # FWD-4: 10 Delta_s with Delta_s = RSS_(s-1) - RSS_s of the step just done
+        assert ref.max_legal([10.0, 8.0, 7.9]) == pytest.approx(1.0)
+
+    def test_the_endspan_cap_uses_all_cases(self):
+        # SPAN-5: E* is capped with N, the weight of all cases (E* = 19 and no
+        # knot), not with N_b (15, which would give 6)
+        rng = np.random.default_rng(24)
+        X = rng.uniform(size=(40, 2))
+        B = np.column_stack(
+            [np.ones(40), np.maximum(X[:, 0] - 0.7, 0), np.maximum(0.7 - X[:, 0], 0)]
+        )
+        w = np.ones(40)
+        Y = (X[:, 0] * X[:, 1])[:, None]
+        P = ref.Projector(B, w)
+        tau_N = ref.weight_tol(40.0)
+        cands, _ = ref._parent_candidates(
+            1,
+            np.array([1, 0], np.int8),
+            X,
+            Y,
+            w,
+            B,
+            P,
+            P.residual(Y),
+            ref.covariate_variances(X, w, 40.0),
+            40.0,
+            tau_N,
+            ref.Params(),
+            0.01,
+        )
+        active = B[:, 1] > 0
+        L, E = ref.search_spans(2, 1, float(active.sum()), 40.0, tau_N)
+        expected = ref.knot_scan(X[:, 1], active, w, L, E, 40.0, tau_N)
+        found = [c.knot for c in cands if c.variable == 1 and c.kind != ref.LINEAR]
+        assert expected == [] and found == []
+
+    def test_the_pair_rule_uses_weighted_variances(self):
+        # LA-7: A_w is 0.95 of the weighted threshold, so the search on the
+        # parent x0 and x1 is a single hinge, as on the repeated rows
+        eta = 0.0520134012737919
+        x0 = np.r_[np.zeros(10), np.ones(10)]
+        x1 = np.r_[np.arange(10.0), 4.5 + eta * np.linspace(-1, 1, 10)]
+        X = np.column_stack([x0, x1])
+        w = np.r_[np.full(10, 3.0), np.ones(10)]
+        y = 2 * x0 + 3 * x0 * x1
+        opts = {
+            "max_terms": 5,
+            "max_degree": 2,
+            "thresh": 0.0,
+            "minspan": 1,
+            "endspan": 1,
+        }
+        weighted = run_forward(X, y, w=w, **opts)
+        reps = w.astype(int)
+        repeated = run_forward(np.repeat(X, reps, axis=0), np.repeat(y, reps), **opts)
+        np.testing.assert_array_equal(weighted["dirs"], [[0, 0], [2, 0], [2, 1]])
+        same_pass(weighted, repeated)
+
+    @pytest.mark.parametrize(
+        ("eta", "code"), [(0.01622815768436774, 2), (0.015905943651091013, 1)]
+    )
+    def test_the_kind_of_a_search_at_the_la_7_threshold_in_the_pass(self, eta, code):
+        # LA-7 through the pass, which divides sigma_v^2 by N: with x0 binary,
+        # step 1 adds x0, and at step 2 A_w / (0.01 sigma^2(x1)) is 1.02 (a
+        # pair search, the linear x1) or 0.98 (a hinge)
+        n = 20
+        x0 = (np.arange(n) % 2).astype(float)
+        X = np.column_stack([x0, x0 + eta * np.sin(np.arange(n) * 1.7)])
+        y = 3 * x0 + 2 * X[:, 1]
+        rec = run_forward(X, y, minspan=1, endspan=1, thresh=0.0, max_terms=5)
+        np.testing.assert_array_equal(rec["dirs"][:3], [[0, 0], [2, 0], [0, code]])
+
+    def test_tenth_weights_give_the_pass_of_unit_weights(self):
+        # W-4 in the pass: 100 cases of weight 0.1 (10 at each of 10 values)
+        # give the pass of the 10 unit cases; without tau_N the running sums
+        # of 0.1 fall below the integers and the scan loses the knot 4
+        x = np.arange(10.0)
+        y = np.abs(x - 4.0)
+        opts = {"minspan": 1, "endspan": 1, "max_terms": 3}
+        unit = run_forward(x[:, None], y, **opts)
+        tenth = run_forward(
+            np.repeat(x, 10)[:, None], np.repeat(y, 10), w=np.full(100, 0.1), **opts
+        )
+        np.testing.assert_array_equal(unit["cuts"][1:, 0], [4.0, 4.0])
+        same_pass(unit, tenth)
 
 
 EARTH_NAMES = {  # [API-7]

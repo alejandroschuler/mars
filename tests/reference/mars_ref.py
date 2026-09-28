@@ -259,7 +259,16 @@ def _smallest_from(guess: int, holds) -> int:
     raise AssertionError(f"the guess {guess} is not within a few steps")
 
 
-def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
+def knot_scan(
+    x,
+    active,
+    w,
+    minspan: int,
+    endspan: int,
+    N: float,
+    tau_N: float,
+    distinct: bool = False,
+):
     """The knot list of KNOT-6 (cumulative weight), in scan order, repeats included.
 
     The scan visits u = N, N - 1, ... while u >= E* + 2 - tau_N; visit k
@@ -271,8 +280,10 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
     reaches 0. The state of the scan takes time O(n log n) and memory O(n),
     whatever N is, so the whole call takes time O(n log n + K) and memory
     O(n + K), where K is the length of the returned list (every listing of a
-    knot is kept). The tests check this form against a loop over single
-    visits.
+    knot is kept). With ``distinct=True`` only the first listing of each
+    value is kept, which is ``distinct_knots`` of the list, and the call takes
+    O(n log n) time and O(n) memory. The tests check this form against a loop
+    over single visits.
     """
     x = np.asarray(x, dtype=np.float64)
     active = np.asarray(active, dtype=bool)
@@ -315,7 +326,10 @@ def knot_scan(x, active, w, minspan: int, endspan: int, N: float, tau_N: float):
         stretch = end - begin
         hit = c0 + L * max(0, -(-(moves + 1 - c0) // L))  # the next knot's move
         if hit <= moves + stretch:
-            knots += [float(t) + 0.0] * ((moves + stretch - hit) // L + 1)
+            if not distinct:
+                knots += [float(t) + 0.0] * ((moves + stretch - hit) // L + 1)
+            elif not knots or knots[-1] != t:
+                knots.append(float(t) + 0.0)
         moves += stretch
     return knots
 
@@ -895,7 +909,7 @@ def _parent_candidates(
             P_G, e_G = P_B, e_B
         if spans is None:
             continue
-        knots = distinct_knots(knot_scan(x, active, w, *spans, N, tau_N))
+        knots = knot_scan(x, active, w, *spans, N, tau_N, distinct=True)
         if not knots:
             continue
         t = np.array(knots)
