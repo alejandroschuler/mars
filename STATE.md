@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 12:06 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 12:10 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED for the budget (week 2). Weekly 53 % at 11:55 Monday 2026-09-28; the user's limit this week is 55 % (10:05 Monday), and the pacing rule starts nothing new from 53 %. The executor told the user in its session and asked whether more budget may be used. No agents or jobs are running. The heartbeat is set to the weekly reset (2026-10-04 17:00 PDT), so the watchdog does not resume the work during the pause. If the user allows more, the executor in this session resumes and refreshes the heartbeat. If a watchdog run takes over after the weekly reset, it first asks the user in its session about the week-3 budget.
+RUNNING (week 2). BUDGET RULE FROM THE USER (about 12:10 Monday 2026-09-28): continue until 98 % of this week's weekly limit (the user has a reset this week; the weekly reset shown is 2026-10-04 17:00 PDT). Weekly 53 % at 12:10 Monday. Pacing to stop cleanly at 98 %: from 92 %, start only small agents that finish open pull requests; from 96 %, start nothing and ask running agents to push a checkpoint and stop; at 98 %, pause, set the heartbeat to the weekly reset, and tell the user. The 5-hour limit still applies (the plan's rule: no new agents from 80 % of it; the 70 % heartbeat rule). Concurrency per the plan (at most 4 authors, 3 reviewers); sonnet for mechanical work. Test rules: COMMON.md "Tests" and REVIEWER.md (meaningful tests only).
 
 Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #57 round 2 cost about 1 point (earlier full rounds about 3); #57's fix, a narrow check and the merge about 2; the full dual review of #55 (1,349 lines) about 3. The reviewers now sample about 30 mutants, flag performative tests for deletion, and spend most effort on wrong results; both rounds found real numerical bugs.
 

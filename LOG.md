@@ -168,6 +168,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:32 Merged #57 (_scan.py) as 2a00063 after recheck-57's re-approvals (the extra refactor checked bit for bit on 410 outputs). Weekly 51 %, 5-hour 39 %. The #55 dual review runs; after it, only work that finishes open PRs, and a pause at 55 %.
 - 11:54 #55 round 1: both REQUEST_CHANGES on one real finding (the uncentered covariate in Gram-Schmidt breaks LA-5 on shifted covariates; plus TSS about one computed mean at large y shifts); both reviewers checked their fixes; 4 performative tests flagged for deletion; samples of 29 to 30 mutants. Weekly 53 %: PAUSED (limit 55 %). Fix list written in STATE for t11-forward. Heartbeat set to the weekly reset.
 - 12:06 The user started TOOLS-2 (pin the fake gh's pr view arguments) in a separate local session; not to be duplicated here.
+- 12:10 The user allowed work until 98 % of this week's limit (a reset comes this week). Resumed at 53 %: heartbeat refreshed. Plan: #55 fix to t11-forward; start T07 (conformance) and T15 (oracle tests, brief to write); T12's PR after #55; T11 stage 2 after #55.
 
 ## Core-hour ledger
 
