@@ -43,7 +43,7 @@ def _params(a):
 def _stage1(name):
     """Degree 1, earth's scaled X, no weights, one numeric response that is not
     constant, and a queue that cannot matter (module docstring)."""
-    d = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
+    d = json.loads((FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
     a, y = d["earth_args"], d["inputs"]["y"]
     if a.get("degree") != 1 or d.get("scale") is None or "error" in d["result"]:
         return False
@@ -55,7 +55,11 @@ def _stage1(name):
     return len(set(y)) > 1 and (fast_k == 0 or max_terms <= max(3, fast_k) + 2)
 
 
-FIXTURES = sorted(f.stem for f in FIXTURES_DIR.glob("S*.json") if _stage1(f.stem))
+# The dataset fixtures are S01 to S20; the lowercase names are extras, which a
+# case-insensitive glob (Windows) would also match.
+FIXTURES = sorted(
+    f.stem for f in FIXTURES_DIR.glob("S*.json") if f.name[0] == "S" and _stage1(f.stem)
+)
 
 
 def test_the_fixture_selection():
@@ -106,7 +110,7 @@ def _fit(X, y, **kw):
 
 def _rss(A, y):
     A = np.column_stack(A)
-    return float(np.sum((y - A @ np.linalg.lstsq(A, y)[0]) ** 2))
+    return float(np.sum((y - A @ np.linalg.lstsq(A, y, rcond=None)[0]) ** 2))
 
 
 def test_the_codes_and_the_defaults():
@@ -169,7 +173,7 @@ def test_the_limit_on_knots_leaves_the_linear_term_free():
 
     def rss(t):
         A = np.column_stack((B, x0, np.maximum(x0 - t, 0.0)))
-        return float(np.sum((y - A @ np.linalg.lstsq(A, y)[0]) ** 2))
+        return float(np.sum((y - A @ np.linalg.lstsq(A, y, rcond=None)[0]) ** 2))
 
     assert fp.rss[1] - min(rss(t) for t in knots) > delta2
     assert fp.candidates.second_rss[1] >= fp.candidates.best_rss[1]  # legal only
