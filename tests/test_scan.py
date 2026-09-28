@@ -136,6 +136,9 @@ def test_the_intercept_parent_in_a_pair_search(seed, n, ties, adjacent):
         rho, gain = _scan.exact_knot(Q, E, np.maximum(x - x[s - 1], 0.0))
         if rho > 1e-4:
             _within(scan, i, rho, gain, rss)
+        if rho > 1e-2:  # tight enough that such a knot is decided by the scan
+            assert scan.ratio_err[i] <= 1e-9 * rho
+            assert scan.gain_err[i] <= 1e-9 * rss
 
 
 def _spec_case(n):
