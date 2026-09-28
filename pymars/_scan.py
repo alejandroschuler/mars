@@ -140,7 +140,7 @@ def knot_scan(
     E = np.asarray(E, dtype=np.float64)
     E = E[:, None] if E.ndim == 1 else E
     if Q.ndim != 2 or Q.shape[1] < 1 or E.ndim != 2:
-        raise ValueError("Q must be 2-D with the intercept direction first")
+        raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     r = Q.shape[1]
     HV, F = hinge_products(x, b, np.hstack((Q, E)), split)
     D = F - HV[:, 0] ** 2

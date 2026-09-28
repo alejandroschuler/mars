@@ -118,11 +118,12 @@ def test_rebuild_refuses_a_column_in_the_span():
     ("x", "b", "V", "split", "match"),
     [
         ([1.0, 0.0], [1.0, 1.0], np.ones((2, 1)), [1], "sorted"),
+        ([0.0, 2.0, 1.0], [1.0] * 3, np.ones((3, 1)), [1], "sorted"),
         ([0.0, np.nan], [1.0, 1.0], np.ones((2, 1)), [1], "finite"),
         ([0.0, 1.0], [1.0], np.ones((2, 1)), [1], "one row"),
         ([0.0, 1.0], [1.0, 1.0], np.ones(2), [1], "one row"),
-        ([0.0, 1.0], [1.0, 1.0], np.ones((2, 1)), [2], "split"),
-        ([0.0, 1.0], [1.0, 1.0], np.ones((2, 1)), [0], "split"),
+        ([0.0, 1.0], [1.0, 1.0], np.ones((2, 1)), [2], r"split must be in 1\.\.1$"),
+        ([0.0, 1.0], [1.0, 1.0], np.ones((2, 1)), [0], r"split must be in 1\.\.1$"),
     ],
 )
 def test_hinge_products_checks_its_input(x, b, V, split, match):
@@ -130,6 +131,14 @@ def test_hinge_products_checks_its_input(x, b, V, split, match):
         _scan.hinge_products(x, b, V, split)
 
 
-def test_knot_scan_needs_the_intercept_column():
+@pytest.mark.parametrize(
+    ("Q", "E"),
+    [
+        (np.ones(2), np.ones(2)),
+        (np.ones((2, 0)), np.ones(2)),
+        (np.ones((2, 1)), np.ones((2, 1, 1))),
+    ],
+)
+def test_knot_scan_checks_its_input(Q, E):
     with pytest.raises(ValueError, match="intercept"):
-        _scan.knot_scan([0.0, 1.0], [1.0, 1.0], np.ones(2), np.ones(2), [1])
+        _scan.knot_scan([0.0, 1.0], [1.0, 1.0], Q, E, [1])
