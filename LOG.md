@@ -169,6 +169,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:54 #55 round 1: both REQUEST_CHANGES on one real finding (the uncentered covariate in Gram-Schmidt breaks LA-5 on shifted covariates; plus TSS about one computed mean at large y shifts); both reviewers checked their fixes; 4 performative tests flagged for deletion; samples of 29 to 30 mutants. Weekly 53 %: PAUSED (limit 55 %). Fix list written in STATE for t11-forward. Heartbeat set to the weekly reset.
 - 12:06 The user started TOOLS-2 (pin the fake gh's pr view arguments) in a separate local session; not to be duplicated here.
 - 12:10 The user allowed work until 98 % of this week's limit (a reset comes this week). Resumed at 53 %: heartbeat refreshed. Plan: #55 fix to t11-forward; start T07 (conformance) and T15 (oracle tests, brief to write); T12's PR after #55; T11 stage 2 after #55.
+- 12:10 Brief T15-oracle.md written (oracle tests fast against reference, gate C script; replaces narrow tests that the oracle covers).
 
 ## Core-hour ledger
 
