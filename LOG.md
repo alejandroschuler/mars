@@ -139,6 +139,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:51 T18 PR #58 ready (a514801): every S01-S20 difference labeled (rule 316, quirk 23, bug 8); new findings F17 to F19; HEAD equals the wheel unweighted; plan correction Adjust.endspan = 0 for the legacy matched mode. Accepted as one PR (validation only). t18-legacy's ruff format on validation/legacy/ (uncommitted, in its old worktree) could not be undone (the classifier denied the restore); recorded with the other local cleanup in issue #60 (needs-user). dcg blocked two of my commands because their text quoted the recursive delete; reworded.
 - 03:52 Weekly 34 % (+4 in 30 minutes), 5-hour 25 % (reset 08:20). Pacing rule for the 50 % stop: no new agents from 44 %, checkpoints from 48 %, pause and tell the user at 50 %.
 - 04:06 #57 round 1: both REQUEST_CHANGES on scan accuracy (cancellation in D and the n·u error of cumsum; LA-5 missed by up to 650x at n = 1e4; a knot near tau can be wrongly rejected) and a red CI job (lstsq rcond on the numpy floor). Sent to t11-forward with the non-blocking items; spec item 8 to #44 as a v2 note.
+- 04:07 Started the single review of #58 (T18; wf_490d20d1-c2a), focused on sampled labels, the 8 bug fits, F17 to F19 and the Adjust.endspan correction.
 
 ## Core-hour ledger
 
