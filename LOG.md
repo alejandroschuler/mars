@@ -191,6 +191,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:00 Started the adversarial review of #69 (opus); its spec review (sonnet) waits for a reviewer slot.
 - 14:02 #63 APPROVE (sonnet) at 5b8d8b6; its branch update waits for #61's merge (shared test file). Started the spec review of #69 (sonnet).
 - 14:03 T12 PR #70 ready (328af43): fit_mars equals the reference on 16 cases to 8.8e-14 and earth on the five matched fits; gate B PASS. Dual review queued for free reviewer slots.
+- 14:04 5-hour 60 % at 14:04 (reset 18:10), weekly 10 %: by the 60 % start rule, T12's full review waits; running work continues.
 
 ## Core-hour ledger
 
