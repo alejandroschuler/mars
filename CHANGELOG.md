@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code will follow a written specification and will be checked against the R package earth, as VALIDATION_PLAN.md describes. This version has no estimators yet. The git tag `legacy-1.0.4-head` keeps the legacy code, upstream commit d68b54a with the version string 1.0.4.
 
 ### Changed
-- The build backend is hatchling. The package is pure Python and depends only on numpy 1.23.5 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14.
+- The build backend is hatchling. The package is pure Python and depends only on numpy 1.24.4 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14. The numpy floor is 1.24.4 because the OpenBLAS in numpy 1.23.5 gives wrong matrix products on some CPUs (#88).
 - A lean CI workflow replaces the 21 inherited workflows.
 
 ### Removed
