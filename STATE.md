@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 18:13 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 18:15 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+USER INSTRUCTION (18:20 Monday): when the current round of work is done (t11-stage2's #71, t07-conformance's #66 fixes, t06-reference's #72, the #69 adversarial review and the #70 dual review), pause, start no more agents (no reviews, checkers, integrators or new authors), and tell the user. Merges that need no new agent are allowed; nothing else starts.
 
 Resumed at 18:12 after the user's pause (weekly 17 %, 5-hour 3 %, next 5-hour reset 23:10 PDT): the three authors continue; reviews running: #69 adversarial (wf_f19109f2-055), #70 dual (wf_0b6666e7-fc1); #67's dual review when slots free.
 
