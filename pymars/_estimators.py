@@ -1,10 +1,11 @@
-"""The scikit-learn estimators: ``EarthRegressor`` (also ``Earth``) and the code
-that the classifier shares with it.
+"""The scikit-learn estimators: ``EarthRegressor`` (also ``Earth``),
+``EarthClassifier`` and the code that they share.
 
 Spec: ``docs/algorithm.md``, "Public API" (API-1 to API-7), "Errors" (ERR-1 to
 ERR-4), W-6 and W-7 (the weight checks), CORE-1, CORE-2 and CORE-6 (the call
 of the core), EDGE-1, RESP-2 (the shape of y), TERM-3 (``basis_matrix``) and
-TERM-5 (the labels in ``summary()``).
+TERM-5 (the labels in ``summary()``); for the classifier, GLM-1, GLM-6 and
+GLM-7, with the refit of GLM-2 to GLM-5 in ``_glm``.
 
 Who does what. The estimators check the parameters and the data, and the core
 (``_core.fit_mars``) fits the model; it assumes valid input (CORE-1). ``fit``
@@ -23,31 +24,42 @@ runs these steps in this order:
 ``_EarthBase`` holds what the regressor and the classifier share: the
 parameters, the checks above, the fitted attributes that come from the
 ``MarsFit``, ``basis_matrix``, ``summary`` and the tags. A subclass adds its
-``fit``, its ``predict`` and ``_summary_columns``.
+``fit``, its ``predict`` and ``_summary_columns``. The classifier's ``fit``
+also checks ``glm_alpha`` (ERR-4) and the target (GLM-1, GLM-7), runs the
+passes on its 0/1 or indicator responses, and refits the selected columns
+with ``_glm.fit_glm``.
 
 Numerics: X and Y reach the core as float64, and no method writes into its
 inputs. Complexity: the checks cost O(n·p), with Python-level work only for
 object and string columns; the fit costs what the core costs (CORE-7);
 ``predict`` and ``basis_matrix`` cost O(n·M·(max_degree + K)) time and O(n·M)
-memory, for M terms and K responses.
+memory, for M terms and K responses; ``predict_proba`` and
+``decision_function`` cost the same with K = Q classes.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import math
+import numbers
 import sys
 import warnings
 
 import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sp
-from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
+from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_array, check_is_fitted, validate_data
 
-from pymars import _core, _terms
+from pymars import _core, _glm, _terms
 
-__all__ = ["MISSING_VALUES_ISSUE", "ONE_HOT_RECIPE", "EarthRegressor"]
+__all__ = [
+    "MISSING_VALUES_ISSUE",
+    "ONE_HOT_RECIPE",
+    "EarthClassifier",
+    "EarthRegressor",
+]
 
 #: API-1: the parameters that map one to one to the fields of ``MarsParams``.
 _MARS_PARAMS = tuple(f.name for f in dataclasses.fields(_core.MarsParams))
@@ -403,3 +415,166 @@ class EarthRegressor(RegressorMixin, _EarthBase):
         tags = super().__sklearn_tags__()
         tags.target_tags.multi_output = True  # API-5, RESP-1
         return tags
+
+
+class EarthClassifier(ClassifierMixin, _EarthBase):
+    """MARS for class labels: the terms of the least-squares passes on 0/1 or
+    indicator responses, then a logistic refit of the selected basis.
+
+    With two classes the passes run on one 0/1 response and the refit is the
+    binomial GLM of earth's ``glm = list(family = binomial)``; with Q ≥ 3
+    classes they run on Q indicator responses and the refit is one
+    multinomial model, as ``nnet::multinom`` fits it, so each row of
+    ``predict_proba`` sums to 1 (``docs/algorithm.md``, GLM-1 and GLM-2).
+
+    Parameters
+    ----------
+    max_degree, max_terms, penalty, thresh, minspan, endspan, adjust_endspan, \
+auto_linpreds, fast_k, fast_beta, pmethod, nprune, allow_missing
+        As in ``EarthRegressor``.
+    glm_alpha : float, default=0.0
+        The L2 penalty of the refit on the coefficients of the non-intercept
+        columns, each column standardized to weighted mean 0 and variance 1;
+        0 gives the unpenalized fit (GLM-2). A positive value gives a finite
+        fit when the classes are separated.
+
+    Attributes
+    ----------
+    classes_ : ndarray of shape (Q,)
+        The sorted labels of the rows with positive weight.
+    glm_ : ndarray, shape (M,) or (M, Q)
+        The coefficients of the refit: those of ``classes_[1]`` with two
+        classes, else one column per class, the first of them 0.
+    term_coef_ : ndarray, shape (M,) or (M, Q)
+        The least-squares coefficients of the passes on the 0/1 response or
+        the Q indicator responses.
+    n_features_in_, feature_names_in_, dirs_, cuts_, rss_, gcv_, rsq_, \
+grsq_, max_terms_, penalty_, mars_
+        As in ``EarthRegressor``; they describe the least-squares passes.
+
+    Notes
+    -----
+    The refit warns with a ConvergenceWarning when it does not converge or
+    when a fitted probability is within 10·ε of 0 or 1, as with separated
+    classes; a positive ``glm_alpha`` avoids it (GLM-4). y must be 1-D: a
+    column vector is raveled with a DataConversionWarning, and multi-output
+    classification is not supported.
+    """
+
+    def __init__(
+        self,
+        max_degree=1,
+        max_terms=None,
+        penalty=None,
+        thresh=0.001,
+        minspan=None,
+        endspan=None,
+        adjust_endspan=2.0,
+        auto_linpreds=True,
+        fast_k=20,
+        fast_beta=1.0,
+        pmethod="backward",
+        nprune=None,
+        allow_missing=False,
+        glm_alpha=0.0,
+    ):
+        super().__init__(
+            max_degree=max_degree,
+            max_terms=max_terms,
+            penalty=penalty,
+            thresh=thresh,
+            minspan=minspan,
+            endspan=endspan,
+            adjust_endspan=adjust_endspan,
+            auto_linpreds=auto_linpreds,
+            fast_k=fast_k,
+            fast_beta=fast_beta,
+            pmethod=pmethod,
+            nprune=nprune,
+            allow_missing=allow_missing,
+        )
+        self.glm_alpha = glm_alpha
+
+    def _glm_alpha(self) -> float:
+        """ERR-4: ``glm_alpha`` must be a finite real number ≥ 0."""
+        a = self.glm_alpha
+        ok = isinstance(a, numbers.Real) and not isinstance(a, (bool, np.bool_))
+        if not (ok and math.isfinite(a) and a >= 0.0):
+            raise ValueError(f"glm_alpha must be a finite float >= 0, not {a!r}")
+        return float(a)
+
+    def fit(self, X, y, sample_weight=None):
+        """Fit the terms and the logistic refit.
+
+        Parameters
+        ----------
+        X : array-like of shape (n, p)
+            Numeric covariates, finite, as for ``EarthRegressor``.
+        y : array-like of shape (n,)
+            Class labels: numbers, strings or booleans. Continuous and
+            multilabel targets raise ValueError.
+        sample_weight : array-like of shape (n,), default=None
+            Case counts, as for ``EarthRegressor``; the labels of the rows
+            with weight 0 do not count as classes.
+
+        Returns
+        -------
+        self : EarthClassifier
+            The fitted estimator.
+        """
+        self._reset_fitted()
+        params = self._mars_params()  # ERR-3 and ERR-4 before the data
+        alpha = self._glm_alpha()
+        _check_numeric(X, self)
+        X, y = validate_data(self, X, y, dtype=np.float64)
+        check_classification_targets(y)  # GLM-1
+        w = _check_weights(sample_weight, X.shape[0])
+        rows = slice(None) if w is None else w > 0.0
+        classes = np.unique(y[rows])
+        if classes.size < 2:  # GLM-7
+            raise ValueError(
+                f"{type(self).__name__} needs at least 2 classes with positive "
+                "weight; y has only one class"
+            )
+        Q = classes.size
+        # One indicator per class; a zero-weight row with another label has
+        # none, and the core and the refit drop it (W-3).
+        T = y[:, None] == classes[None, :]
+        Y = (T[:, 1:] if Q == 2 else T).astype(np.float64)
+        fit = self._fit_core(X, Y, w, params)
+        self.classes_ = classes
+        self.term_coef_ = fit.coef[:, 0] if Q == 2 else fit.coef
+        B = _terms.basis_matrix(X, fit.dirs, fit.cuts)
+        self.glm_ = _glm.fit_glm(B, np.argmax(T, axis=1), Q, w, alpha).coef
+        return self
+
+    def _linear_predictors(self, X) -> np.ndarray:
+        check_is_fitted(self)
+        return _glm.linear_predictors(self.basis_matrix(X), self.glm_)
+
+    def decision_function(self, X):
+        """Return the linear predictors at X (GLM-6): that of ``classes_[1]``,
+        shape (n,), with two classes, else all Q, shape (n, Q), with a first
+        column of 0. Complexity: that of ``basis_matrix``, plus O(n·M·Q)."""
+        eta = self._linear_predictors(X)
+        return eta[:, 1] if self.classes_.size == 2 else eta
+
+    def predict_proba(self, X):
+        """Return the class probabilities at X, shape (n, Q), in the order of
+        ``classes_``: 1 - p and p with two classes, the softmax of the linear
+        predictors otherwise; each row sums to 1 (GLM-6)."""
+        return _glm.probabilities(self._linear_predictors(X))
+
+    def predict(self, X):
+        """Return the class of the largest probability at X, the first such
+        class on a tie (GLM-6). The largest probability is that of the
+        largest linear predictor, which this compares."""
+        eta = self._linear_predictors(X)
+        return self.classes_[np.argmax(eta, axis=1)]
+
+    def _summary_columns(self) -> tuple[np.ndarray, list[str]]:
+        """The coefficients of the refit, ``glm_``, one column per class
+        (API-4); with two classes the one column of ``classes_[1]``."""
+        if self.glm_.ndim == 1:
+            return self.glm_[:, None], [str(self.classes_[1])]
+        return self.glm_, [str(c) for c in self.classes_]

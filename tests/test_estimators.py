@@ -329,7 +329,12 @@ def test_the_public_names_the_tags_and_what_is_left_out():
     estimators and ``__version__``. API-5: the tags. API-6: no ``coef_``,
     ``transform``, ``max_iter`` or ``feature_importances_``."""
     assert pymars.Earth is pymars.EarthRegressor
-    assert sorted(pymars.__all__) == ["Earth", "EarthRegressor", "__version__"]
+    assert sorted(pymars.__all__) == [
+        "Earth",
+        "EarthClassifier",
+        "EarthRegressor",
+        "__version__",
+    ]
     tags = get_tags(EarthRegressor())
     assert tags.target_tags.multi_output is True
     assert tags.input_tags.allow_nan is False
