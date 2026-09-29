@@ -92,8 +92,8 @@ _FORWARD_PARAMS = (
     "fast_k",
     "fast_beta",
 )
-#: W-6: the largest total weight; the knot rule converts N - W to int64 (KNOT-6).
-_MAX_WEIGHT_TOTAL = 2.0**62
+#: W-6: the total weight is below 2^52, the bound of W-4 (exact sums of integers).
+_MAX_WEIGHT_TOTAL = 2.0**52
 
 #: EDGE-6: the scaled TSS must be at least the smallest positive normal float64.
 _TINY = float(np.finfo(np.float64).tiny)
@@ -444,8 +444,8 @@ def _cases(
         total = math.fsum(w)
     except OverflowError:
         total = math.inf
-    if not total < _MAX_WEIGHT_TOTAL:  # the knot rule (KNOT-6) counts in int64
-        raise ValueError(f"the weights must have a total below 2^62, not {total}")
+    if not total < _MAX_WEIGHT_TOTAL:
+        raise ValueError(f"the weights must have a total below 2^52, not {total}")
     return (X, Y, w) if keep.all() else (X[keep], Y[keep], w[keep])
 
 
