@@ -270,6 +270,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:05 #67 at cf4ba04 (spy follows #79; the #77 xfail removed; SHIFT_CAP stays for duplicate covariates, the whole fit and the scaled kind; queue_bands checks every step up to a divergence; gate B and gate C PASS; S15 plan count 0.5 %). New fast-code LA-5 miss at degree 3 added to #85. Both original reviewers recheck. The 5-hour window reset at 04:20 PDT; weekly 45 %.
 - 12:20 recheck of #67 (adversarial) APPROVE at cf4ba04. CI red on #67 in the lowest-dependencies job (10 earth-fixture tests of the reference and the core; not near-ties); the same job failed once on main a072a4e and passed on 7b06227 and 0a7a49d with the same code: runner-dependent. Opened #88; reran the #67 job; started t88-ci-flake (opus) to find and fix the cause. This blocks merges while it recurs.
 - 12:30 recheck of #67 (spec) REQUEST_CHANGES at cf4ba04 on the SHIFT_CAP comment: for duplicate covariates at a large mean the fast code misses LA-5 (5.3e-7), not the reference; each capped case must name an issue. Added the case to #85; sent the comment fix to t15-finish.
+- 12:55 #67 at e368a34 (comment fix; the shifted draws keep the cap at degree 3 after a #85-pattern failure; gate A, B PASS; gate C fails only on main's T16 test_scale_and_shift_of_a_covariate at thorough, seed 1053, an intercept check wrong under a shift). Sent the test fix to t16-invariance (new small PR) and the narrow recheck to #67's spec reviewer. Weekly 46 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
