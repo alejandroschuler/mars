@@ -24,7 +24,7 @@ import numpy as np
 from hypothesis import event, given
 from hypothesis import strategies as st
 
-from pymars import _terms
+from pymars import _gcv, _terms
 from pymars._core import MarsParams, fit_mars
 
 #: The plan's "Ties": a step is a near-tie when the best and the second-best
@@ -117,7 +117,14 @@ def _agree(a, b, *, cols=None, knot=None, y_scale=1.0, ties_of=None):
     assert pb.selected_size == pa.selected_size
     np.testing.assert_array_equal(b.selected, a.selected)
     _rss_close(pb.rss_per_size, s2 * pa.rss_per_size, s2 * fa.rss[0])
-    _rss_close(pb.gcv_per_size, s2 * pa.gcv_per_size, s2 * pa.gcv_per_size)
+    # GCV-2: the GCV of size m is the RSS times a factor of N, m and d, so it
+    # has the RSS's tolerance times that factor (+inf where C(m) >= N).
+    sizes = np.arange(1, len(pa.gcv_per_size) + 1)
+    factor = _gcv.gcv(np.ones(len(sizes)), sizes, a.penalty, a.n_eff)
+    np.testing.assert_array_equal(np.isinf(pb.gcv_per_size), np.isinf(factor))
+    ok = np.isfinite(factor)
+    diff = np.abs(pb.gcv_per_size[ok] - s2 * pa.gcv_per_size[ok])
+    assert np.all(diff <= RSS_TOL * s2 * fa.rss[0] * factor[ok])
     assert abs(b.rss - s2 * a.rss) <= RSS_TOL * s2 * fa.rss[0]
     assert b.n_eff == a.n_eff and b.max_terms == a.max_terms
     return True
