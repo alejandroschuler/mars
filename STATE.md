@@ -16,6 +16,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 ## Phase
 
 TAKEOVER 00:25 Tuesday 2026-09-29: weekly 34 % (limit 50 %), 5-hour 0 % (reset 04:20 PDT). #71's round-1 test fixes are at 1f29cb3 (gate B PASS, CI 12/12). First batch: recheck-71 (narrow, both roles), review-74 (single, sonnet), review-72 (single, opus).
+00:55: #71 merged (6016717), #74 merged (b18f184). Running (this session's agents): review-72 (opus), update-check-66 (sonnet, head ad05b3b), review-73-spec (opus, head 1b67fd5), t11-stage3 (opus author, branch t11-stage3, worktree <main>/.worktrees/t11-stage3). Next: review-73-adversarial; after #72 merges, a new author applies T15's shifted-response patch to #67 (the old t15-oracle agent does not resolve) and #67 gets its dual review; #64 still waits for the user (issue #68).
 
 SNAPSHOT 20:30 Monday (for a restart or a compaction): weekly 32 % of the new counter (the user's limit 50 %); 5-hour 90 % (reset 23:10 PDT): no new agents until then (heartbeat 23:25). Open PRs and next steps:
 - #71 T11 stage 2 (0580057): round 1 both REQUEST_CHANGES on two missing test designs (N_b counts a parent's positive cases, SPAN-1 with KNOT-1; the linear option's knot is the minimum over all cases, FWD-6); code right (exact oracle on 3,480 fits). Sent to t11-stage2 (tests only; rebase onto d87cc40); then a checker's narrow re-approval, merge.
