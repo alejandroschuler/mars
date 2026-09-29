@@ -3,8 +3,11 @@
 # - the oracle tests (tests/test_oracle.py) and the invariance tests
 #   (tests/test_invariance.py, which T16 adds) at the hypothesis thorough
 #   profile, the slow ones included, and the share of the oracle's fits that
-#   stop at a near-tie, from the counts that the oracle writes
-#   (PYMARS_ORACLE_TALLY);
+#   stop at a near-tie where the two programs choose differently, next to the
+#   plan's count ("Ties": fits with any compared step whose best and second
+#   differ by less than 1e-7 of the RSS before the step), from the counts that
+#   the oracle writes (PYMARS_ORACLE_TALLY); a warning line when S15 is above
+#   the plan's 5 percent;
 # - when the branch changes validation/harness/ (the diff from the merge base
 #   with origin/main), the fixtures made again with R and earth, which must
 #   reproduce exactly (validation/harness/gen_fixtures.py --check);
@@ -55,9 +58,13 @@ for f in files:
 for key in sorted(k for k in total if k.endswith(": fits")):
     group = key[: -len(": fits")]
     fits, stops = total[key], total[f"{group}: near-tie stops"]
+    plan = total[f"{group}: plan near-ties"]
     print(f"{group}: {fits} fits, {total[f'{group}: steps compared']} steps "
-          f"compared, {stops} stop at a near-tie ({100 * stops / fits:.1f} %)")
-for key in sorted(k for k in total if "(" in k):
+          f"compared, {stops} stop at a near-tie ({100 * stops / fits:.1f} %); "
+          f"plan's count {plan} ({100 * plan / fits:.1f} %)")
+    if "S15" in group and max(stops, plan) > 0.05 * fits:
+        print(f"WARNING: {group} is above the plan's 5 % of near-ties (Ties)")
+for key in sorted(k for k in total if "(" in k and "plan" not in k):
     print(f"  {key}: {total[key]}")
 EOF
 }
@@ -84,6 +91,8 @@ else
   step "fixtures made again with R" uv run --frozen --python 3.12 --group validation \
     python validation/harness/gen_fixtures.py --check
 fi
+
+echo "== benchmark smoke: not run until T19 adds the benchmark harness" | tee -a "$partial"
 
 if [ -n "$(git status --porcelain)" ] || [ "$(git rev-parse HEAD)" != "$sha" ]; then
   echo "== the checkout changed while the gate ran" | tee -a "$partial"
