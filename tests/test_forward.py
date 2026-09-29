@@ -117,7 +117,7 @@ def test_earth_fixture(load_fixture, name):
 
 def _queue_design(name):
     """Data and settings for test_the_queue_against_the_reference, with no
-    near-tie. "binary": a covariate with the values -1 and 1 has no knot, so
+    near-tie between candidates. "binary": a covariate with the values -1 and 1 has no knot, so
     its linear term enters first and is a parent with negative cases
     (KNOT-1). "degree 3": two covariates, single hinges (the slots run ahead
     of M, FAST-4) and parents of degree 2 that hold both covariates (λ = -1,
@@ -133,7 +133,9 @@ def _queue_design(name):
         return X, y + 0.05 * rng.normal(size=60), kw
     if name == "pair rule":
         x0 = rng.uniform(size=100)
-        X = np.column_stack((x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100)))
+        X = np.column_stack(
+            (x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100))
+        )
         y = 5 * np.maximum(X[:, 2] - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
         return X, y + 0.01 * rng.normal(size=100), kw | {"minspan": 1, "endspan": 1}
     X = rng.uniform(size=(80, 2))
@@ -151,10 +153,13 @@ def test_the_queue_against_the_reference(monkeypatch, name):
     """FAST-1, FAST-2, FAST-4 and FAST-5 with fast_k = 0, and the searches of
     parents other than the intercept (FWD-2, KNOT-1 to KNOT-3, SPAN-4, LA-7),
     against the reference called as a black box with its trace: at every step
-    the queue table, the parents searched (entry e stands for slot e), and κ
-    and λ of every entry after the search, λ within LA-5 of the TSS; then the
-    whole record. λ is the best legal reduction of a parent, so it checks the
-    search of every parent, also of those whose candidates do not win."""
+    the parents searched (entry e stands for slot e), and κ and λ of every
+    entry after the search, λ within LA-5 of the TSS; the queue table and the
+    order of the parents up to the first two computed λ within STOP-7's band
+    of each other, which either program may order (two parents that reach
+    the same product, as in "ageing"); then the whole record. λ is the best
+    legal reduction of a parent, so it checks the search of every parent,
+    also of those whose candidates do not win."""
     X, y, kw = _queue_design(name)
     fast, real = [], _forward._Pass.best
 
@@ -181,11 +186,17 @@ def test_the_queue_against_the_reference(monkeypatch, name):
         record_candidates=True,
         trace=trace,
     )
+    tie = False
     for (table, parents, lam, kap), r in zip(fast, trace, strict=True):
-        assert (table, parents) == (list(r["table"]), list(r["searched"]))
+        if tie:
+            assert sorted(parents) == sorted(r["searched"])
+        else:
+            assert (table, parents) == (list(r["table"]), list(r["searched"]))
         assert kap == [k for _, k in r["entries"]]
         want = [v for v, _ in r["entries"]]
         np.testing.assert_allclose(lam, want, rtol=0.0, atol=1e-8 * tss)
+        values = np.sort([v for v in lam if 0.0 < v < math.inf])  # computed
+        tie = tie or bool(np.any(np.diff(values) <= 4e-8 * tss))  # 2δ ≤ 4e-8·TSS
     for field in ("dirs", "cuts", "parent", "step", "kept"):
         np.testing.assert_array_equal(getattr(fp, field), ref[field])
     assert fp.termination == ref["termination"]
@@ -399,8 +410,14 @@ def _on_binary_grids(design):
     """The data of test_exact_shifts. Every value lies on a binary grid, so a
     shift by a power of 2 is exact. "pairs" and "one covariate" have a hinge
     in x0 and a sine in the last covariate; in "linear", x0 is x1 plus noise
-    and y = 5·(x1 - x0)."""
+    and y = 5·(x1 - x0); in "interaction", hinges on x1 multiply x0 and a
+    hinge on x2."""
     n = 200
+    if design == "interaction":
+        rng = np.random.default_rng(3)
+        X = np.round(rng.uniform(size=(n, 3)) * 2**12) / 2**12
+        y = 5 * np.maximum(X[:, 1] - 0.4, 0) * (X[:, 0] + np.maximum(X[:, 2] - 0.5, 0))
+        return X, np.round((y + 0.1 * rng.normal(size=n)) * 2**10) / 2**10
     if design == "linear":
         rng = np.random.default_rng(3)
         x1 = np.round(rng.uniform(size=n) * 2**12) / 2**12
@@ -422,25 +439,33 @@ def _on_binary_grids(design):
         ("pairs", 2.0**36, 0),  # the first column of a pair
         ("linear", 2.0**24, 0),  # the column of the linear candidate
         ("pairs", 0, 2.0**44),  # the TSS
+        ("interaction", 2.0**36, 0),  # b·(x - c) for a parent b other than 1
     ],
 )
 def test_exact_shifts(design, x_shift, y_shift):
     """Exact shifts of x0 or of y give the fit of the unshifted data: the same
-    terms, knots moved by the shift, and every RSS, rss[0] = TSS included,
-    within 1e-8 of the RSS before its step (LA-5, CORE-3). x is centered before
+    terms, knots moved by the shift, and every RSS, rss[0] = TSS and the
+    log's second included, within 1e-8 of the RSS before its step (LA-5,
+    CORE-3). x is centered before
     Gram-Schmidt (the plan's "Fast path"), and the TSS comes from the centered
     y (FWD-10); each case pins one of these uses. Near 1e14 an uncentered x
     makes A of LA-7 rounding noise above its threshold, and a single-hinge
     search becomes a pair search. In "linear", FWD-4 bars every knot of x0 at
-    step 2, and the linear candidate of x0 wins."""
+    step 2, and the linear candidate of x0 wins. "interaction" runs at degree
+    2 with auto_linpreds=False, where x0 enters products as b·(x0 - m)₊, which
+    a shift does not change (FWD-6)."""
     X, y = _on_binary_grids(design)
     kw = {"thresh": 0.0, "minspan": 1, "endspan": 1, "max_terms": 11}
+    if design == "interaction":
+        kw |= {"max_degree": 2, "auto_linpreds": False}
     a = _fit(X, y, **kw)
     b = _fit(X + np.eye(X.shape[1])[0] * x_shift, y + y_shift, **kw)
     np.testing.assert_array_equal(b.dirs, a.dirs)
     moved = np.abs(a.dirs[:, 0]) == 1
     np.testing.assert_array_equal(b.cuts[moved, 0], a.cuts[moved, 0] + x_shift)
     assert np.all(np.abs(b.rss - a.rss) <= 1e-8 * np.r_[a.rss[0], a.rss[:-1]])
+    second = a.candidates.second_rss, b.candidates.second_rss
+    np.testing.assert_allclose(*second, rtol=0.0, atol=1e-8 * a.rss[0])
 
 
 def test_scaling_y():
@@ -720,10 +745,12 @@ def test_a_scan_value_that_the_explicit_values_refuse_is_left_out(monkeypatch):
 
 
 def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
-    """When the explicit rebuild of the chosen candidate fails its check, the
-    step is searched again without it, and the second best is chosen."""
+    """When the explicit rebuild of the chosen candidate fails its check, it is
+    left out and its search is done again: the second best is chosen, and the
+    third, which pass 1 had left out, is the new second (FWD-8)."""
     st_ = _two_covariates()
     _, _, second = st_.best()
+    third = _explicit_best(st_, 3)[2]
     real = _forward._scan.rebuild
     calls = []
 
@@ -732,8 +759,10 @@ def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
         return None if len(calls) == 1 else real(Q, Y, columns)
 
     monkeypatch.setattr(_forward._scan, "rebuild", failing)
-    chosen, _, _ = st_.best()
+    chosen, _, new_second = st_.best()
     assert chosen.order == second.order and len(calls) == 2
+    assert new_second.order == third[1]
+    assert new_second.reduction == pytest.approx(third[0], rel=1e-12)
 
 
 def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
@@ -877,11 +906,11 @@ def test_a_reduction_within_its_bound_of_0(monkeypatch, value, best):
     assert (chosen.order[2], second and second.order[2]) == best
 
 
-def _explicit_best(st_):
-    """The best two of a step by the explicit values of every candidate: the
-    spec's rules (FWD-3 to FWD-5, LA-3, LA-7) with no scan. The intercept
-    is the only parent, in the table row of the step's search."""
-    s, top, found, row = len(st_.rss), st_.max_legal(), [], st_.rows[0]
+def _explicit_best(st_, top=2):
+    """The best ``top`` of a step by the explicit values of every candidate:
+    the spec's rules (FWD-3 to FWD-5, LA-3, LA-7) with no scan. The
+    intercept is the only parent, in the table row of the step's search."""
+    s, limit, found, row = len(st_.rss), st_.max_legal(), [], st_.rows[0]
     for j in range(st_.X.shape[1]):
         sr = st_.setup(0, j)
         if sr.pair and sr.lin > 0.0:
@@ -889,9 +918,9 @@ def _explicit_best(st_):
         for i, t in enumerate(st_.knots[j].knots):
             rho, gain = _scan.exact_knot(sr.Q, sr.E, np.maximum(sr.x - t, 0.0))
             red = gain + sr.lin
-            if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
+            if not _linalg.knot_rejected(rho, s) and 0.0 < red <= limit:
                 found.append((red, (row, j, i + 1)))
-    return sorted(found, key=lambda c: (-c[0], c[1]))[:2]
+    return sorted(found, key=lambda c: (-c[0], c[1]))[:top]
 
 
 def test_every_step_equals_the_explicit_choice():

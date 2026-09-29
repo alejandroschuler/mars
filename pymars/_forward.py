@@ -244,12 +244,10 @@ class _Pass:
         rank_e is the place of entry e by λ, largest first, ties by entry
         number; AgedRank_e = rank_e + fast_beta·(κ_prev - κ_e), with κ_prev
         the term number of the step just done; the table sorts the entries by
-        AgedRank and then by rank. Before the first step the table holds the
-        intercept alone. Complexity: O(M·log M).
+        AgedRank and then by rank. Before the first step the intercept's entry
+        is the only one. Complexity: O(M·log M).
         """
         s = len(self.rss) - 1
-        if s == 0:
-            return [1]
         M = len(self.lam)
         rank = [0] * M
         for r, e in enumerate(sorted(range(M), key=lambda e: (-self.lam[e], e))):
