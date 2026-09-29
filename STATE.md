@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-29 12:29 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-29 14:10 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -18,6 +18,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 PAUSED UNTIL SATURDAY by the user (12:30 Tuesday 2026-09-29): "pause until saturday and then use whatever is remaining of my weekly usage". Weekly 57 % at 12:27 Tuesday; the weekly reset is 2026-10-04 17:00 PDT. The heartbeat is set to 2026-10-03 07:00 PDT, so the hourly watchdog takes over about 08:17 Saturday with a fresh session (cheaper than this long session). No agent, job or timer runs until then.
 
 BUDGET RULE FOR SATURDAY 2026-10-03 AND SUNDAY UNTIL THE RESET (the user's words above): use whatever remains of this week's weekly limit before the reset (Sunday 17:00 PDT). Pacing: work at full speed (up to 4 authors, 3 reviewers); from 92 %, start only small agents that finish open pull requests; from 96 %, start nothing and let running agents push a checkpoint; at 98 %, stop and tell the user in the session. The 5-hour limit still applies (no new agents from 80 % of it; full reviews and long author tasks only below 60 %). After the reset, ask the user for the week-3 rule before large work.
+
+MODEL RULE FROM THE USER (12:40 Tuesday 2026-09-29): from now on, use Sonnet agents (model `sonnet`, Sonnet 5, the newest Sonnet) for any well-scoped task: fixes from a review's fix list, follow-ups with a clear brief, test additions, rebases and branch updates, checkers and narrow re-reviews, single reviews of small PRs, the benchmark harness, and docs work with a clear outline. Keep opus for open-ended work: drafting spec v2, performance design where the approach is open, the first full review of large or numerically hard code, and the final architecture review. When unsure, prefer sonnet and escalate to opus only if the sonnet agent reports that it is stuck.
 
 PAUSED 14:25 Tuesday 2026-09-29 by the user's budget rule (go to 50 % of the weekly counter; from 44 % only work that finishes open PRs). Weekly 47 %, 5-hour 17 %. Heartbeat set to 2026-10-04 17:15 PDT (the weekly reset, 17:00 PDT, plus 15 minutes), so the watchdog resumes about 18:15 PDT that day unless the user resumes sooner. No agent runs, no timer. caffeinate stays on.
 

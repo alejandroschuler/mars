@@ -280,6 +280,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-09-29
 - 12:29 The user (in session local_a59469db, 12:30 Tuesday): pause until Saturday, then use whatever remains of the weekly usage. The watchdog session local_b1a9357f had taken the stale lock at 00:25 (this session did not resume after the 23:10 reset), merged 16 PRs (T11 stages 2 and 3, T12 to T17 done; only T01 v2 open among T00 to T18) and paused at 47 %; it was idle. This session took the idle lock back (mv to lock.stale), recorded the rule, and set the heartbeat to Saturday 07:00 PDT, so a fresh watchdog session resumes about 08:17 Saturday. Weekly 57 % now.
+- 14:10 The user: from now on, use Sonnet agents for any well-scoped task (recorded as the MODEL RULE in STATE; opus only for open-ended work).
 
 ## Core-hour ledger
 
