@@ -557,6 +557,8 @@ def _exact(B, Y, w, cols):
         (3, "uniform", "hinges"),
         (1, "far first", "hinges"),
         (1, "none", "binary at 33"),
+        (1, "far first", "binary at 33"),
+        (1, "far first", "x and a hinge at 33"),
     ],
 )
 def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
@@ -565,20 +567,32 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     the records (PRUNE-4), the TSS (GCV-5) and the final RSS (PRUNE-8) match
     rational arithmetic to relative 1e-8, and the coefficients to normwise
     1e-6. Without the centering the RSS errors reach 1e-3 and the TSS errors
-    1e-6. In the "far first" case the first 30 cases lie 2e13 below the other
+    1e-6. In the "far first" case of the hinges the first 30 cases lie 2e13 below the other
     20 and have weight 1e-30 (W-6 allows it), so the shift must be the data
     value nearest the weighted mean: the first value, the value nearest the
     unweighted mean, or an unweighted mean of the differences misses by 1e-6
-    or more. The last case is a column of B far from 0 (#84): x binary at
-    33 +- 0.25 and a near-exact fit, RSq = 1 - 1e-12. The pass centers the
-    columns after the intercept too; without that, the RSS of [1, x] misses by
-    2.8e-8."""
-    rng = np.random.default_rng(0 if basis == "hinges" else 189)
+    or more. The "binary at 33" cases have a column of B far from 0 (#84): x
+    binary at 33 +- 0.25 and a near-exact fit, RSq = 1 - 1e-12. The pass
+    centers the columns after the intercept too; without that, the RSS of
+    [1, x] misses by 2.8e-8. With "far first" there, 30 more cases at x = 1e7
+    have weight 1e-40; in the last case the first 10 of B = [1, x, (x - 33)+]
+    lie at x = -1e9 with weight 1e-30. So the columns need the weighted rule
+    of Y: an unweighted centering, a shift by the first row or by the
+    unweighted mean misses by 1e-3 or more."""
+    rng = np.random.default_rng({"hinges": 0, "binary at 33": 189}.get(basis, 1))
     if basis == "binary at 33":
         x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
-        B = np.column_stack([np.ones(109), x])
-        Y = 2.5564 * x + 1e-6 * rng.standard_normal(109)
         w = None
+        if weights == "far first":
+            x = np.concatenate([x, np.full(30, 1e7)])
+            w = np.concatenate([np.ones(109), np.full(30, 1e-40)])
+        B = np.column_stack([np.ones(x.size), x])
+        Y = 2.5564 * x + 1e-6 * rng.standard_normal(x.size)
+    elif basis == "x and a hinge at 33":
+        x, w = 33 + rng.uniform(-0.25, 0.25, 60), rng.uniform(0.5, 2, 60)
+        x[:10], w[:10] = -1e9, 1e-30
+        B = np.column_stack([np.ones(60), x, np.maximum(x - 33, 0)])
+        Y = 2.5 * x + 1e-6 * rng.standard_normal(60)
     else:
         x = rng.uniform(size=50)
         B = np.column_stack(

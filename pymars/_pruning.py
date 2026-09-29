@@ -227,6 +227,7 @@ def pruning_pass(
     if M > 1:
         Bc[:, 1:] = _centered(B[:, 1:], w)[0]  # the same spans (LA-5, #84)
     R, Z, rss = _linalg.r_factor(Bc, _centered(Y, w)[0], w)
+    # fit_mars cannot reach this: FWD-11 drops a column constant over the cases.
     if np.any(np.diag(R) == 0.0):
         raise ValueError("the columns of B must be linearly independent (FWD-11)")
     removed, rss_per_size, subsets = _stages(R, Z, rss, several=Y.shape[1] >= 2)
