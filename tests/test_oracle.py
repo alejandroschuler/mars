@@ -22,7 +22,9 @@ What is compared:
   to a relative 1e-8, the selected terms, and the final coefficients and
   statistics by the plan's tolerance table.
 - The whole fit: ``compare_fits`` compares ``_core.fit_mars`` with
-  ``mars_ref.fit_mars``; the T12 pull request connects it.
+  ``mars_ref.fit_mars`` through ``MarsFit.from_dict`` on hypothesis data:
+  the resolved values, the forward records as above, and then the pruning
+  records, the selection and the final fit.
 
 Near-ties. Where two candidates or a threshold are within rounding, the two
 programs may choose differently, and the paths after two different choices
@@ -62,7 +64,7 @@ from hypothesis import Phase, assume, given, settings
 from hypothesis import strategies as st
 from reference import mars_ref
 
-from pymars import _forward, _pruning
+from pymars import _core, _forward, _pruning
 
 # ---------------------------------------------------------------------------
 # The settings of the forward pass that the fast code supports: T11 stages 1
@@ -721,15 +723,15 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The whole fit, for T12
+# The whole fit
 
 
 def compare_fits(case: Case, fast_fit, ref_fit) -> Outcome:
     """Compare ``_core.fit_mars`` with ``mars_ref.fit_mars`` on one case
-    (CORE-1, CORE-3, CORE-5). The T12 pull request connects it: ``fast_fit``
-    is ``_core.fit_mars(X, Y, w, MarsParams(**params), record_candidates=True)``
-    and ``ref_fit`` is ``MarsFit.from_dict`` of the reference's dict; either
-    may also be a dict of CORE-5. The resolved values and the forward records
+    (CORE-1, CORE-3, CORE-5): ``fast_fit`` is ``_core.fit_mars(X, Y, w,
+    MarsParams(**params), record_candidates=True)`` and ``ref_fit`` is
+    ``MarsFit.from_dict`` of the reference's dict; either may also be a dict
+    of CORE-5. The resolved values and the forward records
     are compared first; when the forward records agree to the end, the
     pruning records, the selected terms and the final fit."""
     f, r = _plain(fast_fit), _plain(ref_fit)
@@ -1200,6 +1202,22 @@ def test_forward_pass_with_large_shifts_at_degree_2_or_3(data):
     #77 fixes the reference; the fix removes the xfail and SHIFT_CAP."""
     case = data.draw(forward_cases("shifted", large_shifts=True), label="case")
     _count("forward, hypothesis large shifts (#77)", check_forward(case))
+
+
+@given(data=st.data())
+def test_whole_fit_on_hypothesis_data(data):
+    """_core.fit_mars equals the reference's fit_mars, read through
+    MarsFit.from_dict, on data of every kind with pmethod and nprune drawn
+    (CORE-1 to CORE-5, PRUNE-5 to PRUNE-8, EDGE-1, EDGE-6), up to the first
+    near-tie of either pass."""
+    kind = data.draw(st.sampled_from(DATA_KINDS), label="kind")
+    case = data.draw(forward_cases(kind), label="case")
+    case.params["pmethod"] = data.draw(st.sampled_from(["backward", "none"]))
+    case.params["nprune"] = data.draw(st.sampled_from([None, 1, 3, 10]))
+    params = _core.MarsParams(**case.params)
+    fast = _core.fit_mars(case.X, case.Y, case.w, params, record_candidates=True)
+    ref = _core.MarsFit.from_dict(case.reference_fit())
+    _count("whole fit, hypothesis", compare_fits(case, fast, ref))
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
