@@ -192,6 +192,20 @@ def load_case(name: str) -> Case:
     )
 
 
+def _knots_on(X: np.ndarray, dirs, cuts) -> list:
+    """earth's knots as the values of X within a relative 1e-12 of them.
+    S15 keeps no data, and its data made again on another platform can
+    differ from the fixture machine's by an ulp (validation/README.md): D8's
+    copula goes through a matrix product and ndtr. On the fixture machine
+    every knot is a value of X already."""
+    dirs, cuts = np.asarray(dirs), np.array(cuts, dtype=float)
+    for r, j in zip(*np.nonzero(np.abs(dirs) == 1), strict=True):
+        near = X[np.argmin(np.abs(X[:, j] - cuts[r, j])), j]
+        if abs(near - cuts[r, j]) <= 1e-12 * abs(cuts[r, j]):
+            cuts[r, j] = near
+    return cuts.tolist()
+
+
 def s15_cases() -> list[tuple[dict, Case]]:
     """The 200 draws of S15 and their comparisons. The fixture keeps earth's
     forward terms and pruning records (pmethod "none", PRUNE-7) but not the
@@ -210,9 +224,8 @@ def s15_cases() -> list[tuple[dict, Case]]:
             dgps.REGISTRY[draw["dgp"]], rng, draw["n"], draw["noise"], diagnostics
         )
         X, _ = scaled_matrix(X)
-        earth = {
-            k: draw[k] for k in ("dirs", "cuts", "rss_per_subset", "gcv_per_subset")
-        }
+        earth = {k: draw[k] for k in ("dirs", "rss_per_subset", "gcv_per_subset")}
+        earth["cuts"] = _knots_on(X, draw["dirs"], draw["cuts"])
         case = Case(
             name=f"s15_draws/draw{draw['rep']:03d}",
             X=X,

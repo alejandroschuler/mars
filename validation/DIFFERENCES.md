@@ -77,7 +77,7 @@ A scratch copy of the reference that adds one empty queue entry (FAST-1) after t
 
 ## S15
 
-The 200 draws come from the simulation DGPs D1 to D6 and D8 (n = 200, p = 10), at degree 1 and 2, half in the matched mode and half at the defaults, all with `pmethod = "none"`. The fixture keeps earth's forward terms and its pruning records, not the fitted values, so the comparison covers the forward path and `rss.per.subset` and `gcv.per.subset`. Every fit takes 10 steps and stops at the term limit.
+The 200 draws come from the simulation DGPs D1 to D6 and D8 (n = 200, p = 10), at degree 1 and 2, half in the matched mode and half at the defaults, all with `pmethod = "none"`. The fixture keeps earth's forward terms and its pruning records, not the data or the fitted values, so the comparison covers the forward path and `rss.per.subset` and `gcv.per.subset`, on data that the test makes again from the seeds. On another platform D8's copula (a matrix product and `ndtr`) can give a value that differs by an ulp from the fixture machine's, so the test takes each of earth's knots as the data value within a relative 1e-12 of it. On the fixture machine all 4,736 knots are data values already. Every fit takes 10 steps and stops at the term limit.
 
 - The share of fits that agree: 197 of 200 (98.5 %). The subsets' RSS and GCV values agree to a relative 7.5e-15 at most.
 - The first divergence: at step 7 (E5, E6) and step 10 (E7), all three by earth's hidden term (`quirk`, FWD-11). 11 draws print the rank fix, all at degree 2 in the matched mode; the other 8 agree with earth.
