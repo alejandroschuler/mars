@@ -252,6 +252,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 07:05 review-79-spec APPROVE at f59b401 (60 random fits within 1.5e-14 of exact; 121 fixtures unchanged; no slowdown, 165 s against 187 s). Non-blocking: the pruning pass still misses LA-5 at intermediate means (3.6e-8 at 2^23, 4 of 40 fits), so T15 keeps SHIFT_CAP for pruning-path comparisons (add to #84); two comment and readability fixes. Sent the #83 re-review to its adversarial reviewer.
 - 07:20 recheck of #83 (adversarial) APPROVE at 7ddeea0: 1e-14 is right (exact-fit rounding up to 2.4e-15 of RSS_s at n = 30000; 1e-15 would miss it). Asked the spec reviewer for a narrow recheck on the new head.
 - 07:30 spec recheck APPROVE at 7ddeea0. Merged #83 (the exact-fit band, 1e-14) as ba1126e; #81 closed. Non-blocking for #44: write the FWD-5 band as a definition; a docstring typo (EXACT_FIT times RSS_s). Updated #82 to 9f1f7e3; started review-82 (opus, also times gate B). Queue: review-86.
+- 07:45 review-67-adversarial REQUEST_CHANGES at a1a34ab: adjust_endspan is drawn only from 0, 1, 2, so SPAN-4's half-up rounding is untested (a wrong rounding mutant survives and gives wrong knots). 36 mutants, 28 killed. No flakiness over 5 seeds. Sent t15-finish the fix plus: a two-way second-best check, centered fitted values at 1e-8 sd(y) and the RSS of the returned coefficients on shifted Y, SUPPORTED widened to fast_k > 0 and weights within the ci time, and gate_c.sh logging.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
