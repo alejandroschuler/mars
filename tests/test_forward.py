@@ -119,19 +119,26 @@ def _queue_design(name):
     """Data and settings for test_the_queue_against_the_reference, with no
     near-tie between candidates. "binary": a covariate with the values -1 and
     1 has no knot, so its linear term enters first and is a parent with
-    negative cases (KNOT-1). "degree 3": two covariates, single hinges (the
-    slots run ahead of M, FAST-4) and parents of degree 2 that hold both
-    covariates (λ = -1, FAST-5). "ageing": the same data with other spans,
-    fast_beta 2.5 (FAST-2) and adjust_endspan 0.5 (SPAN-4). "pair rule": x1
-    is x0 plus noise inside an interaction, on covariates with variance 1/12,
-    where the variances of the parent's covariates decide the kind of a
-    search (LA-7)."""
+    negative cases, which are inactive (KNOT-1) and do not count in N_b: 98
+    of the 200 cases give the minspan 4, and all 200 would give 5 (SPAN-1).
+    "linear option": the linear option of x1 on a hinge parent has its knot
+    at the smallest x1 of all cases, not of the parent's active cases
+    (FWD-6). "degree 3": two covariates, single hinges (the slots run ahead
+    of M, FAST-4) and parents of degree 2 that hold both covariates (λ = -1,
+    FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
+    and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
+    an interaction, on covariates with variance 1/12, where the variances of
+    the parent's covariates decide the kind of a search (LA-7)."""
     rng = np.random.default_rng({"binary": 14, "pair rule": 4}.get(name, 0))
     kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
     if name == "binary":
-        X = np.column_stack((rng.choice([-1.0, 1.0], size=60), rng.uniform(size=60)))
-        y = 2 * X[:, 0] + 3 * X[:, 0] * np.maximum(X[:, 1] - 0.4, 0)
-        return X, y + 0.05 * rng.normal(size=60), kw
+        x0, x1 = rng.choice([-1.0, 1.0], size=200), rng.uniform(size=200)
+        y = 2 * x0 + 3 * x0 * np.maximum(x1 - 0.4, 0)
+        return np.column_stack((x0, x1)), y + 0.05 * rng.normal(size=200), kw
+    if name == "linear option":
+        X = rng.uniform(size=(100, 2))
+        y = 3 * np.maximum(X[:, 0] - 0.5, 0) * X[:, 1] + 0.05 * rng.normal(size=100)
+        return X, y, kw | {"max_terms": 11, "auto_linpreds": False}
     if name == "pair rule":
         x0 = rng.uniform(size=100)
         X = np.column_stack(
@@ -149,10 +156,13 @@ def _queue_design(name):
     return X, y + 0.05 * rng.normal(size=80), kw
 
 
-@pytest.mark.parametrize("name", ["binary", "degree 3", "ageing", "pair rule"])
+@pytest.mark.parametrize(
+    "name", ["binary", "linear option", "degree 3", "ageing", "pair rule"]
+)
 def test_the_queue_against_the_reference(monkeypatch, name):
     """FAST-1, FAST-2, FAST-4 and FAST-5 with fast_k = 0, and the searches of
-    parents other than the intercept (FWD-2, KNOT-1 to KNOT-3, SPAN-4, LA-7),
+    parents other than the intercept (FWD-2, FWD-6, KNOT-1 to KNOT-3, SPAN-1,
+    SPAN-4, LA-7),
     against the reference called as a black box with its trace: at every step
     the parents searched (entry e stands for slot e), and κ and λ of every
     entry after the search, λ within LA-5 of the TSS; the queue table and the
