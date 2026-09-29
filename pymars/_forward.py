@@ -81,6 +81,16 @@ MAX_LEGAL_RSS, MAX_LEGAL_DELTA = 1.01, 10.0
 GRSQ_FLOOR = -10.0
 #: STOP-5: the pass stops when RSS_s < 1e-10·TSS/(N - 1).
 RSS_FLOOR = 1e-10
+#: A candidate RSS at most EXACT_FIT·RSS_s is an exact fit, 0 (issue #81).
+#: The value is set by the rounding of a reduction Σ_k (qᵀE_k)² ≤ RSS_s: with
+#: E orthogonal to Q and q a unit vector, both to about √r·u (Gram-Schmidt
+#: twice), and blocked sums, it is a small multiple of u·RSS_s (u = 2^-53).
+#: Measured, a candidate that fits exactly in exact arithmetic rounds to at
+#: most 6.7e-16·RSS_s on #81's data, and to 2.4e-15·RSS_s for n up to 30000
+#: with weights exp(U(-9, 9)). 1e-14 (about 45·u) covers that four times;
+#: a wider band sets real candidates equal (a kink of size 1e-5 in 50 cases
+#: lost its knot at 1e-12, #83).
+EXACT_FIT = 1e-14
 #: FAST-3: a positive fast_k below this value acts as this value.
 FAST_K_MIN = 3
 
@@ -105,7 +115,9 @@ class CandidateLog(NamedTuple):
     parent as a forward index (TERM-6); ``second_knot`` (S,), NaN for a
     linear term or none; ``second_kind`` (S,) int8, a ``KIND_*`` code.
     Different candidates differ in the parent, the covariate, the kind or
-    the knot value (FWD-8)."""
+    the knot value (FWD-8). A second-best whose RSS lies within EXACT_FIT of
+    0 is logged with ``second_rss`` = 0, so at an exact fit ``second_rss`` can
+    be below ``best_rss``, which is the RSS of the rebuilt winner."""
 
     best_rss: FloatArray
     second_rss: FloatArray
@@ -315,11 +327,22 @@ class _Pass:
         L, E = self.spans[k]
         return self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
 
+    def _capped(self, red):
+        """A reduction, or RSS_s where the candidate's RSS, RSS_s - red, is at
+        most EXACT_FIT·RSS_s: an exact fit up to rounding, since an RSS is at
+        least 0 (LA-1, LA-2). Such candidates then tie exactly, and FWD-5
+        decides between them, not the rounding (issue #81). The change is at
+        most EXACT_FIT·RSS_s, inside LA-5. Complexity: O(len(red))."""
+        rss = self.rss[-1]
+        return np.where(rss - red <= EXACT_FIT * rss, rss, red)
+
     def setup(self, k: int, j: int) -> _Search:
         """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
         gives A of LA-7, and so the kind, where V holds the covariates of b
         and x; a pair search adds b·x to G, and its residuals are
         orthogonalized twice against G, as ``_scan.knot_scan`` requires.
+        Every reduction goes through ``_capped``, here, in ``search`` and in
+        ``refine``.
         Complexity: O(n·r·K)."""
         x, b = self.X[:, j], self.cols[k]
         gs = _linalg.gram_schmidt(self.Q, self.sw * b * (x - self.center[j]))
@@ -328,7 +351,7 @@ class _Pass:
         if not pair:
             return _Search(x, b, False, 0.0, self.Q, self.E)
         Q = np.column_stack((self.Q, gs.q))
-        lin = float(np.sum((gs.q @ self.E) ** 2))
+        lin = float(self._capped(float(np.sum((gs.q @ self.E) ** 2))))
         return _Search(x, b, True, lin, Q, _linalg.orthogonalize(Q, self.E)[0])
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
@@ -344,7 +367,7 @@ class _Pass:
         scan = _scan.knot_scan(
             self.sorted_x[:, j], bw, sr.Q[o], sr.E[o], kc.split, intercept=k == 0
         )
-        red, err = scan.gain + sr.lin, scan.gain_err
+        red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
         top = self.max_legal()
         possible = (scan.ratio + scan.ratio_err >= tau) & (red + err > 0.0)
@@ -385,7 +408,7 @@ class _Pass:
                     continue
                 h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
                 rho, gain = _scan.exact_knot(sr.Q, sr.E, h, self.w)
-                red = gain + sr.lin
+                red = float(self._capped(gain + sr.lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
