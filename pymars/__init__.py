@@ -3,15 +3,16 @@
 The fit follows the rules of the R package earth, as ``docs/algorithm.md``
 states them, and is validated against earth (VALIDATION_PLAN.md).
 ``EarthRegressor`` is the regressor, and ``Earth`` is the same class, so that
-``import pymars as earth; earth.Earth()`` works (API-2). The legacy code,
+``import pymars as earth; earth.Earth()`` works (API-2); ``EarthClassifier``
+refits the selected terms with a logistic model (GLM-1 to GLM-7). The legacy code,
 upstream commit d68b54a with the version string 1.0.4, is kept under the git
 tag ``legacy-1.0.4-head``.
 """
 
-from pymars._estimators import EarthRegressor
+from pymars._estimators import EarthClassifier, EarthRegressor
 
 Earth = EarthRegressor
 
-__all__ = ["Earth", "EarthRegressor", "__version__"]
+__all__ = ["Earth", "EarthClassifier", "EarthRegressor", "__version__"]
 
 __version__ = "2.0.0.dev0"
