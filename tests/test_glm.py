@@ -277,10 +277,34 @@ def test_an_intercept_alone_gives_the_weighted_frequencies(
     assert_array_equal(est.predict(Xr[:3]), first)
 
 
-@pytest.mark.parametrize("alpha", [-1.0, math.nan, math.inf, "0.1", True, None])
-def test_glm_alpha_must_be_a_finite_float_at_least_0(alpha):
-    """ERR-4: ``fit`` checks ``glm_alpha``, and ``__init__`` only stores it."""
+@pytest.mark.parametrize("alpha", [-1.0, math.nan, math.inf, "0.1", True, None, 3])
+def test_glm_alpha_reaches_the_refit_and_must_be_a_finite_float(alpha):
+    """ERR-4: ``fit`` checks ``glm_alpha``, and ``__init__`` only stores it.
+    GLM-2: a valid ``glm_alpha`` is the penalty of the refit."""
     est = EarthClassifier(glm_alpha=alpha, fast_k=0)
     assert est.glm_alpha is alpha
-    with pytest.raises(ValueError, match="glm_alpha"):
-        est.fit(X, CODES2)
+    if alpha != 3:
+        with pytest.raises(ValueError, match="glm_alpha"):
+            est.fit(X, CODES2)
+        return
+    est.fit(X, CODES2)
+    penalized = _glm.fit_glm(est.basis_matrix(X), CODES2, 2, alpha=3.0)
+    assert_array_equal(est.glm_, penalized.coef)
+    assert not np.allclose(est.glm_, _glm.fit_glm(est.basis_matrix(X), CODES2, 2).coef)
+
+
+def test_a_converged_fit_warns_when_a_probability_is_numerically_0():
+    """GLM-4: the refit warns also when it converges, if some fitted
+    probability is within 10·eps of 0 or 1. A case far out on the trend of the
+    others has a probability of about 6e-16, between eps and 10·eps, and
+    barely moves the fit, which converges."""
+    B, codes, _, _, _, _ = _r_case("binomial")
+    base = _glm.fit_glm(B, codes, 2).coef
+    far = B[0].copy()
+    far[1] = (-35.0 - base[0] - base[2] * far[2]) / base[1]  # eta = -35
+    B_far, codes_far = np.vstack([B, far]), np.r_[codes, 0]
+    with pytest.warns(ConvergenceWarning, match="numerically 0 or 1"):
+        fit = _glm.fit_glm(B_far, codes_far, 2)
+    assert fit.converged and fit.extreme
+    p = _glm.probabilities(_glm.linear_predictors(far[None], fit.coef))[0, 1]
+    assert np.finfo(float).eps < p <= 10 * np.finfo(float).eps
