@@ -50,6 +50,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import inspect
 import json
 import math
 import os
@@ -60,7 +61,7 @@ from unittest import mock
 
 import numpy as np
 import pytest
-from hypothesis import Phase, assume, given, settings
+from hypothesis import assume, given
 from hypothesis import strategies as st
 from reference import mars_ref
 
@@ -228,11 +229,14 @@ class Case:
         calls, trace = [], []
         real, real_pass = mars_ref._parent_candidates, mars_ref.forward_pass
 
-        def spy(k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau):
-            found, searchable = real(
-                k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
+        signature = inspect.signature(real)
+
+        def spy(*args, **kw):
+            found, searchable = real(*args, **kw)
+            a = signature.bind(*args, **kw).arguments
+            calls.append(
+                SimpleNamespace(B=a["B"], cond=a.get("conditioned"), found=found)
             )
-            calls.append(SimpleNamespace(B=B, found=found))
             return found, searchable
 
         def traced(*args, **kw):
@@ -348,12 +352,15 @@ class _Step:
         self.M, self.s, self.ref = M, s, ref
         self.dirs = ref["dirs"][:M]
         calls = [c for c in case.searches if c.B.shape[1] == M]
+        self.cuts = ref["cuts"][:M]
         self.B = (
-            calls[0].B
-            if calls
-            else mars_ref.basis_matrix(kept.X, self.dirs, ref["cuts"][:M])
+            calls[0].B if calls else mars_ref.basis_matrix(kept.X, self.dirs, self.cuts)
         )
-        self.P_B = mars_ref.Projector(self.B, kept.w)
+        # The reference's columns for its projections (#79): those of its
+        # Conditioned when it used one, else B.
+        self.cond = calls[0].cond if calls else None
+        self.G = self.B if self.cond is None else self.cond.columns
+        self.P_B = mars_ref.Projector(self.G, kept.w)
         self.sigma2 = mars_ref.covariate_variances(kept.X, kept.w, kept.N)
         self.tau = mars_ref.collinearity_tol(s - 1)
         self.path = np.ldexp(np.asarray(ref["rss"], dtype=float), 2 * kept.j)
@@ -377,6 +384,14 @@ class _Step:
         """The reference's choice at this step, or None (FWD-4, FWD-5)."""
         return mars_ref._first_best(self.legal, self.rss_s)
 
+    def _linear(self, k: int, v: int) -> np.ndarray:
+        """A column that spans with B what b x_v spans, as the reference forms
+        it: b (x - min x), or the Conditioned's linear column (#72, #79)."""
+        b, x = self.B[:, k], self.kept.X[:, v]
+        if self.cond is None:
+            return b * (x - x.min())
+        return self.cond.linear_column(self.dirs[k], self.cuts[k], v, b)
+
     def value(self, key) -> float:
         """The RSS of LA-2 of a candidate: the reference's own value when it
         found the candidate, else a least-squares fit of its columns."""
@@ -385,8 +400,9 @@ class _Step:
         k, v, kind, knot = key
         b, x = self.B[:, k], self.kept.X[:, v]
         h = None if kind == LINEAR else b * np.maximum(x - knot, 0.0)
-        cols = {PAIR: [b * x, h], SINGLE: [h], LINEAR: [b * x]}[kind]
-        return mars_ref.rss(np.column_stack([self.B, *cols]), self.kept.Ys, self.kept.w)
+        lin = None if kind == SINGLE else self._linear(k, v)
+        cols = {PAIR: [lin, h], SINGLE: [h], LINEAR: [lin]}[kind]
+        return mars_ref.rss(np.column_stack([self.G, *cols]), self.kept.Ys, self.kept.w)
 
     def bands(self, key) -> list[str]:
         """The bands that the candidate lies in: A_w of its search within 1e-6
@@ -399,7 +415,8 @@ class _Step:
         V = [*np.flatnonzero(self.dirs[k]).tolist(), v]
         thr = 0.01 * math.prod(self.sigma2[u] for u in V)
         searchable = all(self.sigma2[u] > 0 for u in V)
-        A = self.P_B.rss(b * x)
+        lin = self._linear(k, v)
+        A = self.P_B.rss(lin)
         near_pair = searchable and abs(A - thr) <= BAND * thr
         if near_pair:
             out.append("LA-7")
@@ -407,7 +424,7 @@ class _Step:
         kinds = [True, False] if near_pair else [searchable and thr <= A]
         if h is not None and not np.all(h == h[0]):
             for pair in kinds:
-                G = np.column_stack([self.B, b * x]) if pair else self.B
+                G = np.column_stack([self.G, lin]) if pair else self.G
                 rho = mars_ref.collinearity_ratio(h, G, w)
                 if abs(rho - self.tau) <= BAND * self.tau:
                     out.append("LA-3")
@@ -1055,18 +1072,17 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
     return f
 
 
-# The reference loses LA-5 at degree 2 and 3 when a covariate with a large mean
-# enters a product as a linear factor: its error grows with the ratio of the
-# mean to the spread (1e-8 of the RSS near 2^23 for one such factor), and with
-# the product of the ratios for a product of two (issue #77). Until #77 is
-# fixed, the draws at degree 2 and 3 keep that ratio at or below SHIFT_CAP,
-# and test_forward_pass_with_large_shifts_at_degree_2_or_3 holds the larger
-# shifts.
+# #79 fixed the reference's forward pass for covariates with a large mean at
+# degree 2 and 3 (#77). Two cases still miss LA-5 in the reference, so there
+# the draws at degree 2 and 3 keep the ratio of a covariate shift to its
+# spread at or below SHIFT_CAP: an exact duplicate covariate at a large mean,
+# and the pruning path at intermediate means (near 2^23, #84), which the
+# whole fit compares.
 SHIFT_CAP = 2.0**10
 
 
 @st.composite
-def forward_cases(draw, kind: str, large_shifts: bool = False) -> Case:
+def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
     covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
     constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
@@ -1077,15 +1093,13 @@ def forward_cases(draw, kind: str, large_shifts: bool = False) -> Case:
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
     runs from none (exact fits and STOP-5) to as large as the signal. At
     degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread; ``large_shifts`` draws degree 2 or 3 with shifts of 2^26 or 2^36
-    (issue #77)."""
+    spread with a duplicated covariate, and with ``pruning_path`` (the whole
+    fit)."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
-    if large_shifts:
-        params["max_degree"] = draw(st.sampled_from([2, 3]))
-    capped = params["max_degree"] >= 2 and not large_shifts
+    capped = params["max_degree"] >= 2 and pruning_path
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
@@ -1096,6 +1110,7 @@ def forward_cases(draw, kind: str, large_shifts: bool = False) -> Case:
         X = np.floor(X * levels) / levels
         if p >= 2 and rng.uniform() < 0.5:
             X[:, 1] = X[:, 0]
+            capped = capped or params["max_degree"] >= 2
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
@@ -1119,8 +1134,6 @@ def forward_cases(draw, kind: str, large_shifts: bool = False) -> Case:
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
         big = [2.0**26, 2.0**36]
-        if large_shifts:
-            X[:, 0] += rng.choice(big)
         X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
@@ -1297,22 +1310,6 @@ def test_forward_pass_on_hypothesis_data(kind, data):
     _count(f"forward, hypothesis {kind}", check_forward(case))
 
 
-@pytest.mark.xfail(
-    reason="#77: the reference's RSS misses LA-5 for a linear factor of a "
-    "covariate shifted by 2^26 or 2^36 in a product term",
-    raises=AssertionError,
-    strict=False,
-)
-@settings(phases=(Phase.explicit, Phase.reuse, Phase.generate))  # no shrinking
-@given(data=st.data())
-def test_forward_pass_with_large_shifts_at_degree_2_or_3(data):
-    """The comparison of test_forward_pass_on_hypothesis_data on "shifted" data
-    at degree 2 or 3 with x0 + 2^26 or 2^36 (FWD-10, LA-5). It fails until
-    #77 fixes the reference; the fix removes the xfail and SHIFT_CAP."""
-    case = data.draw(forward_cases("shifted", large_shifts=True), label="case")
-    _count("forward, hypothesis large shifts (#77)", check_forward(case))
-
-
 @given(data=st.data())
 def test_whole_fit_on_hypothesis_data(data):
     """_core.fit_mars equals the reference's fit_mars, read through
@@ -1320,7 +1317,7 @@ def test_whole_fit_on_hypothesis_data(data):
     (CORE-1 to CORE-5, PRUNE-5 to PRUNE-8, EDGE-1, EDGE-6), up to the first
     near-tie of either pass."""
     kind = data.draw(st.sampled_from(DATA_KINDS), label="kind")
-    case = data.draw(forward_cases(kind), label="case")
+    case = data.draw(forward_cases(kind, pruning_path=True), label="case")
     case.params["pmethod"] = data.draw(st.sampled_from(["backward", "none"]))
     case.params["nprune"] = data.draw(st.sampled_from([None, 1, 3, 10]))
     params = _core.MarsParams(**case.params)
