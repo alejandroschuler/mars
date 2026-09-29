@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 20:14 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 20:16 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -51,7 +51,7 @@ After the session restart on 2026-09-28 (about 19:50), agent names no longer res
 
 - t12-core: done (#70 merged as 068ec1e; T12 #14 closed).
 - t13-estimators (a1c05783fcf61dde5): rebasing onto 068ec1e and opening T13's PR.
-- t10-pruning: idle; #69 fixed at c8c1ac4 (shift by the data value nearest the weighted mean; reviewer's case now 1.6e-16; gate B PASS). recheck-69 (sonnet, a6b3536e92d12d279) posts the narrow re-approvals for both roles after CI; then merge; then T15 applies its shifted-response patch.
+- t10-pruning: idle; #69 fixed at c8c1ac4 (shift by the data value nearest the weighted mean; reviewer's case now 1.6e-16; gate B PASS). recheck-69 (a6b3536e92d12d279) verified the fix at c8c1ac4 but main moved (#70); the executor updated the branch (525accd); recheck-69 checks the update and posts the approvals for 525accd; then merge; then T15 applies its shifted-response patch. Side note for later: np.average in _centered overflows with a RuntimeWarning for a constant 1e300 response with weights near 5e11 (results exact).
 - t06-reference: idle; #72 now holds both reference fixes (final RSS; the search columns b(x - min x) at degree 2 and 3), head 37a04b4, gate B PASS, CI 12/12; its review (single, opus) when a slot frees.
 - Reviews: #71 dual (wf_69bb1714-e52), #66 narrow round 2 (sonnet, wf_cbf4953a-e1a).
 - Idle: t07-conformance, t11-stage2 (#71 in review), t13-estimators (waits for T12), t15-oracle (#67 waits for review), t11-forward, t18-legacy, tools-merge-guard.
