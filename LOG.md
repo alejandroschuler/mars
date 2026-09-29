@@ -261,6 +261,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 09:00 update-check-82 APPROVE at 0f922c7 (gate B 386 s). Merged #82 (T16 invariance, weight and edge-case tests) as a072a4e; #18 closed. Sent the #79 rechecks to both original reviewers.
 - 09:10 #79 rechecks at f6bb9fa: spec APPROVE (fixtures unchanged; worst exact error 1.5e-14); adversarial REQUEST_CHANGES on one test row (the m = low[j] mutant in the mirror identity changes a 16-row degree-2 fit). Sent to t06-linear-shift.
 - 09:20 #79 at e297bdf (the mixed row kills the m = low[j] mutant; gate B PASS); updated to a116e65. The adversarial reviewer does the narrow recheck and posts both roles (the spec approval at f6bb9fa covers all logic; the change is one test row and a merge).
+- 09:30 recheck of #67 (adversarial) APPROVE at 1a3c9dd (all round-1 findings fixed; 8 queue mutants, 6 killed, 2 equivalent). #67 now waits only for the #84 fix, then gate C and the spec approval.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
