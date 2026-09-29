@@ -1078,14 +1078,13 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 
 
 # #79 fixed the reference's forward pass for covariates with a large mean at
-# degree 2 and 3 (#77). Two cases still miss LA-5 in the reference, so there
-# the draws at degree 2 and 3 keep the ratio of a covariate shift to its
-# spread at or below SHIFT_CAP: an exact duplicate covariate at a large mean,
-# and the pruning path at intermediate means (near 2^23, #84), which the
-# whole fit compares. The "scaled" kind keeps the cap too, because the fast
-# forward pass misses LA-5 there at degree 3 (1.3e-8 of the RSS before the
-# step, n = 20, a product of two linear factors of covariates with means of
-# 3e3 and 5e8 times their spread; reported to the executor from #67).
+# degree 2 and 3 (#77). Three cases still miss LA-5, so there the draws at
+# degree 2 and 3 keep the ratio of a covariate shift to its spread at or
+# below SHIFT_CAP. Two are in the fast forward pass (#85): an exact duplicate
+# covariate at a large mean, and the "scaled" kind at degree 3 (a product of
+# two linear factors of covariates with large means). The third is the
+# reference's pruning pass at intermediate means, near 2^23 (#84), which the
+# whole fit compares.
 SHIFT_CAP = 2.0**10
 
 
