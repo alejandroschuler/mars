@@ -127,14 +127,19 @@ def _cases(
 def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArray]:
     """Return Y minus one constant per response, and the constants.
 
-    Each response is shifted by its value in the first case, a data value, so
-    that the differences are exact for values within a factor of 2 of it, and
-    then by the weighted mean of the differences. A constant response becomes
-    0 exactly, and its constant is its value. Complexity: O(n·K).
+    Each response is shifted by its data value nearest its weighted mean μ (the
+    first such case in a tie), then by the weighted mean of the differences.
+    The shift a is a data value, so the differences are exact for values
+    within a factor of 2 of it, and N·(a - μ)² ≤ TSS, so the rounding of the
+    others is of the size of the spread, whatever the weights and the order
+    of the cases. A constant response becomes 0 exactly, and its constant is
+    its value. Complexity: O(n·K).
     """
-    D = Y - Y[0]
+    near = np.abs(Y - np.average(Y, axis=0, weights=w)).argmin(axis=0)
+    anchor = Y[near, np.arange(Y.shape[1])]
+    D = Y - anchor
     mean = np.average(D, axis=0, weights=w)
-    return D - mean, Y[0] + mean
+    return D - mean, anchor + mean
 
 
 def _stages(
