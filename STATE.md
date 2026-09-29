@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-29 14:25 PDT, by executor session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5` (the watchdog run that took the stale lock at 00:25; the earlier executor `local_a59469db-...` did not resume after the 23:10 reset). This executor runs in `<main>` and still uses the journal worktree at `<S>/.worktrees/journal`. The agent IDs listed under Running agents belong to the earlier session and do not resolve here; new agents get new names.
+Updated: 2026-09-29 12:29 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,10 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+PAUSED UNTIL SATURDAY by the user (12:30 Tuesday 2026-09-29): "pause until saturday and then use whatever is remaining of my weekly usage". Weekly 57 % at 12:27 Tuesday; the weekly reset is 2026-10-04 17:00 PDT. The heartbeat is set to 2026-10-03 07:00 PDT, so the hourly watchdog takes over about 08:17 Saturday with a fresh session (cheaper than this long session). No agent, job or timer runs until then.
+
+BUDGET RULE FOR SATURDAY 2026-10-03 AND SUNDAY UNTIL THE RESET (the user's words above): use whatever remains of this week's weekly limit before the reset (Sunday 17:00 PDT). Pacing: work at full speed (up to 4 authors, 3 reviewers); from 92 %, start only small agents that finish open pull requests; from 96 %, start nothing and let running agents push a checkpoint; at 98 %, stop and tell the user in the session. The 5-hour limit still applies (no new agents from 80 % of it; full reviews and long author tasks only below 60 %). After the reset, ask the user for the week-3 rule before large work.
 
 PAUSED 14:25 Tuesday 2026-09-29 by the user's budget rule (go to 50 % of the weekly counter; from 44 % only work that finishes open PRs). Weekly 47 %, 5-hour 17 %. Heartbeat set to 2026-10-04 17:15 PDT (the weekly reset, 17:00 PDT, plus 15 minutes), so the watchdog resumes about 18:15 PDT that day unless the user resumes sooner. No agent runs, no timer. caffeinate stays on.
 
