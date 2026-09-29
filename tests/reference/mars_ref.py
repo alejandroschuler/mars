@@ -15,6 +15,9 @@ How it computes, and how that differs from the fast code:
   formula and no suffix sum.
 - The collinearity ratio [LA-3] is an explicit regression of the centered
   hinge column on the centered current columns.
+- When a covariate has a large mean, the forward pass projects on columns
+  from an exact change of basis of the term columns (``Conditioned``), so
+  that a linear factor does not cost digits [LA-5].
 - The pruning pass refits every subset that its rules consider [PRUNE-9].
 - The forward pass evaluates every candidate of every visited parent with
   its explicit columns, and follows the queue, the slots and the stopping
@@ -41,6 +44,7 @@ import itertools
 import math
 import numbers
 from collections.abc import Mapping
+from fractions import Fraction
 
 import numpy as np
 import scipy.linalg
@@ -865,74 +869,147 @@ def window(table, fast_k: int) -> list[int]:
     return list(table[: max(3, fast_k)])
 
 
-# The columns that the projections use. A linear factor x_j carries the mean
-# of x_j into its term, and when the term without that factor is also in the
-# basis, the part of the column that is new to the span is a difference of two
-# large numbers: at a mean of 2^36 about 5 digits go [LA-5]. The projections
-# therefore use, for such a term, the column with x_j - min x_j in place of
-# x_j. That column is the term minus multiples of terms of the basis, so the
-# span, every RSS and every residual stay the same in exact arithmetic
-# [LA-1]; x_j - min x_j is exact when the values of x_j are within a factor of
-# 2 of each other (Sterbenz). The terms themselves, their columns in the
-# returned B and the parents of later candidates keep the factor x_j.
+# The columns that the projections use [LA-5]. A linear factor x_j, or a
+# factor (t - x_j)+, carries the mean of x_j into its term. When the mean is
+# large, the part of a column that is new to the span can be a difference of
+# large numbers, and a float column loses those digits: about 5 of them at a
+# mean of 2^36 (x_j times b, rounded, has an error of eps |x_j b|). So for the
+# covariates whose smallest value m_j is larger in size than their range,
+# each term is expanded exactly in the products of the factors x_j - m_j,
+# (x_j - t)+ and the other factors, with x_j = (x_j - m_j) + m_j and
+# (t - x_j)+ = (x_j - t)+ - (x_j - m_j) + (t - m_j), and rational
+# coefficients. Gaussian elimination in exact arithmetic on these
+# coefficients gives columns that span what the terms span [LA-1], with
+# coefficients of size about 1 on columns whose values are of the size of the
+# range, so no digits go to a mean. The terms, their columns in the returned
+# B and the parents of later candidates stay as they are.
 
 
-def _term_key(row, cut, without=()) -> tuple:
-    """The factors (covariate, code, knot) of a term, without the covariates in
-    ``without``; the knot of a linear factor is 0 [TERM-2]."""
-    return tuple(
-        (int(j), int(row[j]), 0.0 if row[j] == 2 else float(cut[j]))
-        for j in np.flatnonzero(row)
-        if j not in without
-    )
+def _large_mean(X) -> set:
+    """The covariates whose smallest value is larger in size than their range."""
+    low, high = X.min(axis=0), X.max(axis=0)
+    return {j for j in range(X.shape[1]) if abs(low[j]) > high[j] - low[j]}
 
 
-def _shift_set(row, cut, keys, must=None) -> tuple:
-    """The largest set S of the linear factors of the term, with ``must`` in it
-    when given, such that, for every nonempty U in S, the term without the
-    factors in U is in ``keys``; among sets of one size the first in
-    increasing covariate order, and () when there is none. Then
-    prod_{j in S} (x_j - m_j) times the other factors is the term plus a
-    combination of terms in ``keys``."""
-    linear = [int(j) for j in np.flatnonzero(row) if row[j] == 2]
-    for size in range(len(linear), 0, -1):
-        for S in itertools.combinations(linear, size):
-            if (must is None or must in S) and all(
-                _term_key(row, cut, U) in keys
-                for r in range(1, size + 1)
-                for U in itertools.combinations(S, r)
-            ):
-                return S
-    return ()
+class Conditioned:
+    """Columns for the projections that span what the columns of the terms
+    (rows ``dirs``, ``cuts``) span, and the column b x of a linear candidate
+    formed in the same way. Cost: with M terms of degree d, O(M^2 3^d)
+    operations on fractions and O(n M 3^d) on floats."""
 
+    def __init__(self, X, dirs, cuts, B):
+        self.X = np.asarray(X, dtype=np.float64)
+        self.low = self.X.min(axis=0)
+        self.large = _large_mean(self.X)
+        self._cache: dict = {}
+        self._pivots: list = []  # (element, reduced coefficients), in order
+        B = np.asarray(B, dtype=np.float64)
+        if not any(self._expands(r) for r in dirs):
+            self.columns = B
+            return
+        columns = []
+        for r, c in zip(dirs, cuts, strict=True):
+            v = self._reduce(self._expansion(r, c))
+            if not v:
+                continue  # exactly dependent on the earlier terms
+            # the pivot: the element with the largest share of the column,
+            # and the first in key order among equal shares
+            p = max(sorted(v), key=lambda q: abs(v[q]) * self._size(q))
+            v = {q: f / v[p] for q, f in v.items()}
+            self._pivots.append((p, v))
+            columns.append(self._column(v))
+        self.columns = np.column_stack(columns)
 
-def _shifted_column(X, row, cut, shift) -> np.ndarray:
-    """The column of the term with x_j - min x_j for each linear factor j in
-    ``shift``; the factors multiply in increasing covariate order."""
-    column = np.ones(X.shape[0])
-    for j in np.flatnonzero(row):
-        x = X[:, j]
-        f = x - x.min() if j in shift else factor(int(row[j]), x, float(cut[j]))
-        column = column * f
-    return column
+    def _expands(self, row) -> bool:
+        return any(row[j] in (2, -1) and j in self.large for j in np.flatnonzero(row))
 
+    def _expansion(self, row, cut) -> dict:
+        """The term as {element: coefficient}; an element is a tuple of
+        factors (j, code, knot), code 2 standing for x_j - m_j when x_j has a
+        large mean and for x_j otherwise."""
+        out = {(): Fraction(1)}
+        for j in np.flatnonzero(row):
+            code, t, m = int(row[j]), float(cut[j]), float(self.low[j])
+            if j not in self.large or code == 1:
+                parts = {(int(j), code, 0.0 if code == 2 else t): Fraction(1)}
+            elif code == 2:
+                parts = {(int(j), 2, 0.0): Fraction(1), None: Fraction(m)}
+            else:
+                parts = {
+                    (int(j), 1, t): Fraction(1),
+                    (int(j), 2, 0.0): Fraction(-1),
+                    None: Fraction(t) - Fraction(m),
+                }
+            new: dict = {}
+            for e, f in out.items():
+                for q, g in parts.items():
+                    key = e if q is None else (*e, q)
+                    new[key] = new.get(key, 0) + f * g
+            out = new
+        return {e: f for e, f in out.items() if f != 0}
 
-def conditioned_basis(X, dirs, cuts, B):
-    """The columns that span what B spans and that the projections use, and the
-    keys of the terms. Column k is column k of B unless the term has a
-    linear factor that ``_shift_set`` shifts. Cost: O(n M d) time."""
-    X = np.asarray(X, dtype=np.float64)
-    keys = {_term_key(r, c) for r, c in zip(dirs, cuts, strict=True)}
-    out = np.array(B, dtype=np.float64, copy=True)
-    for k, (r, c) in enumerate(zip(dirs, cuts, strict=True)):
-        shift = _shift_set(r, c, keys)
-        if shift:
-            out[:, k] = _shifted_column(X, r, c, shift)
-    return out, keys
+    def _reduce(self, v) -> dict:
+        """v minus its components along the pivots, exactly."""
+        v = dict(v)
+        for p, r in self._pivots:
+            f = v.get(p, 0)
+            if f != 0:
+                for q, g in r.items():
+                    v[q] = v.get(q, 0) - f * g
+                v = {q: g for q, g in v.items() if g != 0}
+        return v
+
+    def _element(self, e) -> np.ndarray:
+        if e not in self._cache:
+            column = np.ones(self.X.shape[0])
+            for j, code, t in e:
+                x = self.X[:, j]
+                if code == 2 and j in self.large:
+                    column = column * (x - self.low[j])
+                else:
+                    column = column * factor(code, x, t)
+            self._cache[e] = column
+        return self._cache[e]
+
+    def _size(self, e) -> float:
+        return float(np.linalg.norm(self._element(e)))
+
+    def _column(self, v) -> np.ndarray:
+        column = np.zeros(self.X.shape[0])
+        for e in sorted(v):
+            column = column + float(v[e]) * self._element(e)
+        return column
+
+    def linear_column(self, parent_row, parent_cut, j, b) -> np.ndarray:
+        """A column that spans with B what b x_j spans with B: b (x_j - min x_j)
+        [#72], or, when b or x_j has a factor that expands, the reduced
+        expansion of b x_j."""
+        x = self.X[:, j]
+        row = np.array(parent_row).copy()
+        row[j] = 2
+        if not self._pivots or not self._expands(row):
+            return b * (x - x.min())
+        cut = np.array(parent_cut, dtype=np.float64).copy()
+        cut[j] = 0.0
+        return self._column(self._reduce(self._expansion(row, cut)))
 
 
 def _parent_candidates(
-    k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau, terms=None
+    k,
+    parent_row,
+    X,
+    Y,
+    w,
+    B,
+    P_B,
+    e_B,
+    sigma2,
+    N,
+    tau_N,
+    params,
+    tau,
+    conditioned=None,
+    parent_cut=None,
 ):
     """The candidates of parent term k (column k of B), in the order of FWD-5,
     and whether some covariate could be searched for it [FWD-2, FWD-3].
@@ -944,13 +1021,14 @@ def _parent_candidates(
     [LA-2], where G is B, and B with b x in a pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
     The column b x is formed as b (x - min x), which spans the same with B.
-    When ``terms`` holds the rows and cuts of the terms of B, P_B must be the
-    projector of ``conditioned_basis``, and the projected columns b x and h
-    shift the linear factors of the parent as ``conditioned_basis`` does, with
-    b x among the terms in a pair search; the denominator of LA-3 is that of
-    the column h itself. Cost: up to n knots per covariate, each projected on
-    up to M + 1 columns, so O(p n^2 M) time, and O(n^2) memory for the hinge
-    matrix.
+    When ``conditioned`` is the Conditioned of the terms of B, P_B must be
+    the projector of its columns, which G uses in place of B, and b x is its
+    linear_column (``parent_cut`` is the cut row of the parent). The hinge
+    column h is used as it is: when a large mean would cost digits of its
+    part that is new to G, that part is a small fraction of h, and LA-3
+    rejects it. Cost: up to n knots
+    per covariate, each projected on up to M + 1 columns, so O(p n^2 M) time,
+    and O(n^2) memory for the hinge matrix.
     """
     p = X.shape[1]
     b = B[:, k]
@@ -972,16 +1050,7 @@ def _parent_candidates(
             params.endspan,
             params.adjust_endspan,
         )
-    if terms is None:
-        B_proj, keys, cut_row = B, None, None
-    else:
-        B_proj, keys = conditioned_basis(X, *terms, B)
-        cut_row = np.asarray(terms[1][k], dtype=np.float64)
-
-    def shifted_parent(shift):
-        # b with x_v - min x_v for each linear factor v of b in shift
-        return b if not shift else _shifted_column(X, parent_row, cut_row, shift)
-
+    B_proj = B if conditioned is None else conditioned.columns
     out = []
     for j in covariates:
         x = X[:, j]
@@ -989,12 +1058,10 @@ def _parent_candidates(
         # with m the smallest x serves in its place: the same A_w, the same
         # linear candidate and the same G in exact arithmetic, and x - m is
         # exact when x has a large mean, so no digits go to the mean [LA-5]
-        bx_shift = ()
-        if keys is not None:
-            bx_row, bx_cut = parent_row.copy(), cut_row.copy()
-            bx_row[j], bx_cut[j] = 2, 0.0
-            bx_shift = tuple(v for v in _shift_set(bx_row, bx_cut, keys, j) if v != j)
-        bx = shifted_parent(bx_shift) * (x - x.min())
+        if conditioned is None:
+            bx = b * (x - x.min())
+        else:
+            bx = conditioned.linear_column(parent_row, parent_cut, j, b)
         V = [*own, j]
         pair = all(sigma2[v] > 0 for v in V) and (
             P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
@@ -1012,19 +1079,7 @@ def _parent_candidates(
             continue
         t = np.array(knots)
         H = b[:, None] * np.maximum(x[:, None] - t[None, :], 0.0)
-        H_proj = H
-        if keys is not None and 2 in parent_row:
-            # the same shift for the hinge column of each knot, with b x among
-            # the terms in a pair search
-            keys_G = keys | {_term_key(bx_row, bx_cut)} if pair else keys
-            H_proj = H.copy()
-            for i, knot in enumerate(knots):
-                h_row, h_cut = parent_row.copy(), cut_row.copy()
-                h_row[j], h_cut[j] = 1, knot
-                shift = _shift_set(h_row, h_cut, keys_G)
-                if shift:
-                    H_proj[:, i] = shifted_parent(shift) * np.maximum(x - knot, 0.0)
-        H_perp = P_G.residual(H_proj)
+        H_perp = P_G.residual(H)
         size = np.sum(H_perp**2, axis=0)
         spread = np.sum(P_G.scaled(H) ** 2, axis=0)
         constant = np.all(H[0] == H, axis=0)
@@ -1125,7 +1180,8 @@ def forward_pass(
             termination = NO_ROOM if s == 0 else TERM_LIMIT
             break
         B = np.column_stack(columns)
-        P_B = Projector(conditioned_basis(X, dirs, cuts, B)[0], w)  # [LA-5]
+        conditioned = Conditioned(X, dirs, cuts, B)  # [LA-5]
+        P_B = Projector(conditioned.columns, w)
         e_B = P_B.residual(Y)
         rss_s = rss_path[-1]
         limit = max_legal(rss_path)
@@ -1151,7 +1207,8 @@ def forward_pass(
                 tau_N,
                 params,
                 tau,
-                terms=(dirs, cuts),
+                conditioned,
+                cuts[k],
             )
             entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
             found.extend(cands)

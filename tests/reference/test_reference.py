@@ -1327,20 +1327,29 @@ class TestForwardPass:
             )
 
     @pytest.mark.parametrize(
-        ("degree", "auto_linpreds", "power"),
-        [(2, False, 36), (3, False, 36), (3, True, 26), (3, True, 36)],
+        ("degree", "auto_linpreds", "shift"),
+        [
+            (2, False, 2.0**36),
+            (3, False, 2.0**36),
+            (2, True, 2.0**26),
+            (2, True, -(2.0**36)),
+            (3, True, 2.0**26),
+            (3, True, -(2.0**36)),
+        ],
     )
     def test_an_exact_shift_of_a_covariate_keeps_the_pass(
-        self, degree, auto_linpreds, power
+        self, degree, auto_linpreds, shift
     ):
         # With auto_linpreds=False every term is a product of hinges, so an
         # exact shift of x1 by 2^36 cannot change the fit (Conventions): the
         # pass must give the same terms with the cuts shifted. With
-        # auto_linpreds=True and a continuous x1, x1 enters products as a
-        # linear factor, next to the same term without it, so the new part of
-        # the column is small beside the mean. In both, each RSS must be
-        # within 1e-8 of the RSS before the step [LA-5] of the exact rational
-        # RSS of the pass's own terms
+        # auto_linpreds=True and every covariate continuous and shifted by
+        # +-2^26 or +-2^36, the covariates enter products as linear factors,
+        # next to the same term without them, so the new part of a column is
+        # small beside the means. In all cases, the RSS of each
+        # step and of its second best candidate must be within 1e-8 of the
+        # RSS before the step [LA-5] of the exact rational RSS of the same
+        # terms, with every column formed exactly
         rng = np.random.default_rng(0 if auto_linpreds else 4)
         n = 40
         if auto_linpreds:
@@ -1356,32 +1365,50 @@ class TestForwardPass:
         opts = {"max_degree": degree, "auto_linpreds": auto_linpreds}
         opts["max_terms"] = 13 if auto_linpreds else 11
         shifted_X = X.copy()
-        shifted_X[:, 1] += 2.0**power
+        shifted_X[:, slice(None) if auto_linpreds else 1] += shift
         shifted = run_forward(shifted_X, y, **opts)
         dirs = shifted["dirs"]
         if auto_linpreds:
-            # x1 is a linear factor of a term of degree 3, and of a term whose
-            # parent is the same term without x1
-            linear = np.flatnonzero(dirs[:, 1] == 2)
-            assert any(ref.term_degree(dirs[k]) == 3 for k in linear)
-            assert any(dirs[shifted["parent"][k], 1] == 0 for k in linear)
+            # a linear factor is the new factor of a term of the given degree
+            # whose parent is not the intercept
+            assert any(
+                dirs[shifted["parent"][k], j] == 0
+                and ref.term_degree(dirs[k]) == degree
+                for k, j in np.argwhere(dirs == 2)
+            )
         else:
-            np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**power, X[:, 1])
+            np.testing.assert_array_equal(shifted_X[:, 1] - shift, X[:, 1])
             base = run_forward(X, y, **opts)
             for key in ("dirs", "parent", "step", "termination"):
                 np.testing.assert_array_equal(shifted[key], base[key])
             cuts = base["cuts"].copy()
-            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**power, 0.0)
+            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift, 0.0)
             np.testing.assert_array_equal(shifted["cuts"], cuts)
             before = base["rss"][:-1]
             change = np.abs(shifted["rss"][1:] - base["rss"][1:])
             assert np.all(change <= 1e-8 * before)
-        before = shifted["rss"][:-1]
+        before, log = shifted["rss"][:-1], shifted["candidates"]
         for s in range(1, len(shifted["rss"])):
             terms = np.flatnonzero(shifted["step"] <= s)
             B = exact_basis(shifted_X, dirs[terms], shifted["cuts"][terms])
             exact = exact_rss(B, y, np.ones(n))
             assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
+            # the second best of the step: RSS(B + {b x}), RSS(B + {b x, h})
+            # or RSS(B + {h}) [LA-2], with B the terms before the step
+            kind = log["second_kind"][s - 1]
+            if kind == ref.NO_KIND:
+                continue
+            k, j = log["second_parent"][s - 1], log["second_variable"][s - 1]
+            rows = [dirs[t] for t in terms if shifted["step"][t] < s]
+            cut_rows = [shifted["cuts"][t] for t in terms if shifted["step"][t] < s]
+            codes = {ref.LINEAR: [2], ref.PAIR: [2, 1], ref.SINGLE: [1]}[kind]
+            for code in codes:
+                rows.append(dirs[k].copy())
+                cut_rows.append(shifted["cuts"][k].copy())
+                rows[-1][j] = code
+                cut_rows[-1][j] = log["second_knot"][s - 1] if code == 1 else 0.0
+            exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, np.ones(n))
+            assert abs(log["second_rss"][s - 1] - exact) <= 1e-8 * before[s - 1]
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
