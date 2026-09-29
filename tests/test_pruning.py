@@ -18,6 +18,7 @@ them fails.
 """
 
 import json
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -301,15 +302,16 @@ def test_exact_ties_and_constant_responses(k):
 
 
 def test_a_constant_response_adds_nothing():
-    """A constant response adds 0 exactly to every RSS, and its coefficients
-    are its value and zeros (Conventions, PRUNE-8)."""
+    """A constant response becomes 0 exactly, so it changes no removal and no
+    subset, and every RSS only by the order of the additions; its
+    coefficients are its value and zeros (Conventions, PRUNE-8)."""
     B, y, _ = _case(8, 25, 5, 1, False)
     Y = np.column_stack([y, np.full(25, -1.5), 2 * y])
     two = pr.pruning_pass(B, Y[:, [0, 2]], penalty=2.0)
     three = pr.pruning_pass(B, Y, penalty=2.0)
     np.testing.assert_array_equal(three.removed, two.removed)
     np.testing.assert_array_equal(three.subsets, two.subsets)
-    np.testing.assert_array_equal(three.rss_per_size, two.rss_per_size)
+    assert_rel(three.rss_per_size, two.rss_per_size, 1e-14)
     fit = pr.final_fit(B, Y, three.selected, penalty=2.0)
     col = fit.coef[:, 1]
     assert col[0] == -1.5 and not col[1:].any()
@@ -517,3 +519,64 @@ def test_errors():
             call()
     with pytest.raises(ValueError, match="independent"):
         pr.pruning_pass(np.column_stack([B, np.zeros(12)]), y, penalty=2.0)
+
+
+def _exact(B, Y, w, cols):
+    """Weighted least squares of Y on the columns ``cols`` of B in rational
+    arithmetic: the coefficients, one row per response, and the RSS summed
+    over the responses (LA-1)."""
+    A = [[Fraction(v) for v in row] for row in B[:, cols]]
+    W = [Fraction(v) for v in (np.ones(B.shape[0]) if w is None else w)]
+    n, m = len(A), len(cols)
+    beta, rss = [], Fraction(0)
+    for col in np.reshape(Y, (n, -1)).T:
+        y = [Fraction(v) for v in col]
+        E = [  # the normal equations [G | g], solved by Gauss-Jordan
+            [sum(W[i] * A[i][r] * A[i][c] for i in range(n)) for c in range(m)]
+            + [sum(W[i] * A[i][r] * y[i] for i in range(n))]
+            for r in range(m)
+        ]
+        for c in range(m):
+            E[c] = [v / E[c][c] for v in E[c]]
+            for r in range(m):
+                if r != c:
+                    E[r] = [a - E[r][c] * b for a, b in zip(E[r], E[c], strict=True)]
+        b = [E[r][m] for r in range(m)]
+        beta.append([float(v) for v in b])
+        fit = [sum(A[i][c] * b[c] for c in range(m)) for i in range(n)]
+        rss += sum(W[i] * (y[i] - fit[i]) ** 2 for i in range(n))
+    return np.array(beta), float(rss)
+
+
+@pytest.mark.parametrize(
+    ("k", "weights"),
+    [(1, "none"), (3, "none"), (1, "uniform"), (3, "uniform"), (1, "far first")],
+)
+def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights):
+    """LA-5 for responses whose means are 1e13 times their spread: every subset
+    holds the intercept (PRUNE-3), so centering Y changes no RSS. Each RSS of
+    the records (PRUNE-4), the TSS (GCV-5) and the final RSS (PRUNE-8) match
+    rational arithmetic to relative 1e-8, and the coefficients to normwise
+    1e-6. Without the centering the RSS errors reach 1e-3 and the TSS errors
+    1e-6. In the last case the first 30 cases lie 2e13 below the other 20 and
+    have weight 1e-30 (W-6 allows it), so the shift must be the data value
+    nearest the weighted mean: the first value, the value nearest the
+    unweighted mean, or an unweighted mean of the differences misses by 1e-6
+    or more."""
+    rng = np.random.default_rng(0)
+    x = rng.uniform(size=50)
+    B = np.column_stack([np.ones(50), np.maximum(x - 0.5, 0), np.maximum(0.3 - x, 0)])
+    means = np.array([1e13, -4e12, 7e12])[:k]
+    Y = means + np.sin(6 * x)[:, None] + 0.1 * rng.normal(size=(50, k))
+    w = None if weights == "none" else rng.uniform(0.5, 2.0, 50)
+    if weights == "far first":
+        Y[:30], w[:30] = -means, 1e-30
+    Y = Y[:, 0] if k == 1 else Y
+    res = pr.pruning_pass(B, Y, w, penalty=2.0)
+    exact = [_exact(B, Y, w, np.flatnonzero(row))[1] for row in res.subsets]
+    assert_rel(res.rss_per_size, exact, 1e-8)
+    assert_rel(_gcv.tss(Y, w), exact[0], 1e-8)
+    fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
+    beta, rss = _exact(B, Y, w, res.selected)
+    assert_rel(fit.rss, rss, 1e-8)
+    assert np.linalg.norm(fit.coef - beta.T) <= 1e-6 * np.linalg.norm(beta)
