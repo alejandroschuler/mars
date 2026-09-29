@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 18:38 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 19:56 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,7 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED BY THE USER (18:40 Monday): the round the user named is done; no agents are running and none may start until the user says so. Weekly 22 % of the new counter (limit 50 %), 5-hour 33 %. The heartbeat is set to the weekly reset (2026-10-04 17:00 PDT), so the watchdog does not resume the work. On resume, in this order: (1) send the recorded fix lists: #70 to t12-core, #69 to t10-pruning (the nearest-to-mean shift), and to t11-stage2 the same shift for _forward when weights come (stage 3); (2) reviews: #71 (T11 stage 2, dual), #66 round 2 (narrow), #72 (single or dual, small), #67 (T15, dual), and #64 after the user's push or OK for update-branch (issue #68); (3) a new reference fix for T06: at degree 2 the reference loses accuracy on covariates with a large mean (x1 + 2^26 moves its RSS path by 2.4e-8, 7.7e-6 at 2^36; t11-stage2's finding; T15 widens max_degree only after it); (4) then T13's PR after T12 merges, T11 stage 3, T14.
+RESUMED by the user at 19:55 Monday ('continue'); earlier PAUSED BY THE USER (18:40 Monday) after the named round. Weekly 22 % of the new counter (limit 50 %), 5-hour 33 %. The heartbeat is live again. Resume order: (1) send the recorded fix lists: #70 to t12-core, #69 to t10-pruning (the nearest-to-mean shift), and to t11-stage2 the same shift for _forward when weights come (stage 3); (2) reviews: #71 (T11 stage 2, dual), #66 round 2 (narrow), #72 (single or dual, small), #67 (T15, dual), and #64 after the user's push or OK for update-branch (issue #68); (3) a new reference fix for T06: at degree 2 the reference loses accuracy on covariates with a large mean (x1 + 2^26 moves its RSS path by 2.4e-8, 7.7e-6 at 2^36; t11-stage2's finding; T15 widens max_degree only after it); (4) then T13's PR after T12 merges, T11 stage 3, T14.
 
 USER INSTRUCTION (18:20 Monday): when the current round of work is done (t11-stage2's #71, t07-conformance's #66 fixes, t06-reference's #72, the #69 adversarial review and the #70 dual review), pause, start no more agents (no reviews, checkers, integrators or new authors), and tell the user. Merges that need no new agent are allowed; nothing else starts.
 
