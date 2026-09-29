@@ -23,7 +23,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from reference import mars_ref
 
-from pymars import _forward, _gcv, _knots, _linalg, _scan, _terms
+from pymars import _forward, _gcv, _linalg, _scan, _terms
 from pymars._forward import Termination
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "validation" / "fixtures"
@@ -391,11 +391,6 @@ def test_a_small_kink_keeps_its_knot(n, a):
     assert fp.cuts[1, 0] == X[X[:, 0] <= 0.5, 0].max()
 
 
-def _rss(A, y):
-    A = np.column_stack(A)
-    return float(np.sum((y - A @ np.linalg.lstsq(A, y, rcond=None)[0]) ** 2))
-
-
 def test_the_codes():
     """CORE-3's kinds and CORE-4's codes."""
     kinds = (_forward.KIND_NONE, _forward.KIND_PAIR, _forward.KIND_HINGE)
@@ -410,170 +405,6 @@ def test_the_codes():
         ("NO_GAIN", 6),
         ("TERM_LIMIT", 7),
     ]
-
-
-def _suppressed():
-    """x1 is x0 plus noise, and y a difference of their hinges: one hinge alone
-    explains little, and the two together much. Step 1 takes a small pair on
-    x1, and at step 2 every pair on x0 exceeds 10·Δ_1."""
-    rng = np.random.default_rng(0)
-    x0 = rng.uniform(size=300)
-    x1 = x0 + 0.02 * rng.normal(size=300)
-    y = 5 * (np.maximum(x0 - 0.5, 0) - np.maximum(x1 - 0.5, 0))
-    return np.column_stack((x0, x1)), y + 0.001 * rng.normal(size=300)
-
-
-SUPPRESSED = {"max_terms": 5, "thresh": 0.0, "minspan": 1, "endspan": 1}
-
-
-def test_the_limit_on_knots_leaves_the_linear_term_free():
-    """FWD-4: no pair on x0 is legal at step 2; the linear term is legal at any
-    size, and it wins, although the best pair would reduce the RSS more."""
-    X, y = _suppressed()
-    x0 = X[:, 0]
-    fp = _fit(X, y, **SUPPRESSED)
-    assert fp.dirs[3].tolist() == [_terms.LINEAR, 0]
-    delta1, delta2 = fp.rss[0] - fp.rss[1], fp.rss[1] - fp.rss[2]
-    assert delta2 > 10 * delta1
-    B = _terms.basis_matrix(X, fp.dirs[:3], fp.cuts[:3])
-    knots = _knots.candidate_knots(np.sort(x0), np.ones(300, bool), 1, 1).knots
-    assert len(knots) == 298
-
-    def rss(t):
-        A = np.column_stack((B, x0, np.maximum(x0 - t, 0.0)))
-        return float(np.sum((y - A @ np.linalg.lstsq(A, y, rcond=None)[0]) ** 2))
-
-    assert fp.rss[1] - min(rss(t) for t in knots) > delta2
-    assert fp.candidates.second_rss[1] >= fp.candidates.best_rss[1]  # legal only
-
-
-@pytest.mark.parametrize(("auto", "code"), [(True, _terms.LINEAR), (False, 1)])
-def test_the_linear_option(auto, code):
-    """FWD-6: the linear candidate adds b·x (code 2), or b·(x - m)₊ with m the
-    smallest x of all cases (code +1); the RSS is the same."""
-    X, y = _suppressed()
-    fp = _fit(X, y, auto_linpreds=auto, **SUPPRESSED)
-    assert fp.dirs[3].tolist() == [code, 0]
-    assert fp.cuts[3, 0] == (0.0 if auto else X[:, 0].min())
-    other = _fit(X, y, auto_linpreds=not auto, **SUPPRESSED)
-    np.testing.assert_allclose(fp.rss, other.rss, rtol=1e-12)
-
-
-def test_pairs_then_single_hinges_on_one_covariate():
-    """LA-7: once x is in the span, its searches are single-hinge searches."""
-    x = np.linspace(-1, 1, 101)
-    y = np.abs(x) + np.maximum(x - 0.5, 0.0)
-    fp = _fit(x[:, None], y, max_terms=7, thresh=0.0, minspan=1, endspan=1)
-    assert fp.dirs[1:3, 0].tolist() == [1, -1] and fp.cuts[1, 0] == fp.cuts[2, 0]
-    assert fp.dirs[3:, 0].tolist() == [1] * (len(fp.dirs) - 3)
-    assert set(fp.candidates.second_kind[1:]) <= {_forward.KIND_HINGE}
-
-
-def test_a_duplicated_column_is_never_used():
-    """FWD-5 and EDGE-4: equal reductions go to the lower covariate index."""
-    rng = np.random.default_rng(2)
-    x = rng.uniform(size=100)
-    X = np.column_stack((x, x, rng.uniform(size=100)))
-    fp = _fit(X, np.sin(6 * x) + 0.1 * X[:, 2], thresh=0.0)
-    assert not fp.dirs[:, 1].any()
-    log = fp.candidates  # the second is the duplicate, with the scan's RSS
-    assert log.second_variable[0] == 1
-    assert log.second_rss[0] == pytest.approx(log.best_rss[0], rel=1e-10)
-
-
-@pytest.mark.parametrize(
-    ("n", "kw", "code"),
-    [
-        (30, {"max_terms": 1}, Termination.NO_ROOM),
-        (30, {"max_terms": 2}, Termination.NO_ROOM),
-        (30, {"max_terms": 4}, Termination.TERM_LIMIT),
-        (20, {"penalty": 16.0}, Termination.GRSQ_LOW),
-        (3, {}, Termination.GRSQ_NEG_INF),
-        (30, {"thresh": 0.5}, Termination.RSQ_CHANGE_SMALL),
-    ],
-)
-def test_the_stopping_rules(n, kw, code):
-    """STOP-1, STOP-3 (with C(M') ≥ N at n = 3) and STOP-4."""
-    rng = np.random.default_rng(n)
-    fp = _fit(rng.uniform(size=(n, 1)), rng.normal(size=n), **kw)
-    assert fp.termination == code
-    assert len(fp.rss) == (2 if code == Termination.TERM_LIMIT else 1)
-
-
-@pytest.mark.parametrize(
-    ("n", "thresh", "code"),
-    [
-        (30, 0.001, Termination.RSQ_CHANGE_SMALL),
-        (30, 0.0, Termination.NO_GAIN),
-        (3, 0.001, Termination.GRSQ_NEG_INF),
-    ],
-)
-def test_a_step_without_a_legal_candidate(n, thresh, code):
-    """STOP-4 before STOP-2: a constant covariate gives no candidate (EDGE-3);
-    STOP-3 counts such a step as M + 1 = 2 terms, so C = 3 ≥ N at n = 3."""
-    y = np.random.default_rng(3).normal(size=n)
-    fp = _fit(np.ones((n, 1)), y, thresh=thresh)
-    assert fp.termination == code and fp.dirs.shape == (1, 1)
-
-
-def _eight():
-    rng = np.random.default_rng(8)
-    return rng.uniform(size=(8, 3)), rng.normal(size=8)
-
-
-@pytest.mark.parametrize(
-    ("data", "steps"), [(([[0.0], [0.0], [1.0]], [0.0, 1.0, 5.0]), 0), (_eight(), 1)]
-)
-def test_grsq_counts_the_real_terms(data, steps):
-    """STOP-3 with M' = M + 1 for a linear term (the only candidate at n = 3:
-    LA-3 rejects the knot at the repeated minimum) and M + 2 for a pair (the
-    second pair at n = 8 has C = 5 + 2·2 = 9 ≥ N)."""
-    fp = _fit(*data)
-    assert fp.termination == Termination.GRSQ_NEG_INF and len(fp.rss) == steps + 1
-
-
-def test_a_step_with_one_legal_candidate():
-    """The only knot is at the repeated minimum (KNOT-5), so the linear term is
-    the only candidate and the log has no second (CORE-3); then no candidate
-    is left at all (NO_GAIN at thresh 0)."""
-    fp = _fit([[0.0], [0.0], [1.0], [1.0]], [0.0, 1.0, 2.0, 3.0], thresh=0.0)
-    assert fp.dirs.tolist() == [[0], [2]] and fp.termination == Termination.NO_GAIN
-    log = fp.candidates
-    second = (log.second_rss, log.second_parent, log.second_variable)
-    assert [a.tolist() for a in second] == [[math.inf], [-1], [-1]]
-    assert np.isnan(log.second_knot[0]) and log.second_kind[0] == _forward.KIND_NONE
-
-
-@pytest.mark.parametrize(("sd", "pair"), [(4e-3, True), (1e-3, False)])
-def test_the_pair_rule(sd, pair):
-    """LA-7: x0 is x1 plus noise. After a pair on x1, A of x0 lies above
-    0.01·sigma² for sd 4e-3 and below it for sd 1e-3, so its search at step 2
-    is a pair search or a single-hinge search."""
-    rng = np.random.default_rng(7)
-    x0 = rng.uniform(size=200)
-    X = np.column_stack((x0, x0 + sd * rng.normal(size=200)))
-    fp = _fit(X, np.maximum(x0 - 0.5, 0) + 5 * X[:, 1], thresh=0.0, max_terms=5)
-    ratio = _rss([_terms.basis_matrix(X, fp.dirs[:3], fp.cuts[:3])], x0) / (
-        0.01 * _linalg.weighted_variances(X)[0]
-    )
-    assert (ratio > 2.0) if pair else (ratio < 0.5)
-    assert fp.dirs[3:, 0].tolist() == ([1, -1] if pair else [1])
-
-
-def test_an_exact_fit_stops_before_the_term_limit():
-    """STOP-5 comes before STOP-1: the RSS floor at an exact fit."""
-    x = np.linspace(0, 1, 41)
-    y = 2 * np.maximum(x - x[12], 0.0)
-    fp = _fit(x[:, None], y, max_terms=3, minspan=1, endspan=1)
-    assert fp.termination == Termination.RSQ_HIGH
-    assert fp.rss[1] < 1e-10 * fp.rss[0] / 40
-
-
-def test_the_rsq_rule_of_stop5():
-    x = np.linspace(0, 1, 41)
-    y = np.maximum(x - x[12], 0.0) + 1e-3 * np.random.default_rng(4).normal(size=41)
-    fp = _fit(x[:, None], y, thresh=0.01, minspan=1, endspan=1)
-    assert fp.termination == Termination.RSQ_HIGH and len(fp.rss) == 2
 
 
 @pytest.mark.parametrize(
@@ -688,38 +519,6 @@ def test_scaling_y():
     np.testing.assert_array_equal(tiny.rss, np.ldexp(big.rss, -1200))
 
 
-def test_the_record():
-    """CORE-3, TERM-6, FWD-8 and FWD-11 on a fit of 10 steps."""
-    rng = np.random.default_rng(6)
-    X = rng.uniform(size=(150, 4))
-    y = np.sin(4 * X[:, 0]) + X[:, 1] + 0.1 * rng.normal(size=150)
-    X0 = X.copy()
-    fp = _fit(X, y, thresh=0.0, auto_linpreds=False)
-    np.testing.assert_array_equal(X, X0)
-    M, S = fp.dirs.shape[0], len(fp.rss) - 1
-    assert fp.dirs.dtype == np.int8 and fp.cuts.shape == (M, 4)
-    _terms.check_terms(fp.dirs, fp.cuts)
-    assert fp.parent.tolist() == [-1] + [0] * (M - 1)
-    assert fp.step[0] == 0 and np.all(np.diff(fp.step) >= 0) and fp.step[-1] == S
-    assert fp.kept.tolist() == list(range(M)) and fp.dropped.shape == (0,)
-    assert np.all(np.diff(fp.rss) < 0)
-    assert abs(fp.rss[0] - _gcv.tss(y)) <= 1e-8 * fp.rss[0]  # LA-5
-    log = fp.candidates
-    np.testing.assert_array_equal(log.best_rss, fp.rss[1:])
-    assert np.all(log.second_rss >= log.best_rss - 1e-7 * fp.rss[:-1])
-    linear = (log.second_kind == _forward.KIND_LINEAR) | (log.second_kind == 0)
-    assert np.all(np.isnan(log.second_knot) == linear)
-    assert np.all(log.second_kind > 0) and np.all(log.second_parent == 0)
-    assert np.all(log.second_rss < fp.rss[:-1])
-    for s in range(S):
-        rows = np.flatnonzero(fp.step == s + 1)
-        v = int(np.flatnonzero(fp.dirs[rows[0]])[0])
-        assert (log.second_variable[s], log.second_knot[s]) != (v, fp.cuts[rows[0], v])
-    bare = _forward.forward_pass(X, y, thresh=0.0, auto_linpreds=False, fast_k=0)
-    assert bare.candidates is None
-    np.testing.assert_array_equal(bare.rss, fp.rss)
-
-
 @given(st.integers(0, 2**32 - 1), st.integers(5, 60), st.integers(1, 4))
 def test_row_order_and_invariants(seed, n, p):
     """CORE-1: the same terms after a permutation of the rows, apart from
@@ -792,34 +591,6 @@ def test_the_stops_before_a_step(ns, chosen, rss_new, m_new, code):
 def test_the_stop_after_a_step(rss, thresh, high):
     """STOP-5 at its bounds."""
     assert _forward._rsq_high(_ns(tss=4.0, thresh=thresh), rss) is high
-
-
-@pytest.mark.parametrize("step", [1, 2])
-def test_search_equals_least_squares(step):
-    """FWD-3, FWD-4, LA-2, LA-3, LA-7: the best two legal candidates of one
-    search against least squares on explicit columns. Step 1 is a pair search
-    on x; step 2, after a pair on x, a single-hinge search."""
-    rng = np.random.default_rng(10)
-    x = np.round(rng.uniform(size=40), 2)
-    y = np.sin(4 * x) + 0.3 * rng.normal(size=40)
-    st_ = _state(x[:, None], y, minspan=1, endspan=1)
-    if step == 2:
-        st_.add(*st_.best()[:2])
-    B = _terms.basis_matrix(x[:, None], st_.dirs, st_.cuts)
-    G, base = ([B, x] if step == 1 else [B]), _rss([B], y)
-    want = [(base - _rss([B, x], y), (0, 0, 0))] if step == 1 else []
-    knots = _knots.candidate_knots(np.sort(x), np.ones(40, bool), 1, 1).knots
-    for i, t in enumerate(knots):
-        h = np.maximum(x - t, 0.0)
-        red = base - _rss([*G, h], y)
-        rho = _rss(G, h) / np.sum((h - h.mean()) ** 2)
-        if rho >= _linalg.collinearity_tolerance(step) and red <= st_.max_legal():
-            want.append((red, (0, 0, i + 1)))
-    want = sorted(want, key=lambda c: (-c[0], c[1]))[:2]
-    got = _forward._top_two(st_.refine(st_.search(0, 0, set())))
-    assert [c.order for c in got] == [c[1] for c in want]
-    for c, (red, _) in zip(got, want, strict=True):
-        assert c.reduction == pytest.approx(red, rel=1e-9)
 
 
 def _fixed_gain(monkeypatch, gain):

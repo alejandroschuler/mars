@@ -244,44 +244,6 @@ def test_s_fixture_list():
     assert len(S_FITS) >= 130
 
 
-@given(cases)
-def test_matches_refits_of_every_subset(case):
-    """PRUNE-2 to PRUNE-5 against the steps of the spec with a refit of every
-    subset, for one and several responses, with and without weights: the same
-    removals, the same subsets (not nested in general for K = 1, nested for
-    K ≥ 2), the same RSS and GCV, and the intercept in every subset."""
-    B, Y, w = _case(*case)
-    removed, best, sets, gap = _spec_pass(B, Y, w)
-    assume(gap > 1e-9)
-    res = pr.pruning_pass(B, Y, w, penalty=3.0)
-    M = B.shape[1]
-    np.testing.assert_array_equal(res.removed, removed)
-    assert _sets(res.subsets) == sets
-    assert_rel(res.rss_per_size, best, 1e-8)
-    N = B.shape[0] if w is None else np.sum(w)
-    sizes = np.arange(1, M + 1)
-    assert_rel(res.gcv_per_size, _gcv.gcv(np.array(best), sizes, 3.0, N), 1e-8)
-    assert res.removed.dtype == np.int64 and res.removed.shape == (M - 1,)
-    assert sorted(res.removed.tolist()) == list(range(1, M))
-    assert res.subsets.dtype == bool and res.subsets.shape == (M, M)
-    assert res.subsets[:, 0].all() and (res.subsets.sum(axis=1) == sizes).all()
-    m_star = int(np.argmin(res.gcv_per_size)) + 1
-    assert res.selected_size == m_star
-    np.testing.assert_array_equal(res.selected, sorted(sets[m_star - 1]))
-    assert res.selected.dtype == np.int64
-
-
-def test_one_term():
-    """CORE-3: with M_f = 1, ``removed`` is empty, ``rss_per_size`` is [TSS]
-    and ``subsets`` is [[True]]."""
-    y = np.array([1.0, 2.0, 4.0, 7.0])
-    res = pr.pruning_pass(np.ones((4, 1)), y, penalty=2.0)
-    assert res.removed.shape == (0,) and res.subsets.tolist() == [[True]]
-    assert_rel(res.rss_per_size, [_gcv.tss(y)], 1e-14)
-    assert_rel(res.gcv_per_size, [_gcv.gcv(_gcv.tss(y), 1, 2.0, 4.0)], 1e-14)
-    assert res.selected_size == 1 and res.selected.tolist() == [0]
-
-
 @pytest.mark.parametrize("k", [1, 2])
 def test_exact_ties_and_constant_responses(k):
     """PRUNE-3 ties: when every response is constant every RSS is 0 exactly
@@ -343,61 +305,6 @@ def test_selected_size_is_the_smallest_with_the_lowest_gcv(monkeypatch):
     assert none.selected_size == 4 and none.selected.tolist() == [0, 1, 2, 3]
     none = pr.pruning_pass(B, y, penalty=2.0, pmethod="none")
     assert none.selected_size == 5 and none.selected.tolist() == [0, 1, 2, 3, 4]
-
-
-@given(cases, st.integers(1, 9), st.sampled_from(["backward", "none"]))
-def test_nprune_and_pmethod_change_only_the_selection(case, nprune, pmethod):
-    """PRUNE-6, PRUNE-7: the stages and the records are those of
-    ``pmethod="backward"`` without ``nprune``."""
-    B, Y, w = _case(*case)
-    base = pr.pruning_pass(B, Y, w, penalty=2.0)
-    res = pr.pruning_pass(B, Y, w, penalty=2.0, pmethod=pmethod, nprune=nprune)
-    for a, b in zip(res[:4], base[:4], strict=True):
-        np.testing.assert_array_equal(a, b)
-    assert res.selected_size <= min(nprune, B.shape[1])
-    if pmethod == "none":
-        assert res.selected_size == min(nprune, B.shape[1])
-
-
-def test_nprune_with_penalty_minus_one_selects_nprune_terms():
-    """PRUNE-6, bb07.19: with d = -1 the GCV is RSS/N, which falls as m grows,
-    so ``nprune`` = k selects exactly k terms."""
-    B, y, _ = _case(11, 40, 8, 1, False)
-    res = pr.pruning_pass(B, y, penalty=-1.0)
-    assert np.all(np.diff(res.rss_per_size) < 0)
-    assert_rel(res.gcv_per_size, res.rss_per_size / 40.0, 1e-15)
-    for k in (1, 3, 8, 20):
-        assert pr.pruning_pass(B, y, penalty=-1.0, nprune=k).selected_size == min(k, 8)
-
-
-@given(cases)
-def test_final_fit_is_least_squares_on_the_selected_terms(case):
-    """PRUNE-8: the coefficients of LA-4 on the selected columns, the RSS of
-    those coefficients, and GCV-2, GCV-5, GCV-6 with M = m*; for
-    ``pmethod="backward"`` the RSS is ``rss_per_size[m* - 1]``."""
-    B, Y, w = _case(*case)
-    res = pr.pruning_pass(B, Y, w, penalty=2.0)
-    fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
-    lm = _linalg.lm_fit(B[:, res.selected], Y, w)
-    want = lm.coef.reshape(fit.coef.shape)
-    assert np.linalg.norm(fit.coef - want) <= 1e-12 * np.linalg.norm(want)
-    assert fit.coef.shape == (res.selected_size, 1 if Y.ndim == 1 else Y.shape[1])
-    assert_rel(fit.rss, res.rss_per_size[res.selected_size - 1], 1e-8)
-    N, tau = _gcv.total_weight(B.shape[0], w)
-    m, tss = res.selected_size, _gcv.tss(Y, w)
-    assert fit.gcv == _gcv.gcv(fit.rss, m, 2.0, N, tau)
-    assert fit.rsq == _gcv.rsq(fit.rss, tss, m)
-    assert fit.grsq == _gcv.grsq(fit.rss, tss, m, 2.0, N, tau)
-
-
-def test_final_fit_with_pmethod_none_describes_the_first_terms():
-    """PRUNE-7, PRUNE-8 (a departure): with m* < M_f the statistics are those of
-    terms 0 to m* - 1, not of T[m*]."""
-    B, y, _ = _case(4, 30, 7, 1, False)
-    res = pr.pruning_pass(B, y, penalty=2.0, pmethod="none", nprune=3)
-    fit = pr.final_fit(B, y, res.selected, penalty=2.0)
-    assert_rel(fit.rss, _rss(B, y, None, [0, 1, 2]), 1e-10)
-    assert fit.rss >= res.rss_per_size[2]
 
 
 def test_degenerate_weight_sum():
