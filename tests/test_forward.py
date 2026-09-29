@@ -788,7 +788,7 @@ def test_a_knot_within_its_bound_of_tau_is_decided_explicitly():
     st_ = _state(x[:, None], y, minspan=1, endspan=7)
     for v in (np.maximum(x - x[n // 2], 0), np.maximum(x[n // 2] - x, 0)):
         st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, v).q))
-    st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
+    st_.E = _linalg.orthogonalize(st_.Q, st_.Yw)[0]
     st_.rss = [st_.rss[0]] * 7 + [float(np.sum(st_.E**2))]  # this is step 8
     kept = st_.search(0, 0, set())
     place = int(np.flatnonzero(st_.knots[0].knots == x[7])[0]) + 1
@@ -818,7 +818,7 @@ def _fixed_passes(monkeypatch, scan, exact, top=None, steps=0):
     x = np.arange(12.0)
     st_ = _state(x[:, None], 10 * np.sin(x), minspan=1, endspan=1)
     st_.Q = np.column_stack((st_.Q, _linalg.gram_schmidt(st_.Q, x).q))
-    st_.E = _linalg.orthogonalize(st_.Q, st_.Yc)[0]
+    st_.E = _linalg.orthogonalize(st_.Q, st_.Yw)[0]
     st_.rss = st_.rss * (steps + 1)
     if top is not None:
         st_.max_legal = lambda: top
@@ -954,26 +954,21 @@ def test_every_step_equals_the_explicit_choice():
         st_.add(chosen, rb)
 
 
-@pytest.mark.parametrize("kw", [{"w": np.ones(4)}, {"fast_k": 20}])
-def test_stage_2_limits(kw):
-    X, y = np.arange(8.0).reshape(4, 2), np.arange(4.0)
-    args = {"fast_k": 0} | kw
-    with pytest.raises(NotImplementedError, match="stage 2"):
-        _forward.forward_pass(X, y, **args)
-    with pytest.raises(NotImplementedError, match="stage 2"):
-        _forward.forward_pass(X, np.ones((4, 2)), fast_k=0)
-
-
 @pytest.mark.parametrize(
-    ("X", "y"),
+    ("X", "y", "w", "match"),
     [
-        (np.ones((3, 1)), np.ones(4)),
-        (np.ones(3), np.ones(3)),
-        (np.full((3, 1), np.inf), np.ones(3)),
-        (np.ones((3, 1)), [0.0, np.nan, 1.0]),
-        (np.ones((0, 1)), np.ones(0)),
+        (np.ones((3, 1)), np.ones(4), None, "X"),
+        (np.ones(3), np.ones(3), None, "X"),
+        (np.full((3, 1), np.inf), np.ones(3), None, "X"),
+        (np.ones((3, 1)), [0.0, np.nan, 1.0], None, "X"),
+        (np.ones((0, 1)), np.ones(0), None, "X"),
+        (np.eye(3, 1), np.arange(3.0), [1.0, -1.0, 1.0], "w must"),
+        (np.eye(3, 1), np.arange(3.0), [1.0, 1.0], "w must"),
+        (np.eye(3, 1), np.arange(3.0), [0.0, 0.0, 0.0], "every weight is zero"),
+        # EDGE-6: the scaled TSS underflows, possible only with extreme weights
+        (np.eye(3, 1), [0.0, 1.0, 1.0], [1e-310, 1e-310, 2.0], "scale of y"),
     ],
 )
-def test_bad_input(X, y):
-    with pytest.raises(ValueError, match="X"):
-        _forward.forward_pass(X, y, fast_k=0)
+def test_bad_input(X, y, w, match):
+    with pytest.raises(ValueError, match=match):
+        _forward.forward_pass(X, y, w, fast_k=0)
