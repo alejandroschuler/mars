@@ -1034,29 +1034,34 @@ class TestLegality:
 
 
 def exact_rss(A, y, w):
-    """The weighted RSS of y on the independent columns of A, in exact
-    rational arithmetic: the normal equations solved with fractions."""
-    n, m = len(A), len(A[0])
-    a = [
-        [v if isinstance(v, Fraction) else Fraction(float(v)) for v in row] for row in A
-    ]
-    yy = [Fraction(float(v)) for v in y]
+    """The weighted RSS of y on the columns of A, in exact rational
+    arithmetic: Gram-Schmidt with fractions, which leaves out a column in the
+    span of the earlier ones."""
     ww = [Fraction(float(v)) for v in w]
-    rows = [
-        [sum(ww[i] * a[i][r] * a[i][q] for i in range(n)) for q in range(m)]
-        + [sum(ww[i] * a[i][r] * yy[i] for i in range(n))]
-        for r in range(m)
-    ]
-    for col in range(m):
-        pivot = next(r for r in range(col, m) if rows[r][col] != 0)
-        rows[col], rows[pivot] = rows[pivot], rows[col]
-        for r in range(m):
-            if r != col and rows[r][col] != 0:
-                f = rows[r][col] / rows[col][col]
-                rows[r] = [u - f * v for u, v in zip(rows[r], rows[col], strict=True)]
-    beta = [rows[r][m] / rows[r][r] for r in range(m)]
-    fitted = [sum(a[i][q] * beta[q] for q in range(m)) for i in range(n)]
-    return float(sum(ww[i] * (yy[i] - fitted[i]) ** 2 for i in range(n)))
+
+    def dot(u, v):
+        return sum(c * a * b for c, a, b in zip(ww, u, v, strict=True))
+
+    basis = []
+
+    def residual(v):
+        for q, qq in basis:
+            f = dot(v, q) / qq
+            if f:
+                v = [vi - f * qi for vi, qi in zip(v, q, strict=True)]
+        return v
+
+    for k in range(len(A[0])):
+        column = [
+            v if isinstance(v, Fraction) else Fraction(float(v))
+            for v in (row[k] for row in A)
+        ]
+        u = residual(column)
+        uu = dot(u, u)
+        if uu:
+            basis.append((u, uu))
+    r = residual([Fraction(float(v)) for v in y])
+    return float(dot(r, r))
 
 
 def exact_basis(X, dirs, cuts):
@@ -1335,6 +1340,7 @@ class TestForwardPass:
             (2, True, -(2.0**36)),
             (3, True, 2.0**26),
             (3, True, -(2.0**36)),
+            (2, True, (1e8, 4e6, 7e8)),
         ],
     )
     def test_an_exact_shift_of_a_covariate_keeps_the_pass(
@@ -1343,13 +1349,13 @@ class TestForwardPass:
         # With auto_linpreds=False every term is a product of hinges, so an
         # exact shift of x1 by 2^36 cannot change the fit (Conventions): the
         # pass must give the same terms with the cuts shifted. With
-        # auto_linpreds=True and every covariate continuous and shifted by
-        # +-2^26 or +-2^36, the covariates enter products as linear factors,
-        # next to the same term without them, so the new part of a column is
-        # small beside the means. In all cases, the RSS of each
-        # step and of its second best candidate must be within 1e-8 of the
-        # RSS before the step [LA-5] of the exact rational RSS of the same
-        # terms, with every column formed exactly
+        # auto_linpreds=True and every covariate shifted by +-2^26, +-2^36 or
+        # 1e8 to 7e8, the covariates enter products as linear factors, next
+        # to the same term without them, so the new part of a column is small
+        # beside the means. In all cases, the RSS of each step and of its
+        # second best candidate must be within 1e-8 of the RSS before the
+        # step [LA-5] of the exact rational RSS of the same terms, with every
+        # column formed exactly
         rng = np.random.default_rng(0 if auto_linpreds else 4)
         n = 40
         if auto_linpreds:
@@ -1362,6 +1368,13 @@ class TestForwardPass:
         if degree == 3:
             y = y + 2 * hinge * X[:, 1] * X[:, 2]
         y = y + (0.2 if auto_linpreds else 0.05) * rng.normal(size=n)
+        if np.ndim(shift):
+            # values 0 to 4 and means near 1e8, 4e6 and 7e8: the pass used to
+            # add x0 x2 a second time, with a false RSS drop of 32 percent
+            rng = np.random.default_rng(2)
+            n = 12
+            X = rng.integers(0, 5, size=(n, 3)).astype(float)
+            y = X[:, 2] + X[:, 0] * X[:, 2] + 0.1 * rng.normal(size=n)
         opts = {"max_degree": degree, "auto_linpreds": auto_linpreds}
         opts["max_terms"] = 13 if auto_linpreds else 11
         shifted_X = X.copy()
