@@ -30,7 +30,12 @@ the intercept, so subtracting a constant from a response changes no RSS in
 exact arithmetic. Each response is centered first, so that the rounding of
 the projections is of the size of the spread of Y, not of its mean (LA-5);
 a response that is constant over the cases (Conventions: all its values are
-equal) becomes 0 exactly and adds 0 to every sum. Y enters only through
+equal) becomes 0 exactly and adds 0 to every sum. For the same reason
+``pruning_pass`` centers each column of B after the intercept in the same
+way before the QR: a column far from 0 relative to its spread (x near 33 with
+a spread of 0.25, say) would otherwise make the factor ill-conditioned, and
+the RSS of a near-exact fit would lose about 1e-8 of its relative accuracy
+(#84). Y enters only through
 differences, products and sums, so multiplying Y by a power of 2 (EDGE-6)
 multiplies every RSS and GCV by its square and changes no other bit. Memory
 is O(n·(M_f + K) + M_f²).
@@ -218,7 +223,11 @@ def pruning_pass(
     B, Y, w, N, tau = _cases(B, Y, w)
     M = B.shape[1]
     m_max = _gcv.nprune_limit(M, nprune)
-    R, Z, rss = _linalg.r_factor(B, _centered(Y, w)[0], w)
+    Bc = B.copy()
+    if M > 1:
+        Bc[:, 1:] = _centered(B[:, 1:], w)[0]  # the same spans (LA-5, #84)
+    R, Z, rss = _linalg.r_factor(Bc, _centered(Y, w)[0], w)
+    # fit_mars cannot reach this: FWD-11 drops a column constant over the cases.
     if np.any(np.diag(R) == 0.0):
         raise ValueError("the columns of B must be linearly independent (FWD-11)")
     removed, rss_per_size, subsets = _stages(R, Z, rss, several=Y.shape[1] >= 2)

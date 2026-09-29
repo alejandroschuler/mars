@@ -937,27 +937,46 @@ class TestLegality:
 
 
 def exact_rss(A, y, w):
-    """The weighted RSS of y on the independent columns of A, in exact
-    rational arithmetic: the normal equations solved with fractions."""
-    n, m = A.shape
-    a = [[Fraction(float(v)) for v in row] for row in A]
-    yy = [Fraction(float(v)) for v in y]
+    """The weighted RSS of y on the columns of A, in exact rational
+    arithmetic: Gram-Schmidt with fractions, which leaves out a column in the
+    span of the earlier ones."""
     ww = [Fraction(float(v)) for v in w]
-    rows = [
-        [sum(ww[i] * a[i][r] * a[i][q] for i in range(n)) for q in range(m)]
-        + [sum(ww[i] * a[i][r] * yy[i] for i in range(n))]
-        for r in range(m)
-    ]
-    for col in range(m):
-        pivot = next(r for r in range(col, m) if rows[r][col] != 0)
-        rows[col], rows[pivot] = rows[pivot], rows[col]
-        for r in range(m):
-            if r != col and rows[r][col] != 0:
-                f = rows[r][col] / rows[col][col]
-                rows[r] = [u - f * v for u, v in zip(rows[r], rows[col], strict=True)]
-    beta = [rows[r][m] / rows[r][r] for r in range(m)]
-    fitted = [sum(a[i][q] * beta[q] for q in range(m)) for i in range(n)]
-    return float(sum(ww[i] * (yy[i] - fitted[i]) ** 2 for i in range(n)))
+
+    def dot(u, v):
+        return sum(c * a * b for c, a, b in zip(ww, u, v, strict=True))
+
+    basis = []
+
+    def residual(v):
+        for q, qq in basis:
+            f = dot(v, q) / qq
+            if f:
+                v = [vi - f * qi for vi, qi in zip(v, q, strict=True)]
+        return v
+
+    for k in range(len(A[0])):
+        column = [
+            v if isinstance(v, Fraction) else Fraction(float(v))
+            for v in (row[k] for row in A)
+        ]
+        u = residual(column)
+        uu = dot(u, u)
+        if uu:
+            basis.append((u, uu))
+    r = residual([Fraction(float(v)) for v in y])
+    return float(dot(r, r))
+
+
+def exact_basis(X, dirs, cuts):
+    """The columns of the terms [TERM-3] as rows of fractions: every factor and
+    product is exact."""
+    B = [[Fraction(1)] * len(dirs) for _ in range(len(X))]
+    for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
+        for j in np.flatnonzero(row):
+            c = Fraction(float(cut[j]))
+            for i, v in enumerate(Fraction(float(v)) for v in X[:, j]):
+                B[i][k] *= {1: max(v - c, 0), -1: max(c - v, 0), 2: v}[int(row[j])]
+    return B
 
 
 def check_best_and_second(log, index, cands, rss_s, limit):
@@ -1215,41 +1234,144 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
-    @pytest.mark.parametrize("degree", [2, 3])
-    def test_an_exact_shift_of_a_covariate_keeps_the_pass(self, degree):
-        # With auto_linpreds=False every term is a product of hinges, so an
-        # exact shift of x1 by 2^36 cannot change the fit (Conventions). The
-        # pass must give the same terms with the cuts shifted, and each RSS
-        # within 1e-8 of the RSS before the step [LA-5], against the pass on
-        # the unshifted x1 and against exact rational arithmetic
-        rng = np.random.default_rng(4)
-        n = 40
-        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
-        X = np.column_stack(grid)[:, :degree]
-        hinge = np.maximum(X[:, 0] - 0.3, 0)
-        y = 2 * hinge + 3 * hinge * X[:, 1] + 0.05 * rng.normal(size=n)
-        if degree == 3:
-            y = y + 2 * hinge * X[:, 1] * X[:, 2]
-        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
-        base = run_forward(X, y, **opts)
-        shifted_X = X.copy()
-        shifted_X[:, 1] += 2.0**36
-        np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**36, X[:, 1])  # exact
-        shifted = run_forward(shifted_X, y, **opts)
-        for key in ("dirs", "parent", "step", "termination"):
-            np.testing.assert_array_equal(shifted[key], base[key])
-        cuts = base["cuts"].copy()
-        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**36, 0.0)
-        np.testing.assert_array_equal(shifted["cuts"], cuts)
-        before = base["rss"][:-1]
-        assert np.all(np.abs(shifted["rss"][1:] - base["rss"][1:]) <= 1e-8 * before)
+    @pytest.mark.parametrize(
+        ("degree", "case", "shift"),
+        [
+            (2, "hinges", 2.0**36),
+            (3, "hinges", 2.0**36),
+            (2, "continuous", 2.0**26),
+            (2, "continuous", -(2.0**36)),
+            (3, "continuous", 2.0**26),
+            (3, "continuous", -(2.0**36)),
+            (2, "grid", (1e8, 4e6, 7e8)),
+            (2, "binary", (2.0**36, 0.0)),
+            (3, "near the range", (1.001, -1.001, 0.5)),
+            (2, "mixed", (2.0**40, 0.0, 0.0)),
+        ],
+    )
+    def test_an_exact_shift_of_a_covariate_keeps_the_pass(
+        self, degree, case, shift, monkeypatch
+    ):
+        # "hinges": with auto_linpreds=False every term is a product of
+        # hinges, so an exact shift of x1 by 2^36 cannot change the fit
+        # (Conventions): the pass must give the same terms with the cuts
+        # shifted. The other cases use auto_linpreds=True, so covariates with
+        # a large mean enter products as linear factors, next to the same
+        # term without them, and the new part of a column is small beside the
+        # means. "continuous": every covariate shifted. "grid": values 0 to
+        # 4 and means near 1e8, 4e6 and 7e8, where the pass used to add x0 x2
+        # a second time, with a false RSS drop of 32 percent. "binary": a
+        # shifted 0/1 covariate times x1, next to a hinge pair on x1, whose
+        # sum is linear in x1. In all cases, the RSS of each step and of its
+        # second best candidate must be within 1e-8 of the RSS before the
+        # step [LA-5] of the exact rational RSS of the same terms, with every
+        # column formed exactly. "near the range": smallest values just above
+        # the range, where the float columns lose no digits, so the pass must
+        # be the same with and without the exact change of basis. "mixed": x0
+        # shifted, x1 and x2 not, with integer weights, so that mirror hinges
+        # of covariates without a large mean enter expanded terms.
+        w = None
+        opts = {"max_degree": degree, "auto_linpreds": case != "hinges"}
+        opts["max_terms"] = 11 if case == "hinges" else 13
+        if case == "hinges":
+            rng = np.random.default_rng(4)
+            n = 40
+            grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+            X = np.column_stack(grid)[:, :degree]
+            shift = np.array([0.0, shift, 0.0][:degree])
+        elif case == "grid":
+            rng = np.random.default_rng(2)
+            n = 12
+            X = rng.integers(0, 5, size=(n, 3)).astype(float)
+            y = X[:, 2] + X[:, 0] * X[:, 2] + 0.1 * rng.normal(size=n)
+        elif case == "binary":
+            rng = np.random.default_rng(7)
+            n = 17
+            X = np.column_stack([rng.integers(0, 2, size=n), rng.uniform(size=n)])
+            coef = rng.uniform([1, 1, 1], [4, 4, 6])
+            y = (
+                coef[0] * X[:, 0]
+                + coef[1] * np.abs(X[:, 1] - 0.5)
+                + coef[2] * X[:, 0] * X[:, 1]
+                + 0.1 * rng.normal(size=n)
+            )
+            opts["max_terms"] = 9
+        elif case == "mixed":
+            rng = np.random.default_rng(93)
+            n = 16
+            X = rng.uniform(size=(n, 3))
+            y = X[:, 0] * X[:, 1] + np.maximum(X[:, 0] - X[:, 0].mean(), 0)
+            y = y + 0.1 * rng.normal(size=n)
+            w = rng.integers(1, 4, size=n).astype(float)
+            opts["max_terms"] = 11
+        elif case == "near the range":
+            rng = np.random.default_rng(27)
+            n = 14
+            X = np.column_stack([rng.uniform(size=n) for _ in range(3)])
+            X[:, 0] = (X[:, 0] - X[:, 0].min()) / np.ptp(X[:, 0])
+            y = X[:, 0] * X[:, 1] + X[:, 1] * X[:, 2] + 0.1 * rng.normal(size=n)
+        else:
+            rng = np.random.default_rng(0)
+            n = 40
+            X = rng.uniform(size=(n, 3))
+        if case in ("hinges", "continuous"):
+            hinge = np.maximum(X[:, 0] - 0.3, 0)
+            y = 2 * hinge + 3 * hinge * X[:, 1]
+            if degree == 3:
+                y = y + 2 * hinge * X[:, 1] * X[:, 2]
+            y = y + (0.05 if case == "hinges" else 0.2) * rng.normal(size=n)
+        shifted_X = X + shift
+        shifted = run_forward(shifted_X, y, w, **opts)
+        dirs = shifted["dirs"]
+        if case == "continuous":
+            # a linear factor is the new factor of a term of the given degree
+            # whose parent is not the intercept
+            assert any(
+                dirs[shifted["parent"][k], j] == 0
+                and ref.term_degree(dirs[k]) == degree
+                for k, j in np.argwhere(dirs == 2)
+            )
+        if case == "near the range":
+            assert ref._large_mean(shifted_X) == {0, 1}
+            monkeypatch.setattr(ref, "_large_mean", lambda X: set())
+            plain = run_forward(shifted_X, y, w, **opts)
+            for key in ("dirs", "cuts", "parent", "termination"):
+                np.testing.assert_array_equal(shifted[key], plain[key])
+            np.testing.assert_allclose(shifted["rss"], plain["rss"], rtol=1e-12)
+        if case == "hinges":
+            np.testing.assert_array_equal(shifted_X - shift, X)
+            base = run_forward(X, y, w, **opts)
+            for key in ("dirs", "parent", "step", "termination"):
+                np.testing.assert_array_equal(shifted[key], base[key])
+            cuts = base["cuts"].copy()
+            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift[1], 0.0)
+            np.testing.assert_array_equal(shifted["cuts"], cuts)
+            before = base["rss"][:-1]
+            change = np.abs(shifted["rss"][1:] - base["rss"][1:])
+            assert np.all(change <= 1e-8 * before)
+        w = np.ones(n) if w is None else w
+        before, log = shifted["rss"][:-1], shifted["candidates"]
         for s in range(1, len(shifted["rss"])):
             terms = np.flatnonzero(shifted["step"] <= s)
-            B = ref.basis_matrix(
-                shifted_X, shifted["dirs"][terms], shifted["cuts"][terms]
-            )
-            exact = exact_rss(B, y, np.ones(n))
+            B = exact_basis(shifted_X, dirs[terms], shifted["cuts"][terms])
+            exact = exact_rss(B, y, w)
             assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
+            # the second best of the step: RSS(B + {b x}), RSS(B + {b x, h})
+            # or RSS(B + {h}) [LA-2], with B the terms before the step
+            kind = log["second_kind"][s - 1]
+            if kind == ref.NO_KIND:
+                continue
+            k, j = log["second_parent"][s - 1], log["second_variable"][s - 1]
+            rows = [dirs[t] for t in terms if shifted["step"][t] < s]
+            cut_rows = [shifted["cuts"][t] for t in terms if shifted["step"][t] < s]
+            codes = {ref.LINEAR: [2], ref.PAIR: [2, 1], ref.SINGLE: [1]}[kind]
+            for code in codes:
+                rows.append(dirs[k].copy())
+                cut_rows.append(shifted["cuts"][k].copy())
+                rows[-1][j] = code
+                cut_rows[-1][j] = log["second_knot"][s - 1] if code == 1 else 0.0
+            exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, w)
+            assert abs(log["second_rss"][s - 1] - exact) <= 1e-8 * before[s - 1]
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
