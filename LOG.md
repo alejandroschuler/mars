@@ -260,6 +260,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:50 recheck of #67 (spec) REQUEST_CHANGES at 1a3c9dd only because gate C fails: test_whole_fit_on_hypothesis_data, hypothesis ties seed=1, fast rss_per_size[1] off by 1.05e-8 (the #84 defect); the oracle itself is right and needs no change; the new comparisons match the spec. Decision: fix #84 first (fast pruning only), no tolerance change. Started t84-pruning (opus). Weekly 43 %.
 - 09:00 update-check-82 APPROVE at 0f922c7 (gate B 386 s). Merged #82 (T16 invariance, weight and edge-case tests) as a072a4e; #18 closed. Sent the #79 rechecks to both original reviewers.
 - 09:10 #79 rechecks at f6bb9fa: spec APPROVE (fixtures unchanged; worst exact error 1.5e-14); adversarial REQUEST_CHANGES on one test row (the m = low[j] mutant in the mirror identity changes a 16-row degree-2 fit). Sent to t06-linear-shift.
+- 09:20 #79 at e297bdf (the mixed row kills the m = low[j] mutant; gate B PASS); updated to a116e65. The adversarial reviewer does the narrow recheck and posts both roles (the spec approval at f6bb9fa covers all logic; the change is one test row and a merge).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
