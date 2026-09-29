@@ -274,6 +274,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:05 #67 spec APPROVE at e368a34; CI green on every job (the lowest-dependencies job too; #88 is intermittent). Decision: #67 is test code; its only gate C failure is main's T16 test outside its diff, which a separate PR fixes; so #67 merges once the adversarial role approves e368a34, and gate C must pass on main after the T16 fix. Asked the adversarial reviewer for the narrow recheck.
 - 13:15 #67 adversarial recheck APPROVE at e368a34. Merged #67 (T15 oracle tests and gate C) as e431fcb; closed #17 (caps tracked in #84 and #85). Added the degree-3 shifted case to #85.
 - 13:35 #90 ready (ab390a2, Refs #18; the shift check moves the intercept by -c times the beta of linear terms in x_j; the file passes at thorough). Updated to 8bc2b1b; started review-90 (sonnet). Weekly 47 %.
+- 13:45 t88-ci-flake: the cause of #88 is numpy 1.23.5's bundled OpenBLAS 0.3.20, whose Cooperlake kernel (CPUs with AVX512-BF16, some Azure centralus hosts) computes A.T @ B wrong for shapes like (300 x 14)^T (300 x 298); both the reference and the fast code then pick other terms. numpy 1.24.4 and later, other kernels and scipy's dgemm are correct. PR #89 (0aa670c): numpy>=1.24.4, a DECISIONS entry, a regression test against einsum; verified on 5 Cooperlake hosts in CI. Started review-89 (sonnet). Leftover: branch t88-diag and worktree <main>/.worktrees/t88-diag (diagnostics, delete after #89).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
