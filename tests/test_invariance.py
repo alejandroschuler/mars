@@ -134,13 +134,19 @@ def _fitted(fit, X):
     return _terms.basis_matrix(X, fit.dirs, fit.cuts) @ fit.coef
 
 
-def _same_model(a, b, Xa, Xb, Yb, *, x_factor=None, y=(0, 1), **agree):
+def _same_model(a, b, Xa, Xb, Yb, *, x_factor=None, x_shift=None, y=(0, 1), **agree):
     """``_agree``, and when the whole fit was compared, the model: b's fitted
     values at Xb within 1e-8·sd(Yb) of shift + scale·(a's at Xa), for
-    ``y = (shift, scale)``; and b's coefficients, divided by ``x_factor`` (one
-    per term, None: 1), within normwise relative 1e-6 of a's times the scale,
-    with the shift added to the intercept, where κ(B) ≤ 1e5 (tolerance
-    table). Returns True when the whole fit was compared."""
+    ``y = (shift, scale)``; and, where κ(B) ≤ 1e5 (tolerance table), b's
+    coefficients within normwise relative 1e-6 of the coefficients that the
+    transform predicts from a's. These are a's times the scale of y, with the
+    shift of y added to the intercept, times ``x_factor`` (one per term,
+    None: 1). ``x_shift = (j, c)`` says that column j of b is a column of a
+    plus c (after its scale): a linear factor x_j of a is (x_j + c) - c in b,
+    so b's intercept is a's minus c times the coefficients of the terms that
+    are x_j alone. The intercept then carries the error of those
+    coefficients times |c|, which the tolerance adds. Returns True when the
+    whole fit was compared."""
     shift, scale = y
     if not _agree(a, b, y_scale=scale, **agree):
         return False
@@ -149,9 +155,18 @@ def _same_model(a, b, Xa, Xb, Yb, *, x_factor=None, y=(0, 1), **agree):
     B = _terms.basis_matrix(Xa, a.dirs, a.cuts)
     if np.linalg.cond(B) <= 1e5:
         coef = scale * a.coef
+        if x_factor is not None:
+            coef = coef * np.asarray(x_factor)[:, None]
         coef[0] += shift
-        got = b.coef if x_factor is None else b.coef / np.asarray(x_factor)[:, None]
-        assert np.linalg.norm(got - coef) <= 1e-6 * np.linalg.norm(coef)
+        tol = 1e-6 * np.linalg.norm(coef)
+        if x_shift is not None:
+            j, c = x_shift
+            linear = (a.dirs[:, j] == _terms.LINEAR) & (
+                _terms.term_degrees(a.dirs) == 1
+            )
+            coef[0] -= c * coef[linear].sum(axis=0)
+            tol += 1e-6 * abs(c) * np.abs(coef[linear]).sum()
+        assert np.linalg.norm(b.coef - coef) <= tol
     return True
 
 
@@ -207,7 +222,8 @@ X_MAPS = {"x·1e-8": (0.0, 1e-8), "x·1e8": (0.0, 1e8), "x + 1e6": (1e6, 1.0)}
 def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data):
     """x_j to a + s·x_j with s > 0, at the S12 fixture's scales: the same terms,
     with knots a + s·t, the same RSS and GCV values, the same fitted values,
-    and the coefficients of the terms that hold x_j divided by s
+    and the coefficients of the terms that hold x_j divided by s; the
+    intercept absorbs -a times the coefficient of a linear term x_j
     (Conventions; LA-7 makes the choice between a pair and a single-hinge
     search free of the units). A shift changes the fit when x_j is a linear
     factor in a product, and in earth too (Conventions), so the shift runs
@@ -221,7 +237,7 @@ def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data
     Xs[:, j] = shift + scale * X[:, j]
     kw = {"max_degree": degree, "auto_linpreds": linpreds}
     a, b = _fit(X, Y, **kw), _fit(Xs, Y, **kw)
-    factor = np.where(a.dirs[:, j] != 0, 1.0 / scale, 1.0)
+    factor = np.where(a.dirs[:, j] != 0, 1.0 / scale, 1.0)  # b's coef / a's
     _same_model(
         a,
         b,
@@ -230,6 +246,7 @@ def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data
         Y,
         knot=lambda v, t: shift + scale * t if v == j else t,
         x_factor=factor,
+        x_shift=(j, shift),
     )
 
 
