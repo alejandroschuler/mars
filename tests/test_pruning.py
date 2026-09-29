@@ -549,29 +549,47 @@ def _exact(B, Y, w, cols):
 
 
 @pytest.mark.parametrize(
-    ("k", "weights"),
-    [(1, "none"), (3, "none"), (1, "uniform"), (3, "uniform"), (1, "far first")],
+    ("k", "weights", "basis"),
+    [
+        (1, "none", "hinges"),
+        (3, "none", "hinges"),
+        (1, "uniform", "hinges"),
+        (3, "uniform", "hinges"),
+        (1, "far first", "hinges"),
+        (1, "none", "binary at 33"),
+    ],
 )
-def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights):
+def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     """LA-5 for responses whose means are 1e13 times their spread: every subset
     holds the intercept (PRUNE-3), so centering Y changes no RSS. Each RSS of
     the records (PRUNE-4), the TSS (GCV-5) and the final RSS (PRUNE-8) match
     rational arithmetic to relative 1e-8, and the coefficients to normwise
     1e-6. Without the centering the RSS errors reach 1e-3 and the TSS errors
-    1e-6. In the last case the first 30 cases lie 2e13 below the other 20 and
-    have weight 1e-30 (W-6 allows it), so the shift must be the data value
-    nearest the weighted mean: the first value, the value nearest the
+    1e-6. In the "far first" case the first 30 cases lie 2e13 below the other
+    20 and have weight 1e-30 (W-6 allows it), so the shift must be the data
+    value nearest the weighted mean: the first value, the value nearest the
     unweighted mean, or an unweighted mean of the differences misses by 1e-6
-    or more."""
-    rng = np.random.default_rng(0)
-    x = rng.uniform(size=50)
-    B = np.column_stack([np.ones(50), np.maximum(x - 0.5, 0), np.maximum(0.3 - x, 0)])
-    means = np.array([1e13, -4e12, 7e12])[:k]
-    Y = means + np.sin(6 * x)[:, None] + 0.1 * rng.normal(size=(50, k))
-    w = None if weights == "none" else rng.uniform(0.5, 2.0, 50)
-    if weights == "far first":
-        Y[:30], w[:30] = -means, 1e-30
-    Y = Y[:, 0] if k == 1 else Y
+    or more. The last case is a column of B far from 0 (#84): x binary at
+    33 +- 0.25 and a near-exact fit, RSq = 1 - 1e-12. The pass centers the
+    columns after the intercept too; without that, the RSS of [1, x] misses by
+    2.8e-8."""
+    rng = np.random.default_rng(0 if basis == "hinges" else 189)
+    if basis == "binary at 33":
+        x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
+        B = np.column_stack([np.ones(109), x])
+        Y = 2.5564 * x + 1e-6 * rng.standard_normal(109)
+        w = None
+    else:
+        x = rng.uniform(size=50)
+        B = np.column_stack(
+            [np.ones(50), np.maximum(x - 0.5, 0), np.maximum(0.3 - x, 0)]
+        )
+        means = np.array([1e13, -4e12, 7e12])[:k]
+        Y = means + np.sin(6 * x)[:, None] + 0.1 * rng.normal(size=(50, k))
+        w = None if weights == "none" else rng.uniform(0.5, 2.0, 50)
+        if weights == "far first":
+            Y[:30], w[:30] = -means, 1e-30
+        Y = Y[:, 0] if k == 1 else Y
     res = pr.pruning_pass(B, Y, w, penalty=2.0)
     exact = [_exact(B, Y, w, np.flatnonzero(row))[1] for row in res.subsets]
     assert_rel(res.rss_per_size, exact, 1e-8)
