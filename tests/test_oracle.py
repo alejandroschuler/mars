@@ -1081,8 +1081,9 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 # degree 2 and 3 (#77). Three cases still miss LA-5, so there the draws at
 # degree 2 and 3 keep the ratio of a covariate shift to its spread at or
 # below SHIFT_CAP. Two are in the fast forward pass (#85): an exact duplicate
-# covariate at a large mean, and the "scaled" kind at degree 3 (a product of
-# two linear factors of covariates with large means). The third is the
+# covariate at a large mean, and a product of two linear factors of
+# covariates with large means at degree 3 (the "scaled" kind at degree 2 and
+# 3, and the "shifted" kind at degree 3). The third is the
 # reference's pruning pass at intermediate means, near 2^23 (#84), which the
 # whole fit compares.
 SHIFT_CAP = 2.0**10
@@ -1100,8 +1101,9 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
     runs from none (exact fits and STOP-5) to as large as the signal. At
     degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread with a duplicated covariate, in the ``scaled`` kind, and with
-    ``pruning_path`` (the whole fit)."""
+    spread with a duplicated covariate, in the ``scaled`` kind, in the
+    ``shifted`` kind at degree 3, and with ``pruning_path`` (the whole
+    fit)."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
@@ -1141,7 +1143,8 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
         big = [2.0**26, 2.0**36]
-        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
+        small = capped or params["max_degree"] == 3  # #85
+        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if small else [0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:
