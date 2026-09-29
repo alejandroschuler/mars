@@ -892,7 +892,7 @@ validation = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.23.5" },
+    { name = "numpy", specifier = ">=1.24.4" },
     { name = "scikit-learn", specifier = ">=1.6" },
     { name = "scipy", specifier = ">=1.9.3" },
 ]
