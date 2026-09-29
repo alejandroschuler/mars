@@ -259,6 +259,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:35 review-82 APPROVE at 9f1f7e3 (gate B 340 s, the three files 15 s at -n 2; the near-tie exception hid none of 7 real failures under an LA-7 mutant). Updated #82 to 0f922c7; the same reviewer runs the update check. #79 round-1 fixes at f6bb9fa (mirror hinges expanded for every covariate, 2.8e-5 to 3.7e-17; duplicate covariates at a large mean excluded from the claim; the Fraction(-m) row; gate B PASS); its two rechecks wait for reviewer slots.
 - 08:50 recheck of #67 (spec) REQUEST_CHANGES at 1a3c9dd only because gate C fails: test_whole_fit_on_hypothesis_data, hypothesis ties seed=1, fast rss_per_size[1] off by 1.05e-8 (the #84 defect); the oracle itself is right and needs no change; the new comparisons match the spec. Decision: fix #84 first (fast pruning only), no tolerance change. Started t84-pruning (opus). Weekly 43 %.
 - 09:00 update-check-82 APPROVE at 0f922c7 (gate B 386 s). Merged #82 (T16 invariance, weight and edge-case tests) as a072a4e; #18 closed. Sent the #79 rechecks to both original reviewers.
+- 09:10 #79 rechecks at f6bb9fa: spec APPROVE (fixtures unchanged; worst exact error 1.5e-14); adversarial REQUEST_CHANGES on one test row (the m = low[j] mutant in the mirror identity changes a 16-row degree-2 fit). Sent to t06-linear-shift.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
