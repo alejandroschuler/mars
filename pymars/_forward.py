@@ -665,6 +665,9 @@ def forward_pass(
         "fast_k": int(fast_k),
         "fast_beta": float(fast_beta),
     }
+    # EDGE-1 comes before EDGE-6 here, so a degenerate fit never raises. The
+    # core checks EDGE-6 first (its TSS is uncentered): the two differ only when
+    # N <= 1 and Y is not constant with an out-of-range TSS, where the core raises.
     if _gcv.is_degenerate(Y, _gcv.total_weight(n, w)[0]):  # EDGE-1, GCV-7
         return _intercept_only(
             p, _gcv.tss(Y, w), Termination.DEGENERATE, record_candidates

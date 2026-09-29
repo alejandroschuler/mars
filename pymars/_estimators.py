@@ -369,6 +369,9 @@ class EarthRegressor(RegressorMixin, _EarthBase):
         self : EarthRegressor
             The fitted estimator.
         """
+        # A failed refit must not leave the new names with the old model (API-3).
+        for name in [a for a in vars(self) if a.endswith("_") and a[0] != "_"]:
+            delattr(self, name)
         params = self._mars_params()  # ERR-3 and ERR-4 before the data
         _check_numeric(X, self)
         X, y = validate_data(

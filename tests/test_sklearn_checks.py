@@ -33,7 +33,6 @@ def reference_fit_mars(X, Y, w, params, *, record_candidates=False):
     return MarsFit.from_dict(fit)
 
 
-@pytest.mark.slow
 @parametrize_with_checks([EarthRegressor(), EarthRegressor(max_degree=2)])
 def test_checks_with_the_reference(estimator, check, monkeypatch):
     monkeypatch.setattr(_core, "fit_mars", reference_fit_mars)

@@ -13,9 +13,10 @@ regression cell, a binary cell, or both (``supports_regression`` /
 
 Every arm sets its MARS degree to 2 (VALIDATION_PLAN.md, "Behavior target":
 "Every simulation arm sets 2"). P-fix needs ``pymars.EarthRegressor`` /
-``pymars.EarthClassifier``, which do not exist yet (T13/T14): it raises
-``NotImplementedError`` until they do; ``run.py`` records that as an ordinary
-per-fit failure, like any other exception from an arm.
+``pymars.EarthClassifier``. ``EarthRegressor`` exists (T13); until
+``EarthClassifier`` does (T14), P-fix on a classification cell raises
+``NotImplementedError``, and ``run.py`` records that as an ordinary per-fit
+failure, like any other exception from an arm.
 """
 
 from __future__ import annotations

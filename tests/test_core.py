@@ -794,3 +794,12 @@ def test_weights_that_are_all_zero():
     """CORE-1: w needs a positive sum; the message matches W-6."""
     with pytest.raises(ValueError, match=r"weight.*zero"):
         fit_mars(np.ones((3, 1)), np.ones(3), np.zeros(3), MarsParams())
+
+
+@pytest.mark.parametrize("weight", [1e300, 2.0**62 / 3])
+def test_weights_with_a_total_that_is_too_large(weight):
+    """W-6: a total weight of 2^62 or more, or one that overflows, raises
+    ValueError; it is not an OverflowError from the knot rule."""
+    x = np.arange(9.0)[:, None]
+    with pytest.raises(ValueError, match="total below 2"):
+        fit_mars(x, x[:, 0], np.full(9, weight), MarsParams())
