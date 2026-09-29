@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 20:24 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 20:26 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,15 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+SNAPSHOT 20:30 Monday (for a restart or a compaction): weekly 32 % of the new counter (the user's limit 50 %); 5-hour 90 % (reset 23:10 PDT): no new agents until then (heartbeat 23:25). Open PRs and next steps:
+- #71 T11 stage 2 (0580057): dual review running (wf_69bb1714-e52).
+- #66 T07 (approved at b96b174; branch updated to 6297914, clean; CI's failed job reran green): main moved again (#69), so update-branch again, then an update check (sonnet), then merge.
+- #73 T13 estimators (f34201c, Closes #15; gate B PASS; CI green after a rerun of the flaky test): dual review after the reset.
+- #72 reference fixes (37a04b4): single review (opus) after the reset.
+- #67 T15 oracle (1ebabee): dual review after the reset; after #72 merges, T15 (a13255c68fa5690ce) applies its shifted-response patch and widens max_degree after the stage-2 merge.
+- Flaky test on main (tests/test_core.py::test_a_power_of_two_on_y_changes_no_bit at an exact-fit tie; failed on 3.10 and 3.11 runners): t12-core (af08693105f0ea118) makes a small fix PR.
+- #64 (the user's TOOLS-2): waits for the user's push or OK (issue #68).
 
 RESUMED by the user at 19:55 Monday ('continue'); earlier PAUSED BY THE USER (18:40 Monday) after the named round. Weekly 22 % of the new counter (limit 50 %), 5-hour 33 %. The heartbeat is live again. Resume order: (1) send the recorded fix lists: #70 to t12-core, #69 to t10-pruning (the nearest-to-mean shift), and to t11-stage2 the same shift for _forward when weights come (stage 3); (2) reviews: #71 (T11 stage 2, dual), #66 round 2 (narrow), #72 (single or dual, small), #67 (T15, dual), and #64 after the user's push or OK for update-branch (issue #68); (3) a new reference fix for T06: at degree 2 the reference loses accuracy on covariates with a large mean (x1 + 2^26 moves its RSS path by 2.4e-8, 7.7e-6 at 2^36; t11-stage2's finding; T15 widens max_degree only after it); (4) then T13's PR after T12 merges, T11 stage 3, T14.
 
@@ -50,7 +59,7 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 After the session restart on 2026-09-28 (about 19:50), agent names no longer resolve in SendMessage; use the agent IDs: t06-reference a958ecba5f80213dc, t07-conformance a66206d8b49539a04, t10-pruning af8c4382b0cd45ab1, t11-forward aa6bb912cf3ab5f57, t11-stage2 a195b582d6cce76ce, t12-core af08693105f0ea118, t13-estimators a1c05783fcf61dde5, t15-oracle a13255c68fa5690ce, t18-legacy a9e0b3cdaf6067711, tools-merge-guard a18ef81d9605aa1da.
 
 - t12-core: done (#70 merged as 068ec1e; T12 #14 closed).
-- t13-estimators (a1c05783fcf61dde5): rebasing onto 068ec1e and opening T13's PR.
+- t13-estimators (a1c05783fcf61dde5): idle; PR #73 ready.
 - t10-pruning: idle; #69 fixed at c8c1ac4 (shift by the data value nearest the weighted mean; reviewer's case now 1.6e-16; gate B PASS). #69 merged as d87cc40 (after recheck-69's approvals of the updated head 525accd). T15 applies its shifted-response patch after #72 (the reference's final RSS) merges too. Side note for later: np.average in _centered overflows with a RuntimeWarning for a constant 1e300 response with weights near 5e11 (results exact).
 - t06-reference: idle; #72 now holds both reference fixes (final RSS; the search columns b(x - min x) at degree 2 and 3), head 37a04b4, gate B PASS, CI 12/12; its review (single, opus) when a slot frees.
 - Reviews: #71 dual (wf_69bb1714-e52), #66 narrow round 2 (sonnet, wf_cbf4953a-e1a).

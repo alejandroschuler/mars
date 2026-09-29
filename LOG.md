@@ -216,6 +216,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:16 recheck-69 held its approvals because main moved (#70 merged); updated #69's branch to 525accd; recheck-69 verifies the update and posts approvals for the new head.
 - 20:23 update-check-66: #66's update is clean, but CI's ubuntu 3.10 job failed in main's EDGE-6 test from #70 (an exact-fit tie decides selected_size by rounding). Reran the job; asked t12-core for a small fix PR that removes the tie from the test.
 - 20:24 Merged #69 (pruning and TSS centering) as d87cc40 after recheck-69's approvals of the updated head.
+- 20:26 T13 PR #73 ready (f34201c; scikit-learn checks pass on the reference core; 52 on the fast core with 7 skips naming #13; gate B PASS; CI green after a rerun of the flaky EDGE-6 test). 5-hour 90 %: no new agents until 23:10; heartbeat 23:25. Snapshot of all open PRs written at the top of STATE.
 
 ## Core-hour ledger
 
