@@ -224,6 +224,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:37 Started recheck-71 (sonnet, narrow, both roles at 1f29cb3), review-74 (single, sonnet), review-72 (single, opus).
 - 00:45 recheck-71: spec and adversarial APPROVE at 1f29cb3 (both round-1 designs pinned; the two mutants fail). Merged #71 (T11 stage 2) as 6016717. review-74: APPROVE at 9007d86. Updated #74 (6e8aea1) and #66 (fc4d6af) to main; update-check-74 started. #66's update check comes after #74 merges.
 - 00:55 update-check-74 APPROVE at 6e8aea1; merged #74 (the EDGE-6 test fix) as b18f184. Updated #66 (ad05b3b) and #73 (1b67fd5) to main. Started t11-stage3 (opus author, Fast MARS, weights, responses), update-check-66 (sonnet) and review-73-spec (opus); review-73-adversarial starts when review-72 ends.
+- 01:07 review-72 (opus) APPROVE at 37a04b4: unshifted fixture fits unchanged (RSS path within 3.4e-16), shifted fits exact to 1.7e-15; no conflict with main. Non-blocking follow-up: a continuous x0 in test_an_exact_shift_of_a_covariate_keeps_the_pass would kill the surviving mutant bx = b*x - b*x.min(). #72 merges after #66 (update, then an update check). Started review-73-adversarial (opus).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
