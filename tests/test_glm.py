@@ -6,9 +6,7 @@ The refit is compared with R on fixed columns: R's ``glm`` and
 ``glm`` on earth's selected basis for S14 and S20, and ``nnet::multinom`` on
 earth's selected basis for S18 (the extra fixture ``s18_multinom``). The
 tolerances are those of the plan's table: relative 1e-5 and absolute 1e-7.
-The classifier's fits use the reference in place of the fast core (CORE-6),
-which lacks weights, several responses and ``fast_k`` > 0 until T11 stage 3
-(#13). scikit-learn's checks in test_sklearn_checks.py pin the rest of the
+scikit-learn's checks in test_sklearn_checks.py pin the rest of the
 classifier contract: NotFittedError, shapes, ``predict`` against
 ``predict_proba`` and ``decision_function``, and the one-class errors.
 """
@@ -19,25 +17,12 @@ import math
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
-from reference import mars_ref
 from sklearn.exceptions import ConvergenceWarning
 from test_conformance import FIXTURES, load_case
 
 from pymars import EarthClassifier, _core, _glm, _terms
-from pymars._core import MarsFit
 
 RTOL, ATOL = 1e-5, 1e-7  # the plan's tolerance for GLM coefficients and probabilities
-
-
-def reference_fit_mars(X, Y, w, params, *, record_candidates=False):
-    """The reference's fit as a MarsFit, in place of ``_core.fit_mars`` (CORE-6)."""
-    fit = mars_ref.fit_mars(X, Y, w, params, record_candidates=record_candidates)
-    return MarsFit.from_dict(fit)
-
-
-@pytest.fixture
-def reference_core(monkeypatch):
-    monkeypatch.setattr(_core, "fit_mars", reference_fit_mars)
 
 
 def _json(path):
@@ -205,7 +190,7 @@ CODES2 = (CODES3 == 2).astype(int)
         (CODES3, np.array(["hi", "lo", "mid"])),
     ],
 )
-def test_labels_of_any_type_give_the_fit_of_the_codes(reference_core, codes, labels):
+def test_labels_of_any_type_give_the_fit_of_the_codes(codes, labels):
     """GLM-1: string, boolean and {-1, 1} labels give the fit of the 0/1 (or
     0, 1, 2) codes, with ``classes_`` the sorted labels, and the passes run
     on one 0/1 response for two classes and Q indicators otherwise, so that
@@ -234,7 +219,7 @@ def test_labels_of_any_type_give_the_fit_of_the_codes(reference_core, codes, lab
     assert str(labels[-1]) in est.summary().splitlines()[0]
 
 
-def test_zero_weights_equal_dropping_the_rows(reference_core):
+def test_zero_weights_equal_dropping_the_rows():
     """W-3 and GLM-1: rows with weight 0 are dropped first, so their labels,
     here a fourth label that only they have, are not classes, and the fit is
     the fit without them. GLM-7: with positive weight on one class only, fit
@@ -263,7 +248,7 @@ def test_zero_weights_equal_dropping_the_rows(reference_core):
     ],
 )
 def test_an_intercept_alone_gives_the_weighted_frequencies(
-    reference_core, codes, weights, expect, first
+    codes, weights, expect, first
 ):
     """GLM-5: with the intercept alone (``nprune=1``) the probabilities are the
     weighted class frequencies. GLM-6: on a tie of the largest probabilities,
@@ -281,7 +266,7 @@ def test_an_intercept_alone_gives_the_weighted_frequencies(
 def test_glm_alpha_reaches_the_refit_and_must_be_a_finite_float(alpha):
     """ERR-4: ``fit`` checks ``glm_alpha``, and ``__init__`` only stores it.
     GLM-2: a valid ``glm_alpha`` is the penalty of the refit."""
-    est = EarthClassifier(glm_alpha=alpha, fast_k=0)
+    est = EarthClassifier(glm_alpha=alpha)
     assert est.glm_alpha is alpha
     if alpha != 3:
         with pytest.raises(ValueError, match="glm_alpha"):

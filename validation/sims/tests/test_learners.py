@@ -237,13 +237,16 @@ def test_logreg_is_unpenalized_and_predicts_probabilities():
     assert not np.allclose(outcome.predictions, penalized_predictions, atol=1e-6)
 
 
-def test_p_fix_raises_not_implemented_today():
-    # pymars.EarthClassifier exists since T14, but the fast core lacks Fast
-    # MARS (fast_k=20, the default) until T11 stage 3 (#13).
+def test_p_fix_fits_the_classifier():
+    # pymars.EarthClassifier exists since T14: P-fix's binary arm returns
+    # the probabilities of class 1 and the size of the selected basis.
     x_train, y_train = _linear_data(seed=0, binary=True)
     x_test, _y_test = _linear_data(seed=1, binary=True)
-    with pytest.raises(NotImplementedError, match="T11 stage"):
-        learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, True)
+    outcome = learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, True)
+    assert outcome.ok
+    assert outcome.predictions.shape == (len(x_test),)
+    assert np.all((outcome.predictions > 0.0) & (outcome.predictions < 1.0))
+    assert outcome.n_terms >= 2
 
 
 class _StandInEarthRegressor:
