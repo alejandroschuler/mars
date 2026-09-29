@@ -226,6 +226,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:55 update-check-74 APPROVE at 6e8aea1; merged #74 (the EDGE-6 test fix) as b18f184. Updated #66 (ad05b3b) and #73 (1b67fd5) to main. Started t11-stage3 (opus author, Fast MARS, weights, responses), update-check-66 (sonnet) and review-73-spec (opus); review-73-adversarial starts when review-72 ends.
 - 01:07 review-72 (opus) APPROVE at 37a04b4: unshifted fixture fits unchanged (RSS path within 3.4e-16), shifted fits exact to 1.7e-15; no conflict with main. Non-blocking follow-up: a continuous x0 in test_an_exact_shift_of_a_covariate_keeps_the_pass would kill the surviving mutant bx = b*x - b*x.min(). #72 merges after #66 (update, then an update check). Started review-73-adversarial (opus).
 - 01:15 update-check-66 APPROVE at ad05b3b (diff unchanged, gate B PASS, CI 12/12). Merged #66 (T07 conformance) as 99e0d86; T07 (#9) closed. Updated #72 to 063eefa; update-check-72 (sonnet) started. #73's reviews are on 1b67fd5, so #73 needs one more update and check before its merge.
+- 01:20 review-73-spec APPROVE at 1b67fd5 (gate B PASS, CI 12/12; 7 skips all tied to #13). Non-blocking, worth doing with any fix round: skip only on the fast core's stage message (tests/test_sklearn_checks.py:45-48); unmark slow the 5 s reference run so the scikit-learn 1.6 job runs it (:36); the stale docstring in validation/sims/learners.py:15-17.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
