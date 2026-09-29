@@ -436,47 +436,52 @@ class _Step:
         return out
 
     def queue_bands(self) -> list[str]:
-        """STOP-7's band of FAST-3: two stored values lambda within 2 delta of
-        each other, whose swap changes the rows of the table that step s
-        visits. An entry searched in step t has kappa = 2t and a reduction of
-        that step, so delta = 2e-8 RSS_{t-2}. The table of step s comes from
-        the entries after step s - 1 and one entry for each term that step
-        added (FAST-1, FAST-2); it must be the table of the reference's trace.
-        """
+        """STOP-7's band of FAST-3, at step s or at any step before it, since
+        the queues of the two programs can part at a step whose choice they
+        still share: two stored values lambda within 2 delta of each other
+        whose order changes the rows of the table that the step visits. An
+        entry searched in step t has kappa = 2t and a reduction of that step,
+        so delta = 2e-8 RSS_{t-2}. The table of step t comes from the entries
+        after step t - 1 and one entry for each term that step added (FAST-1,
+        FAST-2); it must be the table of the reference's trace."""
         fast_k = mars_ref.as_params(self.case.params).fast_k
-        if fast_k == 0 or self.s < 2:
+        if fast_k == 0:
             return []
-        trace, s = self.case.trace, self.s
-        added = int(np.count_nonzero(self.ref["step"] == s - 1))
-        entries = [*trace[s - 2]["entries"], *[(math.inf, 2 * (s - 1))] * added]
-        nu = max(3, fast_k)
-        if nu >= len(entries):
-            return []
-        table = self._table(entries)
-        if len(trace) >= s and table != list(trace[s - 1]["table"]):
-            _fail(self.case, f"step {s}: queue table {table}, trace {trace[s - 1]}")
-        seen = set(table[:nu])
-        values = [
-            (e, lam, 2 * DELTA * self.path[max(kappa // 2 - 2, 0)])
-            for e, (lam, kappa) in enumerate(entries)
-            if 0.0 <= lam < math.inf
-        ]
-        for i, (a, la, da) in enumerate(values):
-            for b, lb, db in values[i + 1 :]:
-                if abs(la - lb) <= max(da, db):
-                    swapped = list(entries)
-                    swapped[a], swapped[b] = (lb, entries[a][1]), (la, entries[b][1])
-                    if set(self._table(swapped)[:nu]) != seen:
+        trace, nu = self.case.trace, max(3, fast_k)
+        for t in range(2, self.s + 1):
+            added = int(np.count_nonzero(self.ref["step"] == t - 1))
+            entries = [*trace[t - 2]["entries"], *[(math.inf, 2 * (t - 1))] * added]
+            if nu >= len(entries):
+                continue
+            table = self._table(entries, t)
+            if len(trace) >= t and table != list(trace[t - 1]["table"]):
+                _fail(self.case, f"step {t}: queue table {table}, trace {trace[t - 1]}")
+            values = [
+                (e, lam, 2 * DELTA * self.path[max(kappa // 2 - 2, 0)])
+                for e, (lam, kappa) in enumerate(entries)
+                if 0.0 <= lam < math.inf
+            ]
+            for i, (a, la, da) in enumerate(values):
+                for b, lb, db in values[i + 1 :]:
+                    band = max(da, db)
+                    if abs(la - lb) > band:
+                        continue
+                    top, seen = max(la, lb), []
+                    for va, vb in ((top + band, top), (top, top + band)):
+                        order = list(entries)
+                        order[a], order[b] = (va, entries[a][1]), (vb, entries[b][1])
+                        seen.append(set(self._table(order, t)[:nu]))
+                    if seen[0] != seen[1]:
                         return ["FAST-3"]
         return []
 
-    def _table(self, entries) -> list[int]:
-        """The table of FAST-2 as 1-based entry numbers, with kappa_prev the
-        term number of the step just done (2 (s - 1))."""
+    def _table(self, entries, t: int) -> list[int]:
+        """The table of FAST-2 for step t as 1-based entry numbers, with
+        kappa_prev the term number of the step just done, 2 (t - 1)."""
         beta = mars_ref.as_params(self.case.params).fast_beta
         by_value = sorted(range(len(entries)), key=lambda e: (-entries[e][0], e))
         rank = {e: r for r, e in enumerate(by_value)}
-        kprev = 2 * (self.s - 1)
+        kprev = 2 * (t - 1)
         aged = {e: rank[e] + beta * (kprev - entries[e][1]) for e in rank}
         return [e + 1 for e in sorted(rank, key=lambda e: (aged[e], rank[e]))]
 
