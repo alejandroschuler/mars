@@ -220,6 +220,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:31 #74 ready (9007d86): the flaky EDGE-6 test now compares the core with itself bit for bit at y and y*2^600 and with the reference on noisy data without a tie. Its review after the reset.
 - 20:45 #71 round 1: both REQUEST_CHANGES on the same two missing test designs; the interaction pass is right against an exact oracle on 3,480 fits and a brute force on 1,400 designs. Sent to t11-stage2 (tests only).
 
+- 2026-09-29 00:25 The watchdog found the heartbeat stale (23:25) and took the lock (session local_b1a9357f). The earlier executor did not resume after the 23:10 reset. Weekly 34 %, 5-hour 0 %. #71 fixes at 1f29cb3.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

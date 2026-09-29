@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 20:45 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-29 00:35 PDT, by executor session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5` (the watchdog run that took the stale lock at 00:25; the earlier executor `local_a59469db-...` did not resume after the 23:10 reset). This executor runs in `<main>` and still uses the journal worktree at `<S>/.worktrees/journal`. The agent IDs listed under Running agents belong to the earlier session and do not resolve here; new agents get new names.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+TAKEOVER 00:25 Tuesday 2026-09-29: weekly 34 % (limit 50 %), 5-hour 0 % (reset 04:20 PDT). #71's round-1 test fixes are at 1f29cb3 (gate B PASS, CI 12/12). First batch: recheck-71 (narrow, both roles), review-74 (single, sonnet), review-72 (single, opus).
 
 SNAPSHOT 20:30 Monday (for a restart or a compaction): weekly 32 % of the new counter (the user's limit 50 %); 5-hour 90 % (reset 23:10 PDT): no new agents until then (heartbeat 23:25). Open PRs and next steps:
 - #71 T11 stage 2 (0580057): round 1 both REQUEST_CHANGES on two missing test designs (N_b counts a parent's positive cases, SPAN-1 with KNOT-1; the linear option's knot is the minimum over all cases, FWD-6); code right (exact oracle on 3,480 fits). Sent to t11-stage2 (tests only; rebase onto d87cc40); then a checker's narrow re-approval, merge.
