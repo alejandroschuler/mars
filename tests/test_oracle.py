@@ -58,21 +58,21 @@ from unittest import mock
 
 import numpy as np
 import pytest
-from hypothesis import assume, given
+from hypothesis import Phase, assume, given, settings
 from hypothesis import strategies as st
 from reference import mars_ref
 
 from pymars import _forward, _pruning
 
 # ---------------------------------------------------------------------------
-# The settings of the forward pass that the fast code supports: T11 stage 1.
-# Stage 2 adds max_degree 2 and 3. Stage 3 adds fast_k > 0, weights and
+# The settings of the forward pass that the fast code supports: T11 stages 1
+# and 2 (every degree). Stage 3 adds fast_k > 0, weights and
 # several responses; fast_k > 0 also needs STOP-7's band for two queue values
 # (FAST-3) in _Step.bands. The pruning pass takes weights and several
 # responses already.
 
 SUPPORTED = {
-    "max_degree": (1,),
+    "max_degree": (1, 2, 3),
     "fast_k": (0,),
     "weights": (False,),
     "responses": (1,),
@@ -911,7 +911,7 @@ DATA_KINDS = ("smooth", "hinge", "ties", "scaled", "shifted", "small")
 
 
 def _settings():
-    """MarsParams fields; those that stage 1 limits come from SUPPORTED."""
+    """MarsParams fields; those that T11 limits come from SUPPORTED."""
     return st.fixed_dictionaries(
         {
             "max_degree": st.sampled_from(SUPPORTED["max_degree"]),
@@ -944,8 +944,18 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
     return f
 
 
+# The reference loses LA-5 at degree 2 and 3 when a covariate with a large mean
+# enters a product as a linear factor: its error grows with the ratio of the
+# mean to the spread (1e-8 of the RSS near 2^23 for one such factor), and with
+# the product of the ratios for a product of two (issue #77). Until #77 is
+# fixed, the draws at degree 2 and 3 keep that ratio at or below SHIFT_CAP,
+# and test_forward_pass_with_large_shifts_at_degree_2_or_3 holds the larger
+# shifts.
+SHIFT_CAP = 2.0**10
+
+
 @st.composite
-def forward_cases(draw, kind: str) -> Case:
+def forward_cases(draw, kind: str, large_shifts: bool = False) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
     covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
     constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
@@ -953,13 +963,18 @@ def forward_cases(draw, kind: str) -> Case:
     EDGE-6, FWD-10, FWD-11); ``shifted``, y + c with |c| of 1e10 or 1e13
     and covariates + 2^26 or 2^36, where only centering keeps the sums of
     squares within LA-5 (FWD-10, the plan's "Fast path"); ``small``, 1 to 15
-    cases, now and then with a
-    constant y (EDGE-1, EDGE-2, STOP-3). The noise runs from none (exact fits
-    and STOP-5) to as large as the signal."""
+    cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
+    runs from none (exact fits and STOP-5) to as large as the signal. At
+    degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
+    spread; ``large_shifts`` draws degree 2 or 3 with shifts of 2^26 or 2^36
+    (issue #77)."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
+    if large_shifts:
+        params["max_degree"] = draw(st.sampled_from([2, 3]))
+    capped = params["max_degree"] >= 2 and not large_shifts
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
@@ -975,20 +990,27 @@ def forward_cases(draw, kind: str) -> Case:
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
             X[:] = X[0]
         if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
-            X = X + 10.0 ** rng.uniform(6, 9, p)
+            low, high = (1, math.log10(SHIFT_CAP)) if capped else (6, 9)
+            X = X + 10.0 ** rng.uniform(low, high, p)
     smooth = kind == "smooth" or rng.uniform() < 0.3
     Y = np.column_stack([_truth(rng, X, smooth) for _ in range(K)])
     Y = Y + noise * np.std(Y) * rng.standard_normal((n, K))
     if kind == "small" and rng.uniform() < 0.1:  # a degenerate fit (EDGE-1)
         Y[:] = Y[0]
     if kind == "scaled":
-        X = X * 10.0 ** rng.uniform(-6, 6, p)
-        X = X + rng.choice([0, 1, -1], p) * 10.0 ** rng.uniform(0, 8, p)
+        scale = rng.uniform(-6, 6, p)
+        shift = rng.uniform(0, 8, p)
+        if capped:
+            shift = np.minimum(shift, scale + math.log10(SHIFT_CAP))
+        X = X * 10.0**scale + rng.choice([0, 1, -1], p) * 10.0**shift
         Y = Y * 10.0 ** rng.uniform(-6, 6) + rng.choice(
             [0, 1, -1]
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
-        X = X + rng.choice([0.0, 2.0**26, 2.0**36], p)
+        big = [2.0**26, 2.0**36]
+        if large_shifts:
+            X[:, 0] += rng.choice(big)
+        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:
@@ -1055,8 +1077,14 @@ def pruning_cases(draw) -> PruneCase:
 def _on_binary_grids(design: str) -> tuple[np.ndarray, np.ndarray]:
     """Data whose values lie on binary grids, so that a shift by a power of 2
     is exact. "pairs" and "one covariate" have a hinge in x0 and a sine in the
-    last covariate; in "linear", x0 is x1 plus noise and y = 5 (x1 - x0)."""
+    last covariate; in "linear", x0 is x1 plus noise and y = 5 (x1 - x0); in
+    "interaction", hinges on x1 multiply x0 and a hinge on x2."""
     n = 200
+    if design == "interaction":
+        rng = np.random.default_rng(3)
+        X = np.round(rng.uniform(size=(n, 3)) * 2**12) / 2**12
+        y = 5 * np.maximum(X[:, 1] - 0.4, 0) * (X[:, 0] + np.maximum(X[:, 2] - 0.5, 0))
+        return X, np.round((y + 0.1 * rng.normal(size=n)) * 2**10) / 2**10
     if design == "linear":
         rng = np.random.default_rng(3)
         x1 = np.round(rng.uniform(size=n) * 2**12) / 2**12
@@ -1118,16 +1146,21 @@ def _designed_cases() -> list[Case]:
     )
     # Exact shifts by powers of 2 on binary grids: x0 by 2^46 (A of LA-7),
     # 2^36 (a pair's first column) and 2^24 (the linear candidate; FWD-4 bars
-    # the knots of x0 at step 2), and y by 2^44 (the TSS) [FWD-10].
+    # the knots of x0 at step 2), and y by 2^44 (the TSS) [FWD-10]; at degree
+    # 2, x0 by 2^36 enters products as b (x0 - m), which a shift does not
+    # change (FWD-6).
     for design, dx, dy in [
         ("one covariate", 2.0**46, 0.0),
         ("pairs", 2.0**36, 0.0),
         ("linear", 2.0**24, 0.0),
         ("pairs", 0.0, 2.0**44),
+        ("interaction", 2.0**36, 0.0),
     ]:
         Xg, yg = _on_binary_grids(design)
         Xg[:, 0] += dx
         kw = spans | {"max_terms": 11}
+        if design == "interaction":
+            kw |= {"max_degree": 2, "auto_linpreds": False}
         cases.append(Case(f"{design}, x0 + {dx:g}, y + {dy:g}", Xg, yg + dy, None, kw))
     u = rng.uniform(size=100)
     Xd = np.column_stack((u, u, rng.uniform(size=100)))
@@ -1151,6 +1184,22 @@ def test_forward_pass_on_hypothesis_data(kind, data):
     CORE-4)."""
     case = data.draw(forward_cases(kind), label="case")
     _count(f"forward, hypothesis {kind}", check_forward(case))
+
+
+@pytest.mark.xfail(
+    reason="#77: the reference's RSS misses LA-5 for a linear factor of a "
+    "covariate shifted by 2^26 or 2^36 in a product term",
+    raises=AssertionError,
+    strict=False,
+)
+@settings(phases=(Phase.explicit, Phase.reuse, Phase.generate))  # no shrinking
+@given(data=st.data())
+def test_forward_pass_with_large_shifts_at_degree_2_or_3(data):
+    """The comparison of test_forward_pass_on_hypothesis_data on "shifted" data
+    at degree 2 or 3 with x0 + 2^26 or 2^36 (FWD-10, LA-5). It fails until
+    #77 fixes the reference; the fix removes the xfail and SHIFT_CAP."""
+    case = data.draw(forward_cases("shifted", large_shifts=True), label="case")
+    _count("forward, hypothesis large shifts (#77)", check_forward(case))
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
