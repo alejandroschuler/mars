@@ -263,6 +263,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 09:20 #79 at e297bdf (the mixed row kills the m = low[j] mutant; gate B PASS); updated to a116e65. The adversarial reviewer does the narrow recheck and posts both roles (the spec approval at f6bb9fa covers all logic; the change is one test row and a merge).
 - 09:30 recheck of #67 (adversarial) APPROVE at 1a3c9dd (all round-1 findings fixed; 8 queue mutants, 6 killed, 2 equivalent). #67 now waits only for the #84 fix, then gate C and the spec approval.
 - 09:40 #79 recheck APPROVE (both roles) at a116e65. Merged #79 (the reference's exact change of basis for large-mean covariates) as 7b06227; #77 closed. T15 may now lift SHIFT_CAP for the forward pass, except duplicate covariates at a large mean and pruning-path comparisons (#84).
+- 09:55 #87 ready (9ff9afb, Refs #84; pruning_pass centers the basis columns after the intercept before the QR; rss_per_size[1] error 2.78e-8 to 1.26e-10 over 200 seeds; #67's oracle passes at thorough on top). Behavior change: a constant basis column now raises FWD-11's error; the reviewers check whether the public API can reach it. Updated to f9dc4a3; started review-87-spec and review-87-adversarial (opus). A scratch worktree .worktrees/scratch-t84-oracle is left (a changed tracked file; not removed with --force by the no-force rule).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
