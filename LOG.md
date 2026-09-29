@@ -210,6 +210,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 19:56 19:55 the user said continue. Weekly 25 %, 5-hour 51 % (other sessions share the account; reset 23:10). Heartbeat live. Sending the recorded fix lists; starting the #71 dual review and the #66 narrow round 2.
 - 19:57 After the session restart, agent names do not resolve; messaged by agent ID (IDs listed in STATE). Sent the #70 fix list to t12-core, the #69 fix to t10-pruning, the degree-2 reference fix to t06-reference. Started the #71 dual review and the #66 narrow round 2.
 - 20:04 #72 now fixes both reference accuracy issues (final RSS; search column b(x - min x) at degree 2 and 3; shifted and unshifted passes equal bit for bit): head 37a04b4, gate B PASS, CI 12/12. Its single review waits for a slot.
+- 20:05 #69 fixed at c8c1ac4 (gate B PASS; CI finishing). recheck-69 (sonnet) started for the narrow re-approval of both roles.
 
 ## Core-hour ledger
 
