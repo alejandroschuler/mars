@@ -267,6 +267,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:10 #87 round 1: both REQUEST_CHANGES on one gap (no test pins the weights in the new column centering; three mutants survive with RSS errors up to 1.9); the code is right (3000 fits select the same terms; 300 fuzz cases never worse than main; #67's oracle passes at thorough; the constant-column path is unreachable). Sent to t84-pruning.
 - 10:40 #87 recheck APPROVE (both roles) at 26b0521 (all 10 round-1 mutants fail). Merged #87 (pruning column centering) as 0a7a49d; #84 stays open for the reference's pruning at intermediate means. Updated #67 to 410a401; its spec reviewer runs gate C and gate B and posts both roles (an update check for the adversarial approval at 1a3c9dd).
 - 11:00 #67 at 410a401: spec REQUEST_CHANGES; gate B, gate C and CI fail with a TypeError because #79 added two parameters to _parent_candidates and the oracle's spy takes the old 13; the #84 seed-1 case passes with a pass-through spy. Sent t15-finish the spy fix plus lifting SHIFT_CAP and the #77 xfail where #79 allows it.
+- 12:05 #67 at cf4ba04 (spy follows #79; the #77 xfail removed; SHIFT_CAP stays for duplicate covariates, the whole fit and the scaled kind; queue_bands checks every step up to a divergence; gate B and gate C PASS; S15 plan count 0.5 %). New fast-code LA-5 miss at degree 3 added to #85. Both original reviewers recheck. The 5-hour window reset at 04:20 PDT; weekly 45 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
