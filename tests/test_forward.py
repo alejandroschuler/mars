@@ -313,14 +313,8 @@ def test_the_window_ends_a_fit_of_pairs(fast_k, terms, thresh, code):
 def test_unit_and_zero_weights():
     """W-5: weights all 1 give the fit of no weights, bit for bit. W-3: a row
     with zero weight is dropped before anything else, so that a far outlier
-    in x and y with weight 0 changes no bit; W-1: integer weights act as
-    repeated rows, with several responses (RESP-1), at degree 2 and with the
-    window of FAST-3."""
-    rng = np.random.default_rng(8)
-    X = rng.uniform(size=(120, 3))
-    Y = np.column_stack((np.sin(4 * X[:, 0]) * X[:, 1], X[:, 2] ** 2))
-    Y = Y + 0.05 * rng.normal(size=Y.shape)
-    kw = {"max_degree": 2, "fast_k": 4, "thresh": 0.0, "max_terms": 15}
+    in x and y with weight 0 changes no bit."""
+    X, Y, _, kw = _weights_design("degree 2")
     base = _fit(X, Y, **kw)
     same = [_fit(X, Y, w=np.ones(120), **kw)]
     far = np.r_[X, [[1e6, -1e6, 0.5]]], np.r_[Y, [[1e9, -1e9]]]
@@ -331,14 +325,44 @@ def test_unit_and_zero_weights():
         assert fp.termination == base.termination
         for a, b in zip(fp.candidates, base.candidates, strict=True):
             np.testing.assert_array_equal(a, b)
-    w = rng.integers(1, 4, size=120)
+
+
+def _weights_design(name):
+    """X, Y, integer weights and settings. "degree 2": several responses
+    (RESP-1), degree 2 and the window of FAST-3. "exact fit": the data of
+    scikit-learn's check_sample_weight_equivalence_on_dense_data for the
+    classifier (15 cases, 30 covariates, 3 indicator responses, weights 0 to
+    4), where step 5 reaches an exact fit and the linear candidates of x0
+    and x23 both reduce the RSS to 0 up to rounding (issue #81)."""
+    if name == "exact fit":
+        rng = np.random.RandomState(42)
+        X, y = rng.rand(15, 30), rng.randint(0, 3, size=15)
+        return X, np.eye(3)[y], rng.randint(0, 5, size=15), {"thresh": 0.001}
+    rng = np.random.default_rng(8)
+    X = rng.uniform(size=(120, 3))
+    Y = np.column_stack((np.sin(4 * X[:, 0]) * X[:, 1], X[:, 2] ** 2))
+    Y = Y + 0.05 * rng.normal(size=Y.shape)
+    w = np.random.default_rng(9).integers(1, 4, size=120)
+    return X, Y, w, {"max_degree": 2, "fast_k": 4, "thresh": 0.0, "max_terms": 15}
+
+
+@pytest.mark.parametrize("name", ["degree 2", "exact fit"])
+def test_integer_weights_are_repeated_rows(name):
+    """W-1: integer weights (zeros included, W-3) give the record of the
+    repeated rows, whose order is shuffled. In "exact fit" the two linear
+    candidates tie at the rounding of RSS_s: a reduction is capped at RSS_s
+    (LA-2: an RSS is at least 0), so they tie exactly and FWD-5 takes x0 in
+    both fits (issue #81)."""
+    X, Y, w, kw = _weights_design(name)
     fp = _fit(X, Y, w=w.astype(float), **kw)
-    rep = _fit(np.repeat(X, w, axis=0), np.repeat(Y, w, axis=0), **kw)
-    log = fp.candidates
-    assert np.all(log.second_rss - log.best_rss >= 1e-7 * fp.rss[:-1])  # no tie
+    perm = np.random.default_rng(0).permutation(int(w.sum()))
+    rep = _fit(np.repeat(X, w, axis=0)[perm], np.repeat(Y, w, axis=0)[perm], **kw)
     for field in ("dirs", "cuts", "parent", "step", "kept"):
         np.testing.assert_array_equal(getattr(fp, field), getattr(rep, field))
+    assert fp.termination == rep.termination
     assert np.all(np.abs(fp.rss - rep.rss) <= 1e-8 * np.r_[fp.rss[0], fp.rss[:-1]])
+    for log in (fp.candidates, rep.candidates):
+        assert np.all(log.second_rss >= 0.0)
 
 
 def _rss(A, y):
