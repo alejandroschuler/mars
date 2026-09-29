@@ -206,6 +206,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:29 #66 round-1 fixes at b96b174 (all blocking items fixed; gate B PASS; CI 12/12). Its round 2 waits (the user's stop-after-round rule).
 - 18:35 #70 (T12) round 1: both REQUEST_CHANGES on CI failures (Windows glob, lstsq rcond at the numpy floor), one EDGE-6 test gap, and test trims; the code is right (700 designs equal the reference). Fix list recorded in STATE; not sent (the user's stop-after-round rule).
 - 18:37 #69 adversarial round 1: REQUEST_CHANGES (the first-value shift fails for a tiny-weight outlier as the first case; shift by the data value nearest the weighted mean). Fix list recorded; not sent (the user's stop-after-round rule). Only t11-stage2 still runs.
+- 18:38 Round done; PAUSED per the user (no new agents until the user says so). T11 stage 2 PR #71 ready (0580057): equals the reference on every degree-2 and 3 fixture and on random fits outside near-ties; it found a reference bug at degree 2 (covariates with a large mean). Weekly 22 %, 5-hour 33 %. Heartbeat set to the weekly reset; timer stopped. Resume order written in STATE.
 
 ## Core-hour ledger
 
