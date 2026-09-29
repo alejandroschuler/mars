@@ -67,16 +67,15 @@ from reference import mars_ref
 from pymars import _core, _forward, _pruning
 
 # ---------------------------------------------------------------------------
-# The settings of the forward pass that the fast code supports: T11 stages 1
-# and 2 (every degree). Stage 3 adds fast_k > 0, weights and
-# several responses; fast_k > 0 also needs STOP-7's band for two queue values
-# (FAST-3) in _Step.bands. The pruning pass takes weights and several
-# responses already.
+# The settings of the forward pass that the oracle draws: every degree (T11
+# stage 2), and fast_k > 0 and weights (stage 3), with STOP-7's band for two
+# queue values (FAST-3) in _Step.queue_bands. Several responses come next.
+# The pruning pass takes weights and several responses already.
 
 SUPPORTED = {
     "max_degree": (1, 2, 3),
-    "fast_k": (0,),
-    "weights": (False,),
+    "fast_k": (0, 1, 3, 5, 20),
+    "weights": (False, True),
     "responses": (1,),
 }
 
@@ -122,6 +121,7 @@ class Outcome:
     steps: int
     near_tie: str | None = None
     step: int | None = None
+    plan_tie: bool = False  # a step of either log within TIE (plan, "Ties")
 
 
 def _count(group: str, outcome: Outcome) -> None:
@@ -130,6 +130,7 @@ def _count(group: str, outcome: Outcome) -> None:
     if outcome.near_tie is not None:
         TALLY[f"{group}: near-tie stops"] += 1
         TALLY[f"{group}: near-tie stops ({outcome.near_tie})"] += 1
+    TALLY[f"{group}: plan near-ties"] += outcome.plan_tie
 
 
 def _plain(rec) -> dict | None:
@@ -221,11 +222,11 @@ class Case:
         )
 
     @functools.cached_property
-    def searches(self) -> list:
-        """Every search of the reference's forward pass, in order: the
-        reference runs again with a spy on its search of one parent."""
-        calls = []
-        real = mars_ref._parent_candidates
+    def _spied(self) -> tuple[list, list]:
+        """The reference runs again with a spy on its search of one parent and
+        with the trace of its forward pass (the queue of FAST-1 to FAST-5)."""
+        calls, trace = [], []
+        real, real_pass = mars_ref._parent_candidates, mars_ref.forward_pass
 
         def spy(k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau):
             found, searchable = real(
@@ -234,9 +235,27 @@ class Case:
             calls.append(SimpleNamespace(B=B, found=found))
             return found, searchable
 
-        with mock.patch.object(mars_ref, "_parent_candidates", spy):
+        def traced(*args, **kw):
+            return real_pass(*args, **{**kw, "trace": trace})
+
+        with (
+            mock.patch.object(mars_ref, "_parent_candidates", spy),
+            mock.patch.object(mars_ref, "forward_pass", traced),
+        ):
             self.reference_fit()
-        return calls
+        if calls and not trace:
+            raise RuntimeError("the reference's forward pass left no trace")
+        return calls, trace
+
+    @property
+    def searches(self) -> list:
+        """Every search of the reference's forward pass, in order."""
+        return self._spied[0]
+
+    @property
+    def trace(self) -> list:
+        """The reference's trace: one dict per step (``mars_ref.forward_pass``)."""
+        return self._spied[1]
 
 
 # ---------------------------------------------------------------------------
@@ -326,10 +345,9 @@ class _Step:
         kept = case.kept
         self.case, self.kept = case, kept
         M = int(np.count_nonzero(ref["step"] < s))
-        self.M = M
+        self.M, self.s, self.ref = M, s, ref
         self.dirs = ref["dirs"][:M]
         calls = [c for c in case.searches if c.B.shape[1] == M]
-        self.searched = bool(calls)
         self.B = (
             calls[0].B
             if calls
@@ -400,6 +418,51 @@ class _Step:
             out.append("FWD-4 zero")
         return out
 
+    def queue_bands(self) -> list[str]:
+        """STOP-7's band of FAST-3: two stored values lambda within 2 delta of
+        each other, whose swap changes the rows of the table that step s
+        visits. An entry searched in step t has kappa = 2t and a reduction of
+        that step, so delta = 2e-8 RSS_{t-2}. The table of step s comes from
+        the entries after step s - 1 and one entry for each term that step
+        added (FAST-1, FAST-2); it must be the table of the reference's trace.
+        """
+        fast_k = mars_ref.as_params(self.case.params).fast_k
+        if fast_k == 0 or self.s < 2:
+            return []
+        trace, s = self.case.trace, self.s
+        added = int(np.count_nonzero(self.ref["step"] == s - 1))
+        entries = [*trace[s - 2]["entries"], *[(math.inf, 2 * (s - 1))] * added]
+        nu = max(3, fast_k)
+        if nu >= len(entries):
+            return []
+        table = self._table(entries)
+        if len(trace) >= s and table != list(trace[s - 1]["table"]):
+            _fail(self.case, f"step {s}: queue table {table}, trace {trace[s - 1]}")
+        seen = set(table[:nu])
+        values = [
+            (e, lam, 2 * DELTA * self.path[max(kappa // 2 - 2, 0)])
+            for e, (lam, kappa) in enumerate(entries)
+            if 0.0 <= lam < math.inf
+        ]
+        for i, (a, la, da) in enumerate(values):
+            for b, lb, db in values[i + 1 :]:
+                if abs(la - lb) <= max(da, db):
+                    swapped = list(entries)
+                    swapped[a], swapped[b] = (lb, entries[a][1]), (la, entries[b][1])
+                    if set(self._table(swapped)[:nu]) != seen:
+                        return ["FAST-3"]
+        return []
+
+    def _table(self, entries) -> list[int]:
+        """The table of FAST-2 as 1-based entry numbers, with kappa_prev the
+        term number of the step just done (2 (s - 1))."""
+        beta = mars_ref.as_params(self.case.params).fast_beta
+        by_value = sorted(range(len(entries)), key=lambda e: (-entries[e][0], e))
+        rank = {e: r for r, e in enumerate(by_value)}
+        kprev = 2 * (self.s - 1)
+        aged = {e: rank[e] + beta * (kprev - entries[e][1]) for e in rank}
+        return [e + 1 for e in sorted(rank, key=lambda e: (aged[e], rank[e]))]
+
     def stop_bands(self, key) -> list[str]:
         """STOP-7's bands of STOP-3 and STOP-4 for the step that adds the
         candidate ``key``, or for a step without a legal candidate (None),
@@ -465,6 +528,8 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
     gap = vf - vr < TIE * R
     if (f_legal or f_bands) and (gap or r_bands):
         return Outcome(s - 1, "gap" if f_legal and gap else _join(f_bands + r_bands), s)
+    if queue := step.queue_bands():  # the two passes searched other parents
+        return Outcome(s - 1, _join(queue + f_bands + r_bands), s)
     _fail(
         case,
         f"step {s}: fast {_terms(fast, s)}, reference {_terms(ref, s)}; values "
@@ -475,7 +540,9 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
 
 def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
     """The second-best candidate of step s (CORE-3, FWD-8), after both programs
-    chose alike; returns the near-tie that explains different seconds."""
+    chose alike; returns the near-tie that explains different seconds. The
+    fast second must differ from the chosen candidate, and neither second may
+    be better than the other by TIE when both are legal in the reference."""
     lf, lr, i = fast["candidates"], ref["candidates"], s - 1
     kf, kr = _second(lf, i), _second(lr, i)
     if kf == kr:
@@ -486,6 +553,8 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         R = LA5 * ref["rss"][i]
         _close(case, lf["second_rss"][i], lr["second_rss"][i], R, f"second, {s}")
         return None
+    if kf is not None and kf in _choice(case, fast, s):
+        _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
     step = _Step(case, ref, s)
     if kf is not None and kr is not None and _identical(step, kf, kr):
         _fail(case, f"step {s}: the seconds {kf} and {kr} have equal columns (FWD-5)")
@@ -499,8 +568,12 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
     if kf is None or kr is None:
         ok = bool(f_bands or r_bands)
     else:
+        gap = abs(step.value(kf) - step.value(kr)) < TIE * step.rss_s
         f_ok = kf in step.legal_keys or f_bands
-        ok = f_ok and (step.value(kf) - step.value(kr) < TIE * step.rss_s or r_bands)
+        r_ok = kr in step.legal_keys or r_bands
+        ok = f_ok and r_ok and (gap or f_bands or r_bands)
+    if not ok and (queue := step.queue_bands()):
+        return _join(queue)
     if not ok:
         _fail(case, f"step {s}: second fast {kf}, reference {kr}; {f_bands}, {r_bands}")
     return _join(f_bands + r_bands) or "gap"
@@ -533,6 +606,7 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
         reasons = [b for key in keys for b in step.bands(key) + step.stop_bands(key)]
         if best is None:
             reasons += step.stop_bands(None)
+        reasons += step.queue_bands()
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
     _fail(
@@ -556,8 +630,23 @@ DTYPES = {
 
 def compare_forward(case: Case, fast, ref) -> Outcome:
     """Compare two forward records (CORE-3) of one case, as the module
-    docstring says; ``fast`` and ``ref`` are records or their dicts."""
+    docstring says; ``fast`` and ``ref`` are records or their dicts. The
+    outcome also says whether the fit has a near-tie by the plan's count
+    ("Ties"): a step, among those compared, where either log's best and
+    second differ by less than TIE of the RSS before the step."""
     fast, ref = _plain(fast), _plain(ref)
+    out = _compare_forward(case, fast, ref)
+    S = min(len(fast["rss"]), len(ref["rss"]), out.step or math.inf) - 1
+    plan = False
+    for rec in (fast, ref):
+        if rec["candidates"] is not None and S > 0:
+            log, rss = _plain(rec["candidates"]), np.asarray(rec["rss"])
+            gap = log["second_rss"][:S] - log["best_rss"][:S]
+            plan |= bool(np.any(gap < TIE * rss[:S]))
+    return dataclasses.replace(out, plan_tie=plan)
+
+
+def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
     logs = fast["candidates"], ref["candidates"] = (
         _plain(fast["candidates"]),
         _plain(ref["candidates"]),
@@ -670,7 +759,7 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
         if not same(rf, rr, tol):
             _fail(case, f"rss_per_size[{m - 1}]: fast {rf!r}, reference {rr!r}")
         gf, gr = fast["gcv_per_size"][m - 1], ref["gcv_per_size"][m - 1]
-        if not same(rf, rr, 0.0) or np.isinf(gf) or np.isinf(gr):
+        if not (rf <= floor and rr <= floor) or np.isinf(gf) or np.isinf(gr):
             _rel(case, gf, gr, tol, f"gcv_per_size[{m - 1}]")
     if first > 1:
         return Outcome(Mf - first, near_tie, Mf - first + 1)
@@ -686,18 +775,21 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
         if near_tie is None:
             _fail(case, f"selected: fast {fast['selected']}, ref {ref['selected']}")
         return Outcome(Mf - 1, near_tie, Mf)
-    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w, same)
+    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w, same, floor)
     return Outcome(Mf - 1, near_tie, None if near_tie is None else Mf)
 
 
-def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
+def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, floor) -> None:
     """The final fit of the same terms (PRUNE-8), by the plan's tolerance
     table: per response, the coefficients normwise within 1e-6 where
-    kappa(B) <= 1e5, and the fitted values within 1e-8 sd(y), scaled by
-    kappa / 1e6 above 1e6, or within the plan's rounding bound kappa u ||y||
-    when that is larger, as it is at a large mean (a fitted value near 1e13
-    has an ulp of 2e-3); RSS and GCV within a relative 1e-8 (``same``, for
-    exact fits); RSq and GRSq within 1e-8."""
+    kappa(B) <= 1e5; the fitted values with their weighted mean removed
+    within 1e-8 sd(y), scaled by kappa / 1e6 above 1e6, and the mean of their
+    difference within rounding, 4 ulp of max |y| plus kappa u ||y - mean||
+    (a fitted value near 1e13 has an ulp of 2e-3); the RSS of the fast
+    coefficients, the reference's RSS plus the weighted sum of squares of
+    the centered difference of the fitted values (least squares), within a
+    relative 1e-8 of the reference's RSS; RSS and GCV within a relative 1e-8
+    (``same``, for exact fits); RSq and GRSq within 1e-8."""
     m, sw = BS.shape[1], np.sqrt(w)[:, None]
     kappa = np.linalg.cond(BS * sw) if m > 1 else 1.0
     cf = np.asarray(fast["coef"], dtype=float).reshape(m, -1)
@@ -708,13 +800,22 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
         _fail(case, f"coefficients: fast {cf.tolist()}, reference {cr.tolist()}")
     mean = np.average(Y, axis=0, weights=w)
     sd = np.sqrt(np.average((Y - mean) ** 2, axis=0, weights=w))
-    rounding = kappa * (np.finfo(float).eps / 2) * np.linalg.norm(Y, axis=0)
-    tol = np.maximum(1e-8 * sd * max(1, kappa / 1e6), rounding)
-    if np.any(np.max(np.abs(BS @ (cf - cr)), axis=0) > tol):
+    d = BS @ (cf - cr)
+    d_mean = np.average(d, axis=0, weights=w)
+    dc = d - d_mean
+    if np.any(np.max(np.abs(dc), axis=0) > 1e-8 * sd * max(1, kappa / 1e6)):
         _fail(case, f"fitted values: kappa {kappa:.3g}, sd(y) {sd.tolist()}")
+    u = np.finfo(float).eps / 2
+    ulps = 4 * np.spacing(np.max(np.abs(Y), axis=0))
+    rounding = ulps + kappa * u * np.linalg.norm((Y - mean) * sw, axis=0)
+    if np.any(np.abs(d_mean) > rounding):
+        _fail(case, f"mean of the fitted values: {d_mean.tolist()}, {rounding}")
+    excess = float(np.sum(w[:, None] * dc**2))
+    if not same(ref["rss"] + excess, ref["rss"], LA5):
+        _fail(case, f"RSS of the fast coefficients: {ref['rss']!r} + {excess!r}")
     if not same(fast["rss"], ref["rss"], LA5):
         _fail(case, f"final rss: fast {fast['rss']!r}, reference {ref['rss']!r}")
-    if not same(fast["rss"], ref["rss"], 0.0) or np.isinf(ref["gcv"]):
+    if not (fast["rss"] <= floor and ref["rss"] <= floor) or np.isinf(ref["gcv"]):
         _rel(case, fast["gcv"], ref["gcv"], LA5, "final gcv")
     for key in ("rsq", "grsq"):
         _close(case, fast[key], ref[key], 1e-8, f"final {key}")
@@ -756,7 +857,7 @@ def compare_fits(case: Case, fast_fit, ref_fit) -> Outcome:
         for key in ("selected", "dirs", "cuts"):
             if not np.array_equal(f[key], r[key]):
                 _fail(case, f"{key}: fast {f[key].tolist()}, ref {r[key].tolist()}")
-    return Outcome(out.steps, pr.near_tie, pr.step)
+    return Outcome(out.steps, pr.near_tie, pr.step, out.plan_tie)
 
 
 @dataclasses.dataclass
@@ -904,6 +1005,14 @@ def _fixture_cases() -> tuple[list[Case], list[PruneCase]]:
 
 
 FIXTURE_CASES, BASIS_CASES = _fixture_cases()
+# The heaviest fixture fits (1,000 cases at degree 2 or 3, about 25 s) run at
+# the thorough profile only, in gate C, so that gate B keeps its time.
+THOROUGH = os.environ.get("HYPOTHESIS_PROFILE") == "thorough"
+FIXTURE_CASES = [
+    c
+    for c in FIXTURE_CASES
+    if THOROUGH or len(c.X) < 1000 or c.params.get("max_degree", 1) == 1
+]
 
 
 # ---------------------------------------------------------------------------
@@ -924,7 +1033,7 @@ def _settings():
             "thresh": st.one_of(st.just(0.0), st.sampled_from([0.001, 0.01, 0.05])),
             "minspan": st.sampled_from([None, 1, 2, 5]),
             "endspan": st.sampled_from([None, 1, 2, 5]),
-            "adjust_endspan": st.sampled_from([0.0, 1.0, 2.0]),
+            "adjust_endspan": st.sampled_from([0.0, 0.5, 1.0, 1.5, 2.0]),
             "auto_linpreds": st.booleans(),
             "fast_k": st.sampled_from(SUPPORTED["fast_k"]),
             "fast_beta": st.sampled_from([0.0, 1.0, 2.5]),
