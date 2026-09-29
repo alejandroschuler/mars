@@ -5,7 +5,7 @@ GLM-1, GLM-6 and GLM-7).
 The checks run twice on ``EarthRegressor()``, ``EarthRegressor(max_degree=2)``
 and ``EarthClassifier()``: with the fast core, which covers weights, several
 responses (the classifier's indicators for three classes), degree 2 and Fast
-MARS since T11 stage 3 (#13), and, marked slow, with the reference
+MARS since T11 stage 3 (#13), and with the reference
 implementation in place of the fast core, through CORE-6. ``Earth`` is the
 same class as ``EarthRegressor`` (API-2), so it needs no run of its own.
 

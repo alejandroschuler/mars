@@ -86,9 +86,11 @@ def test_the_refit_matches_r_on_fixed_columns(name):
     earth's predictions at new points (S14). GLM-4: on separated classes (S20)
     both warn, and the probabilities are within 1e-3 of the end of earth's
     where earth's are; a positive ``glm_alpha`` has a finite minimum and does
-    not warn. (S14_matched: earth warns because R clamps |eta| > 30, but R's
-    glm converged; no fitted probability is within 10·eps of 0 or 1, so the
-    refit does not warn, and a warning here would fail the test.)"""
+    not warn. (S14_matched: the fixture has earth's warning that fitted
+    probabilities are numerically 0 or 1, and ``glm_converged`` true; its
+    smallest ``pred_train`` is 2.2e-16, where the refit gives 2.1e-14. No
+    fitted probability of the refit is within 10·eps of 0 or 1, so the refit
+    does not warn, and a warning here would fail the test.)"""
     B, codes, Q, r_coef, r_prob, earth = _r_case(name)
     separated = earth is not None and not all(earth["glm_converged"])
     if not separated:
@@ -222,13 +224,15 @@ def test_labels_of_any_type_give_the_fit_of_the_codes(codes, labels):
 def test_zero_weights_equal_dropping_the_rows():
     """W-3 and GLM-1: rows with weight 0 are dropped first, so their labels,
     here a fourth label that only they have, are not classes, and the fit is
-    the fit without them. GLM-7: with positive weight on one class only, fit
-    raises the one-class error."""
+    the fit without them. One of them lies far out on the trend, where its
+    probability would be numerically 0 or 1 and warn (GLM-4) if it counted.
+    GLM-7: with positive weight on one class only, fit raises the one-class
+    error, and API-3: the failed refit leaves no fitted attribute."""
     labels = np.array(["hi", "lo", "mid"])[CODES3]
     w = np.random.default_rng(2).integers(1, 3, size=150).astype(float)
-    X0 = np.vstack([X, X[:20] + 0.05])
-    y0 = np.r_[labels, np.full(10, "zz"), labels[:10]]
-    w0 = np.r_[w, np.zeros(20)]
+    X0 = np.vstack([X, X[:20] + 0.05, [[60.0, -60.0]]])
+    y0 = np.concatenate([labels, np.full(10, "zz"), labels[:10], ["hi"]])
+    w0 = np.r_[w, np.zeros(21)]
     dropped = EarthClassifier().fit(X, labels, sample_weight=w)
     est = EarthClassifier().fit(X0, y0, sample_weight=w0)
     assert_array_equal(est.classes_, ["hi", "lo", "mid"])
@@ -237,7 +241,8 @@ def test_zero_weights_equal_dropping_the_rows():
     assert_allclose(est.predict_proba(X), dropped.predict_proba(X), atol=1e-14)
     one = np.where(labels == "lo", w, 0.0)
     with pytest.raises(ValueError, match=r"one class"):
-        EarthClassifier().fit(X, labels, sample_weight=one)
+        est.fit(X, labels, sample_weight=one)
+    assert not any(hasattr(est, a) for a in ("classes_", "glm_", "mars_"))
 
 
 @pytest.mark.parametrize(

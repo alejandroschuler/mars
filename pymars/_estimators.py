@@ -522,6 +522,7 @@ grsq_, max_terms_, penalty_, mars_
         self : EarthClassifier
             The fitted estimator.
         """
+        self._reset_fitted()
         params = self._mars_params()  # ERR-3 and ERR-4 before the data
         alpha = self._glm_alpha()
         _check_numeric(X, self)
