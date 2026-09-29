@@ -1,6 +1,6 @@
 # Common rules for every agent (authors, reviewers, helpers)
 
-The executor (session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`) runs `VALIDATION_PLAN.md` in the fork `alejandroschuler/mars`. Your own brief names your task. These rules hold for every agent.
+The executor (session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5`, since 2026-09-29; before it `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`) runs `VALIDATION_PLAN.md` in the fork `alejandroschuler/mars`. Your own brief names your task. These rules hold for every agent.
 
 ## Paths
 
