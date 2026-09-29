@@ -229,6 +229,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:20 review-73-spec APPROVE at 1b67fd5 (gate B PASS, CI 12/12; 7 skips all tied to #13). Non-blocking, worth doing with any fix round: skip only on the fast core's stage message (tests/test_sklearn_checks.py:45-48); unmark slow the 5 s reference run so the scikit-learn 1.6 job runs it (:36); the stale docstring in validation/sims/learners.py:15-17.
 - 01:30 review-73-adversarial APPROVE at 1b67fd5 (no wrong prediction; 20 mutants, 17 killed). Opened #76 with the non-blocking T13 follow-ups (refit state, W-7 case, the skip match, the slow mark, a docstring, removing the skips after #13) and two spec questions for #44 (weight sums past 2^52; the scale of X). #73 merges after #72, with an update check. Scratch mutant copies from two reviewers stay in the scratchpad (dcg blocked their removal; harmless).
 - 01:40 update-check-72 APPROVE at 063eefa (#66's conformance tests pass against the new reference). Merged #72 as fc3224c. Updated #73 to 96786ce; update-check-73 (sonnet, both roles) started. T15's shifted-response patch was only in the old agent's context; started t15-finish (opus) to rebase #67, add shifted draws, widen max_degree to 3 and connect compare_fits.
+- 01:58 update-check-73 APPROVE (both roles) at 96786ce. Merged #73 (T13 estimators) as 6480e18; #15 closed. Wrote briefs/T14-glm.md; started t14-glm (opus; also does #76 item 3). Weekly 35 %, 5-hour 8 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
