@@ -69,12 +69,13 @@ def _rss_close(a, b, before):
     assert np.all(np.abs(a - b) <= RSS_TOL * before)
 
 
-def _agree(a, b, *, cols=None, knot=None, y_scale=1.0):
+def _agree(a, b, *, cols=None, knot=None, y_scale=1.0, ties_of=None):
     """Check that fit b, of transformed data, is fit a transformed.
 
     ``cols[j]`` is the column of b that holds column j of a (None: the same);
     ``knot(j, t)`` gives b's knot for a's knot t on column j (None: t); every
-    sum of squares of b is y_scale² times a's. Up to a near-tie, the forward
+    sum of squares of b is y_scale² times a's; ``ties_of`` are the fits whose
+    logs show the near-ties (None: a and b). Up to a near-tie, the forward
     terms and their RSS must agree; without one, the whole fit must: the
     forward and pruning records, the selected terms, the GCV and n_eff. The
     coefficients and fitted values are the caller's to check, since they
@@ -93,7 +94,7 @@ def _agree(a, b, *, cols=None, knot=None, y_scale=1.0):
         return out_d, out_c
 
     fa, fb = a.forward, b.forward
-    tie = _tie_step(a, b)
+    tie = _tie_step(*(ties_of or (a, b)))
     s2 = y_scale**2
     if tie is not None:
         event("near-tie")
@@ -126,7 +127,7 @@ def _fitted(fit, X):
     return _terms.basis_matrix(X, fit.dirs, fit.cuts) @ fit.coef
 
 
-def _same_model(a, b, Xa, Xb, Yb, *, cols=None, knot=None, x_factor=None, y=(0, 1)):
+def _same_model(a, b, Xa, Xb, Yb, *, x_factor=None, y=(0, 1), **agree):
     """``_agree``, and when the whole fit was compared, the model: b's fitted
     values at Xb within 1e-8·sd(Yb) of shift + scale·(a's at Xa), for
     ``y = (shift, scale)``; and b's coefficients, divided by ``x_factor`` (one
@@ -134,7 +135,7 @@ def _same_model(a, b, Xa, Xb, Yb, *, cols=None, knot=None, x_factor=None, y=(0, 
     with the shift added to the intercept, where κ(B) ≤ 1e5 (tolerance
     table). Returns True when the whole fit was compared."""
     shift, scale = y
-    if not _agree(a, b, cols=cols, knot=knot, y_scale=scale):
+    if not _agree(a, b, y_scale=scale, **agree):
         return False
     want = shift + scale * _fitted(a, Xa)
     assert np.all(np.abs(_fitted(b, Xb) - want) <= 1e-8 * np.std(Yb, axis=0))
@@ -179,3 +180,173 @@ def test_row_and_column_order(seed, n, p, degree):
     _same_model(base, by_rows, X, X, Y)
     by_cols = _fit(X[:, cols], Y, max_degree=degree)
     _same_model(base, by_cols, X, X[:, cols], Y, cols=np.argsort(cols))
+
+
+# Scale and shift of a covariate (Conventions, LA-7)
+
+#: The S12 fixture's transforms of x: (shift, scale).
+X_MAPS = {"x·1e-8": (0.0, 1e-8), "x·1e8": (0.0, 1e8), "x + 1e6": (1e6, 1.0)}
+
+
+@given(
+    seeds,
+    st.integers(20, 90),
+    st.integers(1, 4),
+    st.integers(1, 2),
+    st.booleans(),
+    st.sampled_from(sorted(X_MAPS)),
+    st.data(),
+)
+def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data):
+    """x_j to a + s·x_j with s > 0, at the S12 fixture's scales: the same terms,
+    with knots a + s·t, the same RSS and GCV values, the same fitted values,
+    and the coefficients of the terms that hold x_j divided by s
+    (Conventions; LA-7 makes the choice between a pair and a single-hinge
+    search free of the units). A shift changes the fit when x_j is a linear
+    factor in a product, and in earth too (Conventions), so the shift runs
+    with ``auto_linpreds=False`` or at degree 1."""
+    shift, scale = X_MAPS[name]
+    if shift != 0.0 and degree > 1:
+        linpreds = False
+    X, Y = _draw(seed, n, p)
+    j = data.draw(st.integers(0, p - 1), label="j")
+    Xs = X.copy()
+    Xs[:, j] = shift + scale * X[:, j]
+    kw = {"max_degree": degree, "auto_linpreds": linpreds}
+    a, b = _fit(X, Y, **kw), _fit(Xs, Y, **kw)
+    factor = np.where(a.dirs[:, j] != 0, 1.0 / scale, 1.0)
+    _same_model(
+        a,
+        b,
+        X,
+        Xs,
+        Y,
+        knot=lambda v, t: shift + scale * t if v == j else t,
+        x_factor=factor,
+    )
+
+
+def _rows(dirs, cuts):
+    """The terms as a sorted list, for sets of terms in any order."""
+    return sorted(
+        zip(map(tuple, dirs.tolist()), map(tuple, cuts.tolist()), strict=True)
+    )
+
+
+def _ratio(h, x):
+    """rho of LA-3 at the first step, where G holds the intercept and x."""
+    G = np.column_stack((np.ones_like(x), x))
+    r = h - G @ np.linalg.lstsq(G, h, rcond=None)[0]
+    return float(r @ r) / float(np.sum((h - h.mean()) ** 2))
+
+
+@given(
+    seeds,
+    st.integers(20, 90),
+    st.integers(1, 4),
+    st.sampled_from([-1.0, -1e-8, -1e8]),
+    st.data(),
+)
+def test_a_negative_scale_mirrors_the_first_pair(seed, n, p, scale, data):
+    """x_j to s·x_j with s < 0 mirrors the hinges, since (s·x - s·t)₊ =
+    |s|·(t - x)₊. With minspan 1 the knot list of KNOT-3 is symmetric, and a
+    pair search spans the same columns in both directions, so the first step
+    takes the same covariate, with the knot s·t and the two hinges swapped,
+    and the same RSS; the one-step model has the same fitted values. Later
+    steps differ often, by the rules that treat the two ends differently: a
+    single-hinge search adds only (x - t)₊, and LA-3 centers only that hinge.
+    At the first step the exception is LA-3: the chosen knot's hinge, seen
+    from the other fit, has rho < 0.01 there, so it is not a candidate. The
+    test checks that every other difference is a near-tie."""
+    X, Y = _draw(seed, n, p)
+    j = data.draw(st.integers(0, p - 1), label="j")
+    Xs = X.copy()
+    Xs[:, j] = scale * X[:, j]
+    kw = {"minspan": 1, "max_terms": 3}
+    a, b = _fit(X, Y, **kw), _fit(Xs, Y, **kw)
+    fa, fb = a.forward, b.forward
+    if _tie_step(a, b) == 1:
+        event("near-tie")
+        return
+    for f, x in ((fa, X[:, j]), (fb, Xs[:, j])):
+        v = int(np.flatnonzero(f.dirs[1])[0]) if len(f.dirs) > 1 else -1
+        if v == j and f.dirs[1, v] != _terms.LINEAR:
+            t = f.cuts[1, v]
+            if _ratio(np.maximum(t - x, 0.0), x) < 0.01:  # the mirror's (x' - t')₊
+                event("LA-3 end rule")
+                return
+    mirror = fa.dirs.copy()
+    mirror[:, j] = np.where(np.abs(mirror[:, j]) == 1, -mirror[:, j], mirror[:, j])
+    cuts = fa.cuts.copy()
+    cuts[:, j] = np.where(np.abs(fa.dirs[:, j]) == 1, scale * fa.cuts[:, j], 0.0)
+    assert _rows(fb.dirs, fb.cuts) == _rows(mirror, cuts)
+    _rss_close(fb.rss, fa.rss, np.r_[fa.rss[0], fa.rss[:-1]])
+    assert np.all(np.abs(_fitted(b, Xs) - _fitted(a, X)) <= 1e-8 * np.std(Y))
+
+
+# Scale and shift of y
+
+
+#: The S12 fixture's scales of y, a negative scale and a shift: (shift, scale).
+Y_MAPS = {
+    "y·1e-9": (0.0, 1e-9),
+    "y·1e9": (0.0, 1e9),
+    "-3y": (0.0, -3.0),
+    "y + 1e4": (1e4, 1.0),
+    "7 - 0.2y": (7.0, -0.2),
+}
+
+
+@given(
+    seeds,
+    st.integers(20, 90),
+    st.integers(1, 3),
+    st.integers(1, 2),
+    st.integers(1, 3),
+    st.sampled_from(sorted(Y_MAPS)),
+)
+def test_scale_and_shift_of_y(seed, n, p, degree, k, name):
+    """y to a + s·y with s != 0, one or several responses (RESP-1): the same
+    terms and records, every RSS and GCV times s², the coefficients times s
+    with a added to the intercept, and the fitted values transformed the same
+    way. Every RSS scales by s², so the rankings and the relative stopping
+    rules do not change (plan: Invariance tests; STOP-5 is relative for every
+    K)."""
+    shift, scale = Y_MAPS[name]
+    X, Y = _draw(seed, n, p, k)
+    Ys = shift + scale * Y
+    kw = {"max_degree": degree}
+    a, b = _fit(X, Y, **kw), _fit(X, Ys, **kw)
+    _same_model(a, b, X, X, Ys, y=(shift, scale))
+
+
+# Added columns (EDGE-3, EDGE-4, LIMIT-1, SPAN-1, SPAN-2)
+
+
+@given(
+    seeds,
+    st.integers(20, 90),
+    st.integers(1, 3),
+    st.integers(1, 2),
+    st.sampled_from([0.0, -2.5, 1e6]),
+    st.data(),
+)
+def test_a_constant_or_duplicated_column(seed, n, p, degree, value, data):
+    """A constant column, at any place and degree, and a duplicate of column
+    0 after the columns leave the fit unchanged, with ``max_terms`` and both
+    spans fixed, since p enters LIMIT-1, SPAN-1 and SPAN-2: a constant
+    column never enters a term (EDGE-3), and at degree 1 a duplicate with the
+    higher index is never used (EDGE-4, FWD-5). The duplicate ties with its
+    original at each of its searches, so near-ties come from the fit without
+    it."""
+    X, Y = _draw(seed, n, p)
+    kw = {"max_degree": degree, "max_terms": 15, "minspan": 2, "endspan": 3}
+    base = _fit(X, Y, **kw)
+    at = data.draw(st.integers(0, p), label="place")
+    Xc = np.insert(X, at, value, axis=1)
+    cols = np.delete(np.arange(p + 1), at)
+    _same_model(base, _fit(Xc, Y, **kw), X, Xc, Y, cols=cols)
+    if degree == 1:
+        Xd = np.column_stack((X, X[:, 0]))
+        dup = _fit(Xd, Y, **kw)
+        _same_model(base, dup, X, Xd, Y, cols=np.arange(p), ties_of=(base,))
