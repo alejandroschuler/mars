@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 19:57 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 20:04 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -51,7 +51,7 @@ After the session restart on 2026-09-28 (about 19:50), agent names no longer res
 
 - t12-core: #70 round-1 fixes (CI, one EDGE-6 test, trims), from 19:58.
 - t10-pruning: #69 round-1 fix (shift by the data value nearest the weighted mean), from 19:58.
-- t06-reference: the reference fix for large-mean covariates at degree 2 (in #72 or a new PR), from 19:58.
+- t06-reference: idle; #72 now holds both reference fixes (final RSS; the search columns b(x - min x) at degree 2 and 3), head 37a04b4, gate B PASS, CI 12/12; its review (single, opus) when a slot frees.
 - Reviews: #71 dual (wf_69bb1714-e52), #66 narrow round 2 (sonnet, wf_cbf4953a-e1a).
 - Idle: t07-conformance, t11-stage2 (#71 in review), t13-estimators (waits for T12), t15-oracle (#67 waits for review), t11-forward, t18-legacy, tools-merge-guard.
 
