@@ -25,12 +25,15 @@ rows that change (``move_column``); no subset is refit.
 Numerics. float64 throughout; no function writes into its inputs; no absolute
 epsilon; the tie rules are fixed: the term added last when two drops give the
 same RSS (PRUNE-3), the earlier offer when two subsets of one size do, and the
-smaller size when two sizes give the same GCV (PRUNE-5). A response that is
-constant over the cases (Conventions: all its values are equal) lies in the
-span of the intercept, which every subset holds, so it adds 0 exactly to every
-RSS, and it is left out of the sums. Y enters only through products and sums,
-so multiplying Y by a power of 2 (EDGE-6) multiplies every RSS and GCV by its
-square and changes no other bit. Memory is O(n·(M_f + K) + M_f²).
+smaller size when two sizes give the same GCV (PRUNE-5). Every subset holds
+the intercept, so subtracting a constant from a response changes no RSS in
+exact arithmetic. Each response is centered first, so that the rounding of
+the projections is of the size of the spread of Y, not of its mean (LA-5);
+a response that is constant over the cases (Conventions: all its values are
+equal) becomes 0 exactly and adds 0 to every sum. Y enters only through
+differences, products and sums, so multiplying Y by a power of 2 (EDGE-6)
+multiplies every RSS and GCV by its square and changes no other bit. Memory
+is O(n·(M_f + K) + M_f²).
 
 Public functions, for ``_core``:
 
@@ -121,13 +124,22 @@ def _cases(
     return B, Y, w, N, tau
 
 
-def _constant(Y: FloatArray) -> tuple[BoolArray, FloatArray]:
-    """Return which responses are constant over the cases (Conventions: all
-    their values are equal) and Y without them, uncopied when there is none.
-    A constant response adds 0 exactly to the RSS of every subset that holds
-    the intercept. Complexity: O(n·K)."""
-    const = (Y[0] == Y).all(axis=0)
-    return const, Y[:, ~const] if const.any() else Y
+def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArray]:
+    """Return Y minus one constant per response, and the constants.
+
+    Each response is shifted by its data value nearest its weighted mean μ (the
+    first such case in a tie), then by the weighted mean of the differences.
+    The shift a is a data value, so the differences are exact for values
+    within a factor of 2 of it, and N·(a - μ)² ≤ TSS, so the rounding of the
+    others is of the size of the spread, whatever the weights and the order
+    of the cases. A constant response becomes 0 exactly, and its constant is
+    its value. Complexity: O(n·K).
+    """
+    near = np.abs(Y - np.average(Y, axis=0, weights=w)).argmin(axis=0)
+    anchor = Y[near, np.arange(Y.shape[1])]
+    D = Y - anchor
+    mean = np.average(D, axis=0, weights=w)
+    return D - mean, anchor + mean
 
 
 def _stages(
@@ -206,8 +218,7 @@ def pruning_pass(
     B, Y, w, N, tau = _cases(B, Y, w)
     M = B.shape[1]
     m_max = _gcv.nprune_limit(M, nprune)
-    _, varying = _constant(Y)
-    R, Z, rss = _linalg.r_factor(B, varying, w)
+    R, Z, rss = _linalg.r_factor(B, _centered(Y, w)[0], w)
     if np.any(np.diag(R) == 0.0):
         raise ValueError("the columns of B must be linearly independent (FWD-11)")
     removed, rss_per_size, subsets = _stages(R, Z, rss, several=Y.shape[1] >= 2)
@@ -237,12 +248,15 @@ def final_fit(
 
     ``coef`` holds the weighted least-squares coefficients of Y on the columns
     ``selected`` of B, in increasing term order, one column per response, with
-    LA-4 for dependent columns (``_linalg.lm_fit``). A constant response gets
-    its value as the intercept's coefficient and 0 for the other terms,
-    exactly. ``rss`` is the weighted RSS of these coefficients; ``gcv``,
-    ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7 with that RSS, M = m*
-    and N = Σw. With ``pmethod="none"`` and m* < M_f the selected terms are
-    not T[m*], so ``rss`` differs from ``rss_per_size[m* - 1]`` (PRUNE-7).
+    LA-4 for dependent columns (``_linalg.lm_fit``). The fit is of the
+    centered responses, and the intercept's coefficient takes back their
+    constants, so a constant response gets its value there and 0 for the other
+    terms, exactly. ``rss`` is the weighted RSS of the centered fit: that of
+    the returned coefficients, up to the rounding of the intercept's
+    coefficient. ``gcv``, ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7
+    with that RSS, M = m* and N = Σw. With ``pmethod="none"`` and m* < M_f the
+    selected terms are not T[m*], so ``rss`` differs from
+    ``rss_per_size[m* - 1]`` (PRUNE-7).
 
     B, Y and w are as for ``pruning_pass``; ``selected`` is an increasing
     integer array that starts with the intercept, 0. Raises ValueError
@@ -262,11 +276,10 @@ def final_fit(
             f"selected must be increasing term indices below {B.shape[1]}, from 0"
         )
     m = sel.size
-    const, varying = _constant(Y)
-    coef = np.zeros((m, Y.shape[1]))
-    coef[0, const] = Y[0, const]
-    fit = _linalg.lm_fit(B[:, sel], varying, w)  # rss 0.0 with no column
-    coef[:, ~const] = fit.coef
+    Yc, constants = _centered(Y, w)
+    fit = _linalg.lm_fit(B[:, sel], Yc, w)
+    coef = fit.coef
+    coef[0] += constants  # column 0 is the intercept, a column of ones
     rss = fit.rss
     gcv = _gcv.gcv(rss, m, penalty, N, tau)
     if _gcv.is_degenerate(Y, N):
