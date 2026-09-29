@@ -212,6 +212,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:04 #72 now fixes both reference accuracy issues (final RSS; search column b(x - min x) at degree 2 and 3; shifted and unshifted passes equal bit for bit): head 37a04b4, gate B PASS, CI 12/12. Its single review waits for a slot.
 - 20:05 #69 fixed at c8c1ac4 (gate B PASS; CI finishing). recheck-69 (sonnet) started for the narrow re-approval of both roles.
 - 20:06 #70 fixed at c6ae666 (CI fixes, the EDGE-6 sign test, errstate, trims; gate B PASS; CI 12/12). recheck-70 (sonnet) started.
+- 20:14 Merged #70 (T12 _core.py) as 068ec1e after recheck-70's narrow re-approvals; T12 (#14) closed. #66 round 2 APPROVE (sonnet) at b96b174; updated its branch to main with update-branch; an update check comes next. Asked t13-estimators to rebase and open T13's PR. Follow-up: T07 adds the fast implementation to the conformance suite in a small PR, limited to the fast code's supported settings.
 
 ## Core-hour ledger
 
