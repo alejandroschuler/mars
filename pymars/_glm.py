@@ -25,12 +25,15 @@ If no other column is left, the fit is the intercept alone, whose
 probabilities are the weighted class frequencies (GLM-5); no solver runs.
 
 The solver. Newton's method on the standardized columns, from the
-intercept-only fit, with a backtracking line search (Armijo). It stops when
-half the Newton decrement, which estimates how far the objective lies above
-its minimum, is at most ``DECREMENT_TOL`` times the objective, and gives up
-after ``MAX_ITER`` steps. Under separation the minimum is not attained: the
-iterates grow without bound and the relative decrement stays near 1/2, so the
-fit ends at ``MAX_ITER`` without converging. A ConvergenceWarning that
+intercept-only fit, with a backtracking line search (Armijo) that needs a
+strict decrease. It stops when half the Newton decrement, which estimates how
+far the objective lies above its minimum, is at most ``DECREMENT_TOL`` times
+the objective; it then takes one more full Newton step, which squares the
+relative error of the coefficients, so they reach about machine precision. It
+gives up after ``MAX_ITER`` steps, or when the line search finds no
+decrease. Under separation the minimum is not attained: the iterates grow
+without bound and the relative decrement stays near 1/2, so the fit ends at
+``MAX_ITER`` without converging. A ConvergenceWarning that
 suggests a positive ``glm_alpha`` follows when the fit did not converge, or
 when some fitted probability is within 10·ε of 0 or 1 (GLM-4); the last
 iterate is kept.
@@ -63,12 +66,10 @@ FloatArray = npt.NDArray[np.float64]
 
 #: The largest number of Newton steps.
 MAX_ITER = 100
-#: Converged when half the Newton decrement is at most this times the objective.
-DECREMENT_TOL = 1e-16
-#: When the line search cannot lower the objective, the fit still counts as
-#: converged if half the decrement is at most this times the objective: the
-#: step is then below the rounding of the objective.
-STALL_TOL = 1e-10
+#: Converged when half the Newton decrement is at most this times the
+#: objective; this lies well above the rounding of the objective (about
+#: 1e-16 relative), so that the line search can still see the decrease.
+DECREMENT_TOL = 1e-12
 #: GLM-4: a probability within this of 0 or 1 warns (R's glm uses the same).
 EXTREME_PROB = 10.0 * np.finfo(np.float64).eps
 #: The Armijo constant and the most halvings of the line search.
@@ -150,13 +151,15 @@ class _Problem:
             np.sum(self.pen * theta**2)
         )
 
-    def derivatives(self, theta: FloatArray):
-        """The value, the gradient (d·(Q - 1),), the Hessian and the fitted
-        probabilities with their complements, (n, Q) each."""
+    def fitted(self, theta: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
+        """The (n, Q) predictors [0, η], probabilities P and complements 1 - P."""
         full = self._full(theta)
         lse = scipy.special.logsumexp(full, axis=1)
-        P = np.exp(full - lse[:, None])
-        C = _complements(full, lse)
+        return full, np.exp(full - lse[:, None]), _complements(full, lse)
+
+    def derivatives(self, theta: FloatArray):
+        """The value, the gradient (d·(Q - 1),) and the Hessian."""
+        full, P, C = self.fitted(theta)
         f = float(self.w @ self._nll(full)) + 0.5 * self.alpha * float(
             np.sum(self.pen * theta**2)
         )
@@ -175,7 +178,7 @@ class _Problem:
                 H[k * d : (k + 1) * d, m * d : (m + 1) * d] = block
                 H[m * d : (m + 1) * d, k * d : (k + 1) * d] = block.T
         H[np.diag_indices_from(H)] += self.alpha * self.pen.T.ravel()
-        return f, G.T.ravel(), H, P, C
+        return f, G.T.ravel(), H
 
 
 def _newton_step(H: FloatArray, g: FloatArray) -> FloatArray:
@@ -191,7 +194,7 @@ def _solve(problem: _Problem, theta: FloatArray) -> tuple[FloatArray, bool, int]
     """Newton's method with a backtracking line search (module docstring)."""
     shape = theta.shape
     for it in range(1, MAX_ITER + 1):
-        f, g, H, _, _ = problem.derivatives(theta)
+        f, g, H = problem.derivatives(theta)
         s = _newton_step(H, g)
         slope = float(g @ s)  # -λ², the directional derivative
         step = s.reshape(shape[::-1]).T
@@ -201,11 +204,13 @@ def _solve(problem: _Problem, theta: FloatArray) -> tuple[FloatArray, bool, int]
         t = 1.0
         for _ in range(_HALVINGS):
             new = theta + t * step
-            if problem.value(new) <= f + _ARMIJO * t * slope:
+            value = problem.value(new)
+            # strictly lower, so that a step lost in rounding is not accepted
+            if value < f and value <= f + _ARMIJO * t * slope:
                 break
             t *= 0.5
         else:
-            return theta, -0.5 * slope <= STALL_TOL * f, it - 1
+            return theta, False, it - 1
         theta = new
     return theta, False, MAX_ITER
 
@@ -262,10 +267,10 @@ def fit_glm(
     gamma = theta[1:]
     coef[cols, 1:] = gamma / sd[:, None]
     coef[0, 1:] = theta[0] - (mean / sd) @ gamma
-    _, _, _, P, C = problem.derivatives(theta)
+    _, P, C = problem.fitted(theta)
     extreme = bool(np.any(P <= EXTREME_PROB) or np.any(C <= EXTREME_PROB))
     if not converged or extreme:
-        why = [] if converged else [f"did not converge in {MAX_ITER} Newton steps"]
+        why = [] if converged else ["did not converge"]
         if extreme:
             why.append("gave fitted probabilities numerically 0 or 1")
         warnings.warn(
