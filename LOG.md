@@ -273,6 +273,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:55 #67 at e368a34 (comment fix; the shifted draws keep the cap at degree 3 after a #85-pattern failure; gate A, B PASS; gate C fails only on main's T16 test_scale_and_shift_of_a_covariate at thorough, seed 1053, an intercept check wrong under a shift). Sent the test fix to t16-invariance (new small PR) and the narrow recheck to #67's spec reviewer. Weekly 46 %.
 - 13:05 #67 spec APPROVE at e368a34; CI green on every job (the lowest-dependencies job too; #88 is intermittent). Decision: #67 is test code; its only gate C failure is main's T16 test outside its diff, which a separate PR fixes; so #67 merges once the adversarial role approves e368a34, and gate C must pass on main after the T16 fix. Asked the adversarial reviewer for the narrow recheck.
 - 13:15 #67 adversarial recheck APPROVE at e368a34. Merged #67 (T15 oracle tests and gate C) as e431fcb; closed #17 (caps tracked in #84 and #85). Added the degree-3 shifted case to #85.
+- 13:35 #90 ready (ab390a2, Refs #18; the shift check moves the intercept by -c times the beta of linear terms in x_j; the file passes at thorough). Updated to 8bc2b1b; started review-90 (sonnet). Weekly 47 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
