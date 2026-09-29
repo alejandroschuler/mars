@@ -30,7 +30,7 @@ classifiers = [
 ]
 # dev/DECISIONS.md gives the reasons for these floors.
 dependencies = [
-    "numpy>=1.23.5",
+    "numpy>=1.24.4",
     "scipy>=1.9.3",
     "scikit-learn>=1.6",
 ]
