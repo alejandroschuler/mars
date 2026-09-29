@@ -222,6 +222,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 - 2026-09-29 00:25 The watchdog found the heartbeat stale (23:25) and took the lock (session local_b1a9357f). The earlier executor did not resume after the 23:10 reset. Weekly 34 %, 5-hour 0 %. #71 fixes at 1f29cb3.
 - 00:37 Started recheck-71 (sonnet, narrow, both roles at 1f29cb3), review-74 (single, sonnet), review-72 (single, opus).
+- 00:45 recheck-71: spec and adversarial APPROVE at 1f29cb3 (both round-1 designs pinned; the two mutants fail). Merged #71 (T11 stage 2) as 6016717. review-74: APPROVE at 9007d86. Updated #74 (6e8aea1) and #66 (fc4d6af) to main; update-check-74 started. #66's update check comes after #74 merges.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
