@@ -203,6 +203,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:13 18:12 resume after the user's pause: weekly 17 %, 5-hour 3 %. Messaged t11-stage2, t07-conformance and t06-reference to continue. Started the #69 adversarial rerun and the #70 (T12) dual review; #67's review waits for slots.
 - 18:15 The user: once the current round of work is done, pause, start no more agents, and tell the user. Recorded in STATE; #67's queued review will not start.
 - 18:19 #72 ready (a7c32dd): the reference's final RSS from the centered projection, accurate at mean 1e13; gate B PASS; CI 12/12. Its review waits (the user's stop-after-round rule).
+- 18:29 #66 round-1 fixes at b96b174 (all blocking items fixed; gate B PASS; CI 12/12). Its round 2 waits (the user's stop-after-round rule).
 
 ## Core-hour ledger
 
