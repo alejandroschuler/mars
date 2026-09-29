@@ -877,6 +877,7 @@ def _parent_candidates(
     largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
     [LA-2], where G is B, and B with b x in a pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
+    The column b x is formed as b (x - min x), which spans the same with B.
     Cost: up to n knots per covariate, each projected on up to M + 1
     columns, so O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
     """
@@ -903,7 +904,11 @@ def _parent_candidates(
     out = []
     for j in covariates:
         x = X[:, j]
-        bx = b * x
+        # b x enters only through its span with B, which holds b, so b (x - m)
+        # with m the smallest x serves in its place: the same A_w, the same
+        # linear candidate and the same G in exact arithmetic, and x - m is
+        # exact when x has a large mean, so no digits go to the mean [LA-5]
+        bx = b * (x - x.min())
         V = [*own, j]
         pair = all(sigma2[v] > 0 for v in V) and (
             P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)

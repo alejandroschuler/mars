@@ -1312,6 +1312,42 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
+    @pytest.mark.parametrize("degree", [2, 3])
+    def test_an_exact_shift_of_a_covariate_keeps_the_pass(self, degree):
+        # With auto_linpreds=False every term is a product of hinges, so an
+        # exact shift of x1 by 2^36 cannot change the fit (Conventions). The
+        # pass must give the same terms with the cuts shifted, and each RSS
+        # within 1e-8 of the RSS before the step [LA-5], against the pass on
+        # the unshifted x1 and against exact rational arithmetic
+        rng = np.random.default_rng(4)
+        n = 40
+        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+        X = np.column_stack(grid)[:, :degree]
+        hinge = np.maximum(X[:, 0] - 0.3, 0)
+        y = 2 * hinge + 3 * hinge * X[:, 1] + 0.05 * rng.normal(size=n)
+        if degree == 3:
+            y = y + 2 * hinge * X[:, 1] * X[:, 2]
+        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
+        base = run_forward(X, y, **opts)
+        shifted_X = X.copy()
+        shifted_X[:, 1] += 2.0**36
+        np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**36, X[:, 1])  # exact
+        shifted = run_forward(shifted_X, y, **opts)
+        for key in ("dirs", "parent", "step", "termination"):
+            np.testing.assert_array_equal(shifted[key], base[key])
+        cuts = base["cuts"].copy()
+        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**36, 0.0)
+        np.testing.assert_array_equal(shifted["cuts"], cuts)
+        before = base["rss"][:-1]
+        assert np.all(np.abs(shifted["rss"][1:] - base["rss"][1:]) <= 1e-8 * before)
+        for s in range(1, len(shifted["rss"])):
+            terms = np.flatnonzero(shifted["step"] <= s)
+            B = ref.basis_matrix(
+                shifted_X, shifted["dirs"][terms], shifted["cuts"][terms]
+            )
+            exact = exact_rss(B, y, np.ones(n))
+            assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
+
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
         # covariates of the parent and x; with a power of 2 every value scales
