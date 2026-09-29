@@ -70,26 +70,38 @@ def test_hinge_products_equal_the_explicit_columns(seed, n, c, ties, shift):
     seeds,
     st.integers(8, 60),
     st.integers(1, 4),
-    st.integers(1, 2),
+    st.integers(1, 3),
     st.booleans(),
     st.booleans(),
     st.sampled_from([0.0, 1e6]),
+    st.booleans(),
 )
-def test_knot_scan_equals_least_squares(seed, n, r, K, parent, ties, shift):
-    """A general parent (``intercept=False``), with ties and a shift of x."""
+def test_knot_scan_equals_least_squares(seed, n, r, K, parent, ties, shift, weighted):
+    """A general parent (``intercept=False``), with ties, a shift of x, several
+    responses (RESP-1) and weights: with ``weighted`` the scan gets √w·b, the
+    orthonormal basis of the √w-scaled B and the √w-scaled residuals (the
+    plan's "Fast path"), against weighted least squares (LA-1 to LA-3)."""
     x, b, B, Q, Y, E, splits = _problem(seed, n, r, K, ties, shift, parent)
-    scan = _scan.knot_scan(x, b, Q, E, splits)
-    base = _rss(B, Y)
+    w = np.random.default_rng(seed + 2).uniform(0.1, 5.0, n) if weighted else None
+    sw = np.ones(n) if w is None else np.sqrt(w)
+    if weighted:
+        Q, _ = np.linalg.qr(sw[:, None] * B)
+        Q *= np.sign(Q[0])  # column 0 is √w/√N, the intercept direction
+        E = sw[:, None] * Y - Q @ (Q.T @ (sw[:, None] * Y))
+    scan = _scan.knot_scan(x, sw * b, Q, E, splits)
+    wv = np.ones(n) if w is None else w
+    base = _rss(sw[:, None] * B, sw[:, None] * Y)
     for i, s in enumerate(splits):
         h = b * np.maximum(x - x[s - 1], 0.0)
-        centered = np.sum((h - h.mean()) ** 2)
+        centered = wv @ (h - wv @ h / wv.sum()) ** 2
         if not np.any(h):  # a constant hinge column: 0 at every case
             assert scan.ratio[i] == scan.gain[i] == scan.ratio_err[i] == 0.0
             continue
-        rho = _rss(B, h) / centered
+        rho = _rss(sw[:, None] * B, sw * h) / centered
         assert abs(scan.ratio[i] - rho) <= max(scan.ratio_err[i], 1e-12)
         if rho > 1e-6:
-            gain = base - _rss(np.column_stack((B, h)), Y)
+            G = sw[:, None] * np.column_stack((B, h))
+            gain = base - _rss(G, sw[:, None] * Y)
             assert abs(scan.gain[i] - gain) <= max(scan.gain_err[i], 1e-10 * base)
 
 

@@ -64,7 +64,7 @@ with a scan value only when that value, moved by its bound either way,
 decides the same, and otherwise with the explicit values of ``exact_knot``
 (LA-5).
 
-Weights (stage 3 of T11). With case weights, b is √w·b, and Q and E are the
+Weights. With case weights, b is √w·b, and Q and E are the
 basis and the residuals of the √w-scaled problem (plan: Fast path); the
 formulas are unchanged, and no division by a weight occurs.
 

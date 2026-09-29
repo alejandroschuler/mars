@@ -1,13 +1,15 @@
-"""Tests of pymars/_forward.py, stages 1 and 2 of T11: every degree, one
-response, no weights and fast_k = 0.
+"""Tests of pymars/_forward.py (T11): every degree, Fast MARS, weights and
+several responses.
 
 The earth fixtures (T05) are compared in the matched and the earth-compatible
 (defaults) modes at degrees 1 to 3 by the plan's rules ("What is compared,
 and the tolerances", "Ties"): the steps exactly up to the first near-tie, the
 RSS after each step within 1e-8 of the RSS before it (LA-5), and the
-termination code when the whole path matched. The defaults mode runs earth's
-fast.k = 20: with M_max ≤ fast_k + 2 the window holds every row at every step
-(FAST-3), so fast_k = 0 gives the same fit.
+termination code when the whole path matched. earth counts cases where
+pymars counts weight (W-2), so a weighted fit is compared with earth's fit of
+the repeated rows, its "_repeated" fixture (W-1, W-3; the plan's "Sample
+weights"). The queue with fast_k > 0, weights and several responses are
+also compared with the reference.
 """
 
 import json
@@ -39,22 +41,27 @@ def _params(a):
         "endspan": a.get("endspan") or None,
         "adjust_endspan": a.get("Adjust.endspan", 2.0),
         "auto_linpreds": a.get("Auto.linpreds", True),
+        "fast_beta": a.get("fast.beta", 1.0),
     }
 
 
+def _repeated(name):
+    """The fixture of earth's fit of the repeated rows of a weighted fixture."""
+    return name.replace("_matched", "_repeated_matched").replace(
+        "_defaults", "_repeated_defaults"
+    )
+
+
 def _selected(name):
-    """Earth's scaled X, no weights, one numeric response that is not constant,
-    and a queue whose window holds every row (module docstring)."""
+    """Earth's scaled X, numeric responses, not all constant, and no weights,
+    or weights with a fixture of the repeated rows (module docstring)."""
     d = json.loads((FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
-    a, y = d["earth_args"], d["inputs"]["y"]
-    if d.get("scale") is None or "error" in d["result"]:
+    y, w = d["inputs"]["y"], d["inputs"]["weights"]
+    if d.get("scale") is None or "error" in d["result"] or isinstance(y[0], str):
         return False
-    if d["inputs"]["weights"] is not None or not isinstance(y[0], float):
+    if w is not None and not (FIXTURES_DIR / f"{_repeated(name)}.json").is_file():
         return False
-    p = len(d["inputs"]["X"][0])
-    max_terms = a.get("nk") or _gcv.default_max_terms(p)
-    fast_k = a.get("fast.k", 20)
-    return len(set(y)) > 1 and (fast_k == 0 or max_terms <= max(3, fast_k) + 2)
+    return len({json.dumps(v) for v in y}) > 1
 
 
 # The dataset fixtures are S01 to S20; the lowercase names are extras, which a
@@ -68,7 +75,8 @@ FIXTURES = sorted(
 
 def test_the_fixture_selection():
     at = [sum(f"_d{d}" in name for name in FIXTURES) for d in (2, 3)]
-    assert len(FIXTURES) == 105 and at == [15, 2]
+    assert len(FIXTURES) == 119 and at == [17, 2]
+    assert {"S16_weighted_matched_d2", "S17_matched_d1"} <= set(FIXTURES)
 
 
 def _steps(dirs, cuts):
@@ -92,15 +100,21 @@ def _steps(dirs, cuts):
 
 @pytest.mark.parametrize("name", FIXTURES)
 def test_earth_fixture(load_fixture, name):
+    """FWD, STOP and FAST against earth; RESP-1 for S17 (two responses), and
+    W-1 and W-3 for S13 and S16, with integer weights, zeros included,
+    against earth's fit of the repeated rows."""
     d = load_fixture(name)
     X = np.asarray(d["inputs"]["X"], dtype=np.float64)
     y = np.asarray(d["inputs"]["y"], dtype=np.float64)
-    fp = _forward.forward_pass(X, y, **_params(d["earth_args"]), **KW)
+    w = d["inputs"]["weights"]
+    kw = _params(d["earth_args"]) | {"fast_k": d["earth_args"].get("fast.k", 20)}
+    fp = _forward.forward_pass(X, y, w, **kw, record_candidates=True)
+    result = d["result"] if w is None else load_fixture(_repeated(name))["result"]
     ours = _steps(fp.dirs, fp.cuts)
-    earth = _steps(d["result"]["dirs"], np.asarray(d["result"]["cuts"]))
+    earth = _steps(result["dirs"], np.asarray(result["cuts"]))
     log = fp.candidates
     tie = log.second_rss - log.best_rss < 1e-7 * fp.rss[:-1]
-    fwd_rss = d["result"]["fwd_rss"]
+    fwd_rss = result["fwd_rss"]
     matched = 0
     for s in range(len(ours)):
         if tie[s]:
@@ -112,7 +126,11 @@ def test_earth_fixture(load_fixture, name):
     assert abs(fp.rss[0] - fwd_rss[0]) <= 1e-8 * fp.rss[0]
     if matched == len(ours):
         assert len(earth) == len(ours)
-        assert fp.termination == d["result"]["termcond"]
+        assert fp.termination == result["termcond"]
+
+
+def _col(y):
+    return y[:, None]
 
 
 def _queue_design(name):
@@ -128,24 +146,41 @@ def _queue_design(name):
     FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
     and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
     an interaction, on covariates with variance 1/12, where the variances of
-    the parent's covariates decide the kind of a search (LA-7)."""
+    the parent's covariates decide the kind of a search (LA-7). "window":
+    fast_k = 1, which acts as 3 (FAST-3), with fast_beta 0.5, so the window
+    leaves out rows of parents that could be searched. "weights": fast_k = 5
+    at degree 3, two responses in different units (RESP-1, RESP-3) and
+    weights that are not integers, so that N = Σw sets the spans and the
+    knots (W-2, KNOT-6) and the weighted variances the kind of a search."""
+    if name in ("window", "weights"):
+        return _weighted_design(name)
     rng = np.random.default_rng({"binary": 14, "pair rule": 4}.get(name, 0))
     kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
     if name == "binary":
         x0, x1 = rng.choice([-1.0, 1.0], size=200), rng.uniform(size=200)
         y = 2 * x0 + 3 * x0 * np.maximum(x1 - 0.4, 0)
-        return np.column_stack((x0, x1)), y + 0.05 * rng.normal(size=200), kw
+        return (
+            np.column_stack((x0, x1)),
+            _col(y + 0.05 * rng.normal(size=200)),
+            None,
+            kw,
+        )
     if name == "linear option":
         X = rng.uniform(size=(100, 2))
         y = 3 * np.maximum(X[:, 0] - 0.5, 0) * X[:, 1] + 0.05 * rng.normal(size=100)
-        return X, y, kw | {"max_terms": 11, "auto_linpreds": False}
+        return X, _col(y), None, kw | {"max_terms": 11, "auto_linpreds": False}
     if name == "pair rule":
         x0 = rng.uniform(size=100)
         X = np.column_stack(
             (x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100))
         )
         y = 5 * np.maximum(X[:, 2] - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
-        return X, y + 0.01 * rng.normal(size=100), kw | {"minspan": 1, "endspan": 1}
+        return (
+            X,
+            _col(y + 0.01 * rng.normal(size=100)),
+            None,
+            kw | {"minspan": 1, "endspan": 1},
+        )
     X = rng.uniform(size=(80, 2))
     y = 10 * np.maximum(X[:, 0] - 0.4, 0) * np.maximum(X[:, 1] - 0.3, 0) + X[:, 0]
     kw |= {"max_degree": 3, "max_terms": 21}
@@ -153,16 +188,30 @@ def _queue_design(name):
         kw |= {"minspan": 1, "endspan": 1}
     else:
         kw |= {"fast_beta": 2.5, "adjust_endspan": 0.5}
-    return X, y + 0.05 * rng.normal(size=80), kw
+    return X, _col(y + 0.05 * rng.normal(size=80)), None, kw
+
+
+def _weighted_design(name):
+    rng = np.random.default_rng(7)
+    n = 150
+    X = rng.uniform(size=(n, 3))
+    f = 4 * np.maximum(X[:, 0] - 0.3, 0) * np.maximum(X[:, 1] - 0.4, 0) + X[:, 2]
+    Y = np.column_stack((f, 100 * np.sin(3 * X[:, 1]))) + 0.05 * rng.normal(size=(n, 2))
+    kw = {"max_degree": 2, "max_terms": 21, "thresh": 0.0, "fast_k": 1}
+    if name == "window":
+        return X, Y[:, :1], None, kw | {"fast_beta": 0.5}
+    kw |= {"max_degree": 3, "fast_k": 5, "max_terms": 25}
+    return X, Y, rng.uniform(0.2, 3.0, size=n), kw
 
 
 @pytest.mark.parametrize(
-    "name", ["binary", "linear option", "degree 3", "ageing", "pair rule"]
+    "name",
+    ["binary", "linear option", "degree 3", "ageing", "pair rule", "window", "weights"],
 )
 def test_the_queue_against_the_reference(monkeypatch, name):
-    """FAST-1, FAST-2, FAST-4 and FAST-5 with fast_k = 0, and the searches of
-    parents other than the intercept (FWD-2, FWD-6, KNOT-1 to KNOT-3, SPAN-1,
-    SPAN-4, LA-7),
+    """FAST-1 to FAST-5, and the searches of parents other than the intercept
+    (FWD-2, FWD-6, KNOT-1 to KNOT-3, SPAN-1, SPAN-4, LA-7), with weights and
+    two responses in "weights" (W-2, W-8, RESP-1),
     against the reference called as a black box with its trace: at every step
     the parents searched (entry e stands for slot e), and κ and λ of every
     entry after the search, λ within LA-5 of the TSS; the queue table and the
@@ -171,7 +220,7 @@ def test_the_queue_against_the_reference(monkeypatch, name):
     the same product, as in "ageing"); then the whole record. λ is the best
     legal reduction of a parent, so it checks the search of every parent,
     also of those whose candidates do not win."""
-    X, y, kw = _queue_design(name)
+    X, Y, w, kw = _queue_design(name)
     fast, real = [], _forward._Pass.best
 
     def best(st_):
@@ -181,18 +230,19 @@ def test_the_queue_against_the_reference(monkeypatch, name):
         return out
 
     monkeypatch.setattr(_forward._Pass, "best", best)
-    fp = _forward.forward_pass(X, y, **KW, **kw)
-    Y = y[:, None]
-    Ys, n = np.ldexp(Y, mars_ref.y_scale_power(Y)), len(y)
-    tss = mars_ref.rss(np.ones((n, 1)), Ys, np.ones(n))
+    fp = _forward.forward_pass(X, Y, w, **(KW | kw))
+    Ys, n = np.ldexp(Y, mars_ref.y_scale_power(Y)), len(Y)
+    wv = np.ones(n) if w is None else w
+    tss = mars_ref.rss(np.ones((n, 1)), Ys, wv)
+    N, tau = _gcv.total_weight(n, w)
     trace = []
     ref, _ = mars_ref.forward_pass(
         X,
         Ys,
-        np.ones(n),
-        kw | {"fast_k": 0},
-        N=float(n),
-        tau_N=mars_ref.weight_tol(float(n)),
+        wv,
+        {"fast_k": 0} | kw,
+        N=N,
+        tau_N=tau,
         tss=tss,
         record_candidates=True,
         trace=trace,
@@ -215,8 +265,66 @@ def test_the_queue_against_the_reference(monkeypatch, name):
     assert np.all(log.second_rss - log.best_rss >= 1e-7 * fp.rss[:-1])
 
 
-def _fit(X, y, **kw):
-    return _forward.forward_pass(np.asarray(X, float), np.asarray(y, float), **KW, **kw)
+def _fit(X, y, w=None, **kw):
+    X, y = np.asarray(X, float), np.asarray(y, float)
+    return _forward.forward_pass(X, y, w, **(KW | kw))
+
+
+def _twelve_hinges():
+    rng = np.random.default_rng(0)
+    X = rng.uniform(size=(300, 12))
+    y = np.abs(X - 0.5) @ 0.8 ** np.arange(12) + 0.01 * rng.normal(size=300)
+    return X, y
+
+
+@pytest.mark.parametrize(
+    ("fast_k", "terms"), [(1, 5), (2, 5), (3, 5), (5, 7), (10, 11), (0, None)]
+)
+@pytest.mark.parametrize(("thresh", "code"), [(0.0, 6), (0.001, 4)])
+def test_the_window_ends_a_fit_of_pairs(fast_k, terms, thresh, code):
+    """FAST-3 and FAST-6: at degree 1, with pairs only and fast_beta = 1, the
+    pass ends at the first size M with M - 1 ≥ nu, since nu entries at
+    max_degree then rank ahead of the intercept: 5, 7 and 11 terms for nu = 3,
+    5 and 10, where fast_k = 1 and 2 act as 3. The step searches nothing, so
+    STOP-4 ends the pass for thresh > 0 and STOP-2 for thresh = 0. Here each
+    step takes a pair on a new covariate; fast_k = 0 goes on."""
+    fp = _fit(*_twelve_hinges(), fast_k=fast_k, thresh=thresh, max_terms=41)
+    if terms is None:
+        assert fp.dirs.shape[0] > 11
+    else:
+        assert fp.dirs.shape[0] == terms and fp.termination == code
+        assert np.all(fp.cuts[1::2] == fp.cuts[2::2])  # pairs
+
+
+def test_unit_and_zero_weights():
+    """W-5: weights all 1 give the fit of no weights, bit for bit. W-3: a row
+    with zero weight is dropped before anything else, so that a far outlier
+    in x and y with weight 0 changes no bit; W-1: integer weights act as
+    repeated rows, with several responses (RESP-1), at degree 2 and with the
+    window of FAST-3."""
+    rng = np.random.default_rng(8)
+    X = rng.uniform(size=(120, 3))
+    Y = np.column_stack((np.sin(4 * X[:, 0]) * X[:, 1], X[:, 2] ** 2))
+    Y = Y + 0.05 * rng.normal(size=Y.shape)
+    kw = {"max_degree": 2, "fast_k": 4, "thresh": 0.0, "max_terms": 15}
+    base = _fit(X, Y, **kw)
+    same = [_fit(X, Y, w=np.ones(120), **kw)]
+    far = np.r_[X, [[1e6, -1e6, 0.5]]], np.r_[Y, [[1e9, -1e9]]]
+    same.append(_fit(*far, w=np.r_[np.ones(120), 0.0], **kw))
+    for fp in same:
+        for field in ("dirs", "cuts", "parent", "step", "kept", "rss"):
+            np.testing.assert_array_equal(getattr(fp, field), getattr(base, field))
+        assert fp.termination == base.termination
+        for a, b in zip(fp.candidates, base.candidates, strict=True):
+            np.testing.assert_array_equal(a, b)
+    w = rng.integers(1, 4, size=120)
+    fp = _fit(X, Y, w=w.astype(float), **kw)
+    rep = _fit(np.repeat(X, w, axis=0), np.repeat(Y, w, axis=0), **kw)
+    log = fp.candidates
+    assert np.all(log.second_rss - log.best_rss >= 1e-7 * fp.rss[:-1])  # no tie
+    for field in ("dirs", "cuts", "parent", "step", "kept"):
+        np.testing.assert_array_equal(getattr(fp, field), getattr(rep, field))
+    assert np.all(np.abs(fp.rss - rep.rss) <= 1e-8 * np.r_[fp.rss[0], fp.rss[:-1]])
 
 
 def _rss(A, y):
@@ -443,6 +551,7 @@ def _on_binary_grids(design):
     return X, np.round(y * 2**8) / 2**8
 
 
+@pytest.mark.parametrize("weighted", [False, True])
 @pytest.mark.parametrize(
     ("design", "x_shift", "y_shift"),
     [
@@ -451,9 +560,10 @@ def _on_binary_grids(design):
         ("linear", 2.0**24, 0),  # the column of the linear candidate
         ("pairs", 0, 2.0**44),  # the TSS
         ("interaction", 2.0**36, 0),  # b·(x - c) for a parent b other than 1
+        ("interaction", 2.0**26, 2.0**34),
     ],
 )
-def test_exact_shifts(design, x_shift, y_shift):
+def test_exact_shifts(design, x_shift, y_shift, weighted):
     """Exact shifts of x0 or of y give the fit of the unshifted data: the same
     terms, knots moved by the shift, and every RSS, rss[0] = TSS and the
     log's second included, within 1e-8 of the RSS before its step (LA-5,
@@ -464,13 +574,23 @@ def test_exact_shifts(design, x_shift, y_shift):
     search becomes a pair search. In "linear", FWD-4 bars every knot of x0 at
     step 2, and the linear candidate of x0 wins. "interaction" runs at degree
     2 with auto_linpreds=False, where x0 enters products as b·(x0 - m)₊, which
-    a shift does not change (FWD-6)."""
+    a shift does not change (FWD-6). With ``weighted`` the weights are
+    multiples of 1/8 (W-8), and the shifted data get one more case: a copy of
+    the first row with y = 2^52 and weight 2^-170, which changes no knot or
+    term and no RSS by more than 1e-19, but which a shift of y by its first
+    value would make the anchor of the centering (FWD-10)."""
     X, y = _on_binary_grids(design)
     kw = {"thresh": 0.0, "minspan": 1, "endspan": 1, "max_terms": 11}
     if design == "interaction":
         kw |= {"max_degree": 2, "auto_linpreds": False}
-    a = _fit(X, y, **kw)
-    b = _fit(X + np.eye(X.shape[1])[0] * x_shift, y + y_shift, **kw)
+    w = None
+    if weighted:
+        w = np.random.default_rng(1).integers(1, 17, size=len(y)) / 8.0
+    Xs, ys, ws = X + np.eye(X.shape[1])[0] * x_shift, y + y_shift, w
+    if weighted:
+        Xs, ys, ws = np.r_[Xs[:1], Xs], np.r_[2.0**52, ys], np.r_[2.0**-170, w]
+    a = _fit(X, y, w=w, **kw)
+    b = _fit(Xs, ys, w=ws, **kw)
     np.testing.assert_array_equal(b.dirs, a.dirs)
     moved = np.abs(a.dirs[:, 0]) == 1
     np.testing.assert_array_equal(b.cuts[moved, 0], a.cuts[moved, 0] + x_shift)
