@@ -146,7 +146,9 @@ def _queue_design(name):
     FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
     and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
     an interaction, on covariates with variance 1/12, where the variances of
-    the parent's covariates decide the kind of a search (LA-7). "window":
+    the parent's covariates decide the kind of a search (LA-7); in "pair
+    rule, weighted", with weight 3 in the tails of x0 and 0.3 elsewhere, the
+    weighted variances decide it (W-8). "window":
     fast_k = 1, which acts as 3 (FAST-3), with fast_beta 0.5, so the window
     leaves out rows of parents that could be searched. "weights": fast_k = 5
     at degree 3, two responses in different units (RESP-1, RESP-3) and
@@ -154,7 +156,8 @@ def _queue_design(name):
     knots (W-2, KNOT-6) and the weighted variances the kind of a search."""
     if name in ("window", "weights"):
         return _weighted_design(name)
-    rng = np.random.default_rng({"binary": 14, "pair rule": 4}.get(name, 0))
+    seed = {"binary": 14, "pair rule": 4, "pair rule, weighted": 4}.get(name, 0)
+    rng = np.random.default_rng(seed)
     kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
     if name == "binary":
         x0, x1 = rng.choice([-1.0, 1.0], size=200), rng.uniform(size=200)
@@ -169,16 +172,18 @@ def _queue_design(name):
         X = rng.uniform(size=(100, 2))
         y = 3 * np.maximum(X[:, 0] - 0.5, 0) * X[:, 1] + 0.05 * rng.normal(size=100)
         return X, _col(y), None, kw | {"max_terms": 11, "auto_linpreds": False}
-    if name == "pair rule":
+    if name.startswith("pair rule"):
         x0 = rng.uniform(size=100)
         X = np.column_stack(
             (x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100))
         )
         y = 5 * np.maximum(X[:, 2] - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
+        w = np.where(np.abs(x0 - 0.5) > 0.35, 3.0, 0.3)
+        w = w if name.endswith("weighted") else None
         return (
             X,
             _col(y + 0.01 * rng.normal(size=100)),
-            None,
+            w,
             kw | {"minspan": 1, "endspan": 1},
         )
     X = rng.uniform(size=(80, 2))
@@ -206,7 +211,16 @@ def _weighted_design(name):
 
 @pytest.mark.parametrize(
     "name",
-    ["binary", "linear option", "degree 3", "ageing", "pair rule", "window", "weights"],
+    [
+        "binary",
+        "linear option",
+        "degree 3",
+        "ageing",
+        "pair rule",
+        "pair rule, weighted",
+        "window",
+        "weights",
+    ],
 )
 def test_the_queue_against_the_reference(monkeypatch, name):
     """FAST-1 to FAST-5, and the searches of parents other than the intercept
@@ -512,13 +526,18 @@ def test_the_rsq_rule_of_stop5():
     assert fp.termination == Termination.RSQ_HIGH and len(fp.rss) == 2
 
 
-@pytest.mark.parametrize("y", [[2.0] * 5, [1.5]])
-def test_a_degenerate_fit(y):
-    """EDGE-1, GCV-7: a constant response or a single case."""
-    fp = _fit(np.arange(len(y), dtype=float)[:, None], y)
+@pytest.mark.parametrize(
+    ("y", "w", "tss"),
+    [([2.0] * 5, None, 0.0), ([1.5], None, 0.0), ([0.0, 1.0, 2.0], [1, 1, 2], 0.6875)],
+)
+def test_a_degenerate_fit(y, w, tss):
+    """EDGE-1, GCV-7: a constant response, a single case, or N = Σw ≤ 1 (W-2)
+    with a response that is not constant, whose rss[0] is its weighted TSS."""
+    w = None if w is None else np.array(w) / 4.0
+    fp = _fit(np.arange(len(y), dtype=float)[:, None], y, w=w)
     assert fp.termination == Termination.DEGENERATE
     assert fp.dirs.tolist() == [[0]] and fp.cuts.tolist() == [[0.0]]
-    assert fp.rss.tolist() == [0.0] and fp.kept.tolist() == [0]
+    assert fp.rss.tolist() == [tss] and fp.kept.tolist() == [0]
     assert fp.dropped.shape == (0,) and fp.dropped.dtype == np.int64
     assert fp.parent.tolist() == [-1] and fp.step.tolist() == [0]
     assert all(a.shape == (0,) for a in fp.candidates)
