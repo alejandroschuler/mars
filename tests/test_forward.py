@@ -117,14 +117,15 @@ def test_earth_fixture(load_fixture, name):
 
 def _queue_design(name):
     """Data and settings for test_the_queue_against_the_reference, with no
-    near-tie between candidates. "binary": a covariate with the values -1 and 1 has no knot, so
-    its linear term enters first and is a parent with negative cases
-    (KNOT-1). "degree 3": two covariates, single hinges (the slots run ahead
-    of M, FAST-4) and parents of degree 2 that hold both covariates (λ = -1,
-    FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
-    and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
-    an interaction, on covariates with variance 1/12, where the variances of
-    the parent's covariates decide the kind of a search (LA-7)."""
+    near-tie between candidates. "binary": a covariate with the values -1 and
+    1 has no knot, so its linear term enters first and is a parent with
+    negative cases (KNOT-1). "degree 3": two covariates, single hinges (the
+    slots run ahead of M, FAST-4) and parents of degree 2 that hold both
+    covariates (λ = -1, FAST-5). "ageing": the same data with other spans,
+    fast_beta 2.5 (FAST-2) and adjust_endspan 0.5 (SPAN-4). "pair rule": x1
+    is x0 plus noise inside an interaction, on covariates with variance 1/12,
+    where the variances of the parent's covariates decide the kind of a
+    search (LA-7)."""
     rng = np.random.default_rng({"binary": 14, "pair rule": 4}.get(name, 0))
     kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
     if name == "binary":
