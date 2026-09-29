@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 19:56 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 19:57 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -47,13 +47,13 @@ Efficiency under the meaningful-tests rule (from 10:10 Monday, 46 % to 53 %): #5
 
 ## Running agents
 
-- `t11-forward` (opus): done (stage 1 merged); resumable for stage-1 questions.
-- `t11-stage2` (opus): idle; PR #71 ready.
-- `t07-conformance` (opus): idle; #66 fixed at b96b174.
-- `t15-oracle` (opus): idle; PR #67 ready.
-- `t13-estimators` (opus): T13 done up to T12's merge: branch t13-estimators at 073811b (a scaffold merge of main 278fcaf; after T12 merges: `git rebase --onto origin/main 278fcaf`, then the PR with Closes #15). EarthRegressor, Earth, _EarthBase; scikit-learn checks pass on the reference (no expected failures) and 52 on the fast core (7 skips name #13 until T11 stages land); 30 of 30 sampled mutants killed. Decision: the gate B and CI smoke fits use fast_k=0 until T11 stage 3 (restore then; note on #13).
-- `t10-pruning` (opus): idle; PR #69 ready.
-- Idle, resumable: `t12-core` (open its PR after #55 merges), `t06-reference`, `t18-legacy`, `tools-merge-guard`.
+After the session restart on 2026-09-28 (about 19:50), agent names no longer resolve in SendMessage; use the agent IDs: t06-reference a958ecba5f80213dc, t07-conformance a66206d8b49539a04, t10-pruning af8c4382b0cd45ab1, t11-forward aa6bb912cf3ab5f57, t11-stage2 a195b582d6cce76ce, t12-core af08693105f0ea118, t13-estimators a1c05783fcf61dde5, t15-oracle a13255c68fa5690ce, t18-legacy a9e0b3cdaf6067711, tools-merge-guard a18ef81d9605aa1da.
+
+- t12-core: #70 round-1 fixes (CI, one EDGE-6 test, trims), from 19:58.
+- t10-pruning: #69 round-1 fix (shift by the data value nearest the weighted mean), from 19:58.
+- t06-reference: the reference fix for large-mean covariates at degree 2 (in #72 or a new PR), from 19:58.
+- Reviews: #71 dual (wf_69bb1714-e52), #66 narrow round 2 (sonnet, wf_cbf4953a-e1a).
+- Idle: t07-conformance, t11-stage2 (#71 in review), t13-estimators (waits for T12), t15-oracle (#67 waits for review), t11-forward, t18-legacy, tools-merge-guard.
 
 ## Running jobs
 
