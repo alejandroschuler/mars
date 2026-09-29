@@ -1,24 +1,29 @@
 """The forward pass: the steps, the stopping rules and the forward record.
 
 Spec: ``docs/algorithm.md``, "Forward pass" (FWD-1 to FWD-11), "Stopping
-rules" (STOP-1 to STOP-7), LA-2 to LA-7, KNOT, SPAN, LIMIT-2, the queue of
-"Fast MARS" (FAST-1, FAST-2, FAST-4 and FAST-5), EDGE-1, EDGE-6, CORE-3 (the
-forward record and the candidate log) and CORE-4 (termination). The plan's
+rules" (STOP-1 to STOP-7), LA-2 to LA-7, KNOT, SPAN, LIMIT-2, "Fast MARS"
+(FAST-1 to FAST-6), "Weights" (W-1 to W-5, W-8), "Several responses"
+(RESP-1 to RESP-3), EDGE-1, EDGE-6, CORE-3 (the forward record and the
+candidate log) and CORE-4 (termination). The plan's
 sections "Fast path" and "Cost model" set the method; ``_scan`` scores the
 knots of one search.
 
-Stages 1 and 2 of T11 (issue #13) support every ``max_degree``, one
-response, no weights and ``fast_k=0``; other values raise
-NotImplementedError. Fast MARS (``fast_k`` > 0), weights and several
-responses come in stage 3.
+Weights and several responses (W, RESP). Rows with zero weight are dropped
+first (W-3). Least squares works on rows scaled by √w (the plan's "Fast
+path"): Q is an orthonormal basis of the √w-scaled columns, E holds the
+√w-scaled residuals of the K responses, and the scan gets √w·b for a parent
+b. N = Σw replaces n in the spans, the knot scan, the GCV and the stopping
+rules (W-2, W-4), and every reduction is summed over the responses (RESP-1).
+Without weights w_i = 1 exactly, and every product with √w is exact (W-5).
 
 Method. Each column of X is sorted once (KNOT-7). The pass keeps the column
 of every term (TERM-3), an orthonormal basis Q of the current columns (column
 0 the intercept direction) and the residuals E. A step searches the parents
-that the queue gives (FWD-2): with ``fast_k=0`` every row of the table
-(FAST-2), where entry e stands for slot e, so a term in a slot above M, the
-number of terms, waits (FAST-4, FWD-9, OQ-4), and a term at ``max_degree`` is
-skipped. For a parent b and each covariate x that b does not hold, the knots
+that the queue gives (FWD-2): the first nu rows of the table (FAST-2, FAST-3;
+nu = max(3, ``fast_k``), and every row with ``fast_k=0``), where entry e
+stands for slot e, so a term in a slot above M, the number of terms, waits
+(FAST-4, FWD-9, OQ-4), and a term at ``max_degree`` is skipped but keeps its
+row. For a parent b and each covariate x that b does not hold, the knots
 come from the active cases of b (KNOT-1 to KNOT-3) with the spans of b's
 degree (SPAN-1 to SPAN-5, the adjusted endspan of SPAN-4 included).
 Gram-Schmidt of b·(x - c) gives A of LA-7, and so the kind of the search,
@@ -34,9 +39,10 @@ checked against FWD-4 with the rebuilt RSS; a candidate that fails is left
 out, its search is done again without it, and the step chooses again.
 
 Numerics. Y is multiplied by a power of 2 first (EDGE-6) and centered in two
-steps, by its first value, a data value, and then by the mean (FWD-10,
-LA-6), so that the rounding is of the size of the spread of Y and not of its
-mean; the TSS comes from the centered Y. Every RSS in the record is on the
+steps, each response by its data value nearest its weighted mean and then by
+the weighted mean (FWD-10, LA-6; ``_pruning`` does the same), so that the
+rounding is of the size of the spread of Y and not of its mean, whatever the
+weights; the TSS comes from the centered Y. Every RSS in the record is on the
 original scale, where one can underflow to 0 or, for |y|·√n above about
 1e154, overflow to +inf (EDGE-6 names the underflow). No absolute epsilon.
 Ties follow FWD-5. No input is written to. Complexity: O(p·n·log n) for the
@@ -62,7 +68,7 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 
-from pymars import _gcv, _knots, _linalg, _scan, _terms
+from pymars import _gcv, _knots, _linalg, _pruning, _scan, _terms
 
 FloatArray = npt.NDArray[np.float64]
 IntArray = npt.NDArray[np.int64]
@@ -75,6 +81,8 @@ MAX_LEGAL_RSS, MAX_LEGAL_DELTA = 1.01, 10.0
 GRSQ_FLOOR = -10.0
 #: STOP-5: the pass stops when RSS_s < 1e-10·TSS/(N - 1).
 RSS_FLOOR = 1e-10
+#: FAST-3: a positive fast_k below this value acts as this value.
+FAST_K_MIN = 3
 
 
 class Termination(enum.IntEnum):
@@ -175,7 +183,8 @@ def _second_largest(values: list[float]) -> float:
 
 
 class _Pass:
-    """The state of one forward pass on the scaled, centered responses.
+    """The state of one forward pass on the scaled, centered responses Yc
+    (n, K) with the weights w (n,), all positive, or None for w_i = 1.
 
     The terms are numbered by their forward index k (TERM-6); ``cols[k]`` is
     the column of term k (TERM-3), ``degree[k]`` its degree (TERM-4) and
@@ -184,14 +193,24 @@ class _Pass:
     the term in each slot that holds one (FWD-9). The queue has one entry
     per term, 1-based: ``lam[e - 1]`` and ``kap[e - 1]`` are λ_e and κ_e of
     entry e (FAST-1, FAST-5). ``rows`` maps each parent of the current step
-    to its row in the queue table, the first key of FWD-5.
+    to its row in the queue table, the first key of FWD-5. ``sw`` is √w, and
+    ``Yw`` = √w·Yc the responses of the scaled rows.
     """
 
-    def __init__(self, X: FloatArray, Yc: FloatArray, tss: float, params: dict):
-        self.X, self.Yc, self.tss, self.params = X, Yc, tss, params
+    def __init__(
+        self,
+        X: FloatArray,
+        Yc: FloatArray,
+        tss: float,
+        params: dict,
+        w: FloatArray | None = None,
+    ):
+        self.X, self.tss, self.params, self.w = X, tss, params, w
         n, p = X.shape
-        self.N, self.tau = _gcv.total_weight(n)
-        self.variances = _linalg.weighted_variances(X)
+        self.N, self.tau = _gcv.total_weight(n, w)
+        self.sw = np.ones(n) if w is None else np.sqrt(w)
+        self.Yw = self.sw[:, None] * np.reshape(Yc, (n, -1))
+        self.variances = _linalg.weighted_variances(X, w)
         self.order = np.argsort(X, axis=0, kind="stable")
         self.sorted_x = np.take_along_axis(X, self.order, axis=0)
         self.center = self.sorted_x[n // 2]  # a data value (FWD-10)
@@ -201,19 +220,25 @@ class _Pass:
         L, E = self.spans[0]
         active = np.ones(n, dtype=bool)
         self.knots = [  # the intercept's knots, found once per covariate (KNOT-7)
-            _knots.candidate_knots(
-                self.sorted_x[:, j], active, L, E, total=self.N, tau=self.tau
-            )
-            for j in range(p)
+            self._knots(j, active, L, E) for j in range(p)
         ]
-        self.Q = np.full((n, 1), 1.0 / math.sqrt(n))
-        self.E, _ = _linalg.orthogonalize(self.Q, Yc)
+        raw = float(n) if w is None else math.fsum(w)  # ‖√w‖², not snapped
+        self.Q = (self.sw / math.sqrt(raw))[:, None]
+        self.E, _ = _linalg.orthogonalize(self.Q, self.Yw)
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.parent, self.step_of = [-1], [0]
         self.slot, self.term_at = [1], {1: 0}  # slot 1 holds the intercept
         self.lam, self.kap = [math.inf], [0]
         self.rows = {0: 0}  # before the first step the table is the intercept
+
+    def _knots(self, j: int, active: npt.NDArray[np.bool_], L: int, E: int):
+        """The knots of covariate j for the active cases, in the order of x
+        (KNOT-3, KNOT-6 with weights). Complexity: O(n)."""
+        w = None if self.w is None else self.w[self.order[:, j]]
+        return _knots.candidate_knots(
+            self.sorted_x[:, j], active, L, E, w, total=self.N, tau=self.tau
+        )
 
     def _spans(self, degree: int, active_weight: float) -> tuple[int, int]:
         """(L, E*) of a search on a parent of this degree and active weight
@@ -257,13 +282,18 @@ class _Pass:
         return [e + 1 for e in sorted(range(M), key=lambda e: (aged[e], rank[e]))]
 
     def parents(self) -> list[int]:
-        """FAST-3 and FAST-4 with ``fast_k=0``: every row of the table is
-        visited, and entry e stands for slot e. It is skipped when the slot
-        is empty or its term's degree is ``max_degree``; otherwise that term
-        is a parent of the step. Sets ``rows`` and returns the parents in
-        table order. Complexity: O(M·log M)."""
+        """FAST-3 and FAST-4: the step visits the first nu rows of the table,
+        nu = max(3, ``fast_k``) for ``fast_k`` ≥ 1 (so 1 and 2 act as 3), and
+        every row for ``fast_k=0`` or nu ≥ M. Entry e stands for slot e. It is
+        skipped when the slot is empty or its term's degree is ``max_degree``,
+        and it keeps its row among the nu; otherwise that term is a parent of
+        the step. Sets ``rows`` and returns the parents in table order.
+        Complexity: O(M·log M)."""
+        table, fast_k = self.table(), self.params.get("fast_k", 0)
+        if fast_k >= 1:
+            table = table[: max(FAST_K_MIN, fast_k)]
         rows = {}
-        for row, e in enumerate(self.table()):
+        for row, e in enumerate(table):
             k = self.term_at.get(e)
             if k is not None and self.degree[k] < self.params["max_degree"]:
                 rows[k] = row
@@ -283,10 +313,7 @@ class _Pass:
         if k == 0:
             return self.knots[j]
         L, E = self.spans[k]
-        active = self.cols[k][self.order[:, j]] > 0.0
-        return _knots.candidate_knots(
-            self.sorted_x[:, j], active, L, E, total=self.N, tau=self.tau
-        )
+        return self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
 
     def setup(self, k: int, j: int) -> _Search:
         """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
@@ -295,7 +322,7 @@ class _Pass:
         orthogonalized twice against G, as ``_scan.knot_scan`` requires.
         Complexity: O(n·r·K)."""
         x, b = self.X[:, j], self.cols[k]
-        gs = _linalg.gram_schmidt(self.Q, b * (x - self.center[j]))
+        gs = _linalg.gram_schmidt(self.Q, self.sw * b * (x - self.center[j]))
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
         if not pair:
@@ -313,8 +340,9 @@ class _Pass:
         sure candidates. Complexity: O(n·r)."""
         sr = self.setup(k, j)
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
+        bw = self.sw[o] * sr.b[o]  # √w·b in the order of x
         scan = _scan.knot_scan(
-            self.sorted_x[:, j], sr.b[o], sr.Q[o], sr.E[o], kc.split, intercept=k == 0
+            self.sorted_x[:, j], bw, sr.Q[o], sr.E[o], kc.split, intercept=k == 0
         )
         red, err = scan.gain + sr.lin, scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
@@ -356,21 +384,21 @@ class _Pass:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
                 h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
-                rho, gain = _scan.exact_knot(sr.Q, sr.E, h)
+                rho, gain = _scan.exact_knot(sr.Q, sr.E, h, self.w)
                 red = gain + sr.lin
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
 
     def columns(self, c: _Candidate) -> tuple[FloatArray, FloatArray | None]:
-        """Return the columns that span the candidate's terms (b·x before the
-        hinge of a pair, FWD-6) and its hinge column, or None. Complexity:
-        O(n)."""
+        """Return the √w-scaled columns that span the candidate's terms (b·x
+        before the hinge of a pair, FWD-6) and its unscaled hinge column, or
+        None. Complexity: O(n)."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
         xc = b * (x - self.center[c.variable])  # centered, as in setup
         h = None if c.kind == KIND_LINEAR else b * _terms.factor(_terms.PLUS, x, c.knot)
         cols = {KIND_PAIR: (xc, h), KIND_HINGE: (h,), KIND_LINEAR: (xc,)}[c.kind]
-        return np.column_stack(cols), h
+        return self.sw[:, None] * np.column_stack(cols), h
 
     def check(self, c: _Candidate) -> _scan.Rebuild | None:
         """Build the candidate again (``_scan.rebuild``) and apply FWD-4 to its
@@ -380,7 +408,7 @@ class _Pass:
         pass 2's reduction can differ in the last bits, so a knot at MaxLegal
         can fail here. Complexity: O(n·r·K)."""
         cols, _ = self.columns(c)
-        rb = _scan.rebuild(self.Q, self.Yc, cols)
+        rb = _scan.rebuild(self.Q, self.Yw, cols)
         if rb is None:
             return None
         reduction = self.rss[-1] - rb.rss
@@ -484,9 +512,10 @@ class _Pass:
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
             self.degree.append(self.degree[c.parent] + 1)
-            self.spans.append(
-                self._spans(self.degree[-1], float(np.count_nonzero(col > 0.0)))
-            )
+            active = col > 0.0  # KNOT-1; N_b is the weight of these cases (W-4)
+            Nb = float(np.count_nonzero(active)) if self.w is None else None
+            Nb = _gcv.weight_sum(self.w[active], self.tau) if Nb is None else Nb
+            self.spans.append(self._spans(self.degree[-1], Nb))
             self.parent.append(c.parent)
             self.step_of.append(s)
             self.slot.append(kappa + i)
@@ -590,21 +619,22 @@ def forward_pass(
     fast_beta: float = 1.0,
     record_candidates: bool = False,
 ) -> ForwardPass:
-    """Run the forward pass on X (n, p) and Y (n,) or (n, 1); return its record.
+    """Run the forward pass on X (n, p), Y (n,) or (n, K) and the case weights
+    w (n,), or None for w_i = 1 exactly; return its record.
 
     The keyword arguments are the fields of ``MarsParams`` (CORE-2), which
     the core checks; None resolves ``max_terms`` by LIMIT-1 and ``penalty``
-    by GCV-4 (the penalty enters only GRSq' of STOP-3). ``fast_beta`` ages
-    the queue (FAST-2), which orders the parents for the ties of FWD-5. A
-    degenerate fit (EDGE-1) returns the intercept alone with code
-    ``DEGENERATE``, and ``max_terms`` ≤ 2 gives ``NO_ROOM`` (STOP-1). Raises
-    NotImplementedError outside stages 1 and 2 (weights, several responses,
-    ``fast_k`` ≠ 0), and ValueError for nonfinite or mismatched input.
-    EDGE-6's error for a scaled TSS that is not a positive normal number
-    needs weights, and comes with them: with unit weights the scaled Y has a
-    value of size at least 1.
-    Complexity: O(p·n·log n + S·P·p·n·r + n·M²) time for S steps of P
-    parents, O(n·(p + M_max)) memory.
+    by GCV-4 (the penalty enters only GRSq' of STOP-3). ``fast_k`` and
+    ``fast_beta`` set the window and the ageing of the queue (FAST-2,
+    FAST-3). Rows with zero weight are dropped first (W-3). A degenerate fit
+    (EDGE-1) returns the intercept alone with code ``DEGENERATE``, and
+    ``max_terms`` ≤ 2 gives ``NO_ROOM`` (STOP-1). Raises ValueError for
+    nonfinite or mismatched input, weights that are negative or all 0, and,
+    by EDGE-6, a scaled TSS that is not a positive normal float64 (possible
+    only with extreme weights: without weights the scaled Y has a value of
+    size at least 1).
+    Complexity: O(p·n·log n + S·P·p·n·r·K + n·M²) time for S steps of P
+    parents, O(n·(p + M_max + K)) memory.
     """
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
@@ -613,10 +643,14 @@ def forward_pass(
         raise ValueError(f"X (n, p) and Y (n, K) do not match: {X.shape}, {Y.shape}")
     if not (np.isfinite(X).all() and np.isfinite(Y).all()):
         raise ValueError("X and Y must be finite")
-    if w is not None or Y.shape[1] != 1 or fast_k != 0:
-        raise NotImplementedError(
-            "T11 stage 2: one response, no weights and fast_k=0 only"
-        )
+    if w is not None:
+        w = np.asarray(w, dtype=np.float64)
+        if w.shape != (X.shape[0],) or not (np.isfinite(w).all() and (w >= 0).all()):
+            raise ValueError(f"w must be finite and at least 0, shape ({len(X)},)")
+        if not w.any():
+            raise ValueError("every weight is zero; the weights need a positive sum")
+        keep = w > 0.0  # W-3: a row with zero weight is not a case
+        X, Y, w = (X, Y, w) if keep.all() else (X[keep], Y[keep], w[keep])
     n, p = X.shape
     max_terms = _gcv.default_max_terms(p) if max_terms is None else max_terms
     penalty = _gcv.default_penalty(max_degree) if penalty is None else penalty
@@ -628,23 +662,30 @@ def forward_pass(
         "auto_linpreds": auto_linpreds,
         "thresh": float(thresh),
         "penalty": penalty,
+        "fast_k": int(fast_k),
         "fast_beta": float(fast_beta),
     }
-    if _gcv.is_degenerate(Y, float(n)):  # EDGE-1, GCV-7
+    if _gcv.is_degenerate(Y, _gcv.total_weight(n, w)[0]):  # EDGE-1, GCV-7
         return _intercept_only(
-            p, _gcv.tss(Y), Termination.DEGENERATE, record_candidates
+            p, _gcv.tss(Y, w), Termination.DEGENERATE, record_candidates
         )
     shift = 1 - int(np.frexp(np.max(np.abs(Y)))[1])  # EDGE-6: D·2^shift in [1, 2)
-    Ys = np.ldexp(Y, shift)
-    D = Ys - Ys[0]  # exact near the first value, a data value (FWD-10)
-    Yc = D - D.mean(axis=0)  # the TSS too comes from Yc (CORE-3: rss[0])
-    st = _Pass(X, Yc, _gcv.tss(Yc), params)
+    # FWD-10: shift each response by its data value nearest its weighted mean,
+    # then by the weighted mean; the TSS too comes from Yc (CORE-3: rss[0]).
+    Yc, _ = _pruning._centered(np.ldexp(Y, shift), w)
+    tss = _gcv.tss(Yc, w)
+    if not (math.isfinite(tss) and tss >= np.finfo(np.float64).tiny):
+        raise ValueError(
+            "the scale of y or of the weights is out of range: the total sum of "
+            f"squares of y·2^{shift} is {tss}, not a positive normal float64 (EDGE-6)"
+        )
+    st = _Pass(X, Yc, tss, params, w)
     log: list = []
     termination = _run(st, max_terms, log)
     with np.errstate(over="ignore"):  # EDGE-6: an RSS above the range is inf
         rss = np.ldexp(np.array(st.rss), -2 * shift)
     B = _terms.basis_matrix(X, st.dirs, st.cuts)
-    kept = _linalg.independent_columns(B)  # FWD-11
+    kept = _linalg.independent_columns(B, w)  # FWD-11
     return ForwardPass(
         st.dirs,
         st.cuts,
