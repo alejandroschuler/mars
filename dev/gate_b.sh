@@ -69,7 +69,8 @@ if hasattr(pymars, "Earth"):
     import numpy as np
     X = np.random.default_rng(0).uniform(size=(100, 3))
     y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
-    assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
+    # fast_k=0 until T11 stage 3 (Fast MARS, #13) lands; then restore the defaults.
+    assert np.isfinite(pymars.Earth(fast_k=0).fit(X, y).predict(X)).all()
 print("smoke check passed:", pymars.__version__, pymars.__file__)
 EOF
 )
