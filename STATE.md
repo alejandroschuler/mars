@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-29 00:35 PDT, by executor session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5` (the watchdog run that took the stale lock at 00:25; the earlier executor `local_a59469db-...` did not resume after the 23:10 reset). This executor runs in `<main>` and still uses the journal worktree at `<S>/.worktrees/journal`. The agent IDs listed under Running agents belong to the earlier session and do not resolve here; new agents get new names.
+Updated: 2026-09-29 14:25 PDT, by executor session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5` (the watchdog run that took the stale lock at 00:25; the earlier executor `local_a59469db-...` did not resume after the 23:10 reset). This executor runs in `<main>` and still uses the journal worktree at `<S>/.worktrees/journal`. The agent IDs listed under Running agents belong to the earlier session and do not resolve here; new agents get new names.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,8 +15,19 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-TAKEOVER 00:25 Tuesday 2026-09-29: weekly 34 % (limit 50 %), 5-hour 0 % (reset 04:20 PDT). #71's round-1 test fixes are at 1f29cb3 (gate B PASS, CI 12/12). First batch: recheck-71 (narrow, both roles), review-74 (single, sonnet), review-72 (single, opus).
-13:15: merged today #71, #74, #66, #72, #73, #75, #80, #78, #83, #86, #82, #79, #87, #67 (main e431fcb). Closed: T07, T11, T13, T14, T15, T16, T17 (#9, #13, #15, #16, #17, #18, #19), #76, #77, #81. Open PRs: #64 (waits for the user, issue #68). Running: t16-invariance (fix of test_scale_and_shift_of_a_covariate at thorough; gate C on main fails until it merges), t88-ci-flake (issue #88: the lowest-dependencies CI job gives runner-dependent fits). Idle authors: t15-finish, t06-linear-shift, t11-stage3, t14-glm, t84-pruning. Open follow-ups: #84 (reference pruning at intermediate means), #85 (fast forward LA-5 at large means: products of linear factors, duplicate covariates), #88, #44 (spec v2 questions), T15's non-blocking list (LOG 05:20), #79's comment fixes. Next tasks: T19 benchmark harness (brief to write), T20, T21 (gate D, freeze), T22 to T24. Budget: weekly 46 % at 13:00; from 48 % nothing new; at 50 % pause and tell the user.
+PAUSED 14:25 Tuesday 2026-09-29 by the user's budget rule (go to 50 % of the weekly counter; from 44 % only work that finishes open PRs). Weekly 47 %, 5-hour 17 %. Heartbeat set to 2026-10-04 17:15 PDT (the weekly reset, 17:00 PDT, plus 15 minutes), so the watchdog resumes about 18:15 PDT that day unless the user resumes sooner. No agent runs, no timer. caffeinate stays on.
+
+State at the pause: main a0ddca9. Merged on 2026-09-29: #71, #74, #66, #72, #73, #75, #80, #78, #83, #86, #82, #79, #87, #67, #90, #89. Closed tasks: T00 to T18 except T01 v2 (#44). Open PR: #64 (the user's TOOLS-2; waits for the user's push or OK, issue #68). Gate C passes on main after #90 (not rerun on a0ddca9).
+
+Resume order (a new watchdog executor or the user's 'continue'):
+1. Read get_usage; the new weekly counter starts at the reset. Ask for or confirm the budget rule for the new week before large work (the user's 50 % rule was for the week ending 2026-10-04).
+2. Run gate C on main once (bash dev/gate_c.sh in a clean detached worktree) to confirm the thorough profile after #87, #90, #89.
+3. Follow-ups, small first: #85 (fast forward pass LA-5 at large means: products of large-mean linear factors at degree 2 and 3, duplicate covariates; then lift T15's SHIFT_CAP for the forward pass), #84 (the reference's pruning at intermediate means, 2^23; then lift the cap for the whole fit), T15's non-blocking list (LOG 05:20 and 07:45), #79's two comment fixes, #86's id names, the #83 docstring typo.
+4. Spec v2 (#44): many questions collected (exact-fit band of #83, W-1 at near-ties, GLM-4 threshold, LA-5 conditioning, outlier at +1e6 and LA-3, the mirror and LA-3, weight sums, the scale of X). A spec writer (opus) drafts v2; implementation follow-ups after.
+5. P4: T19 benchmark harness (brief to write; depends on T15, done), then T20 performance passes. Then T21 (gate D, the freeze tag sim-freeze-1, the new pilot and full run as detached jobs), T22 to T24.
+
+Agents from this session (IDs resolve only in session local_b1a9357f): authors t11-stage3 ac274a0e62eb76fb4, t14-glm a5c67c6531a49e899, t15-finish a5e4db9aa66bbe101, t16-invariance ad50a990e873f492b, t06-linear-shift ae801f004d80767a4, t84-pruning a04fad33bfba381c6, t88-ci-flake ac12e5e3fe7ee0ef5, t13-followups a610d6bf411724891, t17-integration a226373e67090a1ea. Leftover: the scratch worktree <main>/.worktrees/scratch-t84-oracle (a changed tracked file; remove with git worktree remove --force when the user agrees) and many mutant copies in the session scratchpad (dcg blocks their removal; harmless).
+
 
 SNAPSHOT 20:30 Monday (for a restart or a compaction): weekly 32 % of the new counter (the user's limit 50 %); 5-hour 90 % (reset 23:10 PDT): no new agents until then (heartbeat 23:25). Open PRs and next steps:
 - #71 T11 stage 2 (0580057): round 1 both REQUEST_CHANGES on two missing test designs (N_b counts a parent's positive cases, SPAN-1 with KNOT-1; the linear option's knot is the minimum over all cases, FWD-6); code right (exact oracle on 3,480 fits). Sent to t11-stage2 (tests only; rebase onto d87cc40); then a checker's narrow re-approval, merge.
