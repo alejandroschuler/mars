@@ -217,6 +217,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:23 update-check-66: #66's update is clean, but CI's ubuntu 3.10 job failed in main's EDGE-6 test from #70 (an exact-fit tie decides selected_size by rounding). Reran the job; asked t12-core for a small fix PR that removes the tie from the test.
 - 20:24 Merged #69 (pruning and TSS centering) as d87cc40 after recheck-69's approvals of the updated head.
 - 20:26 T13 PR #73 ready (f34201c; scikit-learn checks pass on the reference core; 52 on the fast core with 7 skips naming #13; gate B PASS; CI green after a rerun of the flaky EDGE-6 test). 5-hour 90 %: no new agents until 23:10; heartbeat 23:25. Snapshot of all open PRs written at the top of STATE.
+- 20:31 #74 ready (9007d86): the flaky EDGE-6 test now compares the core with itself bit for bit at y and y*2^600 and with the reference on noisy data without a tie. Its review after the reset.
 
 ## Core-hour ledger
 

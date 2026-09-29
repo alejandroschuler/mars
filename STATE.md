@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-28 20:26 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-09-28 20:31 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -21,7 +21,7 @@ SNAPSHOT 20:30 Monday (for a restart or a compaction): weekly 32 % of the new co
 - #73 T13 estimators (f34201c, Closes #15; gate B PASS; CI green after a rerun of the flaky test): dual review after the reset.
 - #72 reference fixes (37a04b4): single review (opus) after the reset.
 - #67 T15 oracle (1ebabee): dual review after the reset; after #72 merges, T15 (a13255c68fa5690ce) applies its shifted-response patch and widens max_degree after the stage-2 merge.
-- Flaky test on main (tests/test_core.py::test_a_power_of_two_on_y_changes_no_bit at an exact-fit tie; failed on 3.10 and 3.11 runners): t12-core (af08693105f0ea118) makes a small fix PR.
+- #74 (the flaky EDGE-6 test fix, 9007d86, on d87cc40; noisy data at 1e-170 scale with no tie; the D = max(Y) mutant still fails; gate B PASS; CI 12/12): a single review (sonnet) after the reset, then merge first (it unblocks clean CI for the others).
 - #64 (the user's TOOLS-2): waits for the user's push or OK (issue #68).
 
 RESUMED by the user at 19:55 Monday ('continue'); earlier PAUSED BY THE USER (18:40 Monday) after the named round. Weekly 22 % of the new counter (limit 50 %), 5-hour 33 %. The heartbeat is live again. Resume order: (1) send the recorded fix lists: #70 to t12-core, #69 to t10-pruning (the nearest-to-mean shift), and to t11-stage2 the same shift for _forward when weights come (stage 3); (2) reviews: #71 (T11 stage 2, dual), #66 round 2 (narrow), #72 (single or dual, small), #67 (T15, dual), and #64 after the user's push or OK for update-branch (issue #68); (3) a new reference fix for T06: at degree 2 the reference loses accuracy on covariates with a large mean (x1 + 2^26 moves its RSS path by 2.4e-8, 7.7e-6 at 2^36; t11-stage2's finding; T15 widens max_degree only after it); (4) then T13's PR after T12 merges, T11 stage 3, T14.
