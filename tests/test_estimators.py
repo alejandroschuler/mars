@@ -194,6 +194,7 @@ HALVES = np.tile([0.5, 1.5], n // 2)  # not integers, mean 1
     [
         (np.tile([0, 2, 3], n // 3), False),  # integers with zeros, mean 5/3
         (HALVES, False),
+        (np.r_[np.ones(n - 1), 3.5], True),  # mixed integers and a half
         (np.tile([0.0, 0.5, 1.5, 2.0], n // 4), False),  # the mean counts the zeros
         (HALVES * (1 + 5e-7), False),
         (HALVES * (1 + 2e-6), True),
@@ -347,3 +348,14 @@ def test_sample_weight_reaches_fit_through_metadata_routing():
     direct = EarthRegressor().fit(X, y, sample_weight=w)
     assert_array_equal(routed.predict(X), direct.predict(X))
     assert not np.array_equal(direct.predict(X), EarthRegressor().fit(X, y).predict(X))
+
+
+def test_a_failed_refit_leaves_no_fitted_attribute():
+    """API-3: a fit that raises after the new data were validated removes the
+    old model, so the names and the terms never come from different fits."""
+    est = EarthRegressor().fit(X, y)
+    with pytest.raises(ValueError, match="at least 0"):
+        est.fit(X, y, sample_weight=-np.ones(n))
+    assert not hasattr(est, "mars_") and not hasattr(est, "term_coef_")
+    with pytest.raises(NotFittedError):
+        est.predict(X)

@@ -384,7 +384,7 @@ Weights are case weights, given as `sample_weight` to `fit`.
 
 **W-5** No weights means w_i = 1 exactly, and then every sum of weights is exact, so the fit equals the fit with weights all 1. [plan: Behavior target]
 
-**W-6** Weights must be a 1-D array with one weight per row of X, finite and ≥ 0; otherwise `fit` raises ValueError. If every weight is 0, `fit` raises ValueError with a message that matches the regular expression `weight.*zero`. [plan: Behavior target, "Sample weights"; scikit-learn's weight checks]
+**W-6** Weights must be a 1-D array with one weight per row of X, finite and ≥ 0; otherwise `fit` raises ValueError. If every weight is 0, `fit` raises ValueError with a message that matches the regular expression `weight.*zero`. A total weight N of 2^52 or more, the bound of [W-4](#weights), raises ValueError too. [plan: Behavior target, "Sample weights"; scikit-learn's weight checks]
 
 **W-7** `fit` issues a UserWarning when some weight is not an integer and the mean of the given weights differs from 1 by more than 1e-6. The message says that the weights act as case counts, and that importance weights should be rescaled to w·n/Σw. Integer weights, zeros included, never warn. [plan: Behavior target, "Sample weights"]
 

@@ -183,6 +183,12 @@ class _EarthBase(BaseEstimator):
         self.nprune = nprune
         self.allow_missing = allow_missing
 
+    def _reset_fitted(self) -> None:
+        """Remove the fitted attributes, so that a failed refit does not leave
+        the new names with the old model (API-3). Call it first in ``fit``."""
+        for name in [a for a in vars(self) if a.endswith("_") and a[0] != "_"]:
+            delattr(self, name)
+
     def _mars_params(self) -> _core.MarsParams:
         """Return the parameters as a ``MarsParams``, which checks them (ERR-4);
         ``allow_missing`` must be a bool, and True raises NotImplementedError
@@ -369,6 +375,7 @@ class EarthRegressor(RegressorMixin, _EarthBase):
         self : EarthRegressor
             The fitted estimator.
         """
+        self._reset_fitted()
         params = self._mars_params()  # ERR-3 and ERR-4 before the data
         _check_numeric(X, self)
         X, y = validate_data(

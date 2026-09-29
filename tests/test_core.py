@@ -794,3 +794,15 @@ def test_weights_that_are_all_zero():
     """CORE-1: w needs a positive sum; the message matches W-6."""
     with pytest.raises(ValueError, match=r"weight.*zero"):
         fit_mars(np.ones((3, 1)), np.ones(3), np.zeros(3), MarsParams())
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [np.full(9, 1e308), np.r_[2.0**52 - 8, np.ones(8)]],  # fsum overflows; N = 2^52
+)
+def test_weights_with_a_total_that_is_too_large(weights):
+    """W-6: a total weight of 2^52 or more (W-4) raises ValueError, and so does
+    a total that overflows float64; no OverflowError comes from a later sum."""
+    x = np.arange(9.0)[:, None]
+    with pytest.raises(ValueError, match="total below 2"):
+        fit_mars(x, x[:, 0], weights, MarsParams())
