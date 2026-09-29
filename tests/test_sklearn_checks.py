@@ -9,14 +9,9 @@ MARS since T11 stage 3 (#13), and with the reference
 implementation in place of the fast core, through CORE-6. ``Earth`` is the
 same class as ``EarthRegressor`` (API-2), so it needs no run of its own.
 
-Every check must pass, with one exception on the fast core, listed in
-``fast_core_failures`` with its issue. On the data of the classifier's
-weight check, the last forward step is a near-tie at an exact fit, which the
-fast core decides by a negative rounded RSS, so the weighted rows and the
-repeated rows get different terms (#81). Rounding decides it: the check fails
-with scikit-learn 1.9 and numpy 2.5 and passes with scikit-learn 1.6 and
-numpy 2.0, so a failure there is an expected failure and a pass is a pass.
-The reference passes it.
+Every check must pass, on both cores. A check that fails on the fast core
+for a known reason is listed in ``fast_core_failures`` with its issue; none
+is listed now (the classifier's weight check, #81, passes since #83).
 
 Several checks fit classes that a hyperplane of the basis separates, so the
 unpenalized refit (``glm_alpha=0``, GLM-2) warns as GLM-4 requires; the
@@ -40,12 +35,6 @@ SEPARATION = pytest.mark.filterwarnings(
 
 def fast_core_failures(estimator) -> dict[str, str]:
     """The checks that fail on the fast core, each with its issue."""
-    if isinstance(estimator, EarthClassifier):
-        return {
-            "check_sample_weight_equivalence_on_dense_data": (
-                "#81: a near-tie at an exact fit in the fast forward pass"
-            )
-        }
     return {}
 
 
