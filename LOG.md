@@ -250,6 +250,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 06:35 T17 PR #86 ready (12adbac; tests/test_integration.py, 41 tests, 7.5 s at ci; no bug found; gate B PASS in 300 s). The classifier tests use glm_alpha=0.05 because the unpenalized default separates small degree-2 folds and warns (warnings are errors in the suite); the reviewer judges whether the default needs a test or a DECISIONS entry. Review queue: review-82, review-86, recheck-83.
 - 06:50 #83 round-1 fixes at 7ddeea0 (EXACT_FIT = 1e-14 with its rounding bound; the kink test fails at 1e-12; the seed-309 case kills no-cap-in-refine; the #81 entry is gone from tests/test_sklearn_checks.py; gate B PASS). Still a trade-off: a = 1e-6 at n = 50 needs a band of 1e-15 or less; posted on #44 with the 4.1e-13 wide-weight step. Review queue: recheck-83 (the same adversarial reviewer, first), review-82, review-86.
 - 07:05 review-79-spec APPROVE at f59b401 (60 random fits within 1.5e-14 of exact; 121 fixtures unchanged; no slowdown, 165 s against 187 s). Non-blocking: the pruning pass still misses LA-5 at intermediate means (3.6e-8 at 2^23, 4 of 40 fits), so T15 keeps SHIFT_CAP for pruning-path comparisons (add to #84); two comment and readability fixes. Sent the #83 re-review to its adversarial reviewer.
+- 07:20 recheck of #83 (adversarial) APPROVE at 7ddeea0: 1e-14 is right (exact-fit rounding up to 2.4e-15 of RSS_s at n = 30000; 1e-15 would miss it). Asked the spec reviewer for a narrow recheck on the new head.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
