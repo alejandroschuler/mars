@@ -1343,6 +1343,7 @@ class TestForwardPass:
             (2, "grid", (1e8, 4e6, 7e8)),
             (2, "binary", (2.0**36, 0.0)),
             (3, "near the range", (1.001, -1.001, 0.5)),
+            (2, "mixed", (2.0**40, 0.0, 0.0)),
         ],
     )
     def test_an_exact_shift_of_a_covariate_keeps_the_pass(
@@ -1363,7 +1364,10 @@ class TestForwardPass:
         # step [LA-5] of the exact rational RSS of the same terms, with every
         # column formed exactly. "near the range": smallest values just above
         # the range, where the float columns lose no digits, so the pass must
-        # be the same with and without the exact change of basis.
+        # be the same with and without the exact change of basis. "mixed": x0
+        # shifted, x1 and x2 not, with integer weights, so that mirror hinges
+        # of covariates without a large mean enter expanded terms.
+        w = None
         opts = {"max_degree": degree, "auto_linpreds": case != "hinges"}
         opts["max_terms"] = 11 if case == "hinges" else 13
         if case == "hinges":
@@ -1389,6 +1393,14 @@ class TestForwardPass:
                 + 0.1 * rng.normal(size=n)
             )
             opts["max_terms"] = 9
+        elif case == "mixed":
+            rng = np.random.default_rng(93)
+            n = 16
+            X = rng.uniform(size=(n, 3))
+            y = X[:, 0] * X[:, 1] + np.maximum(X[:, 0] - X[:, 0].mean(), 0)
+            y = y + 0.1 * rng.normal(size=n)
+            w = rng.integers(1, 4, size=n).astype(float)
+            opts["max_terms"] = 11
         elif case == "near the range":
             rng = np.random.default_rng(27)
             n = 14
@@ -1406,7 +1418,7 @@ class TestForwardPass:
                 y = y + 2 * hinge * X[:, 1] * X[:, 2]
             y = y + (0.05 if case == "hinges" else 0.2) * rng.normal(size=n)
         shifted_X = X + shift
-        shifted = run_forward(shifted_X, y, **opts)
+        shifted = run_forward(shifted_X, y, w, **opts)
         dirs = shifted["dirs"]
         if case == "continuous":
             # a linear factor is the new factor of a term of the given degree
@@ -1419,13 +1431,13 @@ class TestForwardPass:
         if case == "near the range":
             assert ref._large_mean(shifted_X) == {0, 1}
             monkeypatch.setattr(ref, "_large_mean", lambda X: set())
-            plain = run_forward(shifted_X, y, **opts)
+            plain = run_forward(shifted_X, y, w, **opts)
             for key in ("dirs", "cuts", "parent", "termination"):
                 np.testing.assert_array_equal(shifted[key], plain[key])
             np.testing.assert_allclose(shifted["rss"], plain["rss"], rtol=1e-12)
         if case == "hinges":
             np.testing.assert_array_equal(shifted_X - shift, X)
-            base = run_forward(X, y, **opts)
+            base = run_forward(X, y, w, **opts)
             for key in ("dirs", "parent", "step", "termination"):
                 np.testing.assert_array_equal(shifted[key], base[key])
             cuts = base["cuts"].copy()
@@ -1434,11 +1446,12 @@ class TestForwardPass:
             before = base["rss"][:-1]
             change = np.abs(shifted["rss"][1:] - base["rss"][1:])
             assert np.all(change <= 1e-8 * before)
+        w = np.ones(n) if w is None else w
         before, log = shifted["rss"][:-1], shifted["candidates"]
         for s in range(1, len(shifted["rss"])):
             terms = np.flatnonzero(shifted["step"] <= s)
             B = exact_basis(shifted_X, dirs[terms], shifted["cuts"][terms])
-            exact = exact_rss(B, y, np.ones(n))
+            exact = exact_rss(B, y, w)
             assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
             # the second best of the step: RSS(B + {b x}), RSS(B + {b x, h})
             # or RSS(B + {h}) [LA-2], with B the terms before the step
@@ -1454,7 +1467,7 @@ class TestForwardPass:
                 cut_rows.append(shifted["cuts"][k].copy())
                 rows[-1][j] = code
                 cut_rows[-1][j] = log["second_knot"][s - 1] if code == 1 else 0.0
-            exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, np.ones(n))
+            exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, w)
             assert abs(log["second_rss"][s - 1] - exact) <= 1e-8 * before[s - 1]
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
