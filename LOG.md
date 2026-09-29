@@ -221,6 +221,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:45 #71 round 1: both REQUEST_CHANGES on the same two missing test designs; the interaction pass is right against an exact oracle on 3,480 fits and a brute force on 1,400 designs. Sent to t11-stage2 (tests only).
 
 - 2026-09-29 00:25 The watchdog found the heartbeat stale (23:25) and took the lock (session local_b1a9357f). The earlier executor did not resume after the 23:10 reset. Weekly 34 %, 5-hour 0 %. #71 fixes at 1f29cb3.
+- 00:37 Started recheck-71 (sonnet, narrow, both roles at 1f29cb3), review-74 (single, sonnet), review-72 (single, opus).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
