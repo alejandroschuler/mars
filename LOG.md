@@ -271,6 +271,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:20 recheck of #67 (adversarial) APPROVE at cf4ba04. CI red on #67 in the lowest-dependencies job (10 earth-fixture tests of the reference and the core; not near-ties); the same job failed once on main a072a4e and passed on 7b06227 and 0a7a49d with the same code: runner-dependent. Opened #88; reran the #67 job; started t88-ci-flake (opus) to find and fix the cause. This blocks merges while it recurs.
 - 12:30 recheck of #67 (spec) REQUEST_CHANGES at cf4ba04 on the SHIFT_CAP comment: for duplicate covariates at a large mean the fast code misses LA-5 (5.3e-7), not the reference; each capped case must name an issue. Added the case to #85; sent the comment fix to t15-finish.
 - 12:55 #67 at e368a34 (comment fix; the shifted draws keep the cap at degree 3 after a #85-pattern failure; gate A, B PASS; gate C fails only on main's T16 test_scale_and_shift_of_a_covariate at thorough, seed 1053, an intercept check wrong under a shift). Sent the test fix to t16-invariance (new small PR) and the narrow recheck to #67's spec reviewer. Weekly 46 %.
+- 13:05 #67 spec APPROVE at e368a34; CI green on every job (the lowest-dependencies job too; #88 is intermittent). Decision: #67 is test code; its only gate C failure is main's T16 test outside its diff, which a separate PR fixes; so #67 merges once the adversarial role approves e368a34, and gate C must pass on main after the T16 fix. Asked the adversarial reviewer for the narrow recheck.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
