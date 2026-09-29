@@ -41,7 +41,8 @@ FIXTURES = Path(__file__).resolve().parents[1] / "validation" / "fixtures"
 S_FITS = sorted(
     p.stem
     for p in FIXTURES.glob("S*.json")
-    if "error" not in json.loads(p.read_text(encoding="utf-8"))["result"]
+    if p.name.startswith("S")  # glob ignores case on Windows (s15_draws.json)
+    and "error" not in json.loads(p.read_text(encoding="utf-8"))["result"]
 )
 MATCHED = ["S01_matched_d1"] + [
     f"S04_p{p}_n{n}_matched_d1" for p in ("05", "10") for n in ("0200", "1000")
@@ -686,14 +687,16 @@ def test_no_room(max_terms):
     _check_reference(X, y, None, MarsParams(max_terms=max_terms, fast_k=0))
 
 
-def test_a_power_of_two_on_y_changes_no_bit():
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_a_power_of_two_on_y_changes_no_bit(sign):
     """EDGE-6: y of size 1e-170 has a TSS that underflows unscaled; its fit is
     that of y·2^600 with every value on the scale of y multiplied back, and
-    the reference's fit."""
+    the reference's fit. D is the largest |Y|, so the sign does not matter."""
     x = _frozen(np.arange(8.0)[:, None])[0]
     p = MarsParams(fast_k=0, minspan=1, endspan=1, thresh=0.0)
-    tiny = fit_mars(x, [0.0] * 7 + [1e-170], None, p, record_candidates=True)
-    big = fit_mars(x, [0.0] * 7 + [1e-170 * 2.0**600], None, p, record_candidates=True)
+    y = [0.0] * 7 + [sign * 1e-170]
+    tiny = fit_mars(x, y, None, p, record_candidates=True)
+    big = fit_mars(x, np.array(y) * 2.0**600, None, p, record_candidates=True)
     assert tiny.forward.termination == big.forward.termination != Termination.DEGENERATE
     assert tiny.forward.dirs.shape[0] > 1
     back = big.to_dict()
@@ -707,7 +710,7 @@ def test_a_power_of_two_on_y_changes_no_bit():
     for key in ("best_rss", "second_rss"):
         log[key] = np.ldexp(log[key], -1200)
     _same(tiny, back)
-    _check_reference(x, [0.0] * 7 + [1e-170], None, p)
+    _check_reference(x, y, None, p)
 
 
 @pytest.mark.parametrize(
@@ -746,7 +749,7 @@ def test_pruning_indices_are_kept_forward_indices(monkeypatch):
     selected = [0, 1, 2, 4, 5]
     assert fit.pruning.rss_per_size.shape == (5,) and fit.selected.tolist() == selected
     np.testing.assert_array_equal(fit.dirs, rec.dirs[selected])
-    coef = np.linalg.lstsq(B[:, selected], y)[0]
+    coef = np.linalg.lstsq(B[:, selected], y, rcond=None)[0]
     np.testing.assert_allclose(fit.coef[:, 0], coef, rtol=1e-9)
     first = fit_mars(X, y, None, MarsParams(pmethod="none", nprune=4))
     assert first.selected.tolist() == [0, 1, 2, 4]
@@ -775,7 +778,7 @@ def test_pmethod_and_nprune(monkeypatch, pmethod, nprune):
     else:
         assert m == limit and fit.selected.tolist() == list(range(limit))
     B = _terms.basis_matrix(X, fit.dirs, fit.cuts)
-    coef = np.linalg.lstsq(B, Y)[0]
+    coef = np.linalg.lstsq(B, Y, rcond=None)[0]
     np.testing.assert_allclose(fit.coef, coef, rtol=1e-9, atol=1e-12)
     rss = float(np.sum((Y - B @ coef) ** 2))
     _rel(fit.rss, rss, 1e-10)

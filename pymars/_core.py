@@ -20,8 +20,9 @@ Who does what in ``fit_mars``:
   kept terms and Y times s = 2^j, the power of 2 of EDGE-6, which ``_pruning``
   leaves to its caller. The core multiplies their sums of squares and GCVs by
   1/s² and their coefficients by 1/s, which changes no bit unless a value
-  leaves the normal range, and keeps their RSq and GRSq, which come from the
-  scaled values. Pruning index m is forward index ``kept[m]``.
+  leaves the normal range (then it is ±∞ or rounds toward 0, without a
+  warning), and keeps their RSq and GRSq, which come from the scaled values.
+  Pruning index m is forward index ``kept[m]``.
 
 Records. ``MarsFit``, ``ForwardRecord`` and ``PruningRecord`` are frozen
 dataclasses (CORE-3). ``ForwardRecord`` is a frozen dataclass made from
@@ -439,6 +440,13 @@ def _cases(
     return (X, Y, w) if keep.all() else (X[keep], Y[keep], w[keep])
 
 
+def _back(value: Any, k: int) -> Any:
+    """Return value·2^k, the scale-back of EDGE-6. A value that leaves the range
+    of float64 is ±∞ or 0, without a warning, as in ``_forward``."""
+    with np.errstate(over="ignore"):
+        return np.ldexp(value, k)
+
+
 def _intercept_record(p: int, tss: float, record: bool) -> ForwardRecord:
     """The forward record of a degenerate fit: the intercept alone, rss [TSS],
     code ``DEGENERATE`` and an empty log when one is asked for (EDGE-1)."""
@@ -517,7 +525,7 @@ def fit_mars(
             f"squares of y·2^{j} is {tss}, not a positive normal float64 (EDGE-6)"
         )
     if _gcv.is_degenerate(Y, N):
-        forward = _intercept_record(p, float(np.ldexp(tss, -2 * j)), record_candidates)
+        forward = _intercept_record(p, float(_back(tss, -2 * j)), record_candidates)
     else:
         kw = {name: getattr(params, name) for name in _FORWARD_PARAMS}
         fp = _forward.forward_pass(
@@ -542,10 +550,10 @@ def fit_mars(
     return MarsFit(
         dirs=forward.dirs[selected],
         cuts=forward.cuts[selected],
-        coef=np.ldexp(final.coef, -j),
+        coef=_back(final.coef, -j),
         selected=selected,
-        rss=float(np.ldexp(final.rss, -2 * j)),
-        gcv=float(np.ldexp(final.gcv, -2 * j)),
+        rss=float(_back(final.rss, -2 * j)),
+        gcv=float(_back(final.gcv, -2 * j)),
         rsq=final.rsq,
         grsq=final.grsq,
         n_eff=N,
@@ -554,8 +562,8 @@ def fit_mars(
         forward=forward,
         pruning=PruningRecord(
             removed=pruned.removed,
-            rss_per_size=np.ldexp(pruned.rss_per_size, -2 * j),
-            gcv_per_size=np.ldexp(pruned.gcv_per_size, -2 * j),
+            rss_per_size=_back(pruned.rss_per_size, -2 * j),
+            gcv_per_size=_back(pruned.gcv_per_size, -2 * j),
             subsets=pruned.subsets,
             selected_size=pruned.selected_size,
         ),
