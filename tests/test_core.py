@@ -636,8 +636,11 @@ def test_no_room(max_terms):
 @pytest.mark.parametrize("sign", [1.0, -1.0])
 def test_a_power_of_two_on_y_changes_no_bit(sign):
     """EDGE-6: y of size 1e-170 has a TSS that underflows unscaled; its fit is
-    that of y·2^600 with every value on the scale of y multiplied back, and
-    the reference's fit. D is the largest |Y|, so the sign does not matter."""
+    that of y·2^600 with every value on the scale of y multiplied back, bit
+    for bit. D is the largest |Y|, so the sign does not matter. These data fit
+    exactly at sizes 2 and 3, a tie in the GCV that rounding decides, so the
+    reference is compared on noisy data of the same size, whose fit is not
+    exact."""
     x = _frozen(np.arange(8.0)[:, None])[0]
     p = MarsParams(fast_k=0, minspan=1, endspan=1, thresh=0.0)
     y = [0.0] * 7 + [sign * 1e-170]
@@ -656,7 +659,10 @@ def test_a_power_of_two_on_y_changes_no_bit(sign):
     for key in ("best_rss", "second_rss"):
         log[key] = np.ldexp(log[key], -1200)
     _same(tiny, back)
-    _check_reference(x, y, None, p)
+    rng = np.random.default_rng(9)
+    X = rng.uniform(size=(40, 1))
+    noisy = np.maximum(X[:, 0] - 0.5, 0.0) + 0.1 * rng.normal(size=40)
+    _check_reference(X, sign * 1e-170 * noisy, None, MarsParams(fast_k=0))
 
 
 @pytest.mark.parametrize(
