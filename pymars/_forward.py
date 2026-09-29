@@ -82,7 +82,15 @@ GRSQ_FLOOR = -10.0
 #: STOP-5: the pass stops when RSS_s < 1e-10·TSS/(N - 1).
 RSS_FLOOR = 1e-10
 #: A candidate RSS at most EXACT_FIT·RSS_s is an exact fit, 0 (issue #81).
-EXACT_FIT = 1e-12
+#: The value is set by the rounding of a reduction Σ_k (qᵀE_k)² ≤ RSS_s: with
+#: E orthogonal to Q and q a unit vector, both to about √r·u (Gram-Schmidt
+#: twice), and blocked sums, it is a small multiple of u·RSS_s (u = 2^-53).
+#: Measured, a candidate that fits exactly in exact arithmetic rounds to at
+#: most 6.7e-16·RSS_s on #81's data, and to 2.4e-15·RSS_s for n up to 30000
+#: with weights exp(U(-9, 9)). 1e-14 (about 45·u) covers that four times;
+#: a wider band sets real candidates equal (a kink of size 1e-5 in 50 cases
+#: lost its knot at 1e-12, #83).
+EXACT_FIT = 1e-14
 #: FAST-3: a positive fast_k below this value acts as this value.
 FAST_K_MIN = 3
 
@@ -107,7 +115,9 @@ class CandidateLog(NamedTuple):
     parent as a forward index (TERM-6); ``second_knot`` (S,), NaN for a
     linear term or none; ``second_kind`` (S,) int8, a ``KIND_*`` code.
     Different candidates differ in the parent, the covariate, the kind or
-    the knot value (FWD-8)."""
+    the knot value (FWD-8). A second-best whose RSS lies within EXACT_FIT of
+    0 is logged with ``second_rss`` = 0, so at an exact fit ``second_rss`` can
+    be below ``best_rss``, which is the RSS of the rebuilt winner."""
 
     best_rss: FloatArray
     second_rss: FloatArray

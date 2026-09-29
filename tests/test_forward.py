@@ -333,7 +333,16 @@ def _weights_design(name):
     scikit-learn's check_sample_weight_equivalence_on_dense_data for the
     classifier (15 cases, 30 covariates, 3 indicator responses, weights 0 to
     4), where step 5 reaches an exact fit and the linear candidates of x0
-    and x23 both reduce the RSS to 0 up to rounding (issue #81)."""
+    and x23 both reduce the RSS to 0 up to rounding (issue #81). "exact fit,
+    knot": 7 cases, 4 covariates and 3 indicator responses at degree 2,
+    where step 1 fits exactly with a pair, and several knots do."""
+    if name == "exact fit, knot":
+        rng = np.random.RandomState(309)
+        n, p = rng.randint(6, 16), rng.randint(1, 5)
+        X, K = rng.rand(n, p), rng.randint(1, 4)
+        Y = np.eye(K + 1)[rng.randint(0, K + 1, size=n)][:, :K]
+        w, degree = rng.randint(0, 4, size=n), rng.randint(1, 3)
+        return X, Y, w, {"max_degree": degree, "thresh": 0.0, "fast_k": 20}
     if name == "exact fit":
         rng = np.random.RandomState(42)
         X, y = rng.rand(15, 30), rng.randint(0, 3, size=15)
@@ -346,13 +355,14 @@ def _weights_design(name):
     return X, Y, w, {"max_degree": 2, "fast_k": 4, "thresh": 0.0, "max_terms": 15}
 
 
-@pytest.mark.parametrize("name", ["degree 2", "exact fit"])
+@pytest.mark.parametrize("name", ["degree 2", "exact fit", "exact fit, knot"])
 def test_integer_weights_are_repeated_rows(name):
     """W-1: integer weights (zeros included, W-3) give the record of the
-    repeated rows, whose order is shuffled. In "exact fit" the two linear
-    candidates tie at the rounding of RSS_s: a reduction is capped at RSS_s
-    (LA-2: an RSS is at least 0), so they tie exactly and FWD-5 takes x0 in
-    both fits (issue #81)."""
+    repeated rows, whose order is shuffled. "degree 2" has no near-tie, so the
+    match is not luck. In the exact fits, candidates whose computed RSS is
+    within the band EXACT_FIT·RSS_s of 0 count as exact fits: they tie
+    exactly, and FWD-5 decides, the linear term of x0 in "exact fit" and one
+    knot in "exact fit, knot", in both fits (issue #81)."""
     X, Y, w, kw = _weights_design(name)
     fp = _fit(X, Y, w=w.astype(float), **kw)
     perm = np.random.default_rng(0).permutation(int(w.sum()))
@@ -363,6 +373,22 @@ def test_integer_weights_are_repeated_rows(name):
     assert np.all(np.abs(fp.rss - rep.rss) <= 1e-8 * np.r_[fp.rss[0], fp.rss[:-1]])
     for log in (fp.candidates, rep.candidates):
         assert np.all(log.second_rss >= 0.0)
+    if name == "degree 2":
+        gap = fp.candidates.second_rss - fp.candidates.best_rss
+        assert np.all(gap >= 1e-7 * fp.rss[:-1])  # no near-tie
+
+
+@pytest.mark.parametrize(("n", "a"), [(50, 1e-5), (2000, 1e-4)])
+def test_a_small_kink_keeps_its_knot(n, a):
+    """The band of exact fits is at the rounding level, so a real kink whose
+    candidate RSS is about 1e-14·RSS_s is not tied with the others: y = x0 +
+    a·(x0 - 0.5)₊ gets its pair at the largest x0 below 0.5, as the reference
+    and the code without the band choose (FWD-4, FWD-5; #83)."""
+    X = np.random.default_rng(1).uniform(size=(n, 2))
+    y = X[:, 0] + a * np.maximum(X[:, 0] - 0.5, 0.0)
+    fp = _fit(X, y, thresh=0.0)
+    assert fp.dirs[1:3, 0].tolist() == [1, -1]
+    assert fp.cuts[1, 0] == X[X[:, 0] <= 0.5, 0].max()
 
 
 def _rss(A, y):
