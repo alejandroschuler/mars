@@ -251,6 +251,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 06:50 #83 round-1 fixes at 7ddeea0 (EXACT_FIT = 1e-14 with its rounding bound; the kink test fails at 1e-12; the seed-309 case kills no-cap-in-refine; the #81 entry is gone from tests/test_sklearn_checks.py; gate B PASS). Still a trade-off: a = 1e-6 at n = 50 needs a band of 1e-15 or less; posted on #44 with the 4.1e-13 wide-weight step. Review queue: recheck-83 (the same adversarial reviewer, first), review-82, review-86.
 - 07:05 review-79-spec APPROVE at f59b401 (60 random fits within 1.5e-14 of exact; 121 fixtures unchanged; no slowdown, 165 s against 187 s). Non-blocking: the pruning pass still misses LA-5 at intermediate means (3.6e-8 at 2^23, 4 of 40 fits), so T15 keeps SHIFT_CAP for pruning-path comparisons (add to #84); two comment and readability fixes. Sent the #83 re-review to its adversarial reviewer.
 - 07:20 recheck of #83 (adversarial) APPROVE at 7ddeea0: 1e-14 is right (exact-fit rounding up to 2.4e-15 of RSS_s at n = 30000; 1e-15 would miss it). Asked the spec reviewer for a narrow recheck on the new head.
+- 07:30 spec recheck APPROVE at 7ddeea0. Merged #83 (the exact-fit band, 1e-14) as ba1126e; #81 closed. Non-blocking for #44: write the FWD-5 band as a definition; a docstring typo (EXACT_FIT times RSS_s). Updated #82 to 9f1f7e3; started review-82 (opus, also times gate B). Queue: review-86.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
