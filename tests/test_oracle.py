@@ -692,7 +692,9 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
     """The final fit of the same terms (PRUNE-8), by the plan's tolerance
     table: per response, the coefficients normwise within 1e-6 where
     kappa(B) <= 1e5, and the fitted values within 1e-8 sd(y), scaled by
-    kappa / 1e6 above 1e6; RSS and GCV within a relative 1e-8 (``same``, for
+    kappa / 1e6 above 1e6, or within the plan's rounding bound kappa u ||y||
+    when that is larger, as it is at a large mean (a fitted value near 1e13
+    has an ulp of 2e-3); RSS and GCV within a relative 1e-8 (``same``, for
     exact fits); RSq and GRSq within 1e-8."""
     m, sw = BS.shape[1], np.sqrt(w)[:, None]
     kappa = np.linalg.cond(BS * sw) if m > 1 else 1.0
@@ -704,7 +706,9 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same) -> None:
         _fail(case, f"coefficients: fast {cf.tolist()}, reference {cr.tolist()}")
     mean = np.average(Y, axis=0, weights=w)
     sd = np.sqrt(np.average((Y - mean) ** 2, axis=0, weights=w))
-    if np.any(np.max(np.abs(BS @ (cf - cr)), axis=0) > 1e-8 * sd * max(1, kappa / 1e6)):
+    rounding = kappa * (np.finfo(float).eps / 2) * np.linalg.norm(Y, axis=0)
+    tol = np.maximum(1e-8 * sd * max(1, kappa / 1e6), rounding)
+    if np.any(np.max(np.abs(BS @ (cf - cr)), axis=0) > tol):
         _fail(case, f"fitted values: kappa {kappa:.3g}, sd(y) {sd.tolist()}")
     if not same(fast["rss"], ref["rss"], LA5):
         _fail(case, f"final rss: fast {fast['rss']!r}, reference {ref['rss']!r}")
@@ -903,7 +907,7 @@ FIXTURE_CASES, BASIS_CASES = _fixture_cases()
 # ---------------------------------------------------------------------------
 # Hypothesis data
 
-DATA_KINDS = ("smooth", "hinge", "ties", "scaled", "small")
+DATA_KINDS = ("smooth", "hinge", "ties", "scaled", "shifted", "small")
 
 
 def _settings():
@@ -946,7 +950,10 @@ def forward_cases(draw, kind: str) -> Case:
     covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
     constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
     ``scaled``, covariates and y scaled and shifted by powers of 10 (LA-7,
-    EDGE-6, FWD-10, FWD-11); ``small``, 1 to 15 cases, now and then with a
+    EDGE-6, FWD-10, FWD-11); ``shifted``, y + c with |c| of 1e10 or 1e13
+    and covariates + 2^26 or 2^36, where only centering keeps the sums of
+    squares within LA-5 (FWD-10, the plan's "Fast path"); ``small``, 1 to 15
+    cases, now and then with a
     constant y (EDGE-1, EDGE-2, STOP-3). The noise runs from none (exact fits
     and STOP-5) to as large as the signal."""
     seed = draw(st.integers(0, 2**32 - 1))
@@ -980,6 +987,9 @@ def forward_cases(draw, kind: str) -> Case:
         Y = Y * 10.0 ** rng.uniform(-6, 6) + rng.choice(
             [0, 1, -1]
         ) * 10.0 ** rng.uniform(0, 10)
+    if kind == "shifted":
+        X = X + rng.choice([0.0, 2.0**26, 2.0**36], p)
+        Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:
         w = [rng.uniform(0.2, 3.0, n), rng.integers(0, 4, n).astype(float)][
@@ -993,7 +1003,9 @@ def forward_cases(draw, kind: str) -> Case:
 def pruning_cases(draw) -> PruneCase:
     """An intercept, then hinge and linear columns of Gaussian covariates, as
     in a forward basis; Y a linear combination of them plus noise, K = 1 to
-    3; no weights, positive weights, or integer weights with zeros (W-3)."""
+    3, now and then shifted by 1e10 or 1e13, where only a centered TSS meets
+    LA-5 (GCV-1, PRUNE-2); no weights, positive weights, or integer weights
+    with zeros (W-3)."""
     seed = draw(st.integers(0, 2**32 - 1))
     M = draw(st.integers(1, 10))
     n = draw(st.integers(2 * M + 3, 60))
@@ -1007,6 +1019,7 @@ def pruning_cases(draw) -> PruneCase:
         ),
     }
     noise = draw(st.sampled_from([1e-3, 0.1, 1.0]))
+    shift = draw(st.sampled_from([0.0] * 8 + [1e10, -1e10, 1e13, -1e13]))
     greedy = draw(st.booleans())
     rng = np.random.default_rng(seed)
     cols = [np.ones(n)]
@@ -1016,6 +1029,7 @@ def pruning_cases(draw) -> PruneCase:
         cols.append([x, np.maximum(x - t, 0), np.maximum(t - x, 0)][rng.integers(3)])
     B = np.column_stack(cols)
     Y = B @ rng.standard_normal((M, K)) + noise * rng.standard_normal((n, K))
+    Y = Y + shift
     w = {
         "none": None,
         "positive": rng.uniform(0.2, 3.0, n),
@@ -1023,6 +1037,9 @@ def pruning_cases(draw) -> PruneCase:
     }[weights]
     rows = np.ones(n, bool) if w is None else w > 0
     assume(rows.sum() > M + 1 and np.linalg.matrix_rank(B[rows]) == M)
+    # A shift can round a response with little noise to a constant, a
+    # degenerate fit (EDGE-1), which the pruning pass does not receive.
+    assume(not np.all(Y[rows][0] == Y[rows]))
     # Half of the bases in the order of a greedy forward selection, as a
     # forward pass adds terms, so that the first offer of PRUNE-3 can beat
     # backward elimination; the others in their drawn order, so that the first
@@ -1172,6 +1189,7 @@ def test_pruning_pass_on_random_bases(case):
     bases, with and without weights, for one and several responses (PRUNE-2
     to PRUNE-8, GCV-2, GCV-5, GCV-6, W-3, RESP-1), up to the first near-tie."""
     group = f"pruning, random, K {'= 1' if case.Y.shape[1] == 1 else '>= 2'}"
+    group += ", y shifted" if np.abs(case.Y).min() > 1e9 else ""
     _count(group, check_pruning(case))
 
 
