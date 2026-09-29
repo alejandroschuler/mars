@@ -865,8 +865,74 @@ def window(table, fast_k: int) -> list[int]:
     return list(table[: max(3, fast_k)])
 
 
+# The columns that the projections use. A linear factor x_j carries the mean
+# of x_j into its term, and when the term without that factor is also in the
+# basis, the part of the column that is new to the span is a difference of two
+# large numbers: at a mean of 2^36 about 5 digits go [LA-5]. The projections
+# therefore use, for such a term, the column with x_j - min x_j in place of
+# x_j. That column is the term minus multiples of terms of the basis, so the
+# span, every RSS and every residual stay the same in exact arithmetic
+# [LA-1]; x_j - min x_j is exact when the values of x_j are within a factor of
+# 2 of each other (Sterbenz). The terms themselves, their columns in the
+# returned B and the parents of later candidates keep the factor x_j.
+
+
+def _term_key(row, cut, without=()) -> tuple:
+    """The factors (covariate, code, knot) of a term, without the covariates in
+    ``without``; the knot of a linear factor is 0 [TERM-2]."""
+    return tuple(
+        (int(j), int(row[j]), 0.0 if row[j] == 2 else float(cut[j]))
+        for j in np.flatnonzero(row)
+        if j not in without
+    )
+
+
+def _shift_set(row, cut, keys, must=None) -> tuple:
+    """The largest set S of the linear factors of the term, with ``must`` in it
+    when given, such that, for every nonempty U in S, the term without the
+    factors in U is in ``keys``; among sets of one size the first in
+    increasing covariate order, and () when there is none. Then
+    prod_{j in S} (x_j - m_j) times the other factors is the term plus a
+    combination of terms in ``keys``."""
+    linear = [int(j) for j in np.flatnonzero(row) if row[j] == 2]
+    for size in range(len(linear), 0, -1):
+        for S in itertools.combinations(linear, size):
+            if (must is None or must in S) and all(
+                _term_key(row, cut, U) in keys
+                for r in range(1, size + 1)
+                for U in itertools.combinations(S, r)
+            ):
+                return S
+    return ()
+
+
+def _shifted_column(X, row, cut, shift) -> np.ndarray:
+    """The column of the term with x_j - min x_j for each linear factor j in
+    ``shift``; the factors multiply in increasing covariate order."""
+    column = np.ones(X.shape[0])
+    for j in np.flatnonzero(row):
+        x = X[:, j]
+        f = x - x.min() if j in shift else factor(int(row[j]), x, float(cut[j]))
+        column = column * f
+    return column
+
+
+def conditioned_basis(X, dirs, cuts, B):
+    """The columns that span what B spans and that the projections use, and the
+    keys of the terms. Column k is column k of B unless the term has a
+    linear factor that ``_shift_set`` shifts. Cost: O(n M d) time."""
+    X = np.asarray(X, dtype=np.float64)
+    keys = {_term_key(r, c) for r, c in zip(dirs, cuts, strict=True)}
+    out = np.array(B, dtype=np.float64, copy=True)
+    for k, (r, c) in enumerate(zip(dirs, cuts, strict=True)):
+        shift = _shift_set(r, c, keys)
+        if shift:
+            out[:, k] = _shifted_column(X, r, c, shift)
+    return out, keys
+
+
 def _parent_candidates(
-    k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
+    k, parent_row, X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau, terms=None
 ):
     """The candidates of parent term k (column k of B), in the order of FWD-5,
     and whether some covariate could be searched for it [FWD-2, FWD-3].
@@ -878,8 +944,13 @@ def _parent_candidates(
     [LA-2], where G is B, and B with b x in a pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
     The column b x is formed as b (x - min x), which spans the same with B.
-    Cost: up to n knots per covariate, each projected on up to M + 1
-    columns, so O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
+    When ``terms`` holds the rows and cuts of the terms of B, P_B must be the
+    projector of ``conditioned_basis``, and the projected columns b x and h
+    shift the linear factors of the parent as ``conditioned_basis`` does, with
+    b x among the terms in a pair search; the denominator of LA-3 is that of
+    the column h itself. Cost: up to n knots per covariate, each projected on
+    up to M + 1 columns, so O(p n^2 M) time, and O(n^2) memory for the hinge
+    matrix.
     """
     p = X.shape[1]
     b = B[:, k]
@@ -901,6 +972,16 @@ def _parent_candidates(
             params.endspan,
             params.adjust_endspan,
         )
+    if terms is None:
+        B_proj, keys, cut_row = B, None, None
+    else:
+        B_proj, keys = conditioned_basis(X, *terms, B)
+        cut_row = np.asarray(terms[1][k], dtype=np.float64)
+
+    def shifted_parent(shift):
+        # b with x_v - min x_v for each linear factor v of b in shift
+        return b if not shift else _shifted_column(X, parent_row, cut_row, shift)
+
     out = []
     for j in covariates:
         x = X[:, j]
@@ -908,13 +989,18 @@ def _parent_candidates(
         # with m the smallest x serves in its place: the same A_w, the same
         # linear candidate and the same G in exact arithmetic, and x - m is
         # exact when x has a large mean, so no digits go to the mean [LA-5]
-        bx = b * (x - x.min())
+        bx_shift = ()
+        if keys is not None:
+            bx_row, bx_cut = parent_row.copy(), cut_row.copy()
+            bx_row[j], bx_cut[j] = 2, 0.0
+            bx_shift = tuple(v for v in _shift_set(bx_row, bx_cut, keys, j) if v != j)
+        bx = shifted_parent(bx_shift) * (x - x.min())
         V = [*own, j]
         pair = all(sigma2[v] > 0 for v in V) and (
             P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
         )
         if pair:
-            P_G = Projector(np.column_stack([B, bx]), w)
+            P_G = Projector(np.column_stack([B_proj, bx]), w)
             e_G = P_G.residual(Y)
             out.append(Candidate(k, j, LINEAR, math.nan, float(np.sum(e_G**2))))
         else:
@@ -926,7 +1012,19 @@ def _parent_candidates(
             continue
         t = np.array(knots)
         H = b[:, None] * np.maximum(x[:, None] - t[None, :], 0.0)
-        H_perp = P_G.residual(H)
+        H_proj = H
+        if keys is not None and 2 in parent_row:
+            # the same shift for the hinge column of each knot, with b x among
+            # the terms in a pair search
+            keys_G = keys | {_term_key(bx_row, bx_cut)} if pair else keys
+            H_proj = H.copy()
+            for i, knot in enumerate(knots):
+                h_row, h_cut = parent_row.copy(), cut_row.copy()
+                h_row[j], h_cut[j] = 1, knot
+                shift = _shift_set(h_row, h_cut, keys_G)
+                if shift:
+                    H_proj[:, i] = shifted_parent(shift) * np.maximum(x - knot, 0.0)
+        H_perp = P_G.residual(H_proj)
         size = np.sum(H_perp**2, axis=0)
         spread = np.sum(P_G.scaled(H) ** 2, axis=0)
         constant = np.all(H[0] == H, axis=0)
@@ -1027,7 +1125,7 @@ def forward_pass(
             termination = NO_ROOM if s == 0 else TERM_LIMIT
             break
         B = np.column_stack(columns)
-        P_B = Projector(B, w)
+        P_B = Projector(conditioned_basis(X, dirs, cuts, B)[0], w)  # [LA-5]
         e_B = P_B.residual(Y)
         rss_s = rss_path[-1]
         limit = max_legal(rss_path)
@@ -1040,7 +1138,20 @@ def forward_pass(
             if k is None or term_degree(dirs[k]) >= params.max_degree:
                 continue  # skipped; the entry keeps its values [FAST-4]
             cands, searchable = _parent_candidates(
-                k, dirs[k], X, Y, w, B, P_B, e_B, sigma2, N, tau_N, params, tau
+                k,
+                dirs[k],
+                X,
+                Y,
+                w,
+                B,
+                P_B,
+                e_B,
+                sigma2,
+                N,
+                tau_N,
+                params,
+                tau,
+                terms=(dirs, cuts),
             )
             entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
             found.extend(cands)

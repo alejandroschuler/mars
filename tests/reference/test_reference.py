@@ -1036,8 +1036,10 @@ class TestLegality:
 def exact_rss(A, y, w):
     """The weighted RSS of y on the independent columns of A, in exact
     rational arithmetic: the normal equations solved with fractions."""
-    n, m = A.shape
-    a = [[Fraction(float(v)) for v in row] for row in A]
+    n, m = len(A), len(A[0])
+    a = [
+        [v if isinstance(v, Fraction) else Fraction(float(v)) for v in row] for row in A
+    ]
     yy = [Fraction(float(v)) for v in y]
     ww = [Fraction(float(v)) for v in w]
     rows = [
@@ -1055,6 +1057,18 @@ def exact_rss(A, y, w):
     beta = [rows[r][m] / rows[r][r] for r in range(m)]
     fitted = [sum(a[i][q] * beta[q] for q in range(m)) for i in range(n)]
     return float(sum(ww[i] * (yy[i] - fitted[i]) ** 2 for i in range(n)))
+
+
+def exact_basis(X, dirs, cuts):
+    """The columns of the terms [TERM-3] as rows of fractions: every factor and
+    product is exact."""
+    B = [[Fraction(1)] * len(dirs) for _ in range(len(X))]
+    for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
+        for j in np.flatnonzero(row):
+            c = Fraction(float(cut[j]))
+            for i, v in enumerate(Fraction(float(v)) for v in X[:, j]):
+                B[i][k] *= {1: max(v - c, 0), -1: max(c - v, 0), 2: v}[int(row[j])]
+    return B
 
 
 def check_best_and_second(log, index, cands, rss_s, limit):
@@ -1312,39 +1326,60 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
-    @pytest.mark.parametrize("degree", [2, 3])
-    def test_an_exact_shift_of_a_covariate_keeps_the_pass(self, degree):
+    @pytest.mark.parametrize(
+        ("degree", "auto_linpreds", "power"),
+        [(2, False, 36), (3, False, 36), (3, True, 26), (3, True, 36)],
+    )
+    def test_an_exact_shift_of_a_covariate_keeps_the_pass(
+        self, degree, auto_linpreds, power
+    ):
         # With auto_linpreds=False every term is a product of hinges, so an
-        # exact shift of x1 by 2^36 cannot change the fit (Conventions). The
-        # pass must give the same terms with the cuts shifted, and each RSS
-        # within 1e-8 of the RSS before the step [LA-5], against the pass on
-        # the unshifted x1 and against exact rational arithmetic
-        rng = np.random.default_rng(4)
+        # exact shift of x1 by 2^36 cannot change the fit (Conventions): the
+        # pass must give the same terms with the cuts shifted. With
+        # auto_linpreds=True and a continuous x1, x1 enters products as a
+        # linear factor, next to the same term without it, so the new part of
+        # the column is small beside the mean. In both, each RSS must be
+        # within 1e-8 of the RSS before the step [LA-5] of the exact rational
+        # RSS of the pass's own terms
+        rng = np.random.default_rng(0 if auto_linpreds else 4)
         n = 40
-        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
-        X = np.column_stack(grid)[:, :degree]
+        if auto_linpreds:
+            X = rng.uniform(size=(n, 3))
+        else:
+            grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+            X = np.column_stack(grid)[:, :degree]
         hinge = np.maximum(X[:, 0] - 0.3, 0)
-        y = 2 * hinge + 3 * hinge * X[:, 1] + 0.05 * rng.normal(size=n)
+        y = 2 * hinge + 3 * hinge * X[:, 1]
         if degree == 3:
             y = y + 2 * hinge * X[:, 1] * X[:, 2]
-        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
-        base = run_forward(X, y, **opts)
+        y = y + (0.2 if auto_linpreds else 0.05) * rng.normal(size=n)
+        opts = {"max_degree": degree, "auto_linpreds": auto_linpreds}
+        opts["max_terms"] = 13 if auto_linpreds else 11
         shifted_X = X.copy()
-        shifted_X[:, 1] += 2.0**36
-        np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**36, X[:, 1])  # exact
+        shifted_X[:, 1] += 2.0**power
         shifted = run_forward(shifted_X, y, **opts)
-        for key in ("dirs", "parent", "step", "termination"):
-            np.testing.assert_array_equal(shifted[key], base[key])
-        cuts = base["cuts"].copy()
-        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**36, 0.0)
-        np.testing.assert_array_equal(shifted["cuts"], cuts)
-        before = base["rss"][:-1]
-        assert np.all(np.abs(shifted["rss"][1:] - base["rss"][1:]) <= 1e-8 * before)
+        dirs = shifted["dirs"]
+        if auto_linpreds:
+            # x1 is a linear factor of a term of degree 3, and of a term whose
+            # parent is the same term without x1
+            linear = np.flatnonzero(dirs[:, 1] == 2)
+            assert any(ref.term_degree(dirs[k]) == 3 for k in linear)
+            assert any(dirs[shifted["parent"][k], 1] == 0 for k in linear)
+        else:
+            np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**power, X[:, 1])
+            base = run_forward(X, y, **opts)
+            for key in ("dirs", "parent", "step", "termination"):
+                np.testing.assert_array_equal(shifted[key], base[key])
+            cuts = base["cuts"].copy()
+            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**power, 0.0)
+            np.testing.assert_array_equal(shifted["cuts"], cuts)
+            before = base["rss"][:-1]
+            change = np.abs(shifted["rss"][1:] - base["rss"][1:])
+            assert np.all(change <= 1e-8 * before)
+        before = shifted["rss"][:-1]
         for s in range(1, len(shifted["rss"])):
             terms = np.flatnonzero(shifted["step"] <= s)
-            B = ref.basis_matrix(
-                shifted_X, shifted["dirs"][terms], shifted["cuts"][terms]
-            )
+            B = exact_basis(shifted_X, dirs[terms], shifted["cuts"][terms])
             exact = exact_rss(B, y, np.ones(n))
             assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
 
