@@ -869,20 +869,25 @@ def window(table, fast_k: int) -> list[int]:
     return list(table[: max(3, fast_k)])
 
 
-# The columns that the projections use [LA-5]. A linear factor x_j, or a
-# factor (t - x_j)+, carries the mean of x_j into its term. When the mean is
-# large, the part of a column that is new to the span can be a difference of
-# large numbers, and a float column loses those digits: about 5 of them at a
-# mean of 2^36 (x_j times b, rounded, has an error of eps |x_j b|). So for the
-# covariates whose smallest value m_j is larger in size than their range,
-# each term is expanded exactly in the products of the factors x_j - m_j,
-# (x_j - t)+ and the other factors, with x_j = (x_j - m_j) + m_j and
-# (t - x_j)+ = (x_j - t)+ - (x_j - m_j) + (t - m_j), and rational
-# coefficients. Gaussian elimination in exact arithmetic on these
-# coefficients gives columns that span what the terms span [LA-1], with
-# coefficients of size about 1 on columns whose values are of the size of the
-# range, so no digits go to a mean. The terms, their columns in the returned
-# B and the parents of later candidates stay as they are.
+# The columns that the projections use [LA-5]. A linear factor x_j carries
+# the mean of x_j into its term. When the mean is large, the part of a column
+# that is new to the span can be a difference of large numbers, and a float
+# column loses those digits: about 5 of them at a mean of 2^36 (x_j times b,
+# rounded, has an error of eps |x_j b|). So when a term has a linear factor,
+# or a factor (t - x_j)+, of a covariate whose smallest value m_j is larger in
+# size than its range, the terms are expanded exactly in products of the
+# elements x_j - m_j (x_j itself for the other covariates), (x_j - t)+ and
+# 1, with rational coefficients: x_j = (x_j - m_j) + m_j, and for every
+# covariate (t - x_j)+ = (x_j - t)+ - (x_j - m_j) + (t - m_j), with m_j = 0
+# when the mean is not large. The second identity has values of the size of
+# the range; it is there so that the elimination sees that a hinge pair spans
+# x_j. Gaussian elimination in exact arithmetic on these coefficients gives
+# columns that span what the terms span [LA-1], with coefficients of size
+# about 1 on columns whose values are of the size of the range, so no digits
+# go to a mean. The terms, their columns in the returned B and the parents of
+# later candidates stay as they are. Two covariates that are equal on every
+# row are two symbols here, so a product of such duplicates (EDGE-4) can
+# still lose digits at a large mean.
 
 
 def _large_mean(X) -> set:
@@ -929,8 +934,9 @@ class Conditioned:
         large mean and for x_j otherwise."""
         out = {(): Fraction(1)}
         for j in np.flatnonzero(row):
-            code, t, m = int(row[j]), float(cut[j]), float(self.low[j])
-            if j not in self.large or code == 1:
+            code, t = int(row[j]), float(cut[j])
+            m = float(self.low[j]) if j in self.large else 0.0
+            if code == 1 or (code == 2 and j not in self.large):
                 parts = {(int(j), code, 0.0 if code == 2 else t): Fraction(1)}
             elif code == 2:
                 parts = {(int(j), 2, 0.0): Fraction(1), None: Fraction(m)}
@@ -1026,9 +1032,9 @@ def _parent_candidates(
     linear_column (``parent_cut`` is the cut row of the parent). The hinge
     column h is used as it is: when a large mean would cost digits of its
     part that is new to G, that part is a small fraction of h, and LA-3
-    rejects it. Cost: up to n knots
-    per covariate, each projected on up to M + 1 columns, so O(p n^2 M) time,
-    and O(n^2) memory for the hinge matrix.
+    rejects it. Cost: up to n knots per covariate, each projected on up to
+    M + 1 columns, so O(p n^2 M) time, and O(n^2) memory for the hinge
+    matrix.
     """
     p = X.shape[1]
     b = B[:, k]

@@ -1332,56 +1332,83 @@ class TestForwardPass:
             )
 
     @pytest.mark.parametrize(
-        ("degree", "auto_linpreds", "shift"),
+        ("degree", "case", "shift"),
         [
-            (2, False, 2.0**36),
-            (3, False, 2.0**36),
-            (2, True, 2.0**26),
-            (2, True, -(2.0**36)),
-            (3, True, 2.0**26),
-            (3, True, -(2.0**36)),
-            (2, True, (1e8, 4e6, 7e8)),
+            (2, "hinges", 2.0**36),
+            (3, "hinges", 2.0**36),
+            (2, "continuous", 2.0**26),
+            (2, "continuous", -(2.0**36)),
+            (3, "continuous", 2.0**26),
+            (3, "continuous", -(2.0**36)),
+            (2, "grid", (1e8, 4e6, 7e8)),
+            (2, "binary", (2.0**36, 0.0)),
+            (3, "near the range", (1.001, -1.001, 0.5)),
         ],
     )
     def test_an_exact_shift_of_a_covariate_keeps_the_pass(
-        self, degree, auto_linpreds, shift
+        self, degree, case, shift, monkeypatch
     ):
-        # With auto_linpreds=False every term is a product of hinges, so an
-        # exact shift of x1 by 2^36 cannot change the fit (Conventions): the
-        # pass must give the same terms with the cuts shifted. With
-        # auto_linpreds=True and every covariate shifted by +-2^26, +-2^36 or
-        # 1e8 to 7e8, the covariates enter products as linear factors, next
-        # to the same term without them, so the new part of a column is small
-        # beside the means. In all cases, the RSS of each step and of its
+        # "hinges": with auto_linpreds=False every term is a product of
+        # hinges, so an exact shift of x1 by 2^36 cannot change the fit
+        # (Conventions): the pass must give the same terms with the cuts
+        # shifted. The other cases use auto_linpreds=True, so covariates with
+        # a large mean enter products as linear factors, next to the same
+        # term without them, and the new part of a column is small beside the
+        # means. "continuous": every covariate shifted. "grid": values 0 to
+        # 4 and means near 1e8, 4e6 and 7e8, where the pass used to add x0 x2
+        # a second time, with a false RSS drop of 32 percent. "binary": a
+        # shifted 0/1 covariate times x1, next to a hinge pair on x1, whose
+        # sum is linear in x1. In all cases, the RSS of each step and of its
         # second best candidate must be within 1e-8 of the RSS before the
         # step [LA-5] of the exact rational RSS of the same terms, with every
-        # column formed exactly
-        rng = np.random.default_rng(0 if auto_linpreds else 4)
-        n = 40
-        if auto_linpreds:
-            X = rng.uniform(size=(n, 3))
-        else:
+        # column formed exactly. "near the range": smallest values just above
+        # the range, where the float columns lose no digits, so the pass must
+        # be the same with and without the exact change of basis.
+        opts = {"max_degree": degree, "auto_linpreds": case != "hinges"}
+        opts["max_terms"] = 11 if case == "hinges" else 13
+        if case == "hinges":
+            rng = np.random.default_rng(4)
+            n = 40
             grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
             X = np.column_stack(grid)[:, :degree]
-        hinge = np.maximum(X[:, 0] - 0.3, 0)
-        y = 2 * hinge + 3 * hinge * X[:, 1]
-        if degree == 3:
-            y = y + 2 * hinge * X[:, 1] * X[:, 2]
-        y = y + (0.2 if auto_linpreds else 0.05) * rng.normal(size=n)
-        if np.ndim(shift):
-            # values 0 to 4 and means near 1e8, 4e6 and 7e8: the pass used to
-            # add x0 x2 a second time, with a false RSS drop of 32 percent
+            shift = np.array([0.0, shift, 0.0][:degree])
+        elif case == "grid":
             rng = np.random.default_rng(2)
             n = 12
             X = rng.integers(0, 5, size=(n, 3)).astype(float)
             y = X[:, 2] + X[:, 0] * X[:, 2] + 0.1 * rng.normal(size=n)
-        opts = {"max_degree": degree, "auto_linpreds": auto_linpreds}
-        opts["max_terms"] = 13 if auto_linpreds else 11
-        shifted_X = X.copy()
-        shifted_X[:, slice(None) if auto_linpreds else 1] += shift
+        elif case == "binary":
+            rng = np.random.default_rng(7)
+            n = 17
+            X = np.column_stack([rng.integers(0, 2, size=n), rng.uniform(size=n)])
+            coef = rng.uniform([1, 1, 1], [4, 4, 6])
+            y = (
+                coef[0] * X[:, 0]
+                + coef[1] * np.abs(X[:, 1] - 0.5)
+                + coef[2] * X[:, 0] * X[:, 1]
+                + 0.1 * rng.normal(size=n)
+            )
+            opts["max_terms"] = 9
+        elif case == "near the range":
+            rng = np.random.default_rng(27)
+            n = 14
+            X = np.column_stack([rng.uniform(size=n) for _ in range(3)])
+            X[:, 0] = (X[:, 0] - X[:, 0].min()) / np.ptp(X[:, 0])
+            y = X[:, 0] * X[:, 1] + X[:, 1] * X[:, 2] + 0.1 * rng.normal(size=n)
+        else:
+            rng = np.random.default_rng(0)
+            n = 40
+            X = rng.uniform(size=(n, 3))
+        if case in ("hinges", "continuous"):
+            hinge = np.maximum(X[:, 0] - 0.3, 0)
+            y = 2 * hinge + 3 * hinge * X[:, 1]
+            if degree == 3:
+                y = y + 2 * hinge * X[:, 1] * X[:, 2]
+            y = y + (0.05 if case == "hinges" else 0.2) * rng.normal(size=n)
+        shifted_X = X + shift
         shifted = run_forward(shifted_X, y, **opts)
         dirs = shifted["dirs"]
-        if auto_linpreds:
+        if case == "continuous":
             # a linear factor is the new factor of a term of the given degree
             # whose parent is not the intercept
             assert any(
@@ -1389,13 +1416,20 @@ class TestForwardPass:
                 and ref.term_degree(dirs[k]) == degree
                 for k, j in np.argwhere(dirs == 2)
             )
-        else:
-            np.testing.assert_array_equal(shifted_X[:, 1] - shift, X[:, 1])
+        if case == "near the range":
+            assert ref._large_mean(shifted_X) == {0, 1}
+            monkeypatch.setattr(ref, "_large_mean", lambda X: set())
+            plain = run_forward(shifted_X, y, **opts)
+            for key in ("dirs", "cuts", "parent", "termination"):
+                np.testing.assert_array_equal(shifted[key], plain[key])
+            np.testing.assert_allclose(shifted["rss"], plain["rss"], rtol=1e-12)
+        if case == "hinges":
+            np.testing.assert_array_equal(shifted_X - shift, X)
             base = run_forward(X, y, **opts)
             for key in ("dirs", "parent", "step", "termination"):
                 np.testing.assert_array_equal(shifted[key], base[key])
             cuts = base["cuts"].copy()
-            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift, 0.0)
+            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift[1], 0.0)
             np.testing.assert_array_equal(shifted["cuts"], cuts)
             before = base["rss"][:-1]
             change = np.abs(shifted["rss"][1:] - base["rss"][1:])
