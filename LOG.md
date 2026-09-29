@@ -253,6 +253,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 07:20 recheck of #83 (adversarial) APPROVE at 7ddeea0: 1e-14 is right (exact-fit rounding up to 2.4e-15 of RSS_s at n = 30000; 1e-15 would miss it). Asked the spec reviewer for a narrow recheck on the new head.
 - 07:30 spec recheck APPROVE at 7ddeea0. Merged #83 (the exact-fit band, 1e-14) as ba1126e; #81 closed. Non-blocking for #44: write the FWD-5 band as a definition; a docstring typo (EXACT_FIT times RSS_s). Updated #82 to 9f1f7e3; started review-82 (opus, also times gate B). Queue: review-86.
 - 07:45 review-67-adversarial REQUEST_CHANGES at a1a34ab: adjust_endspan is drawn only from 0, 1, 2, so SPAN-4's half-up rounding is untested (a wrong rounding mutant survives and gives wrong knots). 36 mutants, 28 killed. No flakiness over 5 seeds. Sent t15-finish the fix plus: a two-way second-best check, centered fitted values at 1e-8 sd(y) and the RSS of the returned coefficients on shifted Y, SUPPORTED widened to fast_k > 0 and weights within the ci time, and gate_c.sh logging.
+- 07:55 review-79-adversarial REQUEST_CHANGES at f59b401: a mirror hinge is expanded only for a large-mean covariate (up to 2.8e-5, and a wrong LA-7 decision at 2^50); exact duplicate covariates in products still break LA-5; the Fraction(-m) mutant survives but changes a fit. 240 random fits otherwise clean to 1.2e-14; no slowdown. Sent t06-linear-shift the fix list. Started review-86 (sonnet) at fbb83c0 after update-branch.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
