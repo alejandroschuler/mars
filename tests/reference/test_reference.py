@@ -819,7 +819,8 @@ class TestPruning:
         assert result["gcv"] > 1.05 * result["gcv_per_size"][2]
 
     def test_a_large_penalty_selects_the_intercept_with_rsq_and_grsq_zero(self):
-        # GCV-7: 0 by definition, where 1 - RSS / TSS computes as -2.2e-16
+        # GCV-7: 0 by definition. The final rss of the intercept model is its
+        # TSS, from the same centered projection, so RSS / TSS is 1 exactly
         rng = np.random.default_rng(1)
         n = int(rng.integers(5, 40))
         B = np.column_stack([np.ones(n), rng.normal(size=(n, 3))])
@@ -827,18 +828,23 @@ class TestPruning:
         result = prune(B, y, np.ones(n), penalty=1000.0)
         assert result["selected_size"] == 1
         assert result["rsq"] == 0.0 and result["grsq"] == 0.0
-        # This only checks that the case still needs the GCV-7 rule: if it
-        # fails after a change of rounding elsewhere, pick a new case; the
-        # code of prune need not change.
-        assert 1 - result["rss"] / result["tss"] != 0.0
+        assert result["rss"] == result["tss"]
 
-    def test_two_equal_selected_columns(self):
-        # LA-4 gives the later of two equal columns the coefficient 0, and the
-        # final rss describes the returned model [PRUNE-8]
+    @pytest.mark.parametrize("offset", [0.0, 0.5e-7])
+    def test_two_equal_selected_columns(self, offset):
+        # LA-4 gives the later of two equal columns, or of two whose LA-4
+        # ratio is 0.5e-7, the coefficient 0, and the final rss describes the
+        # returned model [PRUNE-8]; y has a component along the difference, so
+        # the projection on all three columns would have a smaller RSS
         rng = np.random.default_rng(6)
         x = rng.normal(size=30)
-        B = np.column_stack([np.ones(30), x, x, rng.normal(size=30)])
-        y = 1 + 2 * x + rng.normal(size=30)
+        u = ref.Projector(np.column_stack([np.ones(30), x]), np.ones(30)).residual(
+            rng.normal(size=30)
+        )
+        u = u / np.linalg.norm(u)
+        column = x + offset * np.linalg.norm(x) * u
+        B = np.column_stack([np.ones(30), x, column, rng.normal(size=30)])
+        y = 1 + 2 * x + rng.normal(size=30) + 10 * u
         result = prune(B, y, np.ones(30), pmethod="none", nprune=3)
         coef = result["coef"][:, 0]
         assert coef[2] == 0.0
@@ -1305,6 +1311,42 @@ class TestForwardPass:
                 ref.term_degree(rec["dirs"][k])
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
+
+    @pytest.mark.parametrize("degree", [2, 3])
+    def test_an_exact_shift_of_a_covariate_keeps_the_pass(self, degree):
+        # With auto_linpreds=False every term is a product of hinges, so an
+        # exact shift of x1 by 2^36 cannot change the fit (Conventions). The
+        # pass must give the same terms with the cuts shifted, and each RSS
+        # within 1e-8 of the RSS before the step [LA-5], against the pass on
+        # the unshifted x1 and against exact rational arithmetic
+        rng = np.random.default_rng(4)
+        n = 40
+        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+        X = np.column_stack(grid)[:, :degree]
+        hinge = np.maximum(X[:, 0] - 0.3, 0)
+        y = 2 * hinge + 3 * hinge * X[:, 1] + 0.05 * rng.normal(size=n)
+        if degree == 3:
+            y = y + 2 * hinge * X[:, 1] * X[:, 2]
+        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
+        base = run_forward(X, y, **opts)
+        shifted_X = X.copy()
+        shifted_X[:, 1] += 2.0**36
+        np.testing.assert_array_equal(shifted_X[:, 1] - 2.0**36, X[:, 1])  # exact
+        shifted = run_forward(shifted_X, y, **opts)
+        for key in ("dirs", "parent", "step", "termination"):
+            np.testing.assert_array_equal(shifted[key], base[key])
+        cuts = base["cuts"].copy()
+        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, 2.0**36, 0.0)
+        np.testing.assert_array_equal(shifted["cuts"], cuts)
+        before = base["rss"][:-1]
+        assert np.all(np.abs(shifted["rss"][1:] - base["rss"][1:]) <= 1e-8 * before)
+        for s in range(1, len(shifted["rss"])):
+            terms = np.flatnonzero(shifted["step"] <= s)
+            B = ref.basis_matrix(
+                shifted_X, shifted["dirs"][terms], shifted["cuts"][terms]
+            )
+            exact = exact_rss(B, y, np.ones(n))
+            assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
@@ -1791,6 +1833,36 @@ class TestFit:
         B = ref.basis_matrix(X, result["dirs"], result["cuts"])
         np.testing.assert_allclose(
             result["coef"], ref.lstsq_coef(B, y[:, None], np.ones(n)), rtol=1e-10
+        )
+
+    @pytest.mark.parametrize(
+        ("K", "weights"),
+        [(1, "none"), (1, "real"), (2, "none"), (2, "real"), (1, "sum 0.9")],
+    )
+    def test_the_final_rss_at_a_large_mean(self, K, weights):
+        # PRUNE-8 and LA-5: with a mean of 1e13 and a spread of about 1, the
+        # final rss is the RSS of the returned model to 1e-8 of the exact
+        # rational value, and so are RSq and the degenerate fit's rss, its TSS
+        # (weights that sum to 0.9, EDGE-1)
+        rng = np.random.default_rng(31)
+        X = rng.uniform(size=(30, 2))
+        y = [np.abs(X[:, 0] - 0.5) + rng.normal(scale=0.1, size=30) for _ in range(K)]
+        Y = 1e13 + np.column_stack(y)
+        w = {
+            "none": np.ones(30),
+            "real": rng.uniform(0.5, 2.0, 30),
+            "sum 0.9": np.full(30, 0.03),
+        }
+        result = fit(X, Y, w[weights])
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        exact = sum(exact_rss(B, Y[:, k], w[weights]) for k in range(K))
+        tss = sum(exact_rss(np.ones((30, 1)), Y[:, k], w[weights]) for k in range(K))
+        assert result["rss"] == pytest.approx(exact, rel=1e-8)
+        assert result["rsq"] == pytest.approx(
+            0.0 if len(B[0]) == 1 else 1 - exact / tss, abs=1e-8
+        )
+        assert (weights == "sum 0.9") == (
+            result["forward"]["termination"] == ref.DEGENERATE
         )
 
     def test_the_bound_of_edge_1_and_the_degenerate_record(self):

@@ -551,9 +551,11 @@ def prune(
 
     The fit must not be degenerate: ``fit_mars`` applies EDGE-1 and the
     degenerate values of GCV-7 before it calls this function, so here
-    N > 1 and some response is not constant. Cost: either rule refits
-    O(M_f^2) distinct subsets, each in O(n M_f (M_f + K)) time, so
-    O(n M_f^3 (M_f + K)) in all, and the cache holds O(M_f^2) values.
+    N > 1 and some response is not constant. The final rss is the RSS of the
+    returned coefficients, computed as the centered projection on the columns
+    that LA-4 keeps, so it meets LA-5 also when Y has a large mean. Cost:
+    either rule refits O(M_f^2) distinct subsets, each in O(n M_f (M_f + K))
+    time, so O(n M_f^3 (M_f + K)) in all, and the cache holds O(M_f^2) values.
     """
     B = np.asarray(B, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64).reshape(B.shape[0], -1)
@@ -634,10 +636,13 @@ def prune(
         selected = list(range(size))
 
     # The final model [PRUNE-8]; the intercept-only model has RSq = GRSq = 0
-    # by definition [GCV-7].
+    # by definition [GCV-7]. The returned coefficients are the least-squares
+    # fit on the selected columns that LA-4 keeps, so their RSS is the RSS of
+    # the projection on those columns [LA-1], which the Projector computes
+    # centered; Y - BS coef on the raw Y would cancel at a large mean [LA-5].
     BS = B[:, selected]
     coef = lstsq_coef(BS, Y, w)
-    final_rss = float(np.sum(w[:, None] * (Y - BS @ coef) ** 2))
+    final_rss = rss(BS[:, ~dependent_columns(BS, w)], Y, w)
     tss = best_rss[1]
     final_gcv = gcv(final_rss, size, penalty, N, tau_N)
     if size == 1:
@@ -872,6 +877,7 @@ def _parent_candidates(
     largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
     [LA-2], where G is B, and B with b x in a pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
+    The column b x is formed as b (x - min x), which spans the same with B.
     Cost: up to n knots per covariate, each projected on up to M + 1
     columns, so O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
     """
@@ -898,7 +904,11 @@ def _parent_candidates(
     out = []
     for j in covariates:
         x = X[:, j]
-        bx = b * x
+        # b x enters only through its span with B, which holds b, so b (x - m)
+        # with m the smallest x serves in its place: the same A_w, the same
+        # linear candidate and the same G in exact arithmetic, and x - m is
+        # exact when x has a large mean, so no digits go to the mean [LA-5]
+        bx = b * (x - x.min())
         V = [*own, j]
         pair = all(sigma2[v] > 0 for v in V) and (
             P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
@@ -1218,15 +1228,15 @@ def _degenerate_fit(Y, Ys, w, j, constant, tss, p, record_candidates, common) ->
     """The intercept alone, when N <= 1 or every response is constant [EDGE-1,
     GCV-7]: its coefficient is the weighted mean of each response, gcv is
     +inf, rsq and grsq are 0, and TSS and rss are 0 exactly when every
-    response is constant, else computed."""
+    response is constant, else computed. The rss of the intercept model is
+    its TSS, computed centered [LA-5]."""
     n = Ys.shape[0]
     if constant:
         coef = Y[:1].copy()  # the weighted mean of a constant is its value
         final_rss = 0.0
     else:
-        scaled = lstsq_coef(np.ones((n, 1)), Ys, w)
-        coef = _unscale(scaled, -j)
-        final_rss = float(np.sum(w[:, None] * (Ys - scaled) ** 2))
+        coef = _unscale(lstsq_coef(np.ones((n, 1)), Ys, w), -j)
+        final_rss = tss  # the RSS of the intercept model
     tss_row = np.array([_unscale(tss, -2 * j)])
     return {
         "dirs": np.zeros((1, p), dtype=np.int8),

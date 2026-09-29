@@ -609,6 +609,22 @@ class TestStepsFromTraceSlotGap:
             assert dirs[step["parent"]].tolist() == expected.tolist()
 
 
+@pytest.mark.parametrize(
+    ("parent_cuts", "groups"),
+    [
+        ((0.5, 0.5), [[1, 2], [3, 4]]),  # one parent: the pair h(x0-0.5)*h(+-(x1-0.3))
+        ((0.5, 0.8), [[1, 2], [3], [4]]),  # two parents: two single hinges
+    ],
+)
+def test_a_mirror_pair_has_one_parent(parent_cuts, groups):
+    # Spec review of #48, item 7: rows 3 and 4 differ only in their code for
+    # x1, but they are a pair only when their x0 cuts (their parents) agree.
+    dirs = np.array([[0, 0], [1, 0], [-1, 0], [1, 1], [1, -1]])
+    cuts = np.array([[0, 0], [0.5, 0], [0.5, 0], [parent_cuts[0], 0.3], [0, 0]])
+    cuts[4] = [parent_cuts[1], 0.3]
+    assert _dirs_row_groups(dirs, cuts) == groups
+
+
 class TestRemovedSequence:
     def test_from_pruning_removed_directly(self):
         assert removed_sequence({"pruning_removed": [3, 1, 2]}) == [3, 1, 2]
