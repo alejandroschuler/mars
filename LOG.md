@@ -282,6 +282,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:29 The user (in session local_a59469db, 12:30 Tuesday): pause until Saturday, then use whatever remains of the weekly usage. The watchdog session local_b1a9357f had taken the stale lock at 00:25 (this session did not resume after the 23:10 reset), merged 16 PRs (T11 stages 2 and 3, T12 to T17 done; only T01 v2 open among T00 to T18) and paused at 47 %; it was idle. This session took the idle lock back (mv to lock.stale), recorded the rule, and set the heartbeat to Saturday 07:00 PDT, so a fresh watchdog session resumes about 08:17 Saturday. Weekly 57 % now.
 - 14:10 The user: from now on, use Sonnet agents for any well-scoped task (recorded as the MODEL RULE in STATE; opus only for open-ended work).
 
+## 2026-10-03
+- 12:34 Watchdog session local_79d5382d took the stale lock (heartbeat from 07:00). get_usage: weekly 96 %, 5-hour 0 %. By the Saturday rule (from 96 %, start nothing), no agent started. Gate C on main a0ddca9: PASS in 280 s (log gates/a0ddca9…gateC.log). Heartbeat set to 2026-10-04 17:15 PDT; paused until the weekly reset. Extra worktree <main>/.worktrees/gatec-main (detached, removable).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

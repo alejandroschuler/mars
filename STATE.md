@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-09-29 14:14 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-10-03 12:45 PDT, by watchdog executor session `local_79d5382d-4695-42ff-94c2-60b96983d164` (it holds the lock).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,10 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+PAUSED UNTIL THE WEEKLY RESET (2026-10-04 17:00 PDT). The watchdog session local_79d5382d took the stale lock at 12:34 Saturday 2026-10-03 and read get_usage: weekly 96 %, 5-hour 0 %. By the Saturday rule below (from 96 %, start nothing), it started no agent. Gate C PASSES on main a0ddca9 (280 s; resume step 2 is done) and set the heartbeat to 2026-10-04 17:15 PDT, so the watchdog resumes about 18:17 PDT Sunday. No agent or timer runs. caffeinate stays on.
+
+On resume after the reset: the user's Saturday rule ends at the reset. Before large work, the new executor asks the user for the week-3 budget rule (in its session; the user may be away, so it may do only the small resume steps until the user answers). Then follow the resume order below.
 
 PAUSED UNTIL SATURDAY by the user (12:30 Tuesday 2026-09-29): "pause until saturday and then use whatever is remaining of my weekly usage". Weekly 57 % at 12:27 Tuesday; the weekly reset is 2026-10-04 17:00 PDT. The heartbeat is set to 2026-10-03 07:00 PDT, so the hourly watchdog takes over about 08:17 Saturday with a fresh session (cheaper than this long session). No agent, job or timer runs until then.
 
