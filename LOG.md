@@ -285,6 +285,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 ## 2026-10-03
 - 12:34 Watchdog session local_79d5382d took the stale lock (heartbeat from 07:00). get_usage: weekly 96 %, 5-hour 0 %. By the Saturday rule (from 96 %, start nothing), no agent started. Gate C on main a0ddca9: PASS in 280 s (log gates/a0ddca9…gateC.log). Heartbeat set to 2026-10-04 17:15 PDT; paused until the weekly reset. Extra worktree <main>/.worktrees/gatec-main (detached, removable).
 
+## 2026-10-04
+
+- 19:57 PDT: watchdog session local_89e05ad2 took the stale lock. Weekly 0 % (reset 2026-10-11 17:00 PDT), 5-hour 0 %. No week-3 budget rule from the user: opened #91 (needs-user), started no agent, heartbeat set to 2026-10-05 08:00 PDT.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
