@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-05 10:01 PDT, by watchdog executor session `local_d36235f4-dc91-4548-8b4c-e300be80d1a4` (it holds the lock).
+Updated: 2026-10-05 13:16 PDT, by watchdog executor session `local_948927a6-da94-42a7-8de8-2f31a3d99ad2` (it holds the lock).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+STILL WAITING FOR THE WEEK-3 BUDGET RULE (issue #91). Watchdog session local_948927a6 took the lock at 12:21 Monday 2026-10-05: it read the future heartbeat (22:21) as stale, then found the pause recorded here. #91: open, no comments. It started nothing and set the heartbeat to 2026-10-06 01:16 PDT. Note for the watchdog: a heartbeat in the future is an intended pause, so treat it as fresh. On resume, do the same check as below.
 
 STILL WAITING FOR THE WEEK-3 BUDGET RULE (issue #91). Watchdog session local_d36235f4 took the stale lock at 10:01 Monday 2026-10-05. Weekly 0 %, 5-hour 0 %. No answer on #91 and no user message in the last executor session, so it started nothing and set the heartbeat to 2026-10-05 22:21 PDT. On resume, do the same check as below.
 
