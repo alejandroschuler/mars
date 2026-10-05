@@ -289,6 +289,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 - 19:57 PDT: watchdog session local_89e05ad2 took the stale lock. Weekly 0 % (reset 2026-10-11 17:00 PDT), 5-hour 0 %. No week-3 budget rule from the user: opened #91 (needs-user), started no agent, heartbeat set to 2026-10-05 08:00 PDT.
 
+## 2026-10-05
+
+- 10:01 PDT: watchdog session local_d36235f4 took the stale lock (heartbeat from 08:00). Weekly 0 % (reset 2026-10-11 17:00 PDT), 5-hour 0 %. #91 has no answer and the last executor session has no user message. Started nothing. Heartbeat set to 22:21 PDT.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

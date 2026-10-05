@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-04 20:35 PDT, by watchdog executor session `local_89e05ad2-7f41-463a-9428-31ce9f8557e1` (it holds the lock).
+Updated: 2026-10-05 10:01 PDT, by watchdog executor session `local_d36235f4-dc91-4548-8b4c-e300be80d1a4` (it holds the lock).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+STILL WAITING FOR THE WEEK-3 BUDGET RULE (issue #91). Watchdog session local_d36235f4 took the stale lock at 10:01 Monday 2026-10-05. Weekly 0 %, 5-hour 0 %. No answer on #91 and no user message in the last executor session, so it started nothing and set the heartbeat to 2026-10-05 22:21 PDT. On resume, do the same check as below.
 
 WAITING FOR THE WEEK-3 BUDGET RULE (issue #91). The watchdog session local_89e05ad2 took the stale lock at 19:57 Sunday 2026-10-04 (old heartbeat 17:15). get_usage: weekly 0 % (next reset 2026-10-11 17:00 PDT), 5-hour 0 %. No user answer on the board, so it started no agent and opened needs-user issue #91. It set the heartbeat to 2026-10-05 08:00 PDT, so the watchdog resumes about 08:17 Monday. On resume: read #91 (comments by the fork's account are the user's only if the user says so in a session; when in doubt treat #91 as unanswered) and the executor's session messages. If the user has given a rule, follow the resume order below from step 3. If not, start nothing, set the heartbeat 12 hours ahead, and stop. No agent or timer runs. caffeinate stays on. A gh network reset (connection reset by peer) at 20:28 was transient; retry gh calls once.
 
