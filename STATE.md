@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-09 17:40 PDT, by executor session `local_31166e1b-5c39-4d70-92bd-50af6adc1056` (watchdog run, runs in `<main>`).
+Updated: 2026-10-10 06:15 PDT, by executor session `local_31166e1b-5c39-4d70-92bd-50af6adc1056` (watchdog run, runs in `<main>`).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,11 +15,11 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-RUNNING since Friday 2026-10-09 17:26 PDT under the Friday budget rule below (the pause ended). This executor runs in `<main>`: journal worktree `<main>/.worktrees/journal` (detached at origin/executor; push with `git push origin HEAD:executor`), task worktrees `<main>/.worktrees/<branch>`. Briefs COMMON.md and dual_review.js now point there. New briefs: T85-fast-la5, T84-pruning-accuracy, T01v2-spec, T19-bench.
+PAUSED from Saturday 2026-10-10 06:15 PDT at weekly 94 % by the Friday rule; no open PR of the executor's. Waiting for the week-4 budget rule: needs-user issue #116 (and messages from the user in any session). Heartbeat 1791806400 (Monday 2026-10-12 05:00 PDT); the first watchdog run after that reads #116 and the user's sessions; if there is no rule, it starts nothing, sets the heartbeat 12 hours ahead and stops. Comments on #116 count as the user's only if the user says so in a session.
 
-OLD PAUSE NOTE: PAUSED UNTIL FRIDAY 2026-10-09 17:00 PDT. The user, in executor session local_a59469db at 15:00 Monday 2026-10-05: "Resume your work on Friday at 5pm. At that point you can use all of the weekly usage i have left by then." This is the week-3 rule that #91 asked for (#91 is closed). The lock's heartbeat is 1791586800 (Friday 2026-10-09 16:00 PDT). The first hourly watchdog run after 17:00 Friday finds it stale and takes the lock; the runs come at about 20 to 40 minutes past the hour. A session that takes the lock before Friday 17:00 PDT starts nothing, writes 1791586800 into the heartbeat of its own lock, pushes a one-line LOG entry, and stops. No agent, job or timer runs until then. caffeinate stays on.
+main at 6761ee6. Week 3 merged: #92 (spec v2), #93, #94, #95, #96, #98, #100, #106, #107, #108, #109, #110, #111, #112, #114. Open issues to work next: #113 (LA-5 scope; copy symbols; affine copies), #115 (reference copy cases; 7 whole-fit pruning differences), T20 (#22: pruning cost at large means, 150 deg-3 terms 2.3 s; benchmark rerun on main), T21 (#23: freeze tag sim-freeze-1 and the full run; the pre-freeze pilot sizes the parity cells at up to 564 reps, about 2 core-hours), T22 to T24. Leftover cleanup for the user: #60 (two scratch worktrees need --force). The executor runs in <main> with the journal worktree <main>/.worktrees/journal (detached; push HEAD:executor).
 
-BUDGET RULE FOR FRIDAY 2026-10-09 17:00 PDT TO THE WEEKLY RESET (get_usage gives 2026-10-11T23:59:59Z, which is Sunday 16:59 PDT): use all of the weekly usage that is left at that time. The user may use some of it before Friday, so read get_usage first. Pacing:
+OLD WEEK-3 RULE (spent): BUDGET RULE FOR FRIDAY 2026-10-09 17:00 PDT TO THE WEEKLY RESET (get_usage gives 2026-10-11T23:59:59Z, which is Sunday 16:59 PDT): use all of the weekly usage that is left at that time. The user may use some of it before Friday, so read get_usage first. Pacing:
 - Work at full speed: up to 4 authors and 3 reviewers, with Sonnet 5.5 by the model rule below. Run the resume steps 3 to 5 in parallel where their files do not overlap.
 - From 92 % weekly, start only small agents that finish open pull requests. From 96 %, start nothing, and let running agents push a checkpoint. At 98 %, stop and say so in your session's final reply.
 - The 5-hour limit still applies: no new agents from 80 % of it; full reviews and long author tasks only below 60 %; from 70 %, the heartbeat holds max(now, reset + 15 min).
@@ -66,7 +66,7 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running agents
 
-(2026-10-09 22:10 PDT) v2-ref acd6317eff3eb84c2 (adding the oracle EDGE-7 keying fix and the FAST_FOLLOWS_V2 allowance to #108/#109), v2-prune a8c731af70f61e53d (#96 round 2 test). Paused: v2-fwd a7f0d83e7625099ca (#111 <- #112 <- #110; resume after #108/#109 merge). Reviewers to reuse: #96 adversarial aeff6b68aae0eae12, spec a96816c41ef9a74f4. IDs resolve only in session local_31166e1b. Merge order: #96 (gate C); #108, #109; then #111, #112, #110 rebased on main (the last sets FAST_FOLLOWS_V2 True). After that: T21 freeze and the full run (the pre-freeze pilot says about 2 core-hours), T20 (ratio already 7 at 10k x 10 x deg 2; pruning cost at large means), #113, #99 near copies, T22 to T24.
+None since 2026-10-10 06:15 PDT. Older note: (2026-10-09 22:10 PDT) v2-ref acd6317eff3eb84c2 (adding the oracle EDGE-7 keying fix and the FAST_FOLLOWS_V2 allowance to #108/#109), v2-prune a8c731af70f61e53d (#96 round 2 test). Paused: v2-fwd a7f0d83e7625099ca (#111 <- #112 <- #110; resume after #108/#109 merge). Reviewers to reuse: #96 adversarial aeff6b68aae0eae12, spec a96816c41ef9a74f4. IDs resolve only in session local_31166e1b. Merge order: #96 (gate C); #108, #109; then #111, #112, #110 rebased on main (the last sets FAST_FOLLOWS_V2 True). After that: T21 freeze and the full run (the pre-freeze pilot says about 2 core-hours), T20 (ratio already 7 at 10k x 10 x deg 2; pruning cost at large means), #113, #99 near copies, T22 to T24.
 
 ## Running jobs
 
@@ -75,6 +75,8 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 - None. The legacy full run (T04) finished at 16:13 PDT Saturday 2026-09-26 (ALL BLOCKS DONE); results in `<main>/.worktrees/runner-legacy/validation/runs/legacy_full` (49,441 files), logs `driver.log` (6 workers) and `driver_n4.log` (4 workers). Keep the runner worktree until T04 step 6 has collected the results into `validation/sims/results/legacy/`.
 
 ## Usage and resets
+
+- 2026-10-10 06:15 PDT: weekly all models 94 % (resets 2026-10-11 17:00 PDT); 5-hour 15 %.
 
 - 2026-10-09 17:26 PDT: 5-hour 36 % (resets 18:20 PDT); weekly all models 65 % (resets 2026-10-11 17:00 PDT).
 
