@@ -1562,6 +1562,63 @@ def _merge_cases() -> list[Case]:
     return cases
 
 
+def _copy_case() -> Case:
+    """Gate C's case on #95 (1f6d32d), the `ties` draw with seed 36 (#99, #104):
+    covariates on two levels at means of 7e6 to 7e7, x0 and x1 copies at other
+    shifts (their u = x - m columns are bitwise equal), degree 3. The fast
+    second-best RSS at step 4, a linear candidate, was off by 1.5 % of the RSS
+    before the step; the reference is exact."""
+    shifts = [14077133.671830641, 6676980.921659664, 7815508.419754293]
+    shifts += [69258819.11466606]
+    codes = [0x565CBC0B1, 0x565CBC0B1, 0xC00591ACA, 0x49A176134]
+    bits = [[int(c) for c in format(code, "036b")] for code in codes]
+    X = np.column_stack(
+        [m + 0.5 * np.array(b) for m, b in zip(shifts, bits, strict=True)]
+    )
+    y = np.array(
+        [
+            196829966.68739173,
+            196829969.62463754,
+            196829966.6901851,
+            196829967.71280205,
+            196829968.57873824,
+            196829967.72726566,
+            196829967.7228605,
+            196829968.59511694,
+            196829968.6050726,
+            196829967.72074175,
+            196829968.5880215,
+            196829967.7228671,
+            196829967.71984556,
+            196829967.73284683,
+            196829966.6780263,
+            196829968.5933759,
+            196829967.739849,
+            196829968.57697883,
+            196829969.63009456,
+            196829969.63219887,
+            196829967.72322258,
+            196829969.64521456,
+            196829968.5964247,
+            196829966.68590945,
+            196829966.67878583,
+            196829966.7035329,
+            196829966.65620995,
+            196829968.57257807,
+            196829967.72457588,
+            196829966.6954682,
+            196829969.62900403,
+            196829969.63671827,
+            196829966.67015332,
+            196829968.59055468,
+            196829966.67809227,
+            196829967.7302775,
+        ]
+    )
+    kw = {"max_degree": 3, "fast_k": 0, "thresh": 0.0, "adjust_endspan": 0.0}
+    return Case("ties seed 36, a copy at another shift", X, y, None, kw)
+
+
 def _designed_cases() -> list[Case]:
     """Designs that earlier tests and reviews built for one rule each; here the
     reference gives the answer."""
@@ -1637,6 +1694,7 @@ def _designed_cases() -> list[Case]:
     rng = np.random.default_rng(2)
     Xs, ys = rng.uniform(size=(10, 2)), rng.normal(size=10)
     cases.append(Case("GRSq' between -20 and -10", Xs, ys, None, {"penalty": 5.0}))
+    cases.append(_copy_case())
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 

@@ -1,7 +1,7 @@
 """The forward pass: the steps, the stopping rules and the forward record.
 
-Spec: ``docs/algorithm.md``, "Forward pass" (FWD-1 to FWD-11), "Stopping
-rules" (STOP-1 to STOP-7), LA-2 to LA-7, KNOT, SPAN, LIMIT-2, "Fast MARS"
+Spec: ``docs/algorithm.md``, "Forward pass" (FWD-1 to FWD-12), "Stopping
+rules" (STOP-1 to STOP-7), LA-1 to LA-7, KNOT, SPAN, LIMIT-2, "Fast MARS"
 (FAST-1 to FAST-6), "Weights" (W-1 to W-5, W-8), "Several responses"
 (RESP-1 to RESP-3), EDGE-1, EDGE-6, CORE-3 (the forward record and the
 candidate log) and CORE-4 (termination). The plan's
@@ -38,6 +38,20 @@ chosen candidate is built again (``_scan.rebuild``), and its reduction is
 checked against FWD-4 with the rebuilt RSS; a candidate that fails is left
 out, its search is done again without it, and the step chooses again.
 
+Dependence (LA-1, LA-2, LA-4, FWD-11). A candidate's new column (b·x, a hinge)
+that LA-4 finds dependent on G counts as 0: no linear candidate, b·x not in G,
+a hinge with the gain 0. Without a linear factor of a shifted covariate
+(``_linalg.large_covariates``) in the column or in the terms, that is the plain
+test, on a distance that the search has already. Otherwise
+``_linalg.Conditioner.dependent`` applies it in the exact shift, from the float64
+distance of a column free of the mean, with its error bound, and exactly
+(rational arithmetic) where the bound does not decide. FWD-11 is the same test
+on the terms, in their order, so it does not depend on the order of the terms.
+FWD-12: the occurrences of one single hinge or linear candidate in several
+searches of a step (``_Pass.occurrences``) are one candidate, decided by the
+first in the order of FWD-5 (``_Pass.decide``); the others keep its reduction for
+their parent's λ, and the log's second best is of another key.
+
 Numerics. Y is multiplied by a power of 2 first (EDGE-6) and centered in two
 steps, each response by its data value nearest its weighted mean and then by
 the weighted mean (FWD-10, LA-6; ``_pruning`` does the same), so that the
@@ -47,7 +61,10 @@ original scale, where one can underflow to 0 or, for |y|·√n above about
 1e154, overflow to +inf (EDGE-6 names the underflow). No absolute epsilon.
 Ties follow FWD-5. No input is written to. Complexity: O(p·n·log n) for the
 sorts, O(P·p·n·r) per step for P parents and rank r, O(n·M²) for FWD-11;
-memory O(n·(p + M_max)).
+memory O(n·(p + M_max)). The dependence tests add O(n·r) for each knot that
+pass 2 values and O(n) for each pair search; merging adds O(p) for each
+candidate that pass 2 values and O(n·r) for each alternate search that exists.
+With a linear factor of a shifted covariate see ``forward_pass``.
 
 Public names, for ``_core``:
 
@@ -886,7 +903,10 @@ def forward_pass(
     parents, O(n·(p + M_max + K)) memory. With a covariate of a large mean
     (``_linalg.Conditioner``) there are also O(M²·p·3^d) rational operations
     in all, O(n·d·3^d) per column that is formed, and O(M·p·3^d) memory for
-    the coefficients, for terms of degree d.
+    the coefficients, for terms of degree d; a dependence test that the float64
+    error bound does not decide costs O(g·M²) rational operations for g distinct
+    rows of X (the data are few levels at a large mean and a column that the
+    terms span at the cases, not as a formula).
     """
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
