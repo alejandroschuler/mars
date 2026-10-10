@@ -1543,6 +1543,38 @@ def _large_mean_cases() -> list[Case]:
     return cases
 
 
+def _merge_cases() -> list[Case]:
+    """FWD-12 on discrete covariates with a product in the truth: the same rows
+    come from two searches, as linear candidates (the cut that a search adds
+    matters with ``auto_linpreds=False``) and as single hinges. The comparison
+    covers the whole record and the candidate log, the recorded parent and the
+    second best's parent and covariate included (the first occurrence in the
+    order of FWD-5 decides). Seeds from the review of #111."""
+    cases = []
+    for seed in (619, 486, 613, 690):
+        rng = np.random.default_rng(seed)
+        n = int(rng.choice([12, 20, 40, 100]))
+        p = int(rng.choice([2, 3, 4]))
+        levels = int(rng.choice([2, 3, 4, 6, 10]))
+        X = np.floor(rng.uniform(size=(n, p)) * levels) / levels
+        y = sum(
+            rng.normal() * np.maximum(X[:, i] - np.median(X[:, i]), 0) for i in range(p)
+        )
+        y = y + rng.normal() * X[:, 0] * X[:, -1]
+        y = y + rng.choice([0, 0.01, 0.3]) * rng.normal(size=n)
+        kw = {
+            "max_degree": int(rng.choice([2, 3])),
+            "auto_linpreds": bool(rng.integers(2)),
+            "fast_k": int(rng.choice([0, 3, 5, 20])),
+            "thresh": 0.0,
+            "max_terms": int(rng.choice([7, 13, 21])),
+        }
+        if rng.uniform() < 0.4:
+            kw |= {"minspan": 1, "endspan": 1}
+        cases.append(Case(f"merged candidates, seed {seed}", X, y, None, kw))
+    return cases
+
+
 def _designed_cases() -> list[Case]:
     """Designs that earlier tests and reviews built for one rule each; here the
     reference gives the answer."""
@@ -1613,6 +1645,11 @@ def _designed_cases() -> list[Case]:
         Case("a duplicated covariate", Xd, yd, None, {"fast_k": 0, "thresh": 0.0})
     )
     cases += _large_mean_cases()
+    cases += _merge_cases()
+    # STOP-3: GRSq' of the first candidate is -14.6, between -20 and -10: code 3
+    rng = np.random.default_rng(2)
+    Xs, ys = rng.uniform(size=(10, 2)), rng.normal(size=10)
+    cases.append(Case("GRSq' between -20 and -10", Xs, ys, None, {"penalty": 5.0}))
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 
@@ -1645,6 +1682,19 @@ def test_whole_fit_on_hypothesis_data(data):
     fast = _core.fit_mars(case.X, case.Y, case.w, params, record_candidates=True)
     ref = _core.MarsFit.from_dict(case.reference_fit())
     _count("whole fit, hypothesis", compare_fits(case, fast, ref))
+
+
+@pytest.mark.parametrize("case", _merge_cases(), ids=lambda c: c.name)
+def test_merged_candidates_record_the_reference_parents(case):
+    """FWD-12: the recorded parent of each term and the second best's parent,
+    covariate and kind equal the reference's exactly (the comparison of
+    ``check_forward`` takes the same rows from another parent as a tie)."""
+    case = dataclasses.replace(case, Y=np.reshape(case.Y, (-1, 1)))
+    fast, ref = _plain(case.fast_forward()), case.reference_fit()["forward"]
+    assert fast["parent"].tolist() == ref["parent"].tolist()
+    for key in ("second_parent", "second_variable", "second_kind"):
+        got, want = _plain(fast["candidates"])[key], ref["candidates"][key]
+        assert got.tolist() == want.tolist()
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)

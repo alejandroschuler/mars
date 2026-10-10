@@ -568,7 +568,12 @@ def _ns(rss=(12.0,), tss=1.0, N=11.0, penalty=-1.0, thresh=0.001):
         (_ns(), True, 11.0, 3, None),  # GRSq' = -10 exactly: not below
         (_ns(), True, 11.5, 3, Termination.GRSQ_LOW),
         (_ns(thresh=0.0), True, 11.5, 3, None),  # STOP-3 needs thresh > 0
-        (_ns(penalty=2.0), True, 1.0, 11, Termination.GRSQ_NEG_INF),
+        (_ns(penalty=2.0), True, 1.0, 11, Termination.GRSQ_NEG_INF),  # -inf
+        # STOP-3 (v2): code 2 below -1000, not only at -inf
+        (_ns(), True, 1000.0, 3, Termination.GRSQ_LOW),  # GRSq' = -999
+        (_ns(), True, 1001.0, 3, Termination.GRSQ_LOW),  # -1000
+        (_ns(), True, 1001.5, 3, Termination.GRSQ_NEG_INF),  # -1000.5
+        (_ns(), None, 1.0e6, 3, Termination.GRSQ_NEG_INF),  # FAST-6: no candidate
         (_ns((1.0,), thresh=0.25), True, 0.75, 3, None),  # a change of thresh
         (_ns((1.0,), thresh=0.25), True, 0.76, 3, Termination.RSQ_CHANGE_SMALL),
         (_ns((1.0,), thresh=0.0), None, 1.0, 2, Termination.NO_GAIN),
@@ -592,6 +597,75 @@ def test_the_stops_before_a_step(ns, chosen, rss_new, m_new, code):
 def test_the_stop_after_a_step(rss, thresh, high):
     """STOP-5 at its bounds."""
     assert _forward._rsq_high(_ns(tss=4.0, thresh=thresh), rss) is high
+
+
+def _merge_case(seed):
+    """Discrete covariates, a product in the truth: x_i·x_j is often chosen from
+    its two linear parents (FWD-12)."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.choice([12, 20, 40, 100]))
+    p = int(rng.choice([2, 3]))
+    levels = int(rng.choice([2, 3, 4, 6, 10]))
+    X = np.floor(rng.uniform(size=(n, p)) * levels) / levels
+    if rng.uniform() < 0.5:
+        X = X * float(rng.choice([1, 10, 1000]))
+    y = sum(
+        rng.normal() * np.maximum(X[:, i] - np.median(X[:, i]), 0) for i in range(p)
+    )
+    y = y + rng.normal() * np.prod(X[:, :2], axis=1) + 0.01 * rng.normal(size=n)
+    return X, y, int(rng.choice([2, 3])), bool(rng.integers(2))
+
+
+@pytest.mark.parametrize("seed", [6, 9, 74])
+def test_the_second_best_does_not_merge_with_the_chosen(seed):
+    """FWD-12, FWD-8: two linear candidates on the two linear parents of one
+    product add the same row, so they are one candidate; the log's second best
+    is another candidate. Before, the second best was the other occurrence at
+    steps 4 and 6 of these fits (equal up to rounding)."""
+    X, y, degree, auto = _merge_case(seed)
+    fp = _fit(X, y, max_degree=degree, auto_linpreds=auto, thresh=0.0, max_terms=13)
+    log = fp.candidates
+    for s in range(len(log.best_rss)):
+        if log.second_kind[s] != _forward.KIND_LINEAR:
+            continue
+        p, j = log.second_parent[s], log.second_variable[s]
+        d, k = _terms.child_term(fp.dirs[p], fp.cuts[p], j, _terms.LINEAR)
+        for t in np.flatnonzero(fp.step == s + 1):
+            assert not (fp.dirs[t] == d).all() or not (fp.cuts[t] == k).all()
+
+
+def test_two_searches_that_add_the_same_hinge_product_are_one_candidate(monkeypatch):
+    """FWD-12: with h(x0 - t0) and h(x1 - t1) in the model, the single hinge on
+    the first with covariate x1 and knot t1 and the one on the second with
+    covariate x0 and knot t0 add the same row; the first in the order of FWD-5
+    decides, and its reduction and legality hold for both. A pair search on one
+    of the parents breaks the match, since the kinds differ."""
+    rng = np.random.default_rng(2)
+    X = rng.uniform(size=(30, 2))
+    y = np.maximum(X[:, 0] - 0.4, 0) + np.maximum(X[:, 1] - 0.5, 0)
+    st_ = _state(X, y + 0.1 * rng.normal(size=30), max_degree=2, minspan=1, endspan=1)
+    t = [float(np.sort(X[:, j])[12]) for j in (0, 1)]
+    for j in (0, 1):
+        c = _forward._Candidate(1.0, (0, j, 1), 0, j, _forward.KIND_PAIR, t[j])
+        st_.add(c, _scan.rebuild(st_.Q, st_.Yw, st_.columns(c)[0]))
+    assert sorted(st_.parents()) == [0, 1, 2, 3, 4]
+    k0, k1 = 1, 3  # the terms h(x0 - t0) and h(x1 - t1)
+    place = int(np.flatnonzero(st_.knots_of(k0, 1).knots == t[1])[0]) + 1
+    first = _forward._Candidate(
+        1.0, (st_.rows[k0], 1, place), k0, 1, _forward.KIND_HINGE, t[1]
+    )
+    first = st_.keyed(first)
+    assert len(st_.occurrences(first)) == 1  # the real rule: a pair search on k1
+    monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: False)
+    occ = st_.occurrences(first)
+    assert {(c.parent, c.variable, c.knot) for c in occ} == {
+        (k0, 1, t[1]),
+        (k1, 0, t[0]),
+    }
+    assert occ[0].order < occ[1].order and len({c.key for c in occ}) == 1
+    got = [st_.decide(c) for c in occ]
+    assert got[0] is not None
+    assert got[1].reduction == pytest.approx(got[0].reduction, rel=1e-9)
 
 
 def _fixed_gain(monkeypatch, gain):
@@ -928,6 +1002,8 @@ def test_every_step_equals_the_explicit_choice():
         (np.eye(3, 1), np.arange(3.0), [0.0, 0.0, 0.0], "every weight is zero"),
         # EDGE-6: the scaled TSS underflows, possible only with extreme weights
         (np.eye(3, 1), [0.0, 1.0, 1.0], [1e-310, 1e-310, 2.0], "scale of y"),
+        # the check comes before the degenerate test (N = 0.5 <= 1 here)
+        (np.eye(2, 1), [0.0, 1.0], [1e-310, 0.5], "scale of y"),
     ],
 )
 def test_bad_input(X, y, w, match):

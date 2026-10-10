@@ -77,8 +77,10 @@ IntArray = npt.NDArray[np.int64]
 KIND_NONE, KIND_PAIR, KIND_HINGE, KIND_LINEAR = 0, 1, 2, 3
 #: FWD-4: a knot's reduction is at most min(1.01·RSS_s, 10·Δ_s).
 MAX_LEGAL_RSS, MAX_LEGAL_DELTA = 1.01, 10.0
-#: STOP-3: the pass stops when GRSq' is below this value.
+#: STOP-3: the pass stops when GRSq' is below this value, with code 3 (v2: code
+#: 2 when GRSq' is below GRSQ_NEG_INF_FLOOR, -inf included).
 GRSQ_FLOOR = -10.0
+GRSQ_NEG_INF_FLOOR = -1000.0
 #: STOP-5: the pass stops when RSS_s < 1e-10·TSS/(N - 1).
 RSS_FLOOR = 1e-10
 #: A candidate RSS at most EXACT_FIT·RSS_s is an exact fit, 0 (issue #81).
@@ -153,7 +155,9 @@ class _Candidate(NamedTuple):
     ``err`` on its error (0.0 for an explicit value), whether it is legal for
     sure (``sure``: no error within the bounds can change its LA-3 and FWD-4
     decisions), its place in the order of FWD-5, and what it adds. ``parent``
-    is the parent's forward index (TERM-6)."""
+    is the parent's forward index (TERM-6). ``key`` names the rows that a single
+    hinge or a linear candidate on a parent of degree 1 or more adds, so that two
+    occurrences of one candidate have one key (FWD-12)."""
 
     reduction: float
     order: tuple[int, int, int]  # (table row of the parent, covariate, place)
@@ -163,6 +167,7 @@ class _Candidate(NamedTuple):
     knot: float  # NaN for a linear term
     err: float = 0.0
     sure: bool = True
+    key: tuple | None = None  # FWD-12: (kind, rows added); None never merges
 
 
 class _Search(NamedTuple):
@@ -179,9 +184,20 @@ class _Search(NamedTuple):
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
-    """Return the best two, by reduction and then by the order of FWD-5.
-    Complexity: O(c·log c) for c candidates."""
-    return _ranked(candidates)[:2]
+    """Return the best two, by reduction and then by the order of FWD-5, of
+    different keys: later occurrences of a merged candidate do not count
+    (FWD-12, FWD-8). Complexity: O(c·log c) for c candidates."""
+    out: list[_Candidate] = []
+    seen: set = set()
+    for c in _ranked(candidates):
+        if c.key is not None:
+            if c.key in seen:
+                continue
+            seen.add(c.key)
+        out.append(c)
+        if len(out) == 2:
+            break
+    return out
 
 
 def _ranked(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -241,6 +257,8 @@ class _Pass:
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.cond = _linalg.Conditioner(X, self.center)  # LA-5
         self.cond.append(self.dirs[0], self.cuts[0])
+        self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
+        self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
         self.parent, self.step_of = [-1], [0]
         self.slot, self.term_at = [1], {1: 0}  # slot 1 holds the intercept
         self.lam, self.kap = [math.inf], [0]
@@ -268,6 +286,84 @@ class _Pass:
             adjust_endspan=prm["adjust_endspan"],
             tau=self.tau,
         )
+
+    @staticmethod
+    def _row_key(dirs_row: IntArray, cuts_row: FloatArray) -> tuple[bytes, bytes]:
+        """The key of a term's row (TERM-6). Complexity: O(p)."""
+        return dirs_row.tobytes(), (cuts_row + 0.0).tobytes()  # -0.0 is 0.0
+
+    def _adds(self, kind: int, j: int, knot: float) -> tuple[int, float]:
+        """The factor (code and cut) that a candidate of this kind adds on the
+        covariate j (FWD-6). Complexity: O(1)."""
+        if kind == KIND_HINGE:
+            return _terms.PLUS, knot
+        if self.params["auto_linpreds"]:
+            return _terms.LINEAR, 0.0
+        return _terms.PLUS, self.lin_knot[j]
+
+    def _child(self, c: _Candidate) -> tuple[IntArray, FloatArray]:
+        """The row of the term that candidate c adds (a single hinge or a
+        linear candidate). Complexity: O(p)."""
+        code, cut = self._adds(c.kind, c.variable, c.knot)
+        return _terms.child_term(
+            self.dirs[c.parent], self.cuts[c.parent], c.variable, code, cut
+        )
+
+    def keyed(self, c: _Candidate) -> _Candidate:
+        """c with its FWD-12 key: that of the rows it adds, for a single hinge
+        or a linear candidate on a parent of degree 1 or more (the others add
+        rows that no other search adds). Complexity: O(p)."""
+        if c.kind == KIND_PAIR or self.degree[c.parent] == 0:
+            return c
+        d, k = self._child(c)
+        return c._replace(key=(c.kind, *self._row_key(d, k)))
+
+    def occurrences(self, c: _Candidate) -> list[_Candidate]:
+        """The occurrences of candidate c in this step, c included, in the order
+        of FWD-5 (FWD-12): the searches of a parent that this step visits and a
+        covariate g, of the same kind as c (single hinge, or pair search for a
+        linear candidate), that add the same rows, with the same knot. The first
+        one decides. Only the factors g of the added term that a search of c's
+        kind adds can be the new one. Complexity: O(p·n·r) for each alternate
+        search that exists, O(p) otherwise, and O(1) when c.key is None."""
+        out = [c]
+        if c.key is None:
+            return out
+        d, k = self._child(c)
+        for g in np.flatnonzero(d).tolist():
+            code, cut = self._adds(c.kind, g, float(k[g]))
+            if g == c.variable or d[g] != code or k[g] != cut:
+                continue
+            d2, k2 = d.copy(), k.copy()
+            d2[g], k2[g] = _terms.ABSENT, 0.0
+            parent = self.index.get(self._row_key(d2, k2))
+            if parent is None or parent not in self.rows:
+                continue
+            place = 0
+            if c.kind == KIND_HINGE:
+                at = np.flatnonzero(self.knots_of(parent, g).knots == cut)
+                if at.size == 0:
+                    continue
+                place = int(at[0]) + 1
+            if self.setup(parent, g).pair != (c.kind == KIND_LINEAR):
+                continue
+            order = (self.rows[parent], g, place)
+            knot = cut if c.kind == KIND_HINGE else math.nan
+            out.append(c._replace(order=order, parent=parent, variable=g, knot=knot))
+        return sorted(out, key=lambda o: o.order)
+
+    def decide(self, first: _Candidate) -> _Candidate | None:
+        """The explicit values of the first occurrence of a merged candidate, or
+        None when it is not legal (FWD-12: its LA-3 decision, its reduction and
+        its legality hold for every occurrence). Complexity: O(n·(r + K))."""
+        if first.kind == KIND_LINEAR:
+            sr = self.setup(first.parent, first.variable)
+            lin = sr.lin
+            if not sr.pair or lin <= 0.0:
+                return None
+            return first._replace(reduction=lin, err=0.0, sure=True)
+        out = self.refine([first])
+        return out[0] if out else None
 
     def max_legal(self) -> float:
         """FWD-4: MaxLegal_s = min(1.01·RSS_s, 10·Δ_s), and 1.01·RSS_0 first.
@@ -413,7 +509,8 @@ class _Pass:
                 possible[place - 1] = False
         found = []
         if sr.pair and sr.lin > 0.0 and (row, j, 0) not in excluded:
-            found.append(_Candidate(sr.lin, (row, j, 0), k, j, KIND_LINEAR, math.nan))
+            lin = _Candidate(sr.lin, (row, j, 0), k, j, KIND_LINEAR, math.nan)
+            found.append(self.keyed(lin))
         floor = _second_largest(
             [*(red - err)[possible & sure], *(c.reduction for c in found)]
         )
@@ -423,7 +520,7 @@ class _Pass:
             c = _Candidate(
                 float(red[i]), (row, j, i + 1), k, j, kind, t, e, bool(sure[i])
             )
-            found.append(c)
+            found.append(self.keyed(c))
         return _ranked(found)
 
     def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
@@ -507,21 +604,43 @@ class _Pass:
             (k, j): self.search(k, j, excluded) for k in parents for j in searched[k]
         }
         explicit: dict = {}  # order -> the candidate with explicit values, or None
+        decided: dict = {}  # key -> (first occurrence with explicit values or None)
         while True:
             kept = [c for cands in found.values() for c in cands]
             want = self._contenders(kept)
-            new = [c for c in want if c.order not in explicit]
+            new = [c for c in want if c.key is None and c.order not in explicit]
             explicit.update((c.order, None) for c in new)
             explicit.update((c.order, c) for c in self.refine(new))
-            legal = [explicit[c.order] for c in want if explicit[c.order] is not None]
+            legal = []
+            for c in want:
+                if c.key is None:
+                    r = explicit[c.order]
+                else:  # FWD-12: the first occurrence decides for all
+                    if c.key not in decided:
+                        decided[c.key] = self.decide(self.occurrences(c)[0])
+                    r = decided[c.key]
+                    if r is not None and r.order != c.order:
+                        legal.append(r)
+                        r = r._replace(
+                            order=c.order, parent=c.parent, variable=c.variable
+                        )
+                if r is not None:
+                    legal.append(r)
             top = _top_two(legal)
             rb = self.check(top[0]) if top else None
             if not top or rb is not None:
                 break
             c = top[0]
-            excluded.add(c.order)
-            explicit[c.order] = None
-            found[(c.parent, c.variable)] = self.search(c.parent, c.variable, excluded)
+            if c.key is None:
+                dead = [c]
+                explicit[c.order] = None
+            else:
+                dead = self.occurrences(c)
+                decided[c.key] = None
+            for d in dead:
+                excluded.add(d.order)
+            for k, j in {(d.parent, d.variable) for d in dead}:
+                found[k, j] = self.search(k, j, excluded)
         kappa = 2 * len(self.rss)
         for k in parents:
             own = [c.reduction for c in legal if c.parent == k]
@@ -536,9 +655,15 @@ class _Pass:
     def _contenders(kept: list[_Candidate]) -> list[_Candidate]:
         """The candidates of pass 1 that pass 2 values: those whose upper bound
         reaches the second largest lower bound of the sure candidates (the
-        step's best two, FWD-8) or the largest one of their own parent (its
-        λ, FAST-5). Complexity: O(c) for c candidates."""
-        floor = _second_largest([c.reduction - c.err for c in kept if c.sure])
+        step's best two, FWD-8, the occurrences of one merged candidate counted
+        once, FWD-12) or the largest one of their own parent (its λ, FAST-5).
+        Complexity: O(c) for c candidates."""
+        lower: dict = {}  # the occurrences of a merged candidate count once
+        for c in kept:
+            if c.sure:
+                at = c.key if c.key is not None else c.order
+                lower[at] = max(lower.get(at, -math.inf), c.reduction - c.err)
+        floor = _second_largest(list(lower.values()))
         own: dict = {}
         for c in kept:
             if c.sure:
@@ -572,6 +697,7 @@ class _Pass:
             self.dirs = np.vstack((self.dirs, d))
             self.cuts = np.vstack((self.cuts, k))
             self.cond.append(d, k)
+            self.index[self._row_key(d, k)] = len(self.cols)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
             self.degree.append(self.degree[c.parent] + 1)
@@ -601,7 +727,8 @@ def _stop(
     prm, tss = st.params, st.tss
     grsq = _gcv.grsq(rss_new, tss, m_new, prm["penalty"], st.N, st.tau)
     if prm["thresh"] > 0.0 and grsq < GRSQ_FLOOR:
-        return Termination.GRSQ_NEG_INF if grsq == -math.inf else Termination.GRSQ_LOW
+        low = grsq < GRSQ_NEG_INF_FLOOR  # -inf too (STOP-3, FAST-6)
+        return Termination.GRSQ_NEG_INF if low else Termination.GRSQ_LOW
     if (st.rss[-1] - rss_new) / tss < prm["thresh"]:
         return Termination.RSQ_CHANGE_SMALL
     if chosen is None:
@@ -731,23 +858,28 @@ def forward_pass(
         "fast_k": int(fast_k),
         "fast_beta": float(fast_beta),
     }
-    # EDGE-1 comes before EDGE-6 here, so a degenerate fit never raises. The
-    # core checks EDGE-6 first (its TSS is uncentered): the two differ only when
-    # N <= 1 and Y is not constant with an out-of-range TSS, where the core raises.
+    # EDGE-6 (v2): the scale of Y and the TSS check come before the degenerate
+    # test of EDGE-1, as in the core, so that a degenerate fit whose scaled TSS
+    # underflows raises here too. The check needs a response that is not constant.
+    D = float(np.max(np.abs(Y)))
+    shift = 0 if D == 0.0 else 1 - math.frexp(D)[1]  # D·2^shift in [1, 2)
+    constant = bool(np.all(Y[0] == Y))
+    if not constant:
+        tss0 = _gcv.tss(np.ldexp(Y, shift), w)
+        if not (math.isfinite(tss0) and tss0 >= np.finfo(np.float64).tiny):
+            raise ValueError(
+                "the scale of y or of the weights is out of range: the total sum "
+                f"of squares of y·2^{shift} is {tss0}, not a positive normal "
+                "float64 (EDGE-6)"
+            )
     if _gcv.is_degenerate(Y, _gcv.total_weight(n, w)[0]):  # EDGE-1, GCV-7
         return _intercept_only(
             p, _gcv.tss(Y, w), Termination.DEGENERATE, record_candidates
         )
-    shift = 1 - int(np.frexp(np.max(np.abs(Y)))[1])  # EDGE-6: D·2^shift in [1, 2)
     # FWD-10: shift each response by its data value nearest its weighted mean,
     # then by the weighted mean; the TSS too comes from Yc (CORE-3: rss[0]).
     Yc, _ = _pruning._centered(np.ldexp(Y, shift), w)
     tss = _gcv.tss(Yc, w)
-    if not (math.isfinite(tss) and tss >= np.finfo(np.float64).tiny):
-        raise ValueError(
-            "the scale of y or of the weights is out of range: the total sum of "
-            f"squares of y·2^{shift} is {tss}, not a positive normal float64 (EDGE-6)"
-        )
     st = _Pass(X, Yc, tss, params, w)
     log: list = []
     termination = _run(st, max_terms, log)
