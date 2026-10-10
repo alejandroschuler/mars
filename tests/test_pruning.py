@@ -7,9 +7,11 @@ three) and the S datasets (``prune.terms``, ``rss.per.subset``,
 ``gcv.per.subset``, the selected terms, the coefficients and the statistics of
 earth 5.3.4). The tests build earth's forward basis again from its ``dirs`` and
 ``cuts`` (TERM-3) and prune it. Tolerances, from the plan's tolerance table:
-the exact terms at every size, relative 1e-8 for RSS and GCV, absolute 1e-8
-for RSq and GRSq, normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5,
-and 1e-8·sd(y) for fitted values.
+the exact terms at every size, relative 1e-8 for RSS and GCV (relative 1e-7
+where earth keeps a zero weight, W-3), absolute 1e-8 for RSq and GRSq,
+normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5, and 1e-8·sd(y) for
+fitted values. Against exact arithmetic the bound is LA-5's
+ε(V*, V*) = 1e-8 V* + c sqrt(TSS V*) + (c/2)² TSS, with c = 1e-14.
 
 The explicit answers come from a refit of every subset by numpy's SVD solver,
 which follows the steps of PRUNE-3 as the spec writes them. The inputs from
@@ -125,6 +127,14 @@ def _sets(subsets):
     return [frozenset(np.flatnonzero(row).tolist()) for row in subsets]
 
 
+def assert_la5(actual, exact, tss):
+    """LA-5 with R = V*: every RSS within ε(V*, V*) of its exact value, for
+    the total sum of squares tss (GCV-5)."""
+    actual, exact = np.asarray(actual, float), np.asarray(exact, float)
+    bound = 1e-8 * exact + 1e-14 * np.sqrt(tss * exact) + (1e-14 / 2) ** 2 * tss
+    assert np.all(np.abs(actual - exact) <= bound), (actual, exact)
+
+
 def assert_rel(actual, expected, rtol):
     """Equal infinities, and finite values within the relative tolerance."""
     actual, expected = np.asarray(actual, float), np.asarray(expected, float)
@@ -208,7 +218,8 @@ def test_s_fixture_pruning(load_fixture, name):
     rss = np.array(r["rss_per_subset"])
     scale = w[0] if w is not None and len(set(w)) == 1 else 1.0
     shown = rss > 0.0
-    assert_rel(res.rss_per_size[shown] / scale, rss[shown], 1e-8)
+    rtol = 1e-7 if w is not None and np.any(w == 0) else 1e-8  # W-3
+    assert_rel(res.rss_per_size[shown] / scale, rss[shown], rtol)
     if w is None:
         assert_rel(res.gcv_per_size[shown], np.array(r["gcv_per_subset"])[shown], 1e-8)
         np.testing.assert_array_equal(res.selected + 1, r["selected_terms"])
@@ -232,7 +243,8 @@ def test_s_fixture_final_fit(load_fixture, name):
     fitted = np.array(r["fitted"]).reshape(B.shape[0], -1)
     assert np.max(np.abs(B[:, sel] @ fit.coef - fitted)) <= 1e-8 * np.std(Y)
     scale = w[0] if w is not None and len(set(w)) == 1 else 1.0
-    assert_rel(fit.rss / scale, r["rss"], 1e-8)
+    rtol = 1e-7 if w is not None and np.any(w == 0) else 1e-8  # W-3
+    assert_rel(fit.rss / scale, r["rss"], rtol)
     if w is None:
         assert_rel(fit.gcv, r["gcv"], 1e-8)
         assert abs(fit.rsq - r["rsq"]) <= 1e-8
@@ -472,7 +484,7 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     """LA-5 for responses whose means are 1e13 times their spread: every subset
     holds the intercept (PRUNE-3), so centering Y changes no RSS. Each RSS of
     the records (PRUNE-4), the TSS (GCV-5) and the final RSS (PRUNE-8) match
-    rational arithmetic to relative 1e-8, and the coefficients to normwise
+    rational arithmetic to LA-5's ε, and the coefficients to normwise
     1e-6. Without the centering the RSS errors reach 1e-3 and the TSS errors
     1e-6. In the "far first" case of the hinges the first 30 cases lie 2e13
     below the other 20 and have weight 1e-30 (W-6 allows it), so the shift
@@ -513,9 +525,9 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
         Y = Y[:, 0] if k == 1 else Y
     res = pr.pruning_pass(B, Y, w, penalty=2.0)
     exact = [_exact(B, Y, w, np.flatnonzero(row))[1] for row in res.subsets]
-    assert_rel(res.rss_per_size, exact, 1e-8)
-    assert_rel(_gcv.tss(Y, w), exact[0], 1e-8)
+    assert_la5(res.rss_per_size, exact, exact[0])
+    assert_la5([_gcv.tss(Y, w)], [exact[0]], exact[0])
     fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
     beta, rss = _exact(B, Y, w, res.selected)
-    assert_rel(fit.rss, rss, 1e-8)
+    assert_la5([fit.rss], [rss], exact[0])
     assert np.linalg.norm(fit.coef - beta.T) <= 1e-6 * np.linalg.norm(beta)
