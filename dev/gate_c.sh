@@ -11,9 +11,9 @@
 # - when the branch changes validation/harness/ (the diff from the merge base
 #   with origin/main), the fixtures made again with R and earth, which must
 #   reproduce exactly (validation/harness/gen_fixtures.py --check);
-# - the benchmark smoke test of the plan (3 fits, no slower than 1.2 times
-#   main) comes with T19, the benchmark harness; until then this gate has no
-#   speed check.
+# - the benchmark smoke test of the plan (validation/bench/run.py --smoke: 3
+#   fits, no slower than 1.2 times the stored baseline of main, with a numpy
+#   calibration that scales the machine out; about 15 s).
 # The log is <git-common-dir>/pymars-executor/gates/<head-sha>.gateC.log, and
 # its last line is "GATE C PASS <sha>" or "GATE C FAIL <sha>", as
 # dev/tools/merge_pr.sh --require-gate-c reads. The gate refuses to run with
@@ -92,7 +92,7 @@ else
     python validation/harness/gen_fixtures.py --check
 fi
 
-echo "== benchmark smoke: not run until T19 adds the benchmark harness" | tee -a "$partial"
+step "benchmark smoke" uv run --frozen --python 3.12 python validation/bench/run.py --smoke
 
 if [ -n "$(git status --porcelain)" ] || [ "$(git rev-parse HEAD)" != "$sha" ]; then
   echo "== the checkout changed while the gate ran" | tee -a "$partial"
