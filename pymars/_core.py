@@ -445,7 +445,9 @@ def _cases(
     except OverflowError:
         total = math.inf
     if not total < _MAX_WEIGHT_TOTAL:
-        raise ValueError(f"the total weight is out of range: it must be below 2^52, not {total}")
+        raise ValueError(
+            f"the total weight is out of range: it must be below 2^52, not {total}"
+        )
     return (X, Y, w) if keep.all() else (X[keep], Y[keep], w[keep])
 
 

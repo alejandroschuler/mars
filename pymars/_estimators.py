@@ -130,10 +130,10 @@ def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | 
     with one weight per row of X, finite and at least 0, with some weight
     positive; for weights that are all 0 the message matches ``weight.*zero``.
     A total weight that overflows or is 2^52 or more raises ValueError that
-    says the total is out of range; this check precedes EDGE-6. Issues a UserWarning when some
-    weight is not an integer and the mean of the weights differs from 1 by
-    more than 1e-6. The zero weights stay, since the core drops their rows
-    (W-3). Complexity: O(n).
+    says the total is out of range; this check precedes EDGE-6. Issues a
+    UserWarning when some weight is not an integer and the mean of the weights
+    differs from 1 by more than 1e-6. The zero weights stay, since the core
+    drops their rows (W-3). Complexity: O(n).
     """
     if sample_weight is None:
         return None
