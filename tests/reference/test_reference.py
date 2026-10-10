@@ -2076,6 +2076,56 @@ class TestFit:
             2.0**-80 * base["forward"]["candidates"]["second_rss"],
         )
 
+    def test_a_power_of_two_scale_of_x_changes_no_bit(self):
+        # EDGE-7 (v2): X is scaled column by column to a largest |x| in [1, 2),
+        # so X and X with each column times its own power of 2 give the same
+        # fit bit for bit; the knots (cuts, the forward cuts, second_knot)
+        # come back on the original scale, and row k of coef by 2 to the sum
+        # of the exponents of its covariates
+        X, y = noisy_data(32, n=50, p=3)
+        powers = np.array([10, -20, 3])
+        base = fit(X, y, max_degree=3)
+        got = fit(np.ldexp(X, powers), y, max_degree=3)
+        assert (base["forward"]["dirs"][:, :2] != 0).any(axis=1).sum() > 2
+
+        def knots(dirs, cuts):
+            return np.where(np.abs(dirs) == 1, np.ldexp(cuts, powers), 0.0)
+
+        for a, b in ((got, base), (got["forward"], base["forward"])):
+            np.testing.assert_array_equal(a["dirs"], b["dirs"])
+            np.testing.assert_array_equal(a["cuts"], knots(b["dirs"], b["cuts"]))
+        exponents = (base["dirs"] != 0) @ powers
+        np.testing.assert_array_equal(
+            got["coef"], np.ldexp(base["coef"], -exponents[:, None])
+        )
+        for key in ("rss", "gcv", "rsq", "grsq"):
+            assert got[key] == base[key]
+        np.testing.assert_array_equal(got["forward"]["rss"], base["forward"]["rss"])
+        a, b = got["forward"]["candidates"], base["forward"]["candidates"]
+        hinge = np.isin(b["second_kind"], [ref.PAIR, ref.SINGLE])
+        assert hinge.any()
+        np.testing.assert_array_equal(
+            a["second_knot"][hinge],
+            np.ldexp(b["second_knot"], powers[b["second_variable"]])[hinge],
+        )
+
+    @pytest.mark.parametrize("scale", [1e200, 1e-300])
+    def test_an_extreme_scale_of_x(self, scale):
+        # EDGE-7: at degree 1, X 1e200 and X 1e-300 give the model of X; at
+        # degree 2 the coefficient of a product of the two columns is about
+        # y / scale^2, which underflows or overflows: ValueError
+        X, y = noisy_data(33, n=50)
+        base = fit(X, y)
+        got = fit(X * scale, y)
+        np.testing.assert_array_equal(got["dirs"], base["dirs"])
+        np.testing.assert_allclose(got["cuts"], base["cuts"] * scale, rtol=1e-15)
+        np.testing.assert_allclose(got["coef"][1:], base["coef"][1:] / scale, rtol=1e-9)
+        assert got["rss"] == pytest.approx(base["rss"], rel=1e-12)
+        product = X[:, 0] * X[:, 1] + 0.01 * np.random.default_rng(33).normal(size=50)
+        assert (fit(X, product, max_degree=2)["dirs"] != 0).sum(axis=1).max() == 2
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(X * scale, product, max_degree=2)
+
     def test_a_tiny_response_has_a_positive_tss(self):
         # seven 0s and one 1e-170: the fit is not degenerate, although its TSS
         # (about 1e-340) underflows to 0 when it is reported [EDGE-6]

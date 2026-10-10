@@ -29,10 +29,9 @@ How it computes, and how that differs from the fast code:
   the other.
 
 It is slow on purpose, and practical up to n <= 300, p <= 6 and
-max_degree <= 3 [CORE-7]. Sums of squares are formed from the values as
-they are, so values whose squares leave the normal range of float64 (above
-about 1e150 or below about 1e-150 in absolute value, in a covariate or in a
-product of factors) are outside its range; Y is scaled first [EDGE-6].
+max_degree <= 3 [CORE-7]. Y and each column of X are scaled by powers of
+2 first [EDGE-6, EDGE-7], and the knots and coefficients are scaled back;
+sums of squares are formed from the scaled values as they are.
 Bracketed IDs such as [GCV-2] cite the rules of the spec. Indices are
 0-based, as in the spec. No function changes its inputs.
 """
@@ -1394,6 +1393,36 @@ def _unscale(value, power: int):
     return float(out) if out.ndim == 0 else out
 
 
+def x_scale_powers(X) -> np.ndarray:
+    """j_v of EDGE-7 for each column v: the largest |x_iv| times 2**j_v lies
+    in [1, 2); 0 for a column of zeros."""
+    top = np.max(np.abs(X), axis=0) if X.shape[0] else np.zeros(X.shape[1])
+    return np.array(
+        [0 if t == 0.0 else 1 - math.frexp(float(t))[1] for t in top], dtype=np.int64
+    )
+
+
+def _coef_back(coef, dirs, jx, jy: int) -> np.ndarray:
+    """The coefficients of the fit on the scaled X and Y on the original
+    scales: row k times 2 to the sum of j_v over the covariates of term k,
+    and divided by 2**jy, in one ldexp [EDGE-7, EDGE-6]. ValueError when a
+    result is not finite, or when the scale of X turns a nonzero
+    coefficient into 0 or a subnormal (that of Y alone may, as EDGE-6
+    allows)."""
+    power = (np.asarray(dirs) != 0) @ jx - jy
+    with np.errstate(over="ignore", under="ignore"):
+        out = np.ldexp(coef, power[:, None])
+        y_only = np.ldexp(coef, -jy)
+    tiny = np.finfo(np.float64).tiny
+    lost = (coef != 0) & (np.abs(out) < tiny) & (np.abs(y_only) >= tiny)
+    if not np.all(np.isfinite(out)) or lost.any():
+        raise ValueError(
+            "the scale of X is out of range: a coefficient leaves the normal "
+            "range of float64 when it is scaled back"
+        )
+    return out
+
+
 def y_scale_power(Y) -> int:
     """j of EDGE-6: D 2**j lies in [1, 2), where D is the largest |Y_ik|;
     0 when D = 0."""
@@ -1473,6 +1502,8 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     }
     if N <= 1 or constant:
         return _degenerate_fit(Y, Ys, w, j, constant, tss, p, record_candidates, common)
+    jx = x_scale_powers(X)
+    X = np.ldexp(X, jx)  # the fit runs on the scaled X [EDGE-7]
     forward, B = forward_pass(
         X,
         Ys,
@@ -1499,18 +1530,24 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         columns_of=conditioned.span_columns,
     )
     selected = kept[pruned["selected"]]
-    forward = {**forward, "rss": _unscale(forward["rss"], -2 * j)}
+    # the knots back on the original scale, exactly [EDGE-7]
+    cuts = np.ldexp(forward["cuts"], -jx)
+    forward = {**forward, "cuts": cuts, "rss": _unscale(forward["rss"], -2 * j)}
     if forward["candidates"] is not None:
         log = forward["candidates"]
         forward["candidates"] = {
             **log,
             "best_rss": _unscale(log["best_rss"], -2 * j),
             "second_rss": _unscale(log["second_rss"], -2 * j),
+            "second_knot": np.ldexp(
+                log["second_knot"], -jx[np.maximum(log["second_variable"], 0)]
+            ),
         }
+    coef = _coef_back(pruned["coef"], forward["dirs"][selected], jx, j)
     return {
         "dirs": forward["dirs"][selected],
-        "cuts": forward["cuts"][selected],
-        "coef": _unscale(pruned["coef"], -j),
+        "cuts": cuts[selected],
+        "coef": coef,
         "selected": selected,
         "rss": _unscale(pruned["rss"], -2 * j),
         "gcv": _unscale(pruned["gcv"], -2 * j),
