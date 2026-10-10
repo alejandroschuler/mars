@@ -2092,10 +2092,37 @@ class TestFit:
         X = np.arange(4.0)[:, None]
         with pytest.raises(ValueError, match="scale of y or of the weights"):
             fit(X, [0.0, 1.0, 0.0, 1.0], np.full(4, 1e-310))
-        # weights 8e307 keep N finite, but the scaled TSS overflows; under the
-        # repository's filterwarnings = error a warning would fail this test
-        with pytest.raises(ValueError, match="scale of y or of the weights"):
-            fit(np.array([[0.0], [1.0]]), np.array([-1.9, 1.9]), np.full(2, 8e307))
+
+    @pytest.mark.parametrize("w", [2, 2.0, np.int64(2), np.float64(2.0), np.float32(2)])
+    def test_a_scalar_weight_is_given_to_every_row(self, w):
+        # W-6 (v2): an int or float scalar, Python or numpy
+        X, y = noisy_data(31, n=30)
+        expected = fit(X, y, np.full(30, 2.0))
+        got = fit(X, y, w)
+        for key in ("dirs", "cuts", "coef", "rss", "n_eff"):
+            np.testing.assert_array_equal(got[key], expected[key])
+
+    @pytest.mark.parametrize(
+        ("w", "message"),
+        [
+            (True, "bool"),
+            (np.bool_(True), "bool"),
+            (np.array(2.0), "0-d"),
+            # W-6 before EDGE-6: N = 1.6e308 is finite, so the scaled TSS
+            # would overflow; and 2^52, the bound of W-4
+            (np.full(2, 8e307), "total weight is out of range"),
+            (np.array([1e308, 1e308]), "total weight is out of range"),
+            (np.array([2.0**52, 0.0]), "total weight is out of range"),
+        ],
+    )
+    def test_weights_that_w_6_rejects(self, w, message):
+        X = np.array([[0.0], [1.0]])
+        with pytest.raises(ValueError, match=message):
+            fit(X, np.array([-1.9, 1.9]), w)
+        # just below the bound is a weight sum like any other
+        assert fit(X, np.array([-1.9, 1.9]), np.array([2.0**52 - 2, 1.0]))["n_eff"] == (
+            2.0**52 - 1
+        )
 
     def test_several_responses_share_one_basis(self):
         X, y = noisy_data(19, p=3)

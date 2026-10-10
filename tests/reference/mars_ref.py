@@ -1401,14 +1401,43 @@ def y_scale_power(Y) -> int:
     return 0 if D == 0.0 else 1 - math.frexp(D)[1]
 
 
+def case_weights(w, n: int) -> np.ndarray:
+    """The weights as an (n,) float64 array [W-5, W-6]: None is 1 for every
+    row; a Python or numpy int or float scalar is given to every row; a bool
+    (Python or numpy) and a 0-d array raise ValueError."""
+    if w is None:
+        return np.ones(n)
+    if isinstance(w, (bool, np.bool_)):
+        raise ValueError("a bool is not a weight (W-6)")
+    if isinstance(w, np.ndarray) and w.ndim == 0:
+        raise ValueError("a 0-d array is not a weight; give a scalar or 1-D array")
+    if isinstance(w, (int, float, np.integer, np.floating)):
+        return np.full(n, float(w))
+    return np.asarray(w, dtype=np.float64)
+
+
+def total_weight(w) -> float:
+    """N = math.fsum of the weights; ValueError when the sum overflows or is
+    2^52 or more, the bound of W-4 [W-6]."""
+    try:
+        N = weight_sum(w)
+    except OverflowError:
+        N = math.inf
+    if not N < 2.0**52:
+        raise ValueError(f"the total weight is out of range: {N!r}, not below 2^52")
+    return N
+
+
 def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     """The fit of CORE-1, returned as the dict of CORE-5.
 
     X is (n, p); Y is (n, K), or (n,) for K = 1 [RESP-2]; w is (n,) with a
-    positive sum, or None for w_i = 1 exactly [W-5]. The input is valid,
-    as the estimators check it first [CORE-1]. Rows with zero weight are
-    dropped before anything else [W-3]. Y is multiplied by 2**j before any
-    sum, and every value on the scale of Y is scaled back [EDGE-6]. The
+    positive sum, a scalar for every row, or None for w_i = 1 exactly [W-5,
+    W-6]; a total weight that W-6 rejects raises ValueError before EDGE-6.
+    Otherwise the input is valid, as the estimators check it first [CORE-1].
+    Rows with zero weight are dropped before anything else [W-3]. Y is
+    multiplied by 2**j before any sum, and every value on the scale of Y is
+    scaled back [EDGE-6]. The
     keys follow CORE-3; ``forward``, ``pruning`` and ``candidates`` are
     nested dicts and ``termination`` is the integer code [CORE-5].
     """
@@ -1416,11 +1445,11 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
     Y = Y.reshape(Y.shape[0], -1)
-    w = np.ones(X.shape[0]) if w is None else np.asarray(w, dtype=np.float64)
+    w = case_weights(w, X.shape[0])
     rows = w > 0
     X, Y, w = X[rows], Y[rows], w[rows]
     n, p = X.shape
-    N0 = weight_sum(w)
+    N0 = total_weight(w)
     tau_N = weight_tol(N0)
     N = snap(N0, tau_N)
     j = y_scale_power(Y)
