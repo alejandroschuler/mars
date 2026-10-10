@@ -914,9 +914,11 @@ def window(table, fast_k: int) -> list[int]:
 # hinge is its own atom; x_j = u_j + m_j), expanded into monomials with
 # exact rational coefficients. The reduced echelon form of a set of terms,
 # in LA-4's order of the monomials, is unique, so it does not depend on the
-# order of the terms; its rows, evaluated on the data, span what the terms
-# span, with no factor m_j on a pivot. The projections of the forward pass,
-# the subsets of the pruning pass and the final fit use these rows [LA-1].
+# order of the terms, and it decides dependence (la4_dependent). Its rows can
+# carry a factor m_j on a monomial that is not a pivot, so the projections of
+# the forward pass, the subsets of the pruning pass and the final fit use the
+# rows of another exact elimination of the same terms, which span the same
+# (Basis) [LA-1].
 # Covariates whose columns u_j are equal bit for bit (an exact copy, or a
 # copy shifted by a constant that the shift removes) share one symbol, so a
 # product of such copies is exact too (#99).
