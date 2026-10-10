@@ -1083,9 +1083,10 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 # below SHIFT_CAP. Two are in the fast forward pass (#85): an exact duplicate
 # covariate at a large mean, and a product of two linear factors of
 # covariates with large means at degree 3 (the "scaled" kind at degree 2 and
-# 3, and the "shifted" kind at degree 3). The third is the
-# reference's pruning pass at intermediate means, near 2^23 (#84), which the
-# whole fit compares.
+# 3, and the "shifted" kind at degree 3). The third is the fast pruning
+# pass at intermediate means, near a ratio of 2^20 (#84, #96): the reference's
+# is fixed, the fast one still misses LA-5, so the whole fit keeps the cap
+# until #96 lifts it.
 SHIFT_CAP = 2.0**10
 
 

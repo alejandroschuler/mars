@@ -539,6 +539,7 @@ def prune(
     tau_N: float,
     pmethod: str = "backward",
     nprune: int | None = None,
+    columns_of=None,
 ) -> dict:
     """The pruning pass on the kept forward terms [PRUNE-2 to PRUNE-8].
 
@@ -552,6 +553,12 @@ def prune(
     pruning indices of the selected terms, increasing), ``coef`` (m*, K),
     ``rss``, ``gcv``, ``rsq`` and ``grsq`` of the final model [PRUNE-8], and
     ``tss``.
+
+    ``columns_of``, when given, maps the sorted indices of a subset of the
+    terms to columns that span what the terms span; every RSS then uses them
+    in place of the columns of B, which keeps the digits that a large
+    covariate mean would cost in the float columns of B [LA-5]
+    (``Conditioned.span_columns``). The coefficients still come from B.
 
     The fit must not be degenerate: ``fit_mars`` applies EDGE-1 and the
     degenerate values of GCV-7 before it calls this function, so here
@@ -570,11 +577,15 @@ def prune(
         raise ValueError(f"nprune must be None or at least 1, not {nprune!r}")
     Mf = B.shape[1]
     memo: dict[frozenset, float] = {}
+    if columns_of is None:
+
+        def columns_of(rows):
+            return B[:, rows]
 
     def rss_of(terms) -> float:
         key = frozenset(terms)
         if key not in memo:
-            memo[key] = rss(B[:, sorted(key)], Y, w)
+            memo[key] = rss(columns_of(sorted(key)), Y, w)
         return memo[key]
 
     best_rss = [math.inf] * (Mf + 1)  # R[m], m = 1..Mf
@@ -646,7 +657,7 @@ def prune(
     # centered; Y - BS coef on the raw Y would cancel at a large mean [LA-5].
     BS = B[:, selected]
     coef = lstsq_coef(BS, Y, w)
-    final_rss = rss(BS[:, ~dependent_columns(BS, w)], Y, w)
+    final_rss = rss(columns_of(np.array(selected)[~dependent_columns(BS, w)]), Y, w)
     tss = best_rss[1]
     final_gcv = gcv(final_rss, size, penalty, N, tau_N)
     if size == 1:
@@ -909,21 +920,43 @@ class Conditioned:
         self._cache: dict = {}
         self._pivots: list = []  # (element, reduced coefficients), in order
         B = np.asarray(B, dtype=np.float64)
+        self._B, self._dirs, self._cuts = B, dirs, cuts
+        self._terms: dict = {}  # the exact expansion of each term, by row
         if not any(self._expands(r) for r in dirs):
             self.columns = B
             return
+        self.columns = self._eliminate(range(len(dirs)), self._pivots)
+
+    def _eliminate(self, rows, pivots) -> np.ndarray:
+        """The reduced columns of the terms in ``rows``, in order, appending
+        the pivots of the kept ones to ``pivots``."""
         columns = []
-        for r, c in zip(dirs, cuts, strict=True):
-            v = self._reduce(self._expansion(r, c))
+        for k in rows:
+            v = self._reduce(self._term(k), pivots)
             if not v:
                 continue  # exactly dependent on the earlier terms
             # the pivot: the element with the largest share of the column,
             # and the first in key order among equal shares
             p = max(sorted(v), key=lambda q: abs(v[q]) * self._size(q))
             v = {q: f / v[p] for q, f in v.items()}
-            self._pivots.append((p, v))
+            pivots.append((p, v))
             columns.append(self._column(v))
-        self.columns = np.column_stack(columns)
+        return np.column_stack(columns)
+
+    def _term(self, k) -> dict:
+        if k not in self._terms:
+            self._terms[k] = self._expansion(self._dirs[k], self._cuts[k])
+        return self._terms[k]
+
+    def span_columns(self, rows) -> np.ndarray:
+        """Columns that span what the terms in ``rows`` (increasing, with the
+        intercept first) span, formed as in the constructor, so that a subset
+        of the terms (a pruning step) loses no digits to a large mean either.
+        Cost: O(m^2 3^d) operations on fractions for m terms."""
+        rows = list(rows)
+        if not self._pivots:  # no term expands
+            return self._B[:, rows]
+        return self._eliminate(rows, [])
 
     def _expands(self, row) -> bool:
         return any(row[j] in (2, -1) and j in self.large for j in np.flatnonzero(row))
@@ -954,10 +987,10 @@ class Conditioned:
             out = new
         return {e: f for e, f in out.items() if f != 0}
 
-    def _reduce(self, v) -> dict:
+    def _reduce(self, v, pivots=None) -> dict:
         """v minus its components along the pivots, exactly."""
         v = dict(v)
-        for p, r in self._pivots:
+        for p, r in self._pivots if pivots is None else pivots:
             f = v.get(p, 0)
             if f != 0:
                 for q, g in r.items():
@@ -1358,6 +1391,9 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         record_candidates=record_candidates,
     )
     kept = forward["kept"]
+    conditioned = Conditioned(
+        X, forward["dirs"][kept], forward["cuts"][kept], B[:, kept]
+    )
     pruned = prune(
         B[:, kept],
         Ys,
@@ -1367,6 +1403,7 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         tau_N=tau_N,
         pmethod=params.pmethod,
         nprune=params.nprune,
+        columns_of=conditioned.span_columns,
     )
     selected = kept[pruned["selected"]]
     forward = {**forward, "rss": _unscale(forward["rss"], -2 * j)}
