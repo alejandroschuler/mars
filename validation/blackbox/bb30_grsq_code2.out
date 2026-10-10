@@ -1,0 +1,22 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+Part A
+  step-1 model at thresh 0: 3 terms, RSS' 7.563636364
+  penalty 4       C(M') 7        GRSq' -45.3273     termcond 3
+  penalty 4.7     C(M') 7.7      GRSq' -513.747     termcond 3
+  penalty 4.75    C(M') 7.75     GRSq' -740.236     termcond 3
+  penalty 4.78    C(M') 7.78     GRSq' -956.175     termcond 3
+  penalty 4.79    C(M') 7.79     GRSq' -1049.51     termcond 2
+  penalty 4.8     C(M') 7.8      GRSq' -1157.18     termcond 2
+  penalty 4.9     C(M') 7.9      GRSq' -4631.73     termcond 2
+Part B
+  penalty 10      C(M') 7        GRSq' -8           termcond 4
+  penalty 14      C(M') 9        GRSq' -80          termcond 3
+  penalty 15      C(M') 9.5      GRSq' -323         termcond 3
+  penalty 15.4    C(M') 9.7      GRSq' -899         termcond 3
+  penalty 15.5    C(M') 9.75     GRSq' -1295        termcond 2
+  penalty 15.6    C(M') 9.8      GRSq' -2024        termcond 2
+  penalty 16      C(M') 10       GRSq' -Inf         termcond 2
+CHECK bb30.1 TRUE with a finite GRSq' below -10, earth gives code 2 exactly when GRSq' < -1000 and code 3 otherwise (13 runs)
+CHECK bb30.2 TRUE code 2 occurs with a finite GRSq' (so -Inf is not the condition)
+CHECK bb30.3 TRUE the same switch applies to a step without a legal candidate (Part B)
+CHECK bb30.4 FALSE HYPOTHESIS code 2 only when GRSq' = -Inf

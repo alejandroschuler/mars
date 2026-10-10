@@ -1,0 +1,6 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+  outlier at +1e+06: 7 terms, codes on x1: 0 0 0 2 0 0 0; hinge knots on x1: none; RSq 0.0760
+  outlier at -1e+06: 13 terms, codes on x1: 0 1 -1 0 0 1 1 1 1 1 1 1 1; hinge knots on x1: -0.510204 -0.510204 -0.387755 -0.183673 -0.265306 -0.632653 -0.877551 -0.22449 -0.102041 -0.55102; RSq 0.9816
+CHECK bb29.1 TRUE with one case at x1 = +1e6, the forward pass adds no hinge on x1 (x1 enters as a linear term: TRUE)
+CHECK bb29.2 TRUE with x1 mirrored (the outlier at -1e6), the forward pass adds a hinge on x1 with a knot within 0.1 of -0.5
+CHECK bb29.3 TRUE the mirror changes the fit: RSq 0.0760 against 0.9816
