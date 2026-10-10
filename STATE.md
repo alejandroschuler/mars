@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-10 10:01 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-10-10 11:04 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+RUNNING A SMALL EXTRA ROUND (Saturday 2026-10-10 from 10:10 PDT): the user asked this session (local_a59469db) to try to finish #113 and #115 with the rest of week 3's usage. Brief `briefs/W3-copies.md`: S113 (spec, opus) and R115 (reference, sonnet), one reviewer each. This session stops at 98 % weekly, or at the reset, and keeps the heartbeat at Friday 16:00, so the watchdog does not start before then. Unfinished work stays on its branch and PR for the Friday executor.
 
 PAUSED UNTIL FRIDAY 2026-10-16 17:00 PDT. Week 3 ended at 06:15 Saturday 2026-10-10 at weekly 94 %. The user, in session local_a59469db at 10:00 PDT Saturday 2026-10-10, answered #116 (closed): for week 4, the same rule as week 3, "wait until Friday 16 October at 17:00, then use all the usage that is left". The lock's heartbeat is 1792191600 (Friday 2026-10-16 16:00 PDT), so the first hourly watchdog run after 17:00 Friday takes the lock. A session that takes the lock before Friday 17:00 PDT starts nothing, writes 1792191600 into the heartbeat of its own lock, pushes a one-line LOG entry, and stops. No agent, job or timer runs until then.
 
