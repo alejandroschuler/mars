@@ -16,7 +16,13 @@ A differing choice is a near-tie, labeled ``tie``, when the two choices are
 different candidates with columns that are not bitwise equal, and their RSS
 values differ by less than 1e-7 of the RSS before the step (plan: Ties); two
 subsets of one size, when their RSS values differ by at most 1e-7 of the
-lower one (the threshold of OQ-2). The comparison of the structure stops at the first
+lower one plus 2 eps(V, V) of LA-5 (PRUNE-10). Steps that add the same rows from
+different parents are compared by their rows (FWD-12), which is how
+``_terms`` reads a step. The termination codes compare directly, since pymars
+copies earth's rule for code 2 (STOP-3: GRSq' below -1000). A difference of
+FWD-11's rank fix (earth's hidden term) is listed with the label ``quirk``.
+Rows of weight 0 compare with earth at a relative 1e-7 for the sums of
+squares and the GCV (W-3). The comparison of the structure stops at the first
 differing choice. Every other difference must be listed in
 ``validation/differences.json`` with its label and rules;
 ``validation/DIFFERENCES.md`` explains the entries and the special cases of
@@ -380,7 +386,10 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
                 compare.FWD_RSS_REL, kappa, compare.KAPPA_RSS_LIMIT
             )
             theirs = earth_rss[max(rows_b)]
-            if abs(rss[s] - theirs) > tol * before:
+            # LA-5: the kappa-scaled 1e-8 of the RSS before the step, and the
+            # terms in sqrt(TSS V) and TSS
+            bound = tol * before + compare.la5_eps(theirs, 0.0, rss[0])
+            if abs(rss[s] - theirs) > bound:
                 diffs.append(
                     compare.Difference(
                         field="forward_rss",
@@ -388,7 +397,7 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
                         a=rss[s],
                         b=theirs,
                         metric=abs(rss[s] - theirs) / before,
-                        tolerance=tol,
+                        tolerance=bound / before,
                         label="numeric" if numeric else None,
                         detail="relative to the RSS before the step (LA-5)",
                     )
@@ -438,6 +447,17 @@ def _fixed_basis(impl: Any, case: Case) -> dict:
     }
 
 
+def _rss_rtol(case: Case, ours: dict, m: int) -> float:
+    """The relative tolerance for earth's rss_per_subset and gcv_per_subset
+    of size m: 1e-7 when some weight is 0 (W-3), else LA-5's eps with R = V
+    over V, for the RSS V of that size (GCV-2 passes it on to the GCV)."""
+    if np.any(case.w == 0):
+        return compare.ZERO_WEIGHT_REL
+    V = float(ours["rss_per_subset"][m - 1])
+    tss = float(ours["rss_per_subset"][0])
+    return compare.la5_eps(V, V, tss) / V if V > 0 else 0.0
+
+
 def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list, int]:
     """The subsets and the per-size values; the first size where the
     subsets differ, else 0. Values that earth reports as 0 (module
@@ -455,7 +475,7 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
             if a != b:
                 rss_a = _wrss(B[:, [t - 1 for t in a]], case.Y, case.w)
                 rss_b = _wrss(B[:, [t - 1 for t in b]], case.Y, case.w)
-                tie = abs(rss_a - rss_b) <= NEAR_TIE * min(rss_a, rss_b)
+                tie = compare.is_prune_near_tie(rss_a, rss_b, ours["rss_per_subset"][0])
                 diffs.append(
                     compare.Difference(
                         field="pruning",
@@ -476,7 +496,7 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
                 zeroed.append(f"{name}[{m}]")
             elif a != b:
                 metric = abs(a - b) / abs(b) if math.isfinite(b) and b else math.inf
-                if metric > compare.RSS_PER_SUBSET_REL:
+                if metric > _rss_rtol(case, ours, m):
                     diffs.append(
                         compare.Difference(
                             field=name,
@@ -484,7 +504,7 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
                             a=a,
                             b=b,
                             metric=metric,
-                            tolerance=compare.RSS_PER_SUBSET_REL,
+                            tolerance=_rss_rtol(case, ours, m),
                         )
                     )
                     break
@@ -542,7 +562,10 @@ def _final(impl: Any, case: Case, ours: dict, B: np.ndarray, zeroed: list) -> li
             mine["pred_test"] = impl.basis_matrix(case.X_test, dirs, cuts) @ coef
             theirs["pred_test"] = earth["pred_test"]
     kappa = _kappa(B[:, selected], case.w)
-    return compare.compare_fit(mine, theirs, kappa=kappa, sd_y=_sd(case))
+    zero = bool(np.any(case.w == 0))
+    return compare.compare_fit(
+        mine, theirs, kappa=kappa, sd_y=_sd(case), zero_weights=zero
+    )
 
 
 def conform(impl: Any, case: Case, fit: dict | None = None) -> list:

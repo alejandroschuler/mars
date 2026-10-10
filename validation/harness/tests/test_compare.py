@@ -25,6 +25,7 @@ from compare import (
     compare_forward_steps,
     condition_number,
     is_near_tie,
+    is_prune_near_tie,
     removed_sequence,
     steps_from_trace,
 )
@@ -193,6 +194,32 @@ class TestCompareFitGcvRsqGrsq:
         a, b = {"gcv": 1e6 * (1 + 2e-8)}, {"gcv": 1e6}
         diffs = compare_fit(a, b)
         assert len(diffs) == 1 and diffs[0].field == "gcv"
+
+    @pytest.mark.parametrize("field_name", ["rss_per_subset", "gcv_per_subset", "gcv"])
+    def test_zero_weights_widen_the_sums_of_squares_to_1e7_relative(self, field_name):
+        # W-3: earth keeps a zero weight as a tiny one. A gap of 5e-8 relative
+        # fails at 1e-8 and passes at the zero-weight tolerance of 1e-7; a gap
+        # of 2e-7 fails at both.
+        def pair(gap):
+            value = 1e3 if field_name == "gcv" else [1e3, 2e3]
+            if field_name == "gcv":
+                return {field_name: value * (1 + gap)}, {field_name: value}
+            return {field_name: [v * (1 + gap) for v in value]}, {field_name: value}
+
+        assert len(compare_fit(*pair(5e-8))) == 1
+        assert compare_fit(*pair(5e-8), zero_weights=True) == []
+        assert len(compare_fit(*pair(2e-7), zero_weights=True)) == 1
+
+    def test_prune_near_tie_is_1e7_of_the_lower_plus_two_la5_epsilons(self):
+        # PRUNE-10 (LA-5's eps with c = 1e-14): 1e-7 of the lower RSS plus
+        # 2 eps(V, V) = 2e-8 V + 2e-14 sqrt(TSS V) + 2 (c/2)^2 TSS.
+        assert is_prune_near_tie(1.0, 1.0 + 1.0e-7, tss=1.0)
+        assert not is_prune_near_tie(1.0, 1.0 + 1.4e-7, tss=1.0)
+        # an exact fit: RSS values of rounding size are a tie by the third term
+        assert is_prune_near_tie(1e-60, 2e-29, tss=1.0)
+        assert not is_prune_near_tie(1e-60, 1e-28, tss=1.0)
+        # the second term: V = 1e-12 TSS adds 2e-14 sqrt(1e-12 TSS^2) = 2e-20
+        assert is_prune_near_tie(1e-12, 1e-12 + 1.2e-19 + 1.5e-20, tss=1.0)
 
     @pytest.mark.parametrize("field_name", ["rsq", "grsq"])
     def test_rsq_and_grsq_use_absolute_tolerance_not_relative(self, field_name):
