@@ -78,6 +78,29 @@ GRSQ_ABS = 1e-8
 FITTED_ABS_SD_MULT = 1e-8
 GLM_COEF_REL = 1e-5
 GLM_PROB_ABS = 1e-7
+# W-3: earth keeps a zero weight as a tiny one, so its sums of squares differ
+# from the fit without those rows by up to 5.8e-9 relative; a comparison with
+# earth of a fit that has zero weights uses 1e-7 for rss, gcv, rss_per_subset
+# and gcv_per_subset.
+ZERO_WEIGHT_REL = 1e-7
+# LA-5: |V - V*| <= eps(V*, R) = 1e-8 R + c sqrt(TSS V*) + (c/2)^2 TSS.
+LA5_C = 1e-14
+# PRUNE-10: two subsets of one size are a near-tie when their RSS values
+# differ by at most 1e-7 of the lower one plus 2 eps(V, V).
+PRUNE_NEAR_TIE_REL = 1e-7
+
+
+def la5_eps(v: float, r: float, tss: float) -> float:
+    """LA-5's bound on the error of an RSS value v at the scale r, for the
+    total sum of squares tss (GCV-5)."""
+    return 1e-8 * r + LA5_C * float(np.sqrt(tss * v)) + (LA5_C / 2) ** 2 * tss
+
+
+def is_prune_near_tie(rss_a: float, rss_b: float, tss: float) -> bool:
+    """PRUNE-10: whether two RSS values of subsets of one size are a
+    near-tie."""
+    low = min(rss_a, rss_b)
+    return abs(rss_a - rss_b) <= PRUNE_NEAR_TIE_REL * low + 2 * la5_eps(low, low, tss)
 
 
 def condition_number(basis: Any) -> float:
@@ -307,6 +330,7 @@ def compare_fit(
     kappa: float | None = None,
     sd_y: float | None = None,
     glm: bool = False,
+    zero_weights: bool = False,
     dataset: str | None = None,
     skipped: list[Skip] | None = None,
 ) -> list[Difference]:
@@ -324,7 +348,10 @@ def compare_fit(
     difference ``numeric`` there, rather than skipping the comparison;
     without ``kappa``, every comparison runs at its base tolerance. ``sd_y``
     is required for the fitted-value/prediction comparison, which has no
-    other way to know the response's scale.
+    other way to know the response's scale. ``zero_weights`` says that the
+    fit has rows of weight 0, which earth keeps as tiny weights (W-3): the
+    relative tolerance of ``rss_per_subset``, ``gcv_per_subset`` and ``gcv``
+    is then ``ZERO_WEIGHT_REL``.
     """
     diffs: list[Difference] = []
 
@@ -342,9 +369,10 @@ def compare_fit(
             )
         )
 
+    sums = ZERO_WEIGHT_REL if zero_weights else None
     for name, tol in (
-        ("rss_per_subset", RSS_PER_SUBSET_REL),
-        ("gcv_per_subset", GCV_PER_SUBSET_REL),
+        ("rss_per_subset", sums or RSS_PER_SUBSET_REL),
+        ("gcv_per_subset", sums or GCV_PER_SUBSET_REL),
     ):
         av, bv = a.get(name), b.get(name)
         if av is None or bv is None:
@@ -496,7 +524,7 @@ def compare_fit(
             )
 
     for name, base_tol, relative in (
-        ("gcv", GCV_REL, True),
+        ("gcv", sums or GCV_REL, True),
         ("rsq", RSQ_ABS, False),
         ("grsq", GRSQ_ABS, False),
     ):
