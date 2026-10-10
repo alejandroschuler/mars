@@ -507,13 +507,36 @@ def _linear_factor_case(rng, weights):
     cuts[[1, 4, 5, 6, 8], 0] = np.sort(X[:, 0])[12]
     cuts[5, 2] = np.sort(X[:, 2])[20]
 
-    Bx = _exact_basis(X, dirs, cuts)
     h = np.maximum(U[:, 0] - 0.3, 0)
     Y = 2 * h + 3 * h * U[:, 1] + U[:, 1] * U[:, 2] + U[:, 0]
     Y = Y + 4 * h * U[:, 1] * U[:, 2] + 0.01 * rng.normal(size=40)
     w = None if weights == "none" else rng.uniform(0.5, 2, 40)
+    if w is not None:  # not a case (W-3), so it must not set m_j (LA-4)
+        X[0], w[0] = 0.5, 0.0
     B = _terms.basis_matrix(X, dirs, cuts)
+    Bx = _exact_basis(X, dirs, cuts)
     return B, Bx, Y, w, {"X": X, "dirs": dirs, "cuts": cuts}
+
+
+def _pair_case(basis):
+    """PR #96's review: the pair at one knot under a shifted linear parent,
+    1, x0, x1, x0·(x1 - t)+, x0·(t - x1)+, x0 = 2^36 + U0, x1 = U1. The two
+    hinges differ by x1 - t on every case, so their monomials and u1 are
+    dependent unless (t - x)+ is written (x - t)+ - x + t. Or a hinge that is
+    linear on the cases: 1, x1, x0·(x1 - t)+, x0·x1 with t = min x1."""
+    rng = np.random.default_rng(1)
+    U = rng.uniform(size=(30, 2))
+    X = np.column_stack([2.0**36 + U[:, 0], U[:, 1]])
+    t = float(np.sort(U[:, 1])[15])
+    dirs = np.array([[0, 0], [2, 0], [0, 2], [2, 1], [2, -1]])
+    cuts = np.array([[0, 0], [0, 0], [0, 0], [0, t], [0, t]])
+    if basis != "a pair under x0 at 2^36":
+        t = float(U[:, 1].min())
+        dirs = np.array([[0, 0], [0, 2], [2, 1], [2, 2]])
+        cuts = np.array([[0, 0], [0, 0], [0, t], [0, 0]])
+    Y = U[:, 0] * np.maximum(U[:, 1] - t, 0) + U[:, 1] + 0.01 * rng.normal(size=30)
+    B = _terms.basis_matrix(X, dirs, cuts)
+    return B, _exact_basis(X, dirs, cuts), Y, None, {"X": X, "dirs": dirs, "cuts": cuts}
 
 
 @pytest.mark.parametrize(
@@ -529,6 +552,8 @@ def _linear_factor_case(rng, weights):
         (1, "far first", "x and a hinge at 33"),
         (1, "none", "linear factors at 2^36"),
         (1, "uniform", "linear factors at 2^36"),
+        (1, "none", "a pair under x0 at 2^36"),
+        (1, "none", "a hinge linear on the cases at 2^36"),
     ],
 )
 def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
@@ -558,11 +583,19 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     factor too. Both functions take X, dirs and cuts and work in the shifted
     atoms of LA-4, every RSS is compared with the exact basis of TERM-3, and
     the final fit keeps the selected x1·h0, x2·h0, x1·x2 and x1·x2·h0, all
-    of which LA-4 without the shift drops."""
+    of which LA-4 without the shift drops. With weights, row 0 sits at
+    x = 0.5 with weight 0: not a case (W-3), so it must not set m_j; when it
+    did, the RSS missed LA-5 by a ratio of 6e4 (PR #96's review). The "pair
+    under x0" case is the pair at one knot under a shifted linear factor
+    (``_pair_case``), which missed by 2.5e-4 relative when the two hinges
+    were separate monomials; a hinge that is linear on the cases missed the
+    same way, unless it is written as that line."""
     rng = np.random.default_rng({"hinges": 0, "binary at 33": 189}.get(basis, 1))
     kw, Bx = {}, None
     if basis == "linear factors at 2^36":
         B, Bx, Y, w, kw = _linear_factor_case(rng, weights)
+    elif basis.endswith("at 2^36"):
+        B, Bx, Y, w, kw = _pair_case(basis)
     elif basis == "binary at 33":
         x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
         w = None
@@ -628,17 +661,20 @@ def test_fit_mars_passes_the_terms_to_the_pruning_pass():
 
 @pytest.mark.parametrize("shift", [0.5, 1e4, 1e10])
 @pytest.mark.parametrize("copy", [False, True])
-def test_the_final_fit_applies_la4_after_the_shift(shift, copy):
+@pytest.mark.parametrize("shift2", [0.0, 2.0**20])
+def test_the_final_fit_applies_la4_after_the_shift(shift, copy, shift2):
     """LA-4 after the exact shift in the final fit (PRUNE-8), on the examples
     of the spec with #75's data, x0 = shift + (2, 0, 0, 2, 1, 2, 1, 2, 1, 0).
     The terms 1, x0, x0·x2, x2 all count, whatever the order of x0·x2 and x2
     (without the shift, LA-4 drops x0 and x2 at 1e10). With x3 = 3·x2 + 1, the
     term x0·x3 after 1, x0, x3, x0·x2 is dependent at every shift; x3 is one
     symbol with x2 (#99), else the RSS of the other four misses by 1e-6 at
-    1e10. The RSS is that of the kept terms in rational arithmetic, and the
-    returned coefficients give it to 1e-6 (PRUNE-8 allows their rounding)."""
+    1e10. With x2 shifted by 2^20 too, x3 is a copy of a shifted covariate,
+    and its linear factor is x3 itself, not x3 - m_3 (PR #96's review: an
+    O(1) error). The RSS and the coefficients are those of the kept terms in
+    rational arithmetic, to 1e-8 and to normwise 1e-6."""
     x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
-    x2 = np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
+    x2 = shift2 + np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
     X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1])
     rows = [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 2, 0], [0, 0, 2, 0]]
     if copy:
@@ -653,11 +689,6 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, copy):
     kept = fit.coef[:, 0] != 0.0
     assert kept.tolist() == [True] * (len(rows) - copy) + [False] * copy
     Bx = _exact_basis(X, dirs, cuts)
-    exact = _exact(Bx, y, None, sel[kept])[1]
+    beta, exact = _exact(Bx, y, None, sel[kept])
     assert_rel(fit.rss, exact, 1e-8)
-    coef = [Fraction(float(c)) for c in fit.coef[:, 0]]
-    resid = [
-        Fraction(float(v)) - sum(b * c for b, c in zip(row, coef, strict=True))
-        for row, v in zip(Bx, y, strict=True)
-    ]
-    assert_rel(float(sum(r * r for r in resid)), exact, 1e-6)  # the coefficients
+    assert np.linalg.norm(fit.coef[kept, 0] - beta[0]) <= 1e-6 * np.linalg.norm(beta)

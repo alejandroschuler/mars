@@ -166,15 +166,40 @@ _KIND = {_terms.LINEAR: 0, _terms.PLUS: 1, _terms.MINUS: 2}
 
 
 class _Monomials(NamedTuple):
-    """The terms as exact polynomials in the atoms of LA-4: ``keys`` (P,) the
-    monomials, ``E`` (n, P) their columns, not centered, ``terms`` (M,), term
-    k as {monomial index: Fraction}, and the cases ``X`` and shifts ``m``."""
+    """The terms as exact polynomials in the atoms of LA-4. ``keys`` the
+    monomials of LA-4 (atoms u_j, (x_j - t)₊ and (t - x_j)₊), ``terms`` (M,),
+    term k as {index in keys: Fraction}; ``canon`` each of ``keys`` as an exact
+    polynomial in the canonical monomials, whose columns are ``E`` (n, P), not
+    centered, and ``cterms`` the terms in them; the cases ``X`` and the shifts
+    ``m``. The canonical atoms are u_j and (x_j - t)₊ only, so that the
+    columns of a pair at one knot and of u_j are not dependent on the data."""
 
     keys: list
-    E: FloatArray
     terms: list
+    canon: list
+    E: FloatArray
+    cterms: list
+    ckeys: list
     X: FloatArray
     m: FloatArray
+
+
+def _times(poly: dict, parts: dict) -> dict:
+    """The product of {monomial: Fraction} and {atom or None: Fraction}, None
+    standing for the constant 1. Complexity: O(len(poly)·len(parts))."""
+    new: dict = {}
+    for e, f in poly.items():
+        for a, g in parts.items():
+            key = e if a is None else tuple(sorted((*e, a)))
+            new[key] = new.get(key, 0) + f * g
+    return {e: f for e, f in new.items() if f != 0}
+
+
+def _atom_column(X: FloatArray, m: FloatArray, atom: tuple) -> FloatArray:
+    j, kind, t = atom
+    if kind == 0:
+        return X[:, j] - m[j]
+    return _terms.factor(_terms.PLUS if kind == 1 else _terms.MINUS, X[:, j], t)
 
 
 def _shifts(X: FloatArray) -> FloatArray:
@@ -221,65 +246,112 @@ def _copies(X: FloatArray, used: list) -> dict:
     return out
 
 
+def _linear(j: int, m: FloatArray, copies: dict) -> dict:
+    """u_j = x_j - m_j in the atoms of the symbol of x_j: for a copy x_j = a·x_r
+    + b, a·u_r + (a·m_r + b - m_j). Complexity: O(1)."""
+    if j not in copies:
+        return {(j, 0, 0.0): Fraction(1)}
+    r, a, b = copies[j]
+    const = a * Fraction(float(m[r])) + b - Fraction(float(m[j]))
+    return {(r, 0, 0.0): a} | ({None: const} if const else {})
+
+
 def _factor_parts(j: int, kind: int, t: float, m: FloatArray, copies: dict) -> dict:
-    """A factor as {atom: Fraction}, None standing for the constant 1: u_j +
-    m_j for a linear factor, the hinge for a hinge. A linear factor of a copy
-    x_j = a·x_r + b is written in u_r; a hinge of a copy keeps its own atom,
-    since only the linear factors carry the large m_j. Complexity: O(1)."""
-    if kind == 0 and j in copies:  # x_j - m_j = a·u_r + (a·m_r + b - m_j)
-        r, a, b = copies[j]
-        const = a * Fraction(float(m[r])) + b - Fraction(float(m[j]))
-        return {(r, 0, 0.0): a} | ({None: const} if const else {})
-    parts: dict = {(j, kind, t if kind else 0.0): Fraction(1)}
-    if kind == 0 and m[j] != 0.0:
-        parts[None] = Fraction(float(m[j]))
-    return parts
+    """A factor as {atom: Fraction}, None standing for the constant 1: x_j =
+    u_j + m_j for a linear factor (in u_r for a copy of x_r, ``_linear``), the
+    hinge for a hinge. Complexity: O(1)."""
+    if kind == 0:
+        parts = _linear(j, m, copies)
+        const = parts.pop(None, Fraction(0)) + Fraction(float(m[j]))
+        return parts | ({None: const} if const else {})
+    return {(j, kind, t): Fraction(1)}
+
+
+def _canonical(atom: tuple, X: FloatArray, m: FloatArray, copies: dict) -> dict:
+    """An atom in the canonical atoms, exactly on the cases: (t - x)₊ =
+    (x - t)₊ - u_j + (t - m_j); a hinge that is linear on every case is that
+    line, and one that is 0 on every case is 0. Complexity: O(n)."""
+    j, kind, t = atom
+    if kind == 0:
+        return {atom: Fraction(1)}
+    x = X[:, j]
+    lin = _linear(j, m, copies)
+    const = Fraction(t) - Fraction(float(m[j]))  # t - m_j
+    if (np.all(x <= t) and kind == 1) or (np.all(x >= t) and kind == 2):
+        return {}
+    if np.all(x >= t) or np.all(x <= t):  # the line ±(x_j - t) on every case
+        sign = 1 if kind == 1 else -1
+        out = {q: sign * f for q, f in lin.items()}
+        out[None] = out.get(None, 0) - sign * const
+        return {q: f for q, f in out.items() if f != 0}
+    if kind == 1:
+        return {atom: Fraction(1)}
+    out = {(j, 1, t): Fraction(1)} | {q: -f for q, f in lin.items()}
+    out[None] = out.get(None, 0) + const
+    return {q: f for q, f in out.items() if f != 0}
 
 
 def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
     """Write each term exactly in the atoms of LA-4: a linear factor x_j is
     u_j + m_j, a hinge is its own atom (``_factor_parts``; exact copies of a
-    covariate are one symbol, ``_copies``). A term with L linear factors of
-    shifted covariates has 2^L monomials. u_j = x_j - m_j is exact in float64
-    (Sterbenz) when |m_j| ≥ 2·range, and its rounding is of the size of the
-    range otherwise, so no column of E carries the factor m_j.
-    Complexity: O(M·2^d) rational operations and O(n·d·P) for E, P ≤ M·2^d,
-    and that of ``_copies``."""
+    covariate are one symbol, ``_copies``), and each monomial in the canonical
+    atoms (``_canonical``). A term with L linear factors of shifted covariates
+    has at most 3^L·2^h canonical monomials for h hinges. u_j = x_j - m_j is
+    exact in float64 (Sterbenz) when |m_j| ≥ 2·range, and its rounding is of
+    the size of the range otherwise, so no column of E carries the factor m_j.
+    Complexity: O(M·3^d) rational operations, O(n·d·P) for E, and O(n·p·d) and
+    that of ``_copies`` for the atoms."""
     m = _shifts(X)
     copies = _copies(X, np.flatnonzero(np.any(dirs != 0, axis=0)).tolist())
     index: dict = {}
     keys: list = []
-    cols: list = []
     terms: list = []
     for row, cut in zip(dirs, cuts, strict=True):
         poly: dict = {(): Fraction(1)}
         for j in np.flatnonzero(row):
-            parts = _factor_parts(int(j), _KIND[int(row[j])], float(cut[j]), m, copies)
-            new: dict = {}
-            for e, f in poly.items():
-                for a, g in parts.items():
-                    key = e if a is None else tuple(sorted((*e, a)))
-                    new[key] = new.get(key, 0) + f * g
-            poly = {e: f for e, f in new.items() if f != 0}
+            kind = _KIND[int(row[j])]
+            t = float(cut[j]) if kind else 0.0
+            poly = _times(poly, _factor_parts(int(j), kind, t, m, copies))
         term = {}
         for key, f in poly.items():
-            if key not in index:
-                index[key] = len(keys)
+            term[index.setdefault(key, len(index))] = f
+            if len(keys) < len(index):
                 keys.append(key)
-                col = np.ones(X.shape[0])
-                for j, kind, t in key:
-                    x = X[:, j]
-                    col = col * (
-                        (x - m[j])
-                        if kind == 0
-                        else _terms.factor(
-                            _terms.PLUS if kind == 1 else _terms.MINUS, x, t
-                        )
-                    )
-                cols.append(col)
-            term[index[key]] = f
         terms.append(term)
-    return _Monomials(keys, np.column_stack(cols), terms, X, m)
+    atoms: dict = {}
+    cindex: dict = {}
+    cols: list = []
+    canon: list = []
+    ckeys: list = []
+    for key in keys:
+        poly = {(): Fraction(1)}
+        for atom in key:
+            if atom not in atoms:
+                atoms[atom] = _canonical(atom, X, m, copies)
+            poly = _times(poly, atoms[atom])
+        out = {}
+        for ckey, f in poly.items():
+            if ckey not in cindex:
+                cindex[ckey] = len(cols)
+                ckeys.append(ckey)
+                col = np.ones(X.shape[0])
+                for atom in ckey:
+                    col = col * _atom_column(X, m, atom)
+                cols.append(col)
+            out[cindex[ckey]] = f
+        canon.append(out)
+    cterms = [_compose(t, canon) for t in terms]
+    return _Monomials(keys, terms, canon, np.column_stack(cols), cterms, ckeys, X, m)
+
+
+def _compose(poly: dict, canon: list) -> dict:
+    """A polynomial in the monomials of LA-4 as one in the canonical monomials.
+    Complexity: O(Σ len(canon[q]))."""
+    out: dict = {}
+    for q, f in poly.items():
+        for c, g in canon[q].items():
+            out[c] = out.get(c, 0) + f * g
+    return {c: f for c, f in out.items() if f != 0}
 
 
 def _shifted(X: FloatArray, dirs: IntArray) -> bool:
@@ -307,7 +379,7 @@ def _reduce(terms: list, share: FloatArray) -> _Reduced:
     of g span what the prefixes of the terms span, and a large m_j stays in
     the coefficient of a monomial that an earlier term holds: x_j·b after b is
     u_j·b. Terms of different monomials do not interact, so the work is that
-    of the terms that share monomials. Complexity: O(M·f·2^d) rational
+    of the terms that share monomials. Complexity: O(M·f·3^d) rational
     operations, f the largest number of terms on one set of monomials."""
     where: dict = {}
     G: list = []
@@ -394,16 +466,16 @@ class _Shifted:
     factor m_j that the earlier terms hold, so each prefix RSS keeps LA-5. The
     RSS increase of a drop comes from the rows of (R_A·U)⁻¹ = T·R_A⁻¹, with T
     = U⁻¹ exact (``_reduce``), so a term's coefficient m_j never multiplies a
-    rounded column. Complexity: O(n·P·(P + K)) once, P ≤ M·2^d monomials, and
-    per working order O(M³ + M²·(2^d + K)) floats and the rational work of
+    rounded column. Complexity: O(n·P·(P + K)) once, P ≤ M·3^d monomials, and
+    per working order O(M³ + M²·(P + K)) floats and the rational work of
     ``_reduce``."""
 
     def __init__(self, mono: _Monomials, Yc: FloatArray, w: FloatArray | None):
         n, P = mono.E.shape
-        self.terms, self.P = mono.terms, P
+        self.terms, self.P = mono.cterms, P
         sw = np.ones(n) if w is None else np.sqrt(w)
         Ec = mono.E.copy()
-        rest = [q for q, key in enumerate(mono.keys) if key]
+        rest = [q for q, key in enumerate(mono.ckeys) if key]
         if rest:  # the intercept's monomial stays 1 (every subset holds it)
             Ec[:, rest] = _centered(Ec[:, rest], w)[0]
         As = sw[:, None] * Ec
@@ -559,7 +631,7 @@ def pruning_pass(
     ValueError for input outside these ranges. Complexity: O(n·M_f·(M_f + K))
     for the factor and O(M_f³·(M_f + K)) for the stages, at most O(n·M_f²) per
     stage for K ≤ M_f (PRUNE-9); with shifted terms, O(n·P·(P + K)) once for
-    P ≤ M_f·2^d monomials and O(M_f³ + M_f²·(2^d + K)) per stage, plus the
+    P ≤ M_f·3^d monomials and O(M_f³ + M_f²·(P + K)) per stage, plus the
     exact elimination of ``_reduce``; memory O(n·(P + K) + M_f·P).
     """
     if pmethod not in PMETHODS:
@@ -648,15 +720,8 @@ def final_fit(
     m = sel.size
     mono = _terms_of(B, keep, X, dirs, cuts)
     if mono is not None:
-        terms = [mono.terms[k] for k in sel]
-        used = sorted({q for t in terms for q in t})
-        at = {q: i for i, q in enumerate(used)}
-        mono = _Monomials(
-            [mono.keys[q] for q in used],
-            mono.E[:, used],
-            [{at[q]: f for q, f in t.items()} for t in terms],
-            mono.X,
-            mono.m,
+        mono = mono._replace(
+            terms=[mono.terms[k] for k in sel], cterms=[mono.cterms[k] for k in sel]
         )
     Yc, constants = _centered(Y, w)
     if mono is not None:
@@ -700,20 +765,26 @@ def _shifted_fit(
     that carries m_j. The coefficients solve the least
     squares on the reduced kept terms, g, and b = T·g with T = U⁻¹ exact; the
     intercept's takes the constants of the centered monomials.
-    Complexity: O(n·m²·(m + P)) and O(m²·f·2^d) rational operations for m
+    Complexity: O(n·m²·(m + P)) and O(m²·f·3^d) rational operations for m
     terms and P monomials.
     """
     n, P = mono.E.shape
     sw = np.ones(n) if w is None else np.sqrt(w)
     Ec = mono.E.copy()
     shift = np.zeros(P)
-    rest = [q for q, key in enumerate(mono.keys) if key]
+    rest = [q for q, key in enumerate(mono.ckeys) if key]
     if rest:
         Ec[:, rest], shift[rest] = _centered(Ec[:, rest], w)
     As = sw[:, None] * Ec
     share = np.sqrt(np.sum(np.square(As), axis=0))
     Ew = sw[:, None] * mono.E
-    pivot_norm = np.sqrt(np.sum(np.square(Ew), axis=0))
+
+    def pivot_norm(q: int) -> float:  # the w-norm of a monomial of LA-4
+        col = sw.copy()
+        for atom in mono.keys[q]:
+            col = col * _atom_column(mono.X, mono.m, atom)
+        return float(scipy.linalg.norm(col))
+
     rank = [(-len(key), key) for key in mono.keys]
     rows: dict = {}  # the reduced echelon form: pivot -> row, pivot coefficient 1
     kept: list = []
@@ -730,22 +801,28 @@ def _shifted_fit(
         others = {
             p2: _subtract(r, r[p], new) if r.get(p, 0) else r for p2, r in rows.items()
         }
-        red = _reduce([*others.values(), new], share)
+        cnew = _compose(new, mono.canon)
+        try:  # an exact dependence on the cases leaves cnew in the span
+            red = _reduce(
+                [*(_compose(r, mono.canon) for r in others.values()), cnew], share
+            )
+        except ValueError:
+            continue
         G, e = _scaled_columns(red, share, P)
         A = As @ G
         Q, _ = np.linalg.qr(A[:, :-1])
         perp, _ = _linalg.orthogonalize(Q, A[:, -1])
         norm = math.ldexp(float(scipy.linalg.norm(perp)), int(e[-1]))
-        base = pivot_norm[p]
+        base = pivot_norm(p)
         if base == 0.0:
             base = float(
-                scipy.linalg.norm(Ew[:, list(new)] @ [float(f) for f in new.values()])
+                scipy.linalg.norm(Ew[:, list(cnew)] @ [float(f) for f in cnew.values()])
             )
         if base == 0.0 or norm < _linalg.LM_TOL * base:
             continue
         rows = {**others, p: new}
         kept.append(k)
-        basis.append(c)
+        basis.append(mono.cterms[k])
     red = _reduce(basis, share)
     G, e = _scaled_columns(red, share, P)
     Qa, Ra = np.linalg.qr(As @ G)
