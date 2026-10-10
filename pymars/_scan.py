@@ -93,6 +93,7 @@ Public names, for ``_forward``:
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import NamedTuple
 
 import numpy as np
@@ -125,12 +126,16 @@ class KnotScan(NamedTuple):
 
 class Rebuild(NamedTuple):
     """``rebuild``: ``Q`` with the new orthonormal columns appended, the
-    residuals ``resid`` (n, K) of the responses on it, and ``rss``, their
-    sum of squares (LA-1)."""
+    residuals ``resid`` (n, K) of the responses on it, ``rss``, their sum of
+    squares (LA-1), and ``kappa``, the largest ratio of a new column's size
+    (``sizes``, a bound on the magnitude of its entries) to the norm of its
+    part orthogonal to the earlier columns: the loss of digits in the new
+    directions (LA-4's error bound), 1.0 without ``sizes``."""
 
     Q: FloatArray
     resid: FloatArray
     rss: float
+    kappa: float = 1.0
 
 
 def _gamma(k: float) -> float:
@@ -338,7 +343,10 @@ def exact_knot(
 
 
 def rebuild(
-    Q: npt.ArrayLike, Y: npt.ArrayLike, columns: npt.ArrayLike
+    Q: npt.ArrayLike,
+    Y: npt.ArrayLike,
+    columns: npt.ArrayLike,
+    sizes: Sequence[float] | None = None,
 ) -> Rebuild | None:
     """Append the chosen candidate's columns to Q; return None when the part of
     a column orthogonal to the others is exactly 0.
@@ -351,16 +359,20 @@ def rebuild(
     hinge with LA-3 first. Y (n,) or (n, K) are the responses, centered
     (√w·(Y - Ȳ_w) with weights): the residuals come from Y again,
     orthogonalized twice, so rounding does not build up over the steps, but a
-    large mean of Y would keep the rounding of its projection.
+    large mean of Y would keep the rounding of its projection. ``sizes`` (a
+    values) bound the entries of the new columns, for ``Rebuild.kappa``.
     Complexity: O(n·(r + a)·(a + K)) time, O(n·(r + a + K)) memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
     columns = np.asarray(columns, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
-    for v in columns.T:
-        q = _linalg.gram_schmidt(Q, v).q
-        if q is None:
+    kappa = 1.0
+    for i, v in enumerate(columns.T):
+        gs = _linalg.gram_schmidt(Q, v)
+        if gs.q is None:
             return None
-        Q = np.column_stack((Q, q))
+        if sizes is not None:
+            kappa = max(kappa, sizes[i] / gs.norm)
+        Q = np.column_stack((Q, gs.q))
     resid, _ = _linalg.orthogonalize(Q, Y[:, None] if Y.ndim == 1 else Y)
-    return Rebuild(Q, resid, float(np.sum(resid * resid)))
+    return Rebuild(Q, resid, float(np.sum(resid * resid)), kappa)

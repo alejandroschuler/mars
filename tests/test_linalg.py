@@ -13,6 +13,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from pymars import _linalg as la
+from pymars import _terms
 
 seeds = st.integers(0, 2**32 - 1)
 # (seed, n, m, k, weighted): n rows, m columns and k responses.
@@ -623,3 +624,115 @@ def test_r_factor_edge_cases():
         la.drop_costs(f.R, f.Z, 0)
     with pytest.raises(ValueError, match="i and j"):
         la.move_column(f.R, f.Z, 0, 5)
+
+
+def _term_rows(spec, p):
+    """dirs and cuts of terms given as lists of (covariate, code, cut)."""
+    dirs, cuts = np.zeros((len(spec), p), dtype=np.int8), np.zeros((len(spec), p))
+    for k, term in enumerate(spec):
+        for j, code, cut in term:
+            dirs[k, j], cuts[k, j] = code, cut
+    return dirs, cuts
+
+
+@pytest.mark.parametrize(
+    ("x", "shifted", "m"),
+    [
+        ([1.0, 1.9], True, 1.0),  # |m| = 1 > range 0.9
+        ([1.0, 2.0], False, 0.0),  # |m| = range: not larger
+        ([-1.9, -1.0], True, -1.9),  # the smallest value, here the most negative
+        ([5.0, 5.0], True, 5.0),  # a constant covariate: u = 0
+        ([0.0, 0.0], False, 0.0),
+        ([0.0, 1e10], False, 0.0),
+        ([1e10, 1e10 + 8], True, 1e10),
+    ],
+)
+def test_large_covariates_follow_la4(x, shifted, m):
+    """LA-4: m_j is the smallest value when it is larger in absolute value than
+    the range, and 0 otherwise."""
+    big, shift = la.large_covariates(np.array(x)[:, None])
+    assert (bool(big[0]), float(shift[0])) == (shifted, m)
+
+
+_X75 = np.column_stack(
+    (
+        1e10 + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0]),
+        np.zeros(10),
+        np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0]),
+    )
+)
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        ["1", "x0", "x0x2", "x2"],  # x2 counts: ratio 0.46, not 5.6e-11 (LA-4)
+        ["1", "x0", "x2", "x0x2"],
+        ["1", "x0x2", "x2"],
+        ["1", "x2", "x0x2"],
+    ],
+)
+def test_the_order_of_the_terms_does_not_change_la4(order):
+    """LA-4's example on #75's data: x0 = 1e10 + (…) is kept after the intercept
+    (v1 and earth drop it), and so is every product and every term of the
+    others, in any order, since the test is on the reduced echelon form."""
+    lin = {"x0": [(0, 2, 0.0)], "x2": [(2, 2, 0.0)], "x0x2": [(0, 2, 0.0), (2, 2, 0.0)]}
+    dirs, cuts = _term_rows([[]] + [lin[t] for t in order[1:]], 3)
+    assert la.independent_terms(_X75, dirs, cuts).tolist() == [True] * len(order)
+
+
+@pytest.mark.parametrize("shift", [0.0, 0.5, 1e4, 1e10])
+@pytest.mark.parametrize(("a", "b"), [(1.0, 0.0), (3.0, 1.0)])
+def test_a_product_that_the_terms_span_at_the_data_is_dependent(shift, a, b):
+    """LA-4: with x3 = a·x2 + b, the term x0·x3 is a combination of 1, x0, x3 and
+    x0·x2 at the ten cases, not as a formula, at every shift of x0; the shifted
+    basis finds it, also at 1e10 with x3 = 3·x2 + 1, where the part of
+    x0·x2 that carries the mean has to cancel exactly."""
+    x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
+    X = np.column_stack((x0, _X75[:, 1], _X75[:, 2], a * _X75[:, 2] + b))
+    lin = [(0, 2, 0.0)], [(3, 2, 0.0)], [(0, 2, 0.0), (2, 2, 0.0)]
+    dirs, cuts = _term_rows([[], lin[0], lin[1], lin[2], [*lin[0], *lin[1]]], 4)
+    assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4 + [False]
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_independent_terms_without_a_shift_is_independent_columns(seed):
+    """Without a linear factor of a shifted covariate the test is the plain one
+    of LA-4 on the columns of the terms, bit for bit (hinges, products and
+    linear factors of covariates that are not shifted)."""
+    rng = np.random.default_rng(seed)
+    X = np.floor(rng.uniform(size=(30, 3)) * 4) / 4
+    cuts = np.zeros((7, 3))
+    dirs = rng.integers(-1, 3, size=(7, 3)).astype(np.int8)
+    dirs[0] = 0
+    cuts[dirs == 1], cuts[dirs == -1] = 0.25, 0.5
+    cuts[dirs == 2] = 0.0
+    w = rng.uniform(0.5, 2.0, 30) if seed % 2 else None
+    B = _terms.basis_matrix(X, dirs, cuts)
+    got = la.independent_terms(X, dirs, cuts, w)
+    assert got.tolist() == la.independent_columns(B, w).tolist()
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_the_float_test_of_la4_decides_as_the_exact_one(seed, monkeypatch):
+    """LA-4 at a large mean on few levels, with copies of a covariate at other
+    shifts and with a copy off by one unit in the last place: the decision from
+    the float64 distance, trusted only inside its error bound, is that of exact
+    rational arithmetic (the distance passed as NaN forces the exact test)."""
+    rng = np.random.default_rng(seed)
+    a = np.floor(rng.uniform(size=(24, 3)) * 3) / 4
+    shifts = rng.choice([1e3, 2.0**26, 1e9, -1e6], 4)
+    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2])) + shifts
+    X[3, 1] = np.nextafter(X[3, 1], np.inf) if seed % 2 else X[3, 1]
+    L = [[(j, 2, 0.0)] for j in range(4)]
+    spec = [[], L[0], L[1], L[2], L[0] + L[2], L[1] + L[3], L[0] + L[1], L[3]]
+    spec += [L[0] + L[2] + L[3], L[1] + L[2] + L[3], L[0] + L[3]]
+    dirs, cuts = _term_rows(spec, 4)
+    got = la.independent_terms(X, dirs, cuts)
+    real = la.Conditioner.dependent
+
+    def exact(self, row, cut, dist, size, extra=(), kappa=1.0):
+        return real(self, row, cut, float("nan"), size, extra, kappa)
+
+    monkeypatch.setattr(la.Conditioner, "dependent", exact)
+    assert la.independent_terms(X, dirs, cuts).tolist() == got.tolist()
