@@ -1016,6 +1016,8 @@ def _copy_of(kind, x0):
     are bitwise equal), or one unit in the last place off in one row."""
     if kind == "copy":
         return x0.copy()
+    if kind == "scaled":
+        return x0 / 8  # u1 = u0/8 bit for bit: what EDGE-7's column scales make
     if kind == "plus 2^-16":
         return x0 + 2.0**-16
     x1 = x0.copy()
@@ -1023,7 +1025,7 @@ def _copy_of(kind, x0):
     return x1
 
 
-@pytest.mark.parametrize("kind", ["copy", "plus 2^-16", "one ulp"])
+@pytest.mark.parametrize("kind", ["copy", "plus 2^-16", "one ulp", "scaled"])
 def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
     """LA-5 (#85, #99, #104): x1 copies x0 = 2^36 + u, bitwise, plus 2^-16 in
     every row, or off by one unit in the last place in one row; degree 3 forms
