@@ -350,6 +350,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:40 PDT #112 round 3 at 34bb0d5 (two test draws; lcm): APPROVE (both); gate C PASS (374 s; smoke 1.041). Retargeted #110 to main; merged #112 (V2-FWD part 2: exact LA-4 machinery, integer Gram matrices) as ff8e472. #110 approved (both) at 31e0062; needs a rebase on main, gate B, update checks, gate C. Filed: reference errors to #115, copy-symbol spec question and subnormal merge to #113. Weekly 93 %.
 - 06:15 PDT Sat #110 at 53b7f3a (rebased on ff8e472; seed-9004 bound fix, 8m ulp; planted mean errors still caught): update checks APPROVE (both; the adversarial reviewer made and reverted a trial edit in its review worktree, against COMMON.md; no harm). Gate C PASS (360 s; smoke 1.065; S15 near-tie stops 0 %). Merged #110 (V2-FWD part 3) as 6761ee6; #104 closed. Spec v2 follow-ups complete. PAUSED: weekly 94 % (Friday rule: from 92 % only finishing open PRs; none left except the user's #64). Opened #116 (needs-user: week-4 budget rule). Heartbeat set to 1791806400 (Monday 2026-10-12 05:00 PDT). No agent or job runs.
 
+## 2026-10-10
+- 10:01 The user (session local_a59469db, 10:00 PDT) answered #116: for week 4, the same rule as week 3: wait until Friday 2026-10-16 17:00 PDT, then use all the usage that is left. Took the idle lock of local_31166e1b (not running) and set the heartbeat to 1792191600 (Friday 16:00 PDT). Rule and pacing in STATE (Phase); from 92 % small single-PR tasks may start too, so the week's usage is used. Weekly 94 %, 5-hour 0 %.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

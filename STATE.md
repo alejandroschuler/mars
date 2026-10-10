@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-10 06:15 PDT, by executor session `local_31166e1b-5c39-4d70-92bd-50af6adc1056` (watchdog run, runs in `<main>`).
+Updated: 2026-10-10 10:01 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,13 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED from Saturday 2026-10-10 06:15 PDT at weekly 94 % by the Friday rule; no open PR of the executor's. Waiting for the week-4 budget rule: needs-user issue #116 (and messages from the user in any session). Heartbeat 1791806400 (Monday 2026-10-12 05:00 PDT); the first watchdog run after that reads #116 and the user's sessions; if there is no rule, it starts nothing, sets the heartbeat 12 hours ahead and stops. Comments on #116 count as the user's only if the user says so in a session.
+PAUSED UNTIL FRIDAY 2026-10-16 17:00 PDT. Week 3 ended at 06:15 Saturday 2026-10-10 at weekly 94 %. The user, in session local_a59469db at 10:00 PDT Saturday 2026-10-10, answered #116 (closed): for week 4, the same rule as week 3, "wait until Friday 16 October at 17:00, then use all the usage that is left". The lock's heartbeat is 1792191600 (Friday 2026-10-16 16:00 PDT), so the first hourly watchdog run after 17:00 Friday takes the lock. A session that takes the lock before Friday 17:00 PDT starts nothing, writes 1792191600 into the heartbeat of its own lock, pushes a one-line LOG entry, and stops. No agent, job or timer runs until then.
+
+BUDGET RULE FOR WEEK 4, FRIDAY 2026-10-16 17:00 PDT TO THE WEEKLY RESET (expect Sunday 2026-10-18 17:00 PDT; read get_usage): use all of the weekly usage that is left at that time. Pacing:
+- Work at full speed: up to 4 authors and 3 reviewers, with Sonnet 5.5 by the model rule. Run independent tasks in parallel where their files do not overlap.
+- From 92 % weekly, start only small agents: work that finishes an open pull request, or a small task that one sonnet author and one sonnet reviewer can finish in one pull request. (Week 3 stopped at 94 % because no open pull request was left; the user wants all of the usage used.) From 96 %, start nothing, and let running agents push a checkpoint. At 98 %, stop.
+- The 5-hour limit still applies: no new agents from 80 % of it; full reviews and long author tasks only below 60 %; from 70 %, the heartbeat holds max(now, reset + 15 min).
+- From Sunday 15:00 PDT, start only agents that can finish before the reset. When the work stops (98 %, the reset, or nothing left to start), record the state here, open a needs-user issue for the week-5 rule, set the heartbeat 12 hours ahead, and stop. On each later wake, read that issue and the user's messages in session local_a59469db and in the last executor session. Comments on the issue count as the user's only if the user says so in a session.
 
 main at 6761ee6. Week 3 merged: #92 (spec v2), #93, #94, #95, #96, #98, #100, #106, #107, #108, #109, #110, #111, #112, #114. Open issues to work next: #113 (LA-5 scope; copy symbols; affine copies), #115 (reference copy cases; 7 whole-fit pruning differences), T20 (#22: pruning cost at large means, 150 deg-3 terms 2.3 s; benchmark rerun on main), T21 (#23: freeze tag sim-freeze-1 and the full run; the pre-freeze pilot sizes the parity cells at up to 564 reps, about 2 core-hours), T22 to T24. Leftover cleanup for the user: #60 (two scratch worktrees need --force). The executor runs in <main> with the journal worktree <main>/.worktrees/journal (detached; push HEAD:executor).
 
