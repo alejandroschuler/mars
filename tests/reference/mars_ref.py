@@ -800,8 +800,8 @@ NO_KIND, PAIR, SINGLE, LINEAR = 0, 1, 2, 3
 
 @dataclasses.dataclass(frozen=True)
 class Candidate:
-    """One candidate of a forward step [FWD-3]; two candidates differ when they
-    differ in the parent, the variable, the kind or the knot [CORE-3]."""
+    """One candidate of a forward step [FWD-3]. Occurrences of one kind that
+    add the same rows share one Candidate, that of the first [FWD-12]."""
 
     parent: int  # the forward index of the parent term
     variable: int
@@ -857,8 +857,10 @@ def queue_value(candidates, searchable: bool, rss_s: float, limit: float) -> flo
 
 
 def candidate_key(c) -> tuple:
-    """What tells two candidates apart [CORE-3]: the parent, the variable, the
-    kind and the knot, with None as the knot of a linear candidate."""
+    """How the candidate log names a candidate [CORE-3]: the parent, the
+    variable, the kind and the knot, with None as the knot of a linear
+    candidate. Two occurrences of one kind that add the same rows are one
+    candidate, named by the first [FWD-12, merge_key]."""
     return (c.parent, c.variable, c.kind, None if c.kind == LINEAR else c.knot)
 
 
@@ -1062,9 +1064,17 @@ def _parent_candidates(
     tau,
     conditioned=None,
     parent_cut=None,
+    met=None,
 ):
     """The candidates of parent term k (column k of B), in the order of FWD-5,
     and whether some covariate could be searched for it [FWD-2, FWD-3].
+
+    ``met`` maps the candidates that earlier searches of the step met, by
+    their kind and added rows (``merge_key``), to the Candidate of the first
+    occurrence, or to None when LA-3 rejected it there. A candidate met
+    before is that Candidate, with its parent, its RSS and so its legality,
+    or no candidate at all when it was rejected [FWD-12]; the dict is
+    updated with the new ones.
 
     For each covariate that the parent lacks, in increasing order: the kind
     of the search by the pymars rule of LA-7; in a pair search the linear
@@ -1103,7 +1113,18 @@ def _parent_candidates(
             params.adjust_endspan,
         )
     B_proj = B if conditioned is None else conditioned.columns
+    met = {} if met is None else met
+    cut_row = np.zeros(p) if parent_cut is None else parent_cut
     out = []
+
+    def first(candidate, j, kind, knot):
+        # the first occurrence decides [FWD-12]
+        key = merge_key(parent_row, cut_row, j, kind, knot, X, params.auto_linpreds)
+        if key not in met:
+            met[key] = candidate
+        if met[key] is not None:
+            out.append(met[key])
+
     for j in covariates:
         x = X[:, j]
         # b x enters only through its span with B, which holds b, so b (x - m)
@@ -1121,7 +1142,8 @@ def _parent_candidates(
         if pair:
             P_G = Projector(np.column_stack([B_proj, bx]), w)
             e_G = P_G.residual(Y)
-            out.append(Candidate(k, j, LINEAR, math.nan, float(np.sum(e_G**2))))
+            value = float(np.sum(e_G**2))
+            first(Candidate(k, j, LINEAR, math.nan, value), j, LINEAR, math.nan)
         else:
             P_G, e_G = P_B, e_B
         if spans is None:
@@ -1137,12 +1159,34 @@ def _parent_candidates(
         constant = np.all(H[0] == H, axis=0)
         with np.errstate(divide="ignore", invalid="ignore"):
             accept = ~constant & (size / spread >= tau)  # [LA-3]
-        for i in np.flatnonzero(accept):
-            h = H_perp[:, i]
-            residual = e_G - np.outer(h, (h @ e_G) / size[i])
-            kind = PAIR if pair else SINGLE
-            out.append(Candidate(k, j, kind, float(t[i]), float(np.sum(residual**2))))
+        kind = PAIR if pair else SINGLE
+        for i in range(len(t)):
+            c = None  # a knot that LA-3 rejects is no candidate
+            if accept[i]:
+                h = H_perp[:, i]
+                residual = e_G - np.outer(h, (h @ e_G) / size[i])
+                c = Candidate(k, j, kind, float(t[i]), float(np.sum(residual**2)))
+            first(c, j, kind, float(t[i]))
     return out, True
+
+
+def merge_key(parent_row, parent_cut, j, kind, knot, X, auto_linpreds) -> tuple:
+    """The kind of a candidate and the rows of dirs and cuts that it adds, in
+    order [FWD-6]: candidates with equal keys are one candidate [FWD-12]."""
+    if kind == PAIR:
+        codes = [(1, knot), (-1, knot)]
+    elif kind == SINGLE:
+        codes = [(1, knot)]
+    elif auto_linpreds:
+        codes = [(2, 0.0)]
+    else:
+        codes = [(1, float(np.min(X[:, j])))]
+    rows = []
+    for code, cut in codes:
+        row, cuts = list(np.asarray(parent_row).tolist()), list(map(float, parent_cut))
+        row[j], cuts[j] = code, cut + 0.0
+        rows.append((tuple(row), tuple(cuts)))
+    return (kind, tuple(rows))
 
 
 def _first_best(candidates, rss_s):
@@ -1245,7 +1289,7 @@ def forward_pass(
         tau = collinearity_tol(s)
         table = queue_table(entries, s, params.fast_beta)
         visited = window(table, params.fast_k)
-        found, searched = [], []
+        found, searched, met, seen = [], [], {}, set()
         for e in visited:
             k = slots.get(e)
             if k is None or term_degree(dirs[k]) >= params.max_degree:
@@ -1266,9 +1310,11 @@ def forward_pass(
                 tau,
                 conditioned,
                 cuts[k],
+                met,
             )
             entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
-            found.extend(cands)
+            found.extend(c for c in cands if id(c) not in seen)
+            seen.update(id(c) for c in cands)
             searched.append(k)
         legal = [c for c in found if is_legal(c.kind, reduction(c, rss_s), limit)]
         chosen = _first_best(legal, rss_s)
@@ -1313,7 +1359,7 @@ def forward_pass(
         s += 1
         rss_path.append(chosen.rss)
         if record_candidates:
-            others = [c for c in legal if candidate_key(c) != candidate_key(chosen)]
+            others = [c for c in legal if c is not chosen]  # merged already [FWD-12]
             log.append((chosen, _first_best(others, rss_s), rss_s))
         floor = 1e-10 * tss / (N - 1)
         if rsq(chosen.rss, tss) >= 1 - params.thresh or chosen.rss < floor:

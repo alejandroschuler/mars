@@ -1648,6 +1648,71 @@ class TestForwardPass:
             exact = exact_rss(np.column_stack(cols), y, w)
             assert abs(c.rss - exact) <= 1e-8 * before
 
+    def test_candidates_of_one_kind_that_add_the_same_rows_merge(self):
+        # FWD-12, FAST-5: two searches of one step that add the same rows.
+        # Linear candidates on the linear parents x0 and x1 both add x0 x1;
+        # with the products h0 x1 and h1 x0 in B, the searches of h0 = h(x0 -
+        # t) on x1 and of h1 = h(x1 - u) on x0 are single-hinge searches
+        # (A_w = 0, LA-7), and the knots u and t both add h0 h1. The later
+        # search meets the first occurrence: the same Candidate, with its
+        # parent and RSS, so its lambda counts that reduction.
+        rng = np.random.default_rng(30)
+        n, w = 40, np.ones(40)
+        X = rng.uniform(size=(n, 2))
+        y = X[:, 0] * X[:, 1] + 0.1 * rng.normal(size=n)
+        t, u = float(np.sort(X[:, 0])[19]), float(np.sort(X[:, 1])[15])
+        h0, h1 = np.maximum(X[:, 0] - t, 0), np.maximum(X[:, 1] - u, 0)
+        cases = [
+            (
+                np.column_stack([np.ones(n), X]),
+                [[0, 0], [2, 0], [0, 2]],
+                [[0, 0], [0, 0], [0, 0]],
+                ref.LINEAR,
+                math.nan,
+            ),
+            (
+                np.column_stack([np.ones(n), h0, h1, h0 * X[:, 1], h1 * X[:, 0]]),
+                [[0, 0], [1, 0], [0, 1], [1, 2], [2, 1]],
+                [[0, 0], [t, 0], [0, u], [t, 0], [0, u]],
+                ref.SINGLE,
+                u,
+            ),
+        ]
+        sigma2 = ref.covariate_variances(X, w, 40.0)
+        for B, rows, cut_rows, kind, knot in cases:
+            P_B = ref.Projector(B, w)
+            met, found = {}, []
+            for k in (1, 2):
+                cands, _ = ref._parent_candidates(
+                    k,
+                    np.array(rows[k], np.int8),
+                    X,
+                    y[:, None],
+                    w,
+                    B,
+                    P_B,
+                    P_B.residual(y[:, None]),
+                    sigma2,
+                    40.0,
+                    ref.weight_tol(40.0),
+                    ref.Params(max_degree=2, minspan=1, endspan=1),
+                    0.01,
+                    parent_cut=np.array(cut_rows[k], float),
+                    met=met,
+                )
+                found.append(cands)
+            if kind == ref.SINGLE:
+                assert all(c.kind == ref.SINGLE for c in found[0] + found[1])
+            first = [
+                c
+                for c in found[0]
+                if c.kind == kind and (kind == ref.LINEAR or c.knot == knot)
+            ]
+            assert len(first) == 1 and first[0].parent == 1
+            assert sum(c is first[0] for c in found[1]) == 1
+            lam = ref.queue_value(found[1], True, P_B.rss(y), math.inf)
+            assert lam >= P_B.rss(y) - first[0].rss
+
     def test_the_second_best_candidate_of_the_first_step(self):
         # CORE-3 against every legal candidate of the intercept at step 1
         X, y = noisy_data(28, n=50, p=3)
