@@ -1229,12 +1229,14 @@ def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
     is 0 at every case, or when the w-norm of its part orthogonal to the
     other evaluated reduced rows is less than 1e-7 times the w-norm of the
     evaluated pivot monomial (of the new part, when the monomial is 0 at
-    every case). With a shifted covariate the orthogonal part is computed
-    in exact arithmetic, always, since the other rows can carry large
-    factors m_j whose digits no float64 bound sees: from S's cached exact
-    factor (Echelon.factor) when no row of S holds the new pivot, else by
-    _exact_rest_sq. Without one, every row is a monomial, and this is the
-    plain test of LA-4 on the columns, in float64. Cost with a shift: O(k^2)
+    every case). With a shifted covariate, or a covariate that is a copy of
+    another up to a power of 2 other than 1 (no shift is needed for that),
+    the orthogonal part is computed in exact arithmetic, always, since the
+    other rows can carry large factors m_j or 2^k whose digits no float64
+    bound sees: from S's cached exact factor (Echelon.factor) when no row of
+    S holds the new pivot, else by _exact_rest_sq. With neither, every row is
+    a monomial, and this is the plain test of LA-4 on the columns, in
+    float64. Cost on the exact path: O(k^2)
     operations on fractions per test for k kept terms, after the factor; a
     fit of degree 3 with 48 terms, n = 100 and two shifted covariates takes
     about 45 s (1.4 s without the shift).
