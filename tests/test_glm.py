@@ -326,3 +326,15 @@ def test_the_classifier_refit_runs_on_the_scaled_x(k):
     base = EarthClassifier().fit(X, y)
     scaled = EarthClassifier().fit(Xk, y)
     assert_allclose(scaled.predict_proba(Xk), base.predict_proba(X), atol=1e-8)
+
+
+def test_a_zero_weight_row_of_huge_x_gives_no_warning():
+    """EDGE-7 and W-3: the scaled basis of a dropped row may overflow, silently.
+    (pytest turns a RuntimeWarning into an error.)"""
+    rng = np.random.default_rng(6)
+    X = rng.uniform(size=(80, 2))
+    y = (X[:, 0] + 0.3 * rng.normal(size=80) > 0.5).astype(int)
+    X[:, 1] *= 1e-200  # j = 664, so 1e300·2^664 overflows in the dropped row
+    X[0, 1], w = 1e300, np.ones(80)
+    w[0] = 0.0
+    EarthClassifier().fit(X, y, sample_weight=w)

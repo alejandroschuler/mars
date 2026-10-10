@@ -574,9 +574,11 @@ grsq_, max_terms_, penalty_, mars_
         # EDGE-7: the refit runs on the basis of the scaled X, as the core does,
         # and its coefficients go back to the scale of X by the same rule.
         jv = _core._column_exponents(X if w is None else X[w > 0.0])
-        B = _terms.basis_matrix(
-            np.ldexp(X, jv[None, :]), fit.dirs, np.ldexp(fit.cuts, jv[None, :])
-        )
+        with np.errstate(over="ignore", invalid="ignore"):
+            # a zero-weight row of huge x may overflow here; the refit drops it
+            B = _terms.basis_matrix(
+                np.ldexp(X, jv[None, :]), fit.dirs, np.ldexp(fit.cuts, jv[None, :])
+            )
         coef = _glm.fit_glm(B, np.argmax(T, axis=1), Q, w, alpha).coef
         self.glm_ = _core._coef_back(coef, fit.dirs, jv, 0)
         return self
