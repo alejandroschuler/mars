@@ -34,8 +34,10 @@ Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
 - ``weighted_variances``, ``pair_search``: the kind of a search (LA-7).
 - ``independent_columns``, ``lm_fit``: least squares with the dependent columns
   of LA-4, the analogue of R's ``lm.fit`` (FWD-11, PRUNE-8).
-- ``Conditioner``: columns that span what the terms span, free of the large
-  mean of a covariate (LA-5).
+- ``Conditioner``, ``large_covariates``, ``plain_dependent``,
+  ``independent_terms``: columns that span what the terms span, free of the
+  large mean of a covariate (LA-5), and the dependence test of LA-4 with the
+  exact shift of such covariates (LA-1, LA-2, FWD-11).
 - ``r_factor``, ``prefix_rss``, ``drop_costs``, ``move_column``: the R factor of
   the pruning pass and its downdates (PRUNE-3, PRUNE-9).
 
@@ -50,8 +52,10 @@ calls are the same, and pos shrinks by one after each removal.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import operator
+from collections.abc import Sequence
 from fractions import Fraction
 from typing import NamedTuple
 
@@ -59,7 +63,10 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
+from pymars import _terms
+
 FloatArray = npt.NDArray[np.float64]
+IntArray = npt.NDArray[np.int8]
 BoolArray = npt.NDArray[np.bool_]
 
 #: LA-4: a column is dependent when the norm of its part orthogonal to the kept
@@ -73,13 +80,6 @@ COLLINEARITY_TOL_LATE = 1e-5
 COLLINEARITY_LAST_EARLY_STEP = 7
 #: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
 PAIR_SEARCH_FACTOR = 0.01
-#: LA-5: a covariate has a large mean when its smallest absolute value is more
-#: than LARGE_MEAN times its range; its linear factors are then expanded
-#: (``Conditioner``). The ratio is a pymars constant: the spec does not fix it
-#: or the point m_j (spec v2, PR #92, will). 64³·2^-53 is 3e-11, inside the
-#: 1e-8 of LA-5 even before the conditioning of the columns, so a smaller ratio
-#: needs no change of basis.
-LARGE_MEAN = 64.0
 
 
 class GramSchmidt(NamedTuple):
@@ -445,105 +445,261 @@ def move_column(
     return R2, Z2
 
 
-_Element = tuple  # ((covariate, code, knot), ...): a product of factors
+_Atom = tuple  # (symbol, kind, offset): kind 0 is u, 1 is (x - t)+, 2 is (t - x)+
+_Element = tuple  # a product of atoms, sorted
+
+
+def large_covariates(X: npt.ArrayLike) -> tuple[BoolArray, FloatArray]:
+    """LA-4: which covariates are shifted, and the shifts m_j. Covariate j is
+    shifted when its smallest value m_j is larger in absolute value than its
+    range (a constant covariate, with range 0, when it is not 0); then
+    u_j = x_j - m_j, and m_j = 0 for the others. Complexity: O(n·p)."""
+    X = np.asarray(X, dtype=np.float64)
+    lo, hi = X.min(axis=0), X.max(axis=0)
+    big = np.abs(lo) > hi - lo
+    return big, np.where(big, lo, 0.0)
+
+
+def plain_dependent(dist: float, norm: float) -> bool:
+    """LA-4 for a column with no shifted covariate in it or in the earlier
+    columns: it is dependent when the norm of its part orthogonal to them is
+    below LM_TOL times its own norm, or when it is 0 at every case.
+    Complexity: O(1)."""
+    return norm == 0.0 or dist < LM_TOL * norm
+
+
+def _order(m: _Element) -> tuple:
+    """LA-4's total order of monomials: by degree, highest first, then
+    lexicographically on the atoms (covariate, kind, knot)."""
+    return (-len(m), m)
 
 
 class Conditioner:
-    """Columns for the projections of the forward pass that span what the terms
-    span, with no digits lost to the large mean of a covariate (LA-5).
+    """Exact changes of basis for covariates with a large mean (LA-4, LA-5).
 
-    A product with a linear factor x_j of a covariate with a large mean m_j is
-    the sum of the products with u_j = x_j - m_j and with m_j, and a pair of
-    hinges spans x_j with the constant, (t - x)₊ = (x - t)₊ - u_j + (t - m_j),
-    where m_j = 0 and u_j = x_j for a covariate that is not large; so every
-    hinge (t - x)₊ expands once an expanding term exists.
-    So each term is a sum of elements, products of hinges (x_j - t)₊ and of
-    u_j, with exact rational coefficients, and exact Gaussian elimination in
-    that coefficient space removes the part of a term that earlier terms span:
-    the column left has coefficients of size about 1 on elements of the size of
-    the range, not of the size of the mean. A covariate is large when its
-    smallest absolute value exceeds ``LARGE_MEAN`` times its range; then every
-    x_j - m_j is exact in float64 (Sterbenz), with m_j a data value, and a
-    covariate that is not large keeps its factors as they are. With no term
-    that expands (a linear factor, or a hinge (t - x)₊, of a large covariate)
-    in the parent b, the caller uses b·(x_j - m_j) for b·x_j, which spans the
-    same with the terms, since they hold b, and the hinge as it is.
+    Covariate j is shifted when |m_j| exceeds its range, m_j its smallest value
+    (``large_covariates``); u_j = x_j - m_j is exact in float64 where the
+    covariate has no case near 0 (Sterbenz), and a linear factor x_j is
+    u_j + m_j. Covariates whose columns u are bitwise equal are one symbol
+    (the atoms of their terms are the same), so that a copy of a covariate at
+    another shift cancels exactly.
 
-    ``append`` registers the rows of ``dirs`` and ``cuts`` in the order of the
-    terms. ``linear`` and ``hinge`` return unscaled columns that span with the
-    terms so far what b·x_j and the hinge term span with them. Complexity: a
-    term with d factors has at most 3^d elements; reducing it costs O(M·3^d)
-    rational operations for M terms and forming its column O(n·d·3^d), and
-    the reduced coefficients of b·x_j are kept and reduced only by the terms
-    that came after the last call. Over a pass of M terms and p covariates
-    that is O(M²·p·3^d) rational operations, and the memory is O(M·p·3^d)
-    coefficients, no columns.
+    Columns for the projections (LA-5). A pair of hinges spans x_j with the
+    constant, (t - x)₊ = (x - t)₊ - u_j + (t - m_j), so a term is a sum of
+    elements, products of atoms u_j and (x_j - t)₊, with exact rational
+    coefficients, and exact Gaussian elimination in that coefficient space
+    removes the part of a term that earlier terms span: ``linear`` and
+    ``hinge`` return unscaled columns with coefficients of size about 1 on
+    elements of the size of the range, not of the size of the mean, that span
+    with the terms registered by ``append`` what b·x_j and a new term span with
+    them. With no term that expands (a linear factor, or a hinge (t - x)₊, of
+    a shifted covariate) in the parent b, the caller uses b·(x_j - c_j), which
+    spans the same with the terms, since they hold b. The pivots are the
+    elements with the largest share of the reduced term, which keeps the
+    reduced column small.
 
-    Covariates whose columns are bitwise equal are one symbol in the elements,
-    so that the copy of a large-mean covariate cancels exactly.
+    The dependence test of LA-4 (``dependent``). The terms are polynomials in
+    the atoms u_j, (x_j - t)₊ and (t - x_j)₊ (a hinge is its own atom), with
+    exact coefficients; the registered terms are kept in their reduced echelon
+    form for the order of LA-4 (``_order``: the pivot of a row is its first
+    monomial), so the test does not depend on the order of the terms. A new
+    term is dependent when its expansion is in the span, or when the part of
+    its new part (its row in the echelon form of the registered terms, the
+    extra rows and itself) that is orthogonal to the other rows is below
+    LM_TOL times the norm of its pivot monomial (the new part's own norm when
+    that is 0), or when the new part is 0 at every case. The orthogonal part is
+    taken in float64 from a column that carries no digits of the mean, with a
+    bound on its error, and exactly (rational arithmetic on the distinct rows
+    of X) when that bound does not decide, and when the rows of the echelon
+    form that hold the new pivot change, since their evaluation carries the
+    mean.
+
+    Complexity: a term with d factors has at most 2^d monomials in the test and
+    3^d elements in a column; reducing it costs O(M·2^d) rational operations for
+    M registered terms, forming a column O(n·d·3^d), and the exact test
+    O(M·K²) integer operations on the Gram matrix of the K monomials of the
+    rows plus O(M³) rational ones, the Gram matrix costing O(g) integer
+    operations for each new pair of monomials, g the distinct rows of X, once
+    for the fit. The reduced
+    coefficients of b·x_j are kept and reduced only by the terms that came
+    after the last call. Memory O(M·p·3^d) coefficients, no columns, and O(g·K)
+    rationals for K monomials in the Gram matrix of the exact test (O(K²)).
     """
 
-    def __init__(self, X: FloatArray, center: FloatArray):
+    def __init__(self, X: npt.ArrayLike, w: npt.ArrayLike | None = None):
         X = np.asarray(X, dtype=np.float64)
         self._X = X
-        self._m = np.asarray(center, dtype=np.float64)
-        lo, hi = X.min(axis=0), X.max(axis=0)
-        near = np.where(lo * hi > 0.0, np.minimum(np.abs(lo), np.abs(hi)), 0.0)
-        big = (hi > lo) & (near > LARGE_MEAN * (hi - lo))
+        self._w = None if w is None else np.asarray(w, dtype=np.float64)
+        self._sw = None if w is None else np.sqrt(self._w)
+        big, self._m = large_covariates(X)
         self.large = frozenset(int(j) for j in np.flatnonzero(big))
-        first: dict = {}  # a covariate's symbol: the first with the same column
-        self._rep = [first.setdefault(X[:, j].tobytes(), j) for j in range(X.shape[1])]
-        self._rows: list[tuple[FloatArray, FloatArray]] = []
+        self._ucols: dict = {}
+        self._rep = list(range(X.shape[1]))  # a symbol: the first with the same u
+        self._pw = [0] * X.shape[1]  # u_j = 2^pw·u_rep, bit for bit (EDGE-7 scales)
+        first: dict = {}
+        for j in range(X.shape[1]):
+            u = self._ucol(j)
+            top = float(np.max(np.abs(u))) if u.size else 0.0
+            e = 0 if top == 0.0 else math.frexp(top)[1]
+            unit = np.ldexp(u, -e)  # a power of 2 times u does not change the key
+            if not np.array_equal(np.ldexp(unit, e), u):  # underflow: no scaling
+                e, unit = 0, u
+            key = hashlib.blake2b(unit.tobytes(), digest_size=16).digest()
+            r, er = first.setdefault(key, (j, e))
+            if r != j and np.array_equal(unit, np.ldexp(self._ucol(r), -er)):
+                self._rep[j], self._pw[j] = r, e - er
+        self._diff = self._near_copies()
+        self._rows: list[tuple[IntArray, FloatArray]] = []
         self._pivots: list[tuple[_Element, dict]] = []
         self._done = 0  # the rows that the pivots cover
         self._norms: dict = {}
         self._lin: dict = {}
+        self._hat: dict = {}  # a hinge atom -> (covariate, knot) that evaluates it
+        self._acols: dict = {}
+        self._erows: list[tuple[_Element, dict]] = []  # the echelon form of LA-4
+        self._edone = 0
+        self._mcols: dict = {}
+        self._mnorms: dict = {}
+        self._groups: tuple | None = None
+        self._xcols: dict = {}
+        self._grams: dict = {}
+        self._icols: dict = {}
+        self._wint: tuple | None = None
+        self._shifted = False  # a registered term has a linear factor of a large one
+        self.size = 0.0  # a bound on the magnitude of the last column formed
+
+    def _ucol(self, j: int) -> FloatArray:
+        """u_j = x_j - m_j (x_j itself for a covariate that is not shifted)."""
+        if j not in self.large:
+            return self._X[:, j]
+        if j not in self._ucols:
+            self._ucols[j] = self._X[:, j] - self._m[j]
+        return self._ucols[j]
+
+    def _near_copies(self) -> dict:
+        """{j: (r, d)} for a shifted covariate j whose column u_j is a near-copy
+        of that of an earlier symbol r: u_j = u_r + d exactly, d ≠ 0 (every
+        difference is exact, by Sterbenz, and |d| is within 2^-10 of |u_j| in
+        norm). The columns for the projections (``linear``, ``hinge``) then
+        write u_j as u_r + d, so that the part of a product that the terms
+        span cancels as a formula and the small d is not lost under the large
+        mean (the one-ulp copy of PR #95's review, LA-5). The test of LA-4
+        does not use it. Complexity: O(n·p_large·log p_large) for the sort and
+        O(n) for each pair that the norms let through."""
+        sym = sorted(
+            (j for j in self.large if self._rep[j] == j),
+            key=lambda j: float(np.linalg.norm(self._ucol(j))),
+        )
+        out: dict = {}
+        for a, j in enumerate(sym):
+            uj = self._ucol(j)
+            for r in reversed(sym[max(0, a - 8) : a]):
+                if r in out:
+                    continue
+                ur = self._ucol(r)
+                d = uj - ur
+                ok = np.all(
+                    (d == 0) | ((ur != 0) & (uj != 0) & (uj <= 2 * ur) & (ur <= 2 * uj))
+                )
+                if ok and 0 < np.linalg.norm(d) <= 2.0**-10 * np.linalg.norm(uj):
+                    out[j] = (r, d)
+                    break
+        return out
 
     def expands(self, row: npt.ArrayLike) -> bool:
         """Whether a term row has a factor that is expanded: a linear factor or
-        a hinge (t - x)₊ of a covariate with a large mean. Complexity: O(p)."""
+        a hinge (t - x)₊ of a shifted covariate. Complexity: O(p)."""
         row = np.asarray(row)
         return any(row[j] in (2, -1) for j in self.large)
 
+    def shifted(self, *rows: npt.ArrayLike) -> bool:
+        """Whether LA-4's test needs the change of basis for the registered
+        terms and these rows: one of them has a linear factor of a shifted
+        covariate. Otherwise every term is one monomial and the test is the
+        plain one (``plain_dependent``). Complexity: O(p)."""
+        return self._shifted or any(
+            np.asarray(r)[j] == 2 for r in rows for j in self.large
+        )
+
     def append(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> None:
         """Register the next term. Complexity: O(p)."""
-        self._rows.append((np.asarray(row), np.asarray(cut)))
+        row = np.asarray(row)
+        self._rows.append((row, np.asarray(cut)))
+        self._shifted = self._shifted or any(row[j] == 2 for j in self.large)
+
+    # -- atoms and their columns
+
+    def _atom(self, j: int, kind: int, t: float = 0.0) -> _Atom:
+        """The atom of covariate j, in the symbol of its copies: u_j =
+        2^pw·u_rep, and (x_j - t)₊ = 2^pw·(u_rep - (t - m_j)/2^pw)₊ (the
+        coefficient 2^pw is ``_ratio``)."""
+        if kind == 0:
+            return (self._rep[j], 0, 0.0)
+        key = (self._rep[j], kind, float(np.ldexp(t - self._m[j], -self._pw[j])))
+        self._hat.setdefault(key, (j, t))
+        return key
+
+    def _ratio(self, j: int) -> Fraction:
+        return Fraction(2) ** self._pw[j]
+
+    def _atom_column(self, a: _Atom) -> FloatArray:
+        if a not in self._acols:
+            if a[1] == 0:
+                col = self._ucol(a[0])
+            elif a[1] == 3:
+                col = self._diff[a[0]][1]
+            else:
+                j, t = self._hat[a]
+                x = self._X[:, j]
+                col = np.maximum(x - t, 0.0) if a[1] == 1 else np.maximum(t - x, 0.0)
+                col = np.ldexp(col, -self._pw[j])
+            self._acols[a] = col
+        return self._acols[a]
 
     def _element_column(self, e: _Element) -> FloatArray:
-        out = np.ones(self._X.shape[0])
-        for j, code, t in e:
-            x = self._X[:, j]
-            if code == 2:
-                out = out * (x - self._m[j] if j in self.large else x)
-            else:
-                out = out * np.maximum(x - t, 0.0)
-        return out
+        if e not in self._mcols:
+            out = np.ones(self._X.shape[0])
+            for a in e:
+                out = out * self._atom_column(a)
+            self._mcols[e] = out
+        return self._mcols[e]
+
+    def _scaled_norm(self, v: FloatArray) -> float:
+        return float(np.linalg.norm(v if self._sw is None else self._sw * v))
 
     def _norm(self, e: _Element) -> float:
-        if e not in self._norms:
-            self._norms[e] = float(np.linalg.norm(self._element_column(e)))
-        return self._norms[e]
+        if e not in self._mnorms:
+            self._mnorms[e] = self._scaled_norm(self._element_column(e))
+        return self._mnorms[e]
+
+    # -- columns that span what the terms span (LA-5)
+
+    def _u_parts(self, j: int, sign: int) -> dict:
+        """sign·u_j as {element: Fraction}: u_r + d_j for a near-copy."""
+        if j not in self._diff:
+            return {self._atom(j, 0): sign * Fraction(2) ** self._pw[j]}
+        return {
+            self._atom(self._diff[j][0], 0): Fraction(sign),
+            (j, 3, 0.0): Fraction(sign),
+        }
 
     def _expansion(self, row: FloatArray, cut: FloatArray) -> dict:
-        """The term as {element: Fraction}. Complexity: O(3^d)."""
+        """The term as {element: Fraction}, a hinge (t - x)₊ rewritten.
+        Complexity: O(3^d)."""
         out: dict = {(): Fraction(1)}
         for j in np.flatnonzero(row):
             code, t = int(row[j]), float(cut[j])
-            large = int(j) in self.large
-            r = self._rep[j]
-            m = Fraction(float(self._m[j])) if large else Fraction(0)
+            m = Fraction(float(self._m[j]))
             if code == 1:
-                parts: dict = {(r, 1, t): Fraction(1)}
+                parts: dict = {self._atom(j, 1, t): self._ratio(j)}
             elif code == 2:
-                parts = {(r, 2, 0.0): Fraction(1)}
-                if large:
+                parts = self._u_parts(j, 1)
+                if j in self.large:
                     parts[None] = m
-            else:  # (t - x)₊ = (x - t)₊ - u + (t - m), m = 0 if x is not large
-                parts = {
-                    (r, 1, t): Fraction(1),
-                    (r, 2, 0.0): Fraction(-1),
-                    None: Fraction(t) - m,
-                }
+            else:  # (t - x)₊ = (x - t)₊ - u + (t - m), m = 0 if x is not shifted
+                parts = self._u_parts(j, -1)
+                parts[self._atom(j, 1, t)] = self._ratio(j)
+                parts[None] = Fraction(t) - m
             new: dict = {}
             for e, f in out.items():
                 for q, g in parts.items():
@@ -575,9 +731,12 @@ class Conditioner:
                 self._pivots.append((p, {q: f / v[p] for q, f in v.items()}))
 
     def _column(self, v: dict) -> FloatArray:
-        out = np.zeros(self._X.shape[0])
+        out, mag = np.zeros(self._X.shape[0]), np.zeros(self._X.shape[0])
         for e in sorted(v):
-            out += float(v[e]) * self._element_column(e)
+            col, c = self._element_column(e), float(v[e])
+            out += c * col
+            mag += abs(c) * np.abs(col)
+        self.size = self._scaled_norm(mag)
         return out
 
     def linear(
@@ -604,3 +763,260 @@ class Conditioner:
         self._sync()
         v = self._expansion(np.asarray(row), np.asarray(cut, dtype=np.float64))
         return self._column(self._reduce(v, 0))
+
+    # -- the dependence test of LA-4
+
+    def _poly(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> dict:
+        """The term as a polynomial in the atoms of LA-4, {monomial: Fraction}:
+        a linear factor of a shifted covariate is u_j + m_j, a hinge is its own
+        atom. Complexity: O(2^d)."""
+        row, cut = np.asarray(row), np.asarray(cut, dtype=np.float64)
+        out: dict = {(): Fraction(1)}
+        for j in np.flatnonzero(row):
+            code, t = int(row[j]), float(cut[j])
+            if code == 2:
+                parts: dict = {(self._atom(j, 0),): self._ratio(j)}
+                if j in self.large:
+                    parts[()] = Fraction(float(self._m[j]))
+            else:
+                parts = {(self._atom(j, 1 if code == 1 else 2, t),): self._ratio(j)}
+            new: dict = {}
+            for e, f in out.items():
+                for q, g in parts.items():
+                    key = tuple(sorted(e + q))
+                    new[key] = new.get(key, 0) + f * g
+            out = {e: f for e, f in new.items() if f != 0}
+        return out
+
+    @staticmethod
+    def _echelon_add(rows: list, poly: dict):
+        """The reduced echelon form of ``rows`` with ``poly`` added, as (rows,
+        pivot, new part with the pivot coefficient 1, the pivot coefficient of
+        the polynomial), or None when the polynomial lies in their span. The
+        rows are not changed. Complexity: O(M·|poly|)."""
+        v = dict(poly)
+        for p, R in rows:
+            f = v.get(p, 0)
+            if f != 0:
+                for q, g in R.items():
+                    v[q] = v.get(q, 0) - f * g
+        v = {q: g for q, g in v.items() if g != 0}
+        if not v:
+            return None
+        q = min(v, key=_order)
+        N = {m: g / v[q] for m, g in v.items()}
+        out = []
+        for p, R in rows:
+            f = R.get(q, 0)
+            if f != 0:
+                R = {m: R.get(m, 0) - f * N.get(m, 0) for m in R.keys() | N.keys()}
+                R = {m: g for m, g in R.items() if g != 0}
+            out.append((p, R))
+        out.append((q, N))
+        return out, q, N, v[q]
+
+    def _esync(self) -> None:
+        while self._edone < len(self._rows):
+            added = self._echelon_add(self._erows, self._poly(*self._rows[self._edone]))
+            self._edone += 1
+            if added is not None:
+                self._erows = added[0]
+
+    def dependent(
+        self,
+        row: npt.ArrayLike,
+        cut: npt.ArrayLike,
+        dist: float,
+        size: float,
+        extra: Sequence[tuple[npt.ArrayLike, npt.ArrayLike]] = (),
+        kappa: float = 1.0,
+    ) -> bool:
+        """LA-4 for the term with ``row`` and ``cut`` as a new column after the
+        registered terms and the ``extra`` terms (rows and cuts, not registered).
+
+        ``dist`` is the √w-scaled norm of the part of the term's column that is
+        orthogonal to the span of those columns, computed from a column that
+        spans the same with them, and ``size`` a bound on the magnitude of that
+        column's entries (``self.size`` after ``linear`` or ``hinge``, the
+        column's norm when it is plain), and ``kappa`` the largest ratio of
+        the size of a column of the span to the norm of its orthogonal part
+        (``_scan.Rebuild.kappa``), which bounds the error of the basis, so that
+        the float64 value is trusted only where its error cannot change the
+        decision; otherwise, and when
+        the rows of the echelon form change, the test is exact. Complexity: see
+        the class."""
+        self._esync()
+        rows = self._erows
+        for r, c in extra:
+            added = self._echelon_add(rows, self._poly(r, c))
+            rows = rows if added is None else added[0]
+        added = self._echelon_add(rows, self._poly(row, cut))
+        if added is None:
+            return True
+        after, q, N, c = added
+        dist, size = dist / abs(float(c)), size / abs(float(c))  # N has pivot 1
+        scale = self._norm(q)
+        if scale == 0.0:  # the pivot monomial is 0 at every case
+            scale = self._scaled_norm(self._evaluate(N))
+        if scale == 0.0:
+            return True
+        adjusted = any(q in R for _, R in rows)
+        if not adjusted:
+            u = 2.0**-53
+            err = 16.0 * u * (size * (1.0 + kappa) + scale) * math.sqrt(len(rows) + 2)
+            if dist - err > LM_TOL * scale:
+                return False
+            if dist + err < LM_TOL * scale:
+                return True
+        return self._exact_dependent(q, N, after[:-1])
+
+    def _evaluate(self, poly: dict) -> FloatArray:
+        out = np.zeros(self._X.shape[0])
+        for m in sorted(poly, key=_order):
+            out += float(poly[m]) * self._element_column(m)
+        return out
+
+    # -- exact arithmetic on the distinct rows of X
+
+    def _group_data(self) -> tuple:
+        if self._groups is None:
+            Xu, inv = np.unique(self._X, axis=0, return_inverse=True)
+            inv = inv.reshape(-1)
+            if self._w is None:
+                W = [Fraction(int(c)) for c in np.bincount(inv, minlength=len(Xu))]
+            else:
+                W = [Fraction(0)] * len(Xu)
+                for g, wi in zip(inv.tolist(), self._w.tolist(), strict=True):
+                    W[g] += Fraction(wi)
+            self._groups = (Xu, Xu - self._m, W)
+        return self._groups
+
+    def _exact_column(self, e: _Element) -> list:
+        """The monomial on the distinct rows of X, as exact rationals."""
+        if e not in self._xcols:
+            Xu, Uu, _ = self._group_data()
+            col = [Fraction(1)] * len(Xu)
+            for a in e:
+                if a[1] == 0:
+                    vals = [Fraction(float(v)) for v in Uu[:, a[0]]]
+                else:
+                    j, t = self._hat[a]
+                    sign = 1 if a[1] == 1 else -1
+                    r = self._ratio(j)
+                    vals = [
+                        max(sign * (Fraction(float(v)) - Fraction(t)), Fraction(0)) / r
+                        for v in Xu[:, j]
+                    ]
+                col = [c * v for c, v in zip(col, vals, strict=True)]
+            self._xcols[e] = col
+        return self._xcols[e]
+
+    @staticmethod
+    def _dyadic(vals: list) -> tuple[FloatArray, int]:
+        """Exact rationals with power-of-2 denominators as integers over one
+        common denominator."""
+        den = max(v.denominator for v in vals)
+        ints = [v.numerator * (den // v.denominator) for v in vals]
+        return np.array(ints, dtype=object), den
+
+    def _int_column(self, e: _Element) -> tuple:
+        """A monomial on the distinct rows of X as (integers, denominator)."""
+        if e not in self._icols:
+            col, den = self._dyadic(self._exact_column(e))
+            self._icols[e] = (col, den)
+        return self._icols[e]
+
+    def _gram(self, a: _Element, b: _Element) -> Fraction:
+        """⟨a, b⟩_w of two monomials in exact arithmetic (integers over powers
+        of 2), kept for the fit. Complexity: O(g) integer operations the first
+        time."""
+        key = (a, b) if a <= b else (b, a)
+        if key not in self._grams:
+            if self._wint is None:
+                self._wint = self._dyadic(self._group_data()[2])
+            (ca, da), (cb, db) = self._int_column(a), self._int_column(b)
+            total = int(np.dot(self._wint[0] * ca, cb))
+            self._grams[key] = Fraction(total, self._wint[1] * da * db)
+        return self._grams[key]
+
+    def _exact_dependent(self, q: _Element, N: dict, rows: list) -> bool:
+        """LA-4 in exact arithmetic: the weighted squared norm of N orthogonal to
+        the rows is below LM_TOL² times that of the pivot monomial q (of N when
+        q is 0 at every case). The Gram matrix of the polynomials is C·Gm·Cᵀ
+        with the cached Gram matrix Gm of their monomials, in integers over one
+        denominator, and the squared distance is the Schur complement of the
+        rows in it (Gaussian elimination that skips a zero pivot).
+        Complexity: O(K²) lookups and O(M·K²) integer operations for K monomials
+        in M rows, then O(M³) rational operations."""
+        polys = [R for _, R in rows] + [N]
+        mons = sorted(set().union(*polys))
+        gm = [[self._gram(a, b) for b in mons] for a in mons]
+        D = math.lcm(*(g.denominator for r in gm for g in r))
+        Gm = np.array([[int(g * D) for g in r] for r in gm], dtype=object)
+        scale, C = [], []
+        for poly in polys:
+            L = math.lcm(*(c.denominator for c in poly.values()))
+            scale.append(L)
+            C.append([int(poly.get(m, 0) * L) for m in mons])
+        C = np.array(C, dtype=object)
+        Gi = C @ Gm @ C.T
+        n = len(polys)
+        A = [
+            [Fraction(int(Gi[i, j]), scale[i] * scale[j] * D) for j in range(n)]
+            for i in range(n)
+        ]
+        for k in range(n - 1):
+            if A[k][k] == 0:
+                continue
+            for i in range(k + 1, n):
+                f = A[i][k] / A[k][k]
+                if f != 0:
+                    for j in range(k + 1, n):
+                        A[i][j] -= f * A[k][j]
+        ref = self._gram(q, q)
+        if ref == 0:
+            ref = sum(
+                (c * d * self._gram(a, b) for a, c in N.items() for b, d in N.items()),
+                Fraction(0),
+            )
+        return ref == 0 or A[n - 1][n - 1] < Fraction(LM_TOL) ** 2 * ref
+
+
+def independent_terms(
+    X: npt.ArrayLike,
+    dirs: npt.ArrayLike,
+    cuts: npt.ArrayLike,
+    w: npt.ArrayLike | None = None,
+    B: npt.ArrayLike | None = None,
+) -> BoolArray:
+    """Return which terms LA-4 keeps, in their order, True for a kept term
+    (FWD-11): the rule of ``independent_columns`` on the columns of the terms,
+    and, when a term has a linear factor of a shifted covariate (``Conditioner``,
+    ``large_covariates``), after the exact shift of such covariates, so that the
+    result does not depend on the order of the terms. ``B`` is the basis matrix
+    of the terms if the caller has it. Without a shifted covariate in a linear
+    factor this is ``independent_columns`` of B, bit for bit. Complexity: that of
+    ``independent_columns`` and, with a shifted covariate, of ``Conditioner``
+    for each term.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    dirs, cuts = np.asarray(dirs), np.asarray(cuts, dtype=np.float64)
+    cond = Conditioner(X, w)
+    if not any(cond.shifted(r) for r in dirs):
+        return independent_columns(
+            _terms.basis_matrix(X, dirs, cuts) if B is None else B, w
+        )
+    sw = np.ones(X.shape[0]) if w is None else np.sqrt(np.asarray(w, dtype=np.float64))
+    Q = np.empty((X.shape[0], 0))
+    kept, kappa = np.zeros(len(dirs), dtype=bool), 1.0
+    for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
+        v = sw * cond.hinge(row, cut)
+        gs = gram_schmidt(Q, v)
+        if cond.dependent(row, cut, gs.norm, cond.size, kappa=kappa):
+            continue
+        if gs.q is not None:  # a term that adds no direction is kept, as LA-4 says
+            kappa = max(kappa, cond.size / gs.norm)
+            Q = np.column_stack((Q, gs.q))
+        cond.append(row, cut)
+        kept[k] = True
+    return kept

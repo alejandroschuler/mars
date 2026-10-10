@@ -255,7 +255,7 @@ class _Pass:
         self.E, _ = _linalg.orthogonalize(self.Q, self.Yw)
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
-        self.cond = _linalg.Conditioner(X, self.center)  # LA-5
+        self.cond = _linalg.Conditioner(X, w)  # LA-4, LA-5
         self.cond.append(self.dirs[0], self.cuts[0])
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
         self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
