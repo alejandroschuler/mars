@@ -88,13 +88,18 @@ def test_the_refit_matches_r_on_fixed_columns(name):
     where earth's are; a positive ``glm_alpha`` has a finite minimum and does
     not warn. (S14_matched: the fixture has earth's warning that fitted
     probabilities are numerically 0 or 1, and ``glm_converged`` true; its
-    smallest ``pred_train`` is 2.2e-16, where the refit gives 2.1e-14. No
-    fitted probability of the refit is within 10·eps of 0 or 1, so the refit
-    does not warn, and a warning here would fail the test.)"""
+    smallest ``pred_train`` is 2.2e-16, where the refit gives 2.1e-14, with
+    |eta| = 31.5. The v2 threshold |eta| > 30 makes the refit warn there, as
+    earth does, although it converges.)"""
     B, codes, Q, r_coef, r_prob, earth = _r_case(name)
     separated = earth is not None and not all(earth["glm_converged"])
     if not separated:
-        fit = _glm.fit_glm(B, codes, Q)
+        if name == "S14_matched_d2":  # GLM-4 (v2): converged, but |eta| > 30
+            with pytest.warns(ConvergenceWarning, match="numerically 0 or 1"):
+                fit = _glm.fit_glm(B, codes, Q)
+            assert fit.extreme
+        else:
+            fit = _glm.fit_glm(B, codes, Q)
         coef = fit.coef[:, None] if Q == 2 else fit.coef[:, 1:]
         assert fit.converged
         if Q > 2:
@@ -283,18 +288,25 @@ def test_glm_alpha_reaches_the_refit_and_must_be_a_finite_float(alpha):
     assert not np.allclose(est.glm_, _glm.fit_glm(est.basis_matrix(X), CODES2, 2).coef)
 
 
-def test_a_converged_fit_warns_when_a_probability_is_numerically_0():
-    """GLM-4: the refit warns also when it converges, if some fitted
-    probability is within 10·eps of 0 or 1. A case far out on the trend of the
-    others has a probability of about 6e-16, between eps and 10·eps, and
-    barely moves the fit, which converges."""
+@pytest.mark.parametrize(
+    ("eta", "weight", "warns"),
+    [(-32.0, 1.0, True), (31.0, 1.0, True), (-27.0, 1.0, False), (-60.0, 0.0, False)],
+)
+def test_the_warning_follows_eta_beyond_30_over_positive_weights(eta, weight, warns):
+    """GLM-4 (v2): a converged refit warns when |eta| > 30 for some case of
+    positive weight, and not for a case of weight 0, which W-3 drops, nor for
+    |eta| below 30. A case far out on the trend of the others barely moves the
+    fit, which converges."""
     B, codes, _, _, _, _ = _r_case("binomial")
     base = _glm.fit_glm(B, codes, 2).coef
     far = B[0].copy()
-    far[1] = (-35.0 - base[0] - base[2] * far[2]) / base[1]  # eta = -35
-    B_far, codes_far = np.vstack([B, far]), np.r_[codes, 0]
+    far[1] = (eta - base[0] - base[2] * far[2]) / base[1]
+    B_far, codes_far = np.vstack([B, far]), np.r_[codes, int(eta > 0)]
+    w = np.r_[np.ones(len(B)), weight]
+    if not warns:
+        fit = _glm.fit_glm(B_far, codes_far, 2, w)
+        assert fit.converged and not fit.extreme
+        return
     with pytest.warns(ConvergenceWarning, match="numerically 0 or 1"):
-        fit = _glm.fit_glm(B_far, codes_far, 2)
+        fit = _glm.fit_glm(B_far, codes_far, 2, w)
     assert fit.converged and fit.extreme
-    p = _glm.probabilities(_glm.linear_predictors(far[None], fit.coef))[0, 1]
-    assert np.finfo(float).eps < p <= 10 * np.finfo(float).eps

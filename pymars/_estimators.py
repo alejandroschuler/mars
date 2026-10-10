@@ -481,7 +481,8 @@ grsq_, max_terms_, penalty_, mars_
     Notes
     -----
     The refit warns with a ConvergenceWarning when it does not converge or
-    when a fitted probability is within 10·ε of 0 or 1, as with separated
+    when a fitted probability of a case with positive weight is below
+    1/(1 + e³⁰) or above its complement (|η| > 30), as with separated
     classes; a positive ``glm_alpha`` avoids it (GLM-4). y must be 1-D: a
     column vector is raveled with a DataConversionWarning, and multi-output
     classification is not supported.

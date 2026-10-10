@@ -35,7 +35,8 @@ decrease. Under separation the minimum is not attained: the iterates grow
 without bound and the relative decrement stays near 1/2, so the fit ends at
 ``MAX_ITER`` without converging. A ConvergenceWarning that
 suggests a positive ``glm_alpha`` follows when the fit did not converge, or
-when some fitted probability is within 10·ε of 0 or 1 (GLM-4); the last
+when some fitted probability of a case with positive weight is below
+1/(1 + e³⁰) or above its complement (|η| > 30, GLM-4); the last
 iterate is kept.
 
 Numerics: float64; no function writes into its inputs; the log-likelihood,
@@ -70,8 +71,10 @@ MAX_ITER = 100
 #: objective; this lies well above the rounding of the objective (about
 #: 1e-16 relative), so that the line search can still see the decrease.
 DECREMENT_TOL = 1e-12
-#: GLM-4: a probability within this of 0 or 1 warns (R's glm uses the same).
-EXTREME_PROB = 10.0 * np.finfo(np.float64).eps
+#: GLM-4: a fitted probability below this or above 1 minus it warns. With two
+#: classes this is |η| > 30, where R's ``glm`` warns that fitted probabilities
+#: are numerically 0 or 1.
+EXTREME_PROB = 1.0 / (1.0 + math.exp(30.0))
 #: The Armijo constant and the most halvings of the line search.
 _ARMIJO = 1e-4
 _HALVINGS = 60
@@ -82,7 +85,7 @@ class GlmFit(NamedTuple):
     of class 1, and (M, Q) otherwise, with a first column of 0; ``converged``
     and ``n_iter`` describe the solver (``n_iter`` = 0 for the intercept-only
     fit of GLM-5); ``extreme`` is True when some fitted probability is within
-    10·ε of 0 or 1 (GLM-4)."""
+    1/(1 + e³⁰) of 0 or 1 (GLM-4)."""
 
     coef: FloatArray
     converged: bool
@@ -268,7 +271,7 @@ def fit_glm(
     coef[cols, 1:] = gamma / sd[:, None]
     coef[0, 1:] = theta[0] - (mean / sd) @ gamma
     _, P, C = problem.fitted(theta)
-    extreme = bool(np.any(P <= EXTREME_PROB) or np.any(C <= EXTREME_PROB))
+    extreme = bool(np.any(P < EXTREME_PROB) or np.any(C < EXTREME_PROB))
     if not converged or extreme:
         why = [] if converged else ["did not converge"]
         if extreme:
