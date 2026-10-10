@@ -523,7 +523,21 @@ def _pair_case(basis):
     1, x0, x1, x0·(x1 - t)+, x0·(t - x1)+, x0 = 2^36 + U0, x1 = U1. The two
     hinges differ by x1 - t on every case, so their monomials and u1 are
     dependent unless (t - x)+ is written (x - t)+ - x + t. Or a hinge that is
-    linear on the cases: 1, x1, x0·(x1 - t)+, x0·x1 with t = min x1."""
+    linear on the cases: 1, x1, x0·(x1 - t)+, x0·x1 with t = min x1. Or both
+    covariates shifted, x0 = 1000 + U0 and x1 = 5 + U1, with 1, x0, x1,
+    x0·(t - x1)+ at t = median x1, and x0·(x1 - 4.5)+, linear on the cases
+    with t - m_1 ≠ 0 (the round-1 recheck of PR #96)."""
+    if basis == "shifted hinges at 1000":
+        rng = np.random.default_rng(0)
+        U = rng.uniform(size=(20, 2))
+        X = np.column_stack([1000 + U[:, 0], 5 + U[:, 1]])
+        t = float(np.median(X[:, 1]))
+        dirs = np.array([[0, 0], [2, 0], [0, 2], [2, -1], [2, 1]])
+        cuts = np.array([[0, 0], [0, 0], [0, 0], [0, t], [0, 4.5]])
+        Y = U[:, 0] * U[:, 1] + U[:, 1] + 0.01 * rng.normal(size=20)
+        B = _terms.basis_matrix(X, dirs, cuts)
+        kw = {"X": X, "dirs": dirs, "cuts": cuts}
+        return B, _exact_basis(X, dirs, cuts), Y, None, kw
     rng = np.random.default_rng(1)
     U = rng.uniform(size=(30, 2))
     X = np.column_stack([2.0**36 + U[:, 0], U[:, 1]])
@@ -554,6 +568,7 @@ def _pair_case(basis):
         (1, "uniform", "linear factors at 2^36"),
         (1, "none", "a pair under x0 at 2^36"),
         (1, "none", "a hinge linear on the cases at 2^36"),
+        (1, "none", "shifted hinges at 1000"),
     ],
 )
 def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
@@ -594,7 +609,7 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     kw, Bx = {}, None
     if basis == "linear factors at 2^36":
         B, Bx, Y, w, kw = _linear_factor_case(rng, weights)
-    elif basis.endswith("at 2^36"):
+    elif basis.endswith(("at 2^36", "at 1000")):
         B, Bx, Y, w, kw = _pair_case(basis)
     elif basis == "binary at 33":
         x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
