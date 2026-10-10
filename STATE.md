@@ -70,7 +70,7 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running jobs
 
-- T19 benchmark grid (from 2026-10-09 ~19:00): runner `<main>/.worktrees/runner-t19` at ae9d199, `nohup caffeinate -i nice -n 15`, 4 jobs, PID file `validation/runs/bench/run.pid`, log `validation/runs/bench/run.log`. Restart: same command with `--resume --legacy-python <main>/.worktrees/runner-legacy/.venv-legacy/bin/python`.
+- DONE 2026-10-09 21:25: T19 benchmark grid (from 2026-10-09 ~19:00): runner `<main>/.worktrees/runner-t19` at ae9d199, `nohup caffeinate -i nice -n 15`, 4 jobs, PID file `validation/runs/bench/run.pid`, log `validation/runs/bench/run.log`. Restart: same command with `--resume --legacy-python <main>/.worktrees/runner-legacy/.venv-legacy/bin/python`.
 
 - None. The legacy full run (T04) finished at 16:13 PDT Saturday 2026-09-26 (ALL BLOCKS DONE); results in `<main>/.worktrees/runner-legacy/validation/runs/legacy_full` (49,441 files), logs `driver.log` (6 workers) and `driver_n4.log` (4 workers). Keep the runner worktree until T04 step 6 has collected the results into `validation/sims/results/legacy/`.
 
