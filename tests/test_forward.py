@@ -800,9 +800,9 @@ def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
     real = _forward._scan.rebuild
     calls = []
 
-    def failing(Q, Y, columns):
+    def failing(Q, Y, columns, sizes=None):
         calls.append(1)
-        return None if len(calls) == 1 else real(Q, Y, columns)
+        return None if len(calls) == 1 else real(Q, Y, columns, sizes)
 
     monkeypatch.setattr(_forward._scan, "rebuild", failing)
     chosen, _, new_second = st_.best()
@@ -1011,19 +1011,63 @@ def test_bad_input(X, y, w, match):
         _forward.forward_pass(X, y, w, fast_k=0)
 
 
-def test_rss_meets_la5_with_an_exact_copy_of_a_large_mean_covariate():
-    """LA-5 (#85): x1 is a bitwise copy of x0 = 2^36 + u, so that u0 and u1 are
-    one symbol in the change of basis; degree 3 forms x0·x1·h(z) on the
-    parent x0·h(z). Each RSS is within 1e-8 of the RSS before its step of the
-    exact rational RSS of the same terms (the pass was off by 4e-6)."""
-    rng = np.random.default_rng(3)
-    u, z = rng.uniform(size=20), rng.uniform(size=20)
+def _copy_of(kind, x0):
+    """A covariate that copies x0 = 2^36 + u: the same, plus 2^-16 (the u columns
+    are bitwise equal), or one unit in the last place off in one row."""
+    if kind == "copy":
+        return x0.copy()
+    if kind == "scaled":
+        return x0 / 8  # u1 = u0/8 bit for bit: what EDGE-7's column scales make
+    if kind == "plus 2^-16":
+        return x0 + 2.0**-16
+    x1 = x0.copy()
+    x1[3] = np.nextafter(x1[3], np.inf)
+    return x1
+
+
+@pytest.mark.parametrize("kind", ["copy", "plus 2^-16", "one ulp", "scaled"])
+def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
+    """LA-5 (#85, #99, #104): x1 copies x0 = 2^36 + u, bitwise, plus 2^-16 in
+    every row, or off by one unit in the last place in one row; degree 3 forms
+    x0·x1·h(z) on the parent x0·h(z). The u columns of the first two are bitwise
+    equal, so they are one symbol in the change of basis; the last is the copy
+    u0 + d, with the difference d kept apart from the mean. Each RSS is within
+    1e-8 of the RSS before its step of the exact rational RSS of the same terms
+    (the last two were off by up to 2e-5 before)."""
+    rng = np.random.default_rng(10)
+    u, z = rng.uniform(size=40), rng.uniform(size=40)
     h = np.maximum(z - np.median(z), 0)
-    X = np.column_stack((2.0**36 + u, 2.0**36 + u, z))
+    x0 = 2.0**36 + u
+    X = np.column_stack((x0, _copy_of(kind, x0), z))
     y = 10 * h + 6 * h * u + 4 * h * u**2
     fp = _forward.forward_pass(X, y, max_degree=3, thresh=0.0, fast_k=0, max_terms=9)
     B = exact_basis(X, fp.dirs, fp.cuts)
     for s in range(1, len(fp.rss)):
         cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
-        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(20))
+        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(40))
         assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
+
+
+@pytest.mark.parametrize("shifted", [False, True])
+def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, shifted):
+    """LA-2: x2 is a combination of the intercept and x1 at the n cases (x2 =
+    3·x1 + 1, or a copy of x1 at another shift, whose u columns are bitwise
+    equal), so the column x2 is dependent, though not as a formula. In a pair
+    search (forced here) it has the reduction 0 and no linear candidate, it is
+    left out of G and of the chosen candidate's columns, and its rounding noise
+    never decides. Before, the direction of its noise entered G."""
+    rng = np.random.default_rng(4)
+    a, z = np.floor(rng.uniform(size=24) * 4) / 4, rng.uniform(size=24)
+    x1 = a + 2.0**30 if shifted else a
+    X = np.column_stack((x1, z, x1 + 2.0**40 if shifted else 3 * a + 1))
+    st_ = _state(X, np.sin(5 * z) + a, max_degree=2, minspan=1, endspan=1)
+    lin = _forward._Candidate(1.0, (0, 0, 0), 0, 0, _forward.KIND_LINEAR, math.nan)
+    st_.add(lin, _scan.rebuild(st_.Q, st_.Yw, st_.columns(lin)[0]))
+    monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: True)
+    sr = st_.setup(0, 2)
+    assert (sr.pair, sr.dep, sr.lin) == (True, True, 0.0) and sr.Q is st_.Q
+    found = st_.search(0, 2, set())
+    assert {c.kind for c in found} == {_forward.KIND_PAIR}  # no linear candidate
+    pair = found[0]
+    assert st_.columns(pair)[0].shape == (24, 1)
+    assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate

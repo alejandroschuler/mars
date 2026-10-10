@@ -121,83 +121,6 @@ LIMIT_CODES = {mars_ref.NO_ROOM, mars_ref.TERM_LIMIT}
 # The counts of the fits compared, by group (module docstring).
 TALLY: collections.Counter = collections.Counter()
 
-# v2 allowance (temporary). The reference follows spec v2's FWD-12 (one
-# candidate per kind and added rows), STOP-3 (code 2 for a finite GRSq' below
-# -1000), and LA-2, LA-4 and FWD-11 (dependence after the exact shift); the
-# fast forward pass follows them with #104 (PR #110). Until then, with
-# FAST_FOLLOWS_V2 False, a difference that those rules explain ends the
-# comparison of the fit (or of a second best) with the label "v2 allowance:
-# ...", counted in TALLY (gate C reports it), and every other difference
-# fails: FWD-11 only where each program's kept terms follow its LA-4 (v1's
-# float test, v2's shifted test) on terms with a shifted covariate, and LA-2
-# only where the reference finds a new column of the fast choice dependent.
-# #110 sets FAST_FOLLOWS_V2 = True and removes this block, _shifted_terms,
-# _fwd11_explained, _la2_dependent, _v2_allowance and their calls.
-FAST_FOLLOWS_V2 = False
-
-
-def _shifted_terms(case, dirs) -> set:
-    """The terms that contain a covariate that LA-4 shifts (its smallest value
-    larger in size than its range) or one whose x - m column equals another
-    covariate's bit for bit (one symbol, #99): only there can v2's LA-4
-    decide differently from v1's float test."""
-    X = case.kept.X
-    low, high = X.min(axis=0), X.max(axis=0)
-    shifted = np.abs(low) > high - low
-    U = X - np.where(shifted, low, 0.0)
-    keys = [U[:, j].tobytes() for j in range(X.shape[1])]
-    special = shifted | np.array([keys.count(k) > 1 for k in keys])
-    return {k for k, row in enumerate(dirs) if special[np.flatnonzero(row)].any()}
-
-
-def _fwd11_explained(case, fast: dict, ref: dict) -> bool:
-    """The kept terms differ only as v1 and v2 LA-4 decide (FWD-11): the fast
-    record follows v1's float test, the reference v2's test after the exact
-    shift, and every term where they differ has a shifted covariate."""
-    kept, dirs = case.kept, ref["dirs"]
-    B = mars_ref.basis_matrix(kept.X, dirs, ref["cuts"])
-    v1 = ~mars_ref.dependent_columns(B, kept.w)
-    v2 = mars_ref.la4_kept(kept.Xs, dirs, np.ldexp(ref["cuts"], kept.jx), kept.w)
-    fast_kept = np.zeros(len(dirs), dtype=bool)
-    fast_kept[fast["kept"]] = True
-    ref_kept = np.zeros(len(dirs), dtype=bool)
-    ref_kept[ref["kept"]] = True
-    differ = set(np.flatnonzero(v1 != v2).tolist())
-    return (
-        np.array_equal(fast_kept, v1)
-        and np.array_equal(ref_kept, v2)
-        and differ <= _shifted_terms(case, dirs)
-    )
-
-
-def _la2_dependent(step, key) -> bool:
-    """The reference finds a new column of the candidate ``key`` dependent by
-    LA-4 after the exact shift (LA-2), so that it counts 0 in v2."""
-    if step.cond is None or step.cond.atoms.plain:
-        return False
-    k, v, kind, _ = key
-    cond, w = step.cond, step.kept.w
-    e_bx = cond.linear_expansion(step.dirs[k], step.cuts[k], v)
-    S = cond.echelon.copy()
-    if mars_ref.la4_dependent(cond.atoms, S, e_bx, w):
-        return True
-    if kind == LINEAR:
-        return False
-    if kind == PAIR:
-        S.add(e_bx)
-    row, cut = step.dirs[k].copy(), step.cuts[k].copy()
-    row[v], cut[v] = 1, step.scaled(key)[2]
-    return mars_ref.la4_dependent(cond.atoms, S, cond.atoms.expansion(row, cut), w)
-
-
-def _v2_allowance(rule: str) -> str | None:
-    """The label of a difference that the v2 ``rule`` explains, counted, or
-    None once the fast code follows v2 (then the difference fails)."""
-    if FAST_FOLLOWS_V2:
-        return None
-    TALLY[f"v2 allowance ({rule})"] += 1
-    return f"v2 allowance: {rule}"
-
 
 @pytest.fixture(scope="module", autouse=True)
 def _write_tally():
@@ -223,9 +146,7 @@ class Outcome:
 def _count(group: str, outcome: Outcome) -> None:
     TALLY[f"{group}: fits"] += 1
     TALLY[f"{group}: steps compared"] += outcome.steps
-    if outcome.near_tie is not None and outcome.near_tie.startswith("v2 allowance"):
-        TALLY[f"{group}: {outcome.near_tie}"] += 1
-    elif outcome.near_tie is not None:
+    if outcome.near_tie is not None:
         TALLY[f"{group}: near-tie stops"] += 1
         TALLY[f"{group}: near-tie stops ({outcome.near_tie})"] += 1
     TALLY[f"{group}: plan near-ties"] += outcome.plan_tie
@@ -737,9 +658,6 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
         return Outcome(s - 1, "gap" if f_legal and gap else _join(f_bands + r_bands), s)
     if queue := step.queue_bands():  # the two passes searched other parents
         return Outcome(s - 1, _join(queue + f_bands + r_bands), s)
-    explained = not f_legal and _la2_dependent(step, cf[0])
-    if explained and (label := _v2_allowance("LA-2")):
-        return Outcome(s - 1, label, s)
     _fail(
         case,
         f"step {s}: fast {_terms(fast, s)}, reference {_terms(ref, s)}; values "
@@ -776,8 +694,6 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         step.rows_of(k) for k in _choice(case, fast, s)
     ]:
         # the fast second adds the chosen rows from another parent (FWD-12)
-        if kf not in _choice(case, fast, s) and (label := _v2_allowance("FWD-12")):
-            return label
         _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
     if kf is not None and kr is not None and _identical(step, kf, kr):
         _fail(case, f"step {s}: the seconds {kf} and {kr} have equal columns (FWD-5)")
@@ -797,9 +713,6 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         ok = f_ok and r_ok and (gap or f_bands or r_bands)
     if not ok and (queue := step.queue_bands()):
         return _join(queue)
-    explained = not ok and kf is not None and _la2_dependent(step, kf)
-    if explained and (label := _v2_allowance("LA-2")):
-        return label
     if not ok:
         _fail(case, f"step {s}: second fast {kf}, reference {kr}; {f_bands}, {r_bands}")
     return _join(f_bands + r_bands) or "gap"
@@ -835,14 +748,6 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
         reasons += step.queue_bands()
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
-    codes = (int(fast["termination"]), int(ref["termination"]))
-    if len(fast["rss"]) == len(ref["rss"]) and codes == (3, 2):
-        # v2's code 2 for a finite GRSq' below -1000 (at -inf v1 gives 2 too)
-        step = _Step(case, ref, t)
-        best = step.best()
-        g = _grsq_new(case, step, None if best is None else step.key_of(best))
-        if -math.inf < g < -1000 and (label := _v2_allowance("STOP-3")):
-            return Outcome(t - 1, label, t)
     _fail(
         case,
         f"after {t - 1} equal steps: fast {len(fast['rss']) - 1} steps, code "
@@ -909,9 +814,6 @@ def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
         return _stopped_apart(case, fast, ref, S + 1)
     for key in ("dirs", "cuts", "step", "kept", "dropped"):
         if not np.array_equal(fast[key], ref[key]):
-            explained = key in ("kept", "dropped") and _fwd11_explained(case, fast, ref)
-            if explained and (label := _v2_allowance("FWD-11")):
-                return Outcome(S, label, S + 1)
             _fail(case, f"{key}: fast {fast[key].tolist()}, ref {ref[key].tolist()}")
     for r, (pf, pr) in enumerate(zip(fast["parent"], ref["parent"], strict=True)):
         # FWD-12: a different parent is fine when the rows are the same and
@@ -1048,7 +950,7 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     table: per response, the coefficients normwise within 1e-6 where
     kappa(B) <= 1e5; the fitted values with their weighted mean removed
     within 1e-8 sd(y), scaled by kappa / 1e6 above 1e6, and the mean of their
-    difference within rounding, 4 ulp of max |y| plus kappa u ||y - mean||
+    difference within rounding, 8 ulp of max |y| per term plus kappa u ||y - mean||
     (a fitted value near 1e13 has an ulp of 2e-3); the RSS of the fast
     coefficients, the reference's RSS plus the weighted sum of squares of
     the centered difference of the fitted values (least squares), within
@@ -1071,7 +973,7 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     if np.any(np.max(np.abs(dc), axis=0) > 1e-8 * sd * max(1, kappa / 1e6)):
         _fail(case, f"fitted values: kappa {kappa:.3g}, sd(y) {sd.tolist()}")
     u = np.finfo(float).eps / 2
-    ulps = 4 * np.spacing(np.max(np.abs(Y), axis=0))
+    ulps = 8 * m * np.spacing(np.max(np.abs(Y), axis=0))
     rounding = ulps + kappa * u * np.linalg.norm((Y - mean) * sw, axis=0)
     if np.any(np.abs(d_mean) > rounding):
         _fail(case, f"mean of the fitted values: {d_mean.tolist()}, {rounding}")
@@ -1320,14 +1222,6 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
     return f
 
 
-# #79 fixed the reference's forward pass for covariates with a large mean at
-# degree 2 and 3 (#77), #85 fixed the fast one, and #94 and #96 the pruning
-# passes (#84, #105), so the whole fit has no cap. The `ties` kind with a
-# duplicated covariate keeps the ratio of a covariate shift to its spread at
-# or below SHIFT_CAP at degree 2 and 3 (#99, #101, #104).
-SHIFT_CAP = 2.0**10
-
-
 @st.composite
 def forward_cases(draw, kind: str) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
@@ -1338,14 +1232,11 @@ def forward_cases(draw, kind: str) -> Case:
     and covariates + 2^26 or 2^36, where only centering keeps the sums of
     squares within LA-5 (FWD-10, the plan's "Fast path"); ``small``, 1 to 15
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
-    runs from none (exact fits and STOP-5) to as large as the signal. At
-    degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread in the ``ties`` kind with a duplicated covariate (#99, #101, #104)."""
+    runs from none (exact fits and STOP-5) to as large as the signal."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
-    capped = False
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
@@ -1356,16 +1247,12 @@ def forward_cases(draw, kind: str) -> Case:
         X = np.floor(X * levels) / levels
         if p >= 2 and rng.uniform() < 0.5:
             X[:, 1] = X[:, 0]
-            # copies that are shifted apart are near-copies at a large mean:
-            # #99, #101 (reference) and #104 (fast) settle them (LA-4, LA-2)
-            capped = capped or params["max_degree"] >= 2
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
             X[:] = X[0]
         if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
-            low, high = (1, math.log10(SHIFT_CAP)) if capped else (6, 9)
-            X = X + 10.0 ** rng.uniform(low, high, p)
+            X = X + 10.0 ** rng.uniform(6, 9, p)
     smooth = kind == "smooth" or rng.uniform() < 0.3
     Y = np.column_stack([_truth(rng, X, smooth) for _ in range(K)])
     Y = Y + noise * np.std(Y) * rng.standard_normal((n, K))
@@ -1374,15 +1261,13 @@ def forward_cases(draw, kind: str) -> Case:
     if kind == "scaled":
         scale = rng.uniform(-6, 6, p)
         shift = rng.uniform(0, 8, p)
-        if capped:
-            shift = np.minimum(shift, scale + math.log10(SHIFT_CAP))
         X = X * 10.0**scale + rng.choice([0, 1, -1], p) * 10.0**shift
         Y = Y * 10.0 ** rng.uniform(-6, 6) + rng.choice(
             [0, 1, -1]
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
         big = [2.0**26, 2.0**36]
-        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
+        X = X + rng.choice([0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:
@@ -1575,6 +1460,63 @@ def _merge_cases() -> list[Case]:
     return cases
 
 
+def _copy_case() -> Case:
+    """Gate C's case on #95 (1f6d32d), the `ties` draw with seed 36 (#99, #104):
+    covariates on two levels at means of 7e6 to 7e7, x0 and x1 copies at other
+    shifts (their u = x - m columns are bitwise equal), degree 3. The fast
+    second-best RSS at step 4, a linear candidate, was off by 1.5 % of the RSS
+    before the step; the reference is exact."""
+    shifts = [14077133.671830641, 6676980.921659664, 7815508.419754293]
+    shifts += [69258819.11466606]
+    codes = [0x565CBC0B1, 0x565CBC0B1, 0xC00591ACA, 0x49A176134]
+    bits = [[int(c) for c in format(code, "036b")] for code in codes]
+    X = np.column_stack(
+        [m + 0.5 * np.array(b) for m, b in zip(shifts, bits, strict=True)]
+    )
+    y = np.array(
+        [
+            196829966.68739173,
+            196829969.62463754,
+            196829966.6901851,
+            196829967.71280205,
+            196829968.57873824,
+            196829967.72726566,
+            196829967.7228605,
+            196829968.59511694,
+            196829968.6050726,
+            196829967.72074175,
+            196829968.5880215,
+            196829967.7228671,
+            196829967.71984556,
+            196829967.73284683,
+            196829966.6780263,
+            196829968.5933759,
+            196829967.739849,
+            196829968.57697883,
+            196829969.63009456,
+            196829969.63219887,
+            196829967.72322258,
+            196829969.64521456,
+            196829968.5964247,
+            196829966.68590945,
+            196829966.67878583,
+            196829966.7035329,
+            196829966.65620995,
+            196829968.57257807,
+            196829967.72457588,
+            196829966.6954682,
+            196829969.62900403,
+            196829969.63671827,
+            196829966.67015332,
+            196829968.59055468,
+            196829966.67809227,
+            196829967.7302775,
+        ]
+    )
+    kw = {"max_degree": 3, "fast_k": 0, "thresh": 0.0, "adjust_endspan": 0.0}
+    return Case("ties seed 36, a copy at another shift", X, y, None, kw)
+
+
 def _designed_cases() -> list[Case]:
     """Designs that earlier tests and reviews built for one rule each; here the
     reference gives the answer."""
@@ -1650,6 +1592,7 @@ def _designed_cases() -> list[Case]:
     rng = np.random.default_rng(2)
     Xs, ys = rng.uniform(size=(10, 2)), rng.normal(size=10)
     cases.append(Case("GRSq' between -20 and -10", Xs, ys, None, {"penalty": 5.0}))
+    cases.append(_copy_case())
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 
@@ -1695,6 +1638,27 @@ def test_merged_candidates_record_the_reference_parents(case):
     for key in ("second_parent", "second_variable", "second_kind"):
         got, want = _plain(fast["candidates"])[key], ref["candidates"][key]
         assert got.tolist() == want.tolist()
+
+
+def test_whole_fit_of_two_cases_with_weights():
+    """PRUNE-8: an exact fit of two weighted cases (hypothesis `small`, seed
+    9004). The weighted mean of the fitted values is 0.14666045613757861 in
+    exact arithmetic; the fast fit is 3.6e-16 from it and the reference 2.3e-15
+    (about 10 ulp), so the mean of the difference is rounding of the reference's
+    least squares, within 8 ulp of max |y| per term."""
+    X = np.array(
+        [
+            [0.7019429236618134, 0.07319247226045111],
+            [0.2140700088820472, 0.8836087384301462],
+        ]
+    )
+    Y = np.array([[-0.3900669638755577], [1.5168667116401282]])
+    w = np.array([2.2183432527174323, 0.8689535943607877])
+    params = {"max_degree": 1, "adjust_endspan": 0.0, "fast_k": 0, "thresh": 0.0}
+    case = Case("two cases", X, Y, w, params)
+    fast = _core.fit_mars(X, Y, w, _core.MarsParams(**params), record_candidates=True)
+    ref = _core.MarsFit.from_dict(case.reference_fit())
+    compare_fits(case, fast, ref)
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
