@@ -122,13 +122,13 @@ LIMIT_CODES = {mars_ref.NO_ROOM, mars_ref.TERM_LIMIT}
 TALLY: collections.Counter = collections.Counter()
 
 # v2 allowance (temporary). The reference follows spec v2's FWD-12 (one
-# candidate per kind and added rows) and LA-2, LA-4 and FWD-11 (dependence
-# after the exact shift); the fast forward pass follows them with #104 (PR
-# #110). Until then, with FAST_FOLLOWS_V2 False, a difference that those rules
-# explain ends the comparison of the fit with the label "v2 allowance: ...",
-# counted in TALLY (gate C reports it), and every other difference fails.
-# #110 sets FAST_FOLLOWS_V2 = True and removes this block, _v2_allowance,
-# _la4_applies and their calls.
+# candidate per kind and added rows), LA-2, LA-4 and FWD-11 (dependence after
+# the exact shift) and STOP-3 (code 2 below -1000); the fast forward pass
+# follows them with #104 (PR #110). Until then, with FAST_FOLLOWS_V2 False,
+# a difference that those rules explain ends the comparison of the fit with
+# the label "v2 allowance: ...", counted in TALLY (gate C reports it), and
+# every other difference fails. #110 sets FAST_FOLLOWS_V2 = True and removes
+# this block, _v2_allowance, _la4_applies and their calls.
 FAST_FOLLOWS_V2 = False
 
 
@@ -774,6 +774,10 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
         reasons += step.queue_bands()
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
+    codes = (int(fast["termination"]), int(ref["termination"]))
+    same = len(fast["rss"]) == len(ref["rss"])
+    if same and codes == (3, 2) and (label := _v2_allowance("STOP-3")):
+        return Outcome(t - 1, label, t)  # code 2 below GRSq' -1000 (v2)
     _fail(
         case,
         f"after {t - 1} equal steps: fast {len(fast['rss']) - 1} steps, code "
