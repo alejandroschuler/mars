@@ -313,6 +313,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 21:00 #92 spec recheck REQUEST_CHANGES at cb95e23 (round-1 items fixed; new blocking: LA-4's shifted rule still drops x2 in the order 1, x0, x0*x2, x2 on #75's data and its new part is defined only up to a coset). Decision sent to t01-spec-v2: an order-independent test by leading monomials in the shifted coordinates (reduced echelon form, as #95's Conditioner), or else document the order dependence. The adversarial recheck waits for that head.
 - 21:10 #94 recheck APPROVE (adversarial, and spec update check; diff since 0d1f611 test-only). Merged #94 (the reference's pruning at intermediate means) as fc7cb9d. #84 stays open for the fast pruning (#96).
 - 21:20 review-95-spec APPROVE at 827e110 (thorough oracle 700 passed; bit-identical to a0ddca9 on 454 fits except large-mean ones and weighted ones: sw*(b*(x-c)) vs (sw*b)*(x-c), 5.7e-14; non-blocking: keep the old product order, update the complexity lines (O(M^2 3^d) worst case), LARGE_MEAN = 64 not in the spec, v2 follow-up to reuse Conditioner). Waiting for the adversarial review before sending fixes.
+- 21:40 #93 at 61b213f (Windows getloadavg guard; smoke best of 5 and one rerun; newest record per cell; REPORT.md note; gate B PASS; CI green). Narrow recheck by review-93-single. Load 7, weekly 69 %: started fu1-small-followups ad0b28e1c07e6a724 (sonnet; brief FU1: #79 comment fixes in mars_ref.py, #86 test id items).
 
 ## Core-hour ledger
 
