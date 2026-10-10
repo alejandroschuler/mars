@@ -50,3 +50,6 @@ Notes for the trace parser (T02):
 | bb26 | the stop at an exact fit: the RSS floor relative to TSS/(n − 1), earth's rounding near it at large n, and the absolute floor with two responses; the statistics that earth reports as 0 or NaN for small values | STOP-5, STOP-7, CORE-4, PRUNE-4, PRUNE-8 |
 | bb27 | earth's hidden term after some linear-option steps with `Auto.linpreds = FALSE`: the kind of parent does not decide it, and the column order can change it | FWD-11, FAST-1 |
 | bb28 | whether R reads doubles back exactly from 17-digit decimal and from hexadecimal strings | LA-7 |
+| bb29 | one case far above the others in x: the collinearity test rejects every knot; the mirror x to −x keeps them (spec v2) | LA-3, Conventions |
+| bb30 | the termination code for a GRSq′ below −10: code 2 below −1000, finite values included (spec v2) | STOP-3, CORE-4, FAST-6 |
+| bb31 | when R's `glm`, which earth's refit calls, warns that fitted probabilities are numerically 0 or 1: for a linear predictor above 30 in absolute value (spec v2) | GLM-4 |
