@@ -290,7 +290,7 @@ class _Pass:
     @staticmethod
     def _row_key(dirs_row: IntArray, cuts_row: FloatArray) -> tuple[bytes, bytes]:
         """The key of a term's row (TERM-6). Complexity: O(p)."""
-        return dirs_row.tobytes(), cuts_row.tobytes()
+        return dirs_row.tobytes(), (cuts_row + 0.0).tobytes()  # -0.0 is 0.0
 
     def _adds(self, kind: int, j: int, knot: float) -> tuple[int, float]:
         """The factor (code and cut) that a candidate of this kind adds on the
