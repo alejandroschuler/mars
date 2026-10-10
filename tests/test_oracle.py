@@ -121,83 +121,6 @@ LIMIT_CODES = {mars_ref.NO_ROOM, mars_ref.TERM_LIMIT}
 # The counts of the fits compared, by group (module docstring).
 TALLY: collections.Counter = collections.Counter()
 
-# v2 allowance (temporary). The reference follows spec v2's FWD-12 (one
-# candidate per kind and added rows), STOP-3 (code 2 for a finite GRSq' below
-# -1000), and LA-2, LA-4 and FWD-11 (dependence after the exact shift); the
-# fast forward pass follows them with #104 (PR #110). Until then, with
-# FAST_FOLLOWS_V2 False, a difference that those rules explain ends the
-# comparison of the fit (or of a second best) with the label "v2 allowance:
-# ...", counted in TALLY (gate C reports it), and every other difference
-# fails: FWD-11 only where each program's kept terms follow its LA-4 (v1's
-# float test, v2's shifted test) on terms with a shifted covariate, and LA-2
-# only where the reference finds a new column of the fast choice dependent.
-# #110 sets FAST_FOLLOWS_V2 = True and removes this block, _shifted_terms,
-# _fwd11_explained, _la2_dependent, _v2_allowance and their calls.
-FAST_FOLLOWS_V2 = False
-
-
-def _shifted_terms(case, dirs) -> set:
-    """The terms that contain a covariate that LA-4 shifts (its smallest value
-    larger in size than its range) or one whose x - m column equals another
-    covariate's bit for bit (one symbol, #99): only there can v2's LA-4
-    decide differently from v1's float test."""
-    X = case.kept.X
-    low, high = X.min(axis=0), X.max(axis=0)
-    shifted = np.abs(low) > high - low
-    U = X - np.where(shifted, low, 0.0)
-    keys = [U[:, j].tobytes() for j in range(X.shape[1])]
-    special = shifted | np.array([keys.count(k) > 1 for k in keys])
-    return {k for k, row in enumerate(dirs) if special[np.flatnonzero(row)].any()}
-
-
-def _fwd11_explained(case, fast: dict, ref: dict) -> bool:
-    """The kept terms differ only as v1 and v2 LA-4 decide (FWD-11): the fast
-    record follows v1's float test, the reference v2's test after the exact
-    shift, and every term where they differ has a shifted covariate."""
-    kept, dirs = case.kept, ref["dirs"]
-    B = mars_ref.basis_matrix(kept.X, dirs, ref["cuts"])
-    v1 = ~mars_ref.dependent_columns(B, kept.w)
-    v2 = mars_ref.la4_kept(kept.Xs, dirs, np.ldexp(ref["cuts"], kept.jx), kept.w)
-    fast_kept = np.zeros(len(dirs), dtype=bool)
-    fast_kept[fast["kept"]] = True
-    ref_kept = np.zeros(len(dirs), dtype=bool)
-    ref_kept[ref["kept"]] = True
-    differ = set(np.flatnonzero(v1 != v2).tolist())
-    return (
-        np.array_equal(fast_kept, v1)
-        and np.array_equal(ref_kept, v2)
-        and differ <= _shifted_terms(case, dirs)
-    )
-
-
-def _la2_dependent(step, key) -> bool:
-    """The reference finds a new column of the candidate ``key`` dependent by
-    LA-4 after the exact shift (LA-2), so that it counts 0 in v2."""
-    if step.cond is None or step.cond.atoms.plain:
-        return False
-    k, v, kind, _ = key
-    cond, w = step.cond, step.kept.w
-    e_bx = cond.linear_expansion(step.dirs[k], step.cuts[k], v)
-    S = cond.echelon.copy()
-    if mars_ref.la4_dependent(cond.atoms, S, e_bx, w):
-        return True
-    if kind == LINEAR:
-        return False
-    if kind == PAIR:
-        S.add(e_bx)
-    row, cut = step.dirs[k].copy(), step.cuts[k].copy()
-    row[v], cut[v] = 1, step.scaled(key)[2]
-    return mars_ref.la4_dependent(cond.atoms, S, cond.atoms.expansion(row, cut), w)
-
-
-def _v2_allowance(rule: str) -> str | None:
-    """The label of a difference that the v2 ``rule`` explains, counted, or
-    None once the fast code follows v2 (then the difference fails)."""
-    if FAST_FOLLOWS_V2:
-        return None
-    TALLY[f"v2 allowance ({rule})"] += 1
-    return f"v2 allowance: {rule}"
-
 
 @pytest.fixture(scope="module", autouse=True)
 def _write_tally():
@@ -223,9 +146,7 @@ class Outcome:
 def _count(group: str, outcome: Outcome) -> None:
     TALLY[f"{group}: fits"] += 1
     TALLY[f"{group}: steps compared"] += outcome.steps
-    if outcome.near_tie is not None and outcome.near_tie.startswith("v2 allowance"):
-        TALLY[f"{group}: {outcome.near_tie}"] += 1
-    elif outcome.near_tie is not None:
+    if outcome.near_tie is not None:
         TALLY[f"{group}: near-tie stops"] += 1
         TALLY[f"{group}: near-tie stops ({outcome.near_tie})"] += 1
     TALLY[f"{group}: plan near-ties"] += outcome.plan_tie
@@ -737,9 +658,6 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
         return Outcome(s - 1, "gap" if f_legal and gap else _join(f_bands + r_bands), s)
     if queue := step.queue_bands():  # the two passes searched other parents
         return Outcome(s - 1, _join(queue + f_bands + r_bands), s)
-    explained = not f_legal and _la2_dependent(step, cf[0])
-    if explained and (label := _v2_allowance("LA-2")):
-        return Outcome(s - 1, label, s)
     _fail(
         case,
         f"step {s}: fast {_terms(fast, s)}, reference {_terms(ref, s)}; values "
@@ -776,8 +694,6 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         step.rows_of(k) for k in _choice(case, fast, s)
     ]:
         # the fast second adds the chosen rows from another parent (FWD-12)
-        if kf not in _choice(case, fast, s) and (label := _v2_allowance("FWD-12")):
-            return label
         _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
     if kf is not None and kr is not None and _identical(step, kf, kr):
         _fail(case, f"step {s}: the seconds {kf} and {kr} have equal columns (FWD-5)")
@@ -797,9 +713,6 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         ok = f_ok and r_ok and (gap or f_bands or r_bands)
     if not ok and (queue := step.queue_bands()):
         return _join(queue)
-    explained = not ok and kf is not None and _la2_dependent(step, kf)
-    if explained and (label := _v2_allowance("LA-2")):
-        return label
     if not ok:
         _fail(case, f"step {s}: second fast {kf}, reference {kr}; {f_bands}, {r_bands}")
     return _join(f_bands + r_bands) or "gap"
@@ -835,14 +748,6 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
         reasons += step.queue_bands()
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
-    codes = (int(fast["termination"]), int(ref["termination"]))
-    if len(fast["rss"]) == len(ref["rss"]) and codes == (3, 2):
-        # v2's code 2 for a finite GRSq' below -1000 (at -inf v1 gives 2 too)
-        step = _Step(case, ref, t)
-        best = step.best()
-        g = _grsq_new(case, step, None if best is None else step.key_of(best))
-        if -math.inf < g < -1000 and (label := _v2_allowance("STOP-3")):
-            return Outcome(t - 1, label, t)
     _fail(
         case,
         f"after {t - 1} equal steps: fast {len(fast['rss']) - 1} steps, code "
@@ -909,9 +814,6 @@ def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
         return _stopped_apart(case, fast, ref, S + 1)
     for key in ("dirs", "cuts", "step", "kept", "dropped"):
         if not np.array_equal(fast[key], ref[key]):
-            explained = key in ("kept", "dropped") and _fwd11_explained(case, fast, ref)
-            if explained and (label := _v2_allowance("FWD-11")):
-                return Outcome(S, label, S + 1)
             _fail(case, f"{key}: fast {fast[key].tolist()}, ref {ref[key].tolist()}")
     for r, (pf, pr) in enumerate(zip(fast["parent"], ref["parent"], strict=True)):
         # FWD-12: a different parent is fine when the rows are the same and
