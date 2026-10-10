@@ -950,7 +950,7 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     table: per response, the coefficients normwise within 1e-6 where
     kappa(B) <= 1e5; the fitted values with their weighted mean removed
     within 1e-8 sd(y), scaled by kappa / 1e6 above 1e6, and the mean of their
-    difference within rounding, 4 ulp of max |y| plus kappa u ||y - mean||
+    difference within rounding, 8 ulp of max |y| per term plus kappa u ||y - mean||
     (a fitted value near 1e13 has an ulp of 2e-3); the RSS of the fast
     coefficients, the reference's RSS plus the weighted sum of squares of
     the centered difference of the fitted values (least squares), within
@@ -973,7 +973,7 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     if np.any(np.max(np.abs(dc), axis=0) > 1e-8 * sd * max(1, kappa / 1e6)):
         _fail(case, f"fitted values: kappa {kappa:.3g}, sd(y) {sd.tolist()}")
     u = np.finfo(float).eps / 2
-    ulps = 4 * np.spacing(np.max(np.abs(Y), axis=0))
+    ulps = 8 * m * np.spacing(np.max(np.abs(Y), axis=0))
     rounding = ulps + kappa * u * np.linalg.norm((Y - mean) * sw, axis=0)
     if np.any(np.abs(d_mean) > rounding):
         _fail(case, f"mean of the fitted values: {d_mean.tolist()}, {rounding}")
@@ -1638,6 +1638,27 @@ def test_merged_candidates_record_the_reference_parents(case):
     for key in ("second_parent", "second_variable", "second_kind"):
         got, want = _plain(fast["candidates"])[key], ref["candidates"][key]
         assert got.tolist() == want.tolist()
+
+
+def test_whole_fit_of_two_cases_with_weights():
+    """PRUNE-8: an exact fit of two weighted cases (hypothesis `small`, seed
+    9004). The weighted mean of the fitted values is 0.14666045613757861 in
+    exact arithmetic; the fast fit is 3.6e-16 from it and the reference 2.3e-15
+    (about 10 ulp), so the mean of the difference is rounding of the reference's
+    least squares, within 8 ulp of max |y| per term."""
+    X = np.array(
+        [
+            [0.7019429236618134, 0.07319247226045111],
+            [0.2140700088820472, 0.8836087384301462],
+        ]
+    )
+    Y = np.array([[-0.3900669638755577], [1.5168667116401282]])
+    w = np.array([2.2183432527174323, 0.8689535943607877])
+    params = {"max_degree": 1, "adjust_endspan": 0.0, "fast_k": 0, "thresh": 0.0}
+    case = Case("two cases", X, Y, w, params)
+    fast = _core.fit_mars(X, Y, w, _core.MarsParams(**params), record_candidates=True)
+    ref = _core.MarsFit.from_dict(case.reference_fit())
+    compare_fits(case, fast, ref)
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
