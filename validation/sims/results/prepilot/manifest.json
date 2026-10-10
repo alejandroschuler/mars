@@ -1,0 +1,173 @@
+[
+  {
+    "arm_source_hash": {
+      "E-def": "cbe2bdb501f34e5f",
+      "E-pym": "cbe2bdb501f34e5f",
+      "HGB": "3f67c7aea749a780",
+      "OLS": "0cb60542c4c2cef7",
+      "P-fix": "006d0e68d5d463af"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "E-pym": {
+        "args": {
+          "Adjust.endspan": 1,
+          "degree": 2,
+          "endspan": 1,
+          "fast.k": 0,
+          "minspan": 1,
+          "penalty": 6,
+          "thresh": 0
+        }
+      },
+      "HGB": {},
+      "OLS": {},
+      "P-fix": {}
+    },
+    "cells": [
+      "D1_n00200_lo",
+      "D1_n00200_hi",
+      "D1_n01000_lo",
+      "D1_n01000_hi",
+      "D1_n05000_lo",
+      "D1_n05000_hi",
+      "D2_n00200_lo",
+      "D2_n00200_hi",
+      "D2_n01000_lo",
+      "D2_n01000_hi",
+      "D2_n05000_lo",
+      "D2_n05000_hi",
+      "D3_n00200_lo",
+      "D3_n00200_hi",
+      "D3_n01000_lo",
+      "D3_n01000_hi",
+      "D3_n05000_lo",
+      "D3_n05000_hi",
+      "D4_n00200_lo",
+      "D4_n00200_hi",
+      "D4_n01000_lo",
+      "D4_n01000_hi",
+      "D4_n05000_lo",
+      "D4_n05000_hi",
+      "D5_n00200_lo",
+      "D5_n00200_hi",
+      "D5_n01000_lo",
+      "D5_n01000_hi",
+      "D5_n05000_lo",
+      "D5_n05000_hi",
+      "D6_n00200",
+      "D6_n01000",
+      "D6_n05000",
+      "D7_n00200_lo",
+      "D7_n00200_hi",
+      "D7_n01000_lo",
+      "D7_n01000_hi",
+      "D7_n05000_lo",
+      "D7_n05000_hi",
+      "D8_n00200_lo",
+      "D8_n00200_hi",
+      "D8_n01000_lo",
+      "D8_n01000_hi",
+      "D8_n05000_lo",
+      "D8_n05000_hi",
+      "D3-bin_n00200",
+      "D3-bin_n01000",
+      "D3-bin_n05000",
+      "D4-bin_n00200",
+      "D4-bin_n01000",
+      "D4-bin_n05000"
+    ],
+    "reps": [
+      0,
+      2
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-10-10T02:11:09Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "02f788cfa006765e022dcfd04e0e5846260798b4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "cbe2bdb501f34e5f"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      }
+    },
+    "cells": [
+      "D7_n00200_lo",
+      "D7_n00200_hi"
+    ],
+    "reps": [
+      0,
+      300
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-10-10T02:13:21Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "02f788cfa006765e022dcfd04e0e5846260798b4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arm_source_hash": {
+      "E-def": "cbe2bdb501f34e5f",
+      "P-fix": "006d0e68d5d463af"
+    },
+    "arms": {
+      "E-def": {
+        "args": {
+          "degree": 2
+        }
+      },
+      "P-fix": {}
+    },
+    "cells": [
+      "D3_n01000_lo",
+      "D3_n01000_hi",
+      "D4_n01000_lo",
+      "D4_n01000_hi",
+      "D5_n01000_lo",
+      "D5_n01000_hi",
+      "D7_n01000_lo",
+      "D7_n01000_hi"
+    ],
+    "reps": [
+      0,
+      100
+    ],
+    "resume": true,
+    "retry_failed": false,
+    "started": "2026-10-10T02:13:47Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "02f788cfa006765e022dcfd04e0e5846260798b4",
+      "r_earth": "5.3.4",
+      "scipy": "1.18.1",
+      "sklearn": "1.9.1"
+    }
+  }
+]
