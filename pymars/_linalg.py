@@ -517,10 +517,12 @@ class Conditioner:
     Complexity: a term with d factors has at most 2^d monomials in the test and
     3^d elements in a column; reducing it costs O(M·2^d) rational operations for
     M registered terms, forming a column O(n·d·3^d), and the exact test
-    O(g·M²) rational operations for g distinct rows of X. The reduced
+    O(M²·k²) rational operations on the Gram matrix of the monomials (k
+    monomials per row), which costs O(g) rational operations for each new
+    pair of monomials, g the distinct rows of X, once for the fit. The reduced
     coefficients of b·x_j are kept and reduced only by the terms that came
     after the last call. Memory O(M·p·3^d) coefficients, no columns, and O(g·K)
-    rationals for K monomials in the exact test.
+    rationals for K monomials in the Gram matrix of the exact test (O(K²)).
     """
 
     def __init__(self, X: npt.ArrayLike, w: npt.ArrayLike | None = None):
@@ -557,6 +559,7 @@ class Conditioner:
         self._mnorms: dict = {}
         self._groups: tuple | None = None
         self._xcols: dict = {}
+        self._grams: dict = {}
         self._shifted = False  # a registered term has a linear factor of a large one
         self.size = 0.0  # a bound on the magnitude of the last column formed
 
@@ -777,7 +780,8 @@ class Conditioner:
     @staticmethod
     def _echelon_add(rows: list, poly: dict):
         """The reduced echelon form of ``rows`` with ``poly`` added, as (rows,
-        pivot, new part), or None when the polynomial lies in their span. The
+        pivot, new part with the pivot coefficient 1, the pivot coefficient of
+        the polynomial), or None when the polynomial lies in their span. The
         rows are not changed. Complexity: O(M·|poly|)."""
         v = dict(poly)
         for p, R in rows:
@@ -798,7 +802,7 @@ class Conditioner:
                 R = {m: g for m, g in R.items() if g != 0}
             out.append((p, R))
         out.append((q, N))
-        return out, q, N
+        return out, q, N, v[q]
 
     def _esync(self) -> None:
         while self._edone < len(self._rows):
@@ -838,7 +842,8 @@ class Conditioner:
         added = self._echelon_add(rows, self._poly(row, cut))
         if added is None:
             return True
-        after, q, N = added
+        after, q, N, c = added
+        dist, size = dist / abs(float(c)), size / abs(float(c))  # N has pivot 1
         scale = self._norm(q)
         if scale == 0.0:  # the pivot monomial is 0 at every case
             scale = self._scaled_norm(self._evaluate(N))
@@ -894,45 +899,49 @@ class Conditioner:
             self._xcols[e] = col
         return self._xcols[e]
 
-    def _exact_vector(self, poly: dict) -> list:
-        n = len(self._group_data()[2])
-        out = [Fraction(0)] * n
-        for m, c in poly.items():
-            out = [o + c * x for o, x in zip(out, self._exact_column(m), strict=True)]
-        return out
+    def _gram(self, a: _Element, b: _Element) -> Fraction:
+        """⟨a, b⟩_w of two monomials in exact arithmetic, kept for the fit.
+        Complexity: O(g) the first time."""
+        key = (a, b) if a <= b else (b, a)
+        if key not in self._grams:
+            W = self._group_data()[2]
+            ca, cb = self._exact_column(a), self._exact_column(b)
+            self._grams[key] = sum(
+                (w * x * y for w, x, y in zip(W, ca, cb, strict=True)), Fraction(0)
+            )
+        return self._grams[key]
+
+    def _ip(self, a: dict, b: dict) -> Fraction:
+        """⟨a, b⟩_w of two polynomials, from the Gram matrix of their monomials."""
+        return sum(
+            (ca * cb * self._gram(m, n) for m, ca in a.items() for n, cb in b.items()),
+            Fraction(0),
+        )
+
+    def _project_out(self, v: dict, basis: list) -> dict:
+        for b, nb in basis:
+            c = self._ip(v, b) / nb
+            if c != 0:
+                v = {m: v.get(m, 0) - c * b.get(m, 0) for m in v.keys() | b.keys()}
+        return v
 
     def _exact_dependent(self, q: _Element, N: dict, rows: list) -> bool:
         """LA-4 in exact arithmetic: the weighted squared norm of N orthogonal to
         the rows is below LM_TOL² times that of the pivot monomial q (of N when
-        q is 0 at every case). Complexity: O(g·M²) rational operations."""
-        W = self._group_data()[2]
-
-        def norm2(a: list, b: list) -> Fraction:
-            return sum(
-                (w * x * y for w, x, y in zip(W, a, b, strict=True)), Fraction(0)
-            )
-
-        basis: list = []  # orthogonal vectors with their squared norms
+        q is 0 at every case). Gram-Schmidt on the coefficient vectors with the
+        Gram matrix of the monomials (rational, cached): O(g) per new pair of
+        monomials, O(M²·k²) per test for k monomials per row."""
+        basis: list = []  # orthogonal polynomials with their squared norms
         for _, R in rows:
-            v = self._exact_vector(R)
-            for b, nb in basis:
-                c = norm2(v, b) / nb
-                if c != 0:
-                    v = [x - c * y for x, y in zip(v, b, strict=True)]
-            nv = norm2(v, v)
+            v = self._project_out(dict(R), basis)
+            nv = self._ip(v, v)
             if nv != 0:
                 basis.append((v, nv))
-        v = self._exact_vector(N)
-        total = norm2(v, v)
-        for b, nb in basis:
-            c = norm2(v, b) / nb
-            if c != 0:
-                v = [x - c * y for x, y in zip(v, b, strict=True)]
-        eq = self._exact_column(q)
-        ref = norm2(eq, eq)
+        ref = self._gram(q, q)
         if ref == 0:
-            ref = total
-        return ref == 0 or norm2(v, v) < Fraction(LM_TOL) ** 2 * ref
+            ref = self._ip(N, N)
+        res = self._project_out(dict(N), basis)
+        return ref == 0 or self._ip(res, res) < Fraction(LM_TOL) ** 2 * ref
 
 
 def independent_terms(

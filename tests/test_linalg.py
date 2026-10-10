@@ -713,26 +713,45 @@ def test_independent_terms_without_a_shift_is_independent_columns(seed):
     assert got.tolist() == la.independent_columns(B, w).tolist()
 
 
-@pytest.mark.parametrize("seed", range(12))
+@pytest.mark.parametrize("seed", range(40))
 def test_the_float_test_of_la4_decides_as_the_exact_one(seed, monkeypatch):
-    """LA-4 at a large mean on few levels, with copies of a covariate at other
-    shifts and with a copy off by one unit in the last place: the decision from
-    the float64 distance, trusted only inside its error bound, is that of exact
-    rational arithmetic (the distance passed as NaN forces the exact test)."""
+    """LA-4 at a large mean on few levels, with a copy of a covariate at another
+    shift, scaled by a power of 2 (EDGE-7's column scales) or off by one unit in
+    the last place, with hinges in the terms and weights that include 0: the
+    decision from the float64 distance, trusted only inside its error bound, is
+    that of exact rational arithmetic (the distance passed as NaN forces the
+    exact test)."""
     rng = np.random.default_rng(seed)
     a = np.floor(rng.uniform(size=(24, 3)) * 3) / 4
     shifts = rng.choice([1e3, 2.0**26, 1e9, -1e6], 4)
     X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2])) + shifts
-    X[3, 1] = np.nextafter(X[3, 1], np.inf) if seed % 2 else X[3, 1]
+    if seed % 3 == 0:
+        X[:, 1] = np.ldexp(X[:, 0] - X[:, 0].min() + 2.0**40, -int(rng.integers(1, 6)))
+    elif seed % 3 == 1:
+        X[3, 1] = np.nextafter(X[3, 1], np.inf)
+    w = rng.integers(0, 3, 24).astype(float) if seed % 2 else None
+    if w is not None:
+        w[0] = 1.0
     L = [[(j, 2, 0.0)] for j in range(4)]
+    H = [(2, 1, float(np.median(X[:, 2]))), (3, -1, float(np.median(X[:, 3])))]
     spec = [[], L[0], L[1], L[2], L[0] + L[2], L[1] + L[3], L[0] + L[1], L[3]]
-    spec += [L[0] + L[2] + L[3], L[1] + L[2] + L[3], L[0] + L[3]]
+    spec += [L[0] + L[2] + L[3], L[1] + L[2] + L[3], L[0] + [H[0]], L[1] + [H[1]]]
     dirs, cuts = _term_rows(spec, 4)
-    got = la.independent_terms(X, dirs, cuts)
+    got = la.independent_terms(X, dirs, cuts, w)
     real = la.Conditioner.dependent
 
     def exact(self, row, cut, dist, size, extra=(), kappa=1.0):
         return real(self, row, cut, float("nan"), size, extra, kappa)
 
     monkeypatch.setattr(la.Conditioner, "dependent", exact)
-    assert la.independent_terms(X, dirs, cuts).tolist() == got.tolist()
+    assert la.independent_terms(X, dirs, cuts, w).tolist() == got.tolist()
+
+
+def test_a_scaled_copy_is_kept_as_the_exact_test_says():
+    """LA-4: x1 = (x0 + 2^40)/2^40 is a power-of-2 copy of u0 up to a shift, so
+    its u column is that of x0/2: x1 after the intercept is independent (the
+    float distance and the pivot are on one scale)."""
+    x0 = np.array([0.0, 1.0, 2.0, 3.0])
+    X = np.column_stack((np.ldexp(x0, -1), np.ldexp(x0 + 2.0**40, -40)))
+    dirs, cuts = _term_rows([[], [(1, 2, 0.0)]], 2)
+    assert la.independent_terms(X, dirs, cuts).tolist() == [True, True]
