@@ -13,14 +13,17 @@ What is compared:
 - The forward pass: ``_forward.forward_pass`` against the forward record of
   ``mars_ref.fit_mars``, step by step: the terms of each step (parent,
   covariate, codes and knots, exactly: knots are data values), the RSS after
-  each step within 1e-8 of the RSS before the step (LA-5), the second-best
-  candidate of the candidate log (its identity exactly, its RSS by LA-5), and,
+  each step within LA-5's eps (1e-8 of the RSS before the step plus the terms
+  in sqrt(TSS V) and TSS), the second-best candidate of the candidate log (its
+  identity exactly, its RSS by LA-5); the added rows, not their parents, since
+  two programs can add the same rows from different parents (FWD-12); and,
   when every step agrees, the termination code and the kept terms (FWD-11).
 - The pruning pass: ``_pruning.pruning_pass`` and ``final_fit`` against
   ``mars_ref.prune`` on random bases, with and without weights, for K = 1 and
-  K >= 2: the removals and the subsets exactly, the RSS and GCV of each size
-  to a relative 1e-8, the selected terms, and the final coefficients and
-  statistics by the plan's tolerance table.
+  K >= 2: the removals and the subsets exactly (up to PRUNE-10's near-ties),
+  the RSS and GCV of each size within LA-5's eps with R = V, the selected
+  terms, and the final coefficients and statistics by the plan's tolerance
+  table.
 - The whole fit: ``compare_fits`` compares ``_core.fit_mars`` with
   ``mars_ref.fit_mars`` through ``MarsFit.from_dict`` on hypothesis data:
   the resolved values, the forward records as above, and then the pruning
@@ -85,16 +88,31 @@ FORWARD_PARAMS = {f.name for f in dataclasses.fields(mars_ref.Params)} - {
     "nprune",
 }
 
-# LA-5 bounds each RSS by 1e-8 of the RSS before its step; two candidates
-# within 1e-7 of that RSS are a near-tie (plan, "Ties"); STOP-7's delta is
-# 2e-8 of the RSS that it names; LA-5's bands for rho and A_w are 1e-6 of
-# their thresholds. The pruning pass takes the forward pass's near-tie
-# factor (OQ-2 leaves the threshold of the conformance tests to T07).
+# LA-5 bounds each RSS V by eps(V, R) = 1e-8 R + c sqrt(TSS V) + (c/2)^2 TSS,
+# with c = 1e-14; two candidates within 1e-7 of the RSS before their step are
+# a near-tie (plan, "Ties"); STOP-7's delta is 2 eps(R, R) for the RSS R that
+# it names; LA-5's bands for rho and A_w are 1e-6 of their thresholds.
+# PRUNE-10: two subsets of one size are a near-tie when their RSS values
+# differ by at most 1e-7 of the lower one plus 2 eps(V, V), V the lower.
 LA5 = 1e-8
+LA5_C = 1e-14
 TIE = 1e-7
-DELTA = 2e-8
 BAND = 1e-6
 PRUNE_TIE = 1e-7
+EXACT_FIT = 1e-14  # FWD-5: a candidate RSS at most EXACT_FIT RSS_s is 0
+
+
+def eps(V: float, R: float, tss: float) -> float:
+    """LA-5's bound on the error of an RSS value V (V* in the rule), at the
+    scale R, for the total sum of squares tss."""
+    return LA5 * R + LA5_C * math.sqrt(tss * V) + (LA5_C / 2) ** 2 * tss
+
+
+def delta(R: float, tss: float) -> float:
+    """STOP-7's delta: the error of a difference of two values, each within
+    eps(R, R) of its exact value."""
+    return 2 * eps(R, R, tss)
+
 
 PAIR, SINGLE, LINEAR = mars_ref.PAIR, mars_ref.SINGLE, mars_ref.LINEAR
 RSQ_HIGH = mars_ref.RSQ_HIGH
@@ -272,6 +290,13 @@ def _key(parent, variable, kind, knot) -> tuple:
     return (int(parent), int(variable), int(kind), knot)
 
 
+def _rows(rec: dict, s: int) -> list:
+    """The rows that step s added: their dirs and cuts, without the parents.
+    Two programs can add the same rows from different parents (FWD-12), so
+    the comparison of a step looks at the rows."""
+    return [t[:2] for t in _terms(rec, s)]
+
+
 def _terms(rec: dict, s: int) -> list:
     """The terms that step s added: their dirs and cuts rows and parents."""
     return [
@@ -282,6 +307,21 @@ def _terms(rec: dict, s: int) -> list:
         )
         for r in np.flatnonzero(rec["step"] == s)
     ]
+
+
+def _parent_gives(rec: dict, p: int, r: int) -> bool:
+    """Term p is a parent of term r (TERM-1): the row of r with one covariate
+    removed, in codes and cuts."""
+    for v in np.flatnonzero(rec["dirs"][r]):
+        d, c = rec["dirs"][r].copy(), rec["cuts"][r].copy()
+        d[v], c[v] = 0, rec["cuts"][p][v]
+        if (
+            p < r
+            and np.array_equal(rec["dirs"][p], d)
+            and np.array_equal(rec["cuts"][p], c)
+        ):
+            return True
+    return False
 
 
 def _render(case: Case, rec: dict, key) -> list:
@@ -365,6 +405,7 @@ class _Step:
         self.tau = mars_ref.collinearity_tol(s - 1)
         self.path = np.ldexp(np.asarray(ref["rss"], dtype=float), 2 * kept.j)
         self.rss_s = self.path[s - 1]
+        self.tss = self.path[0]
         self.limit = mars_ref.max_legal(list(self.path[:s]))
         # STOP-7's R: the RSS before step s for a candidate's RSS alone, one
         # step earlier for a reduction, two steps earlier for Delta_s.
@@ -379,6 +420,10 @@ class _Step:
             if mars_ref.is_legal(c.kind, self.rss_s - c.rss, self.limit)
         ]
         self.legal_keys = {mars_ref.candidate_key(c) for c in self.legal}
+
+    def delta(self, R: float) -> float:
+        """STOP-7's delta for the RSS R (scaled Y)."""
+        return delta(R, self.tss)
 
     def best(self):
         """The reference's choice at this step, or None (FWD-4, FWD-5)."""
@@ -408,7 +453,9 @@ class _Step:
         """The bands that the candidate lies in: A_w of its search within 1e-6
         of the pair rule's threshold (LA-7); its knot's rho within 1e-6 tau of
         tau (LA-3), for each kind of search that the pair rule allows; its
-        reduction within 11 delta of MaxLegal or within delta of 0 (FWD-4)."""
+        reduction within 22 delta of MaxLegal or within 2 delta of 0 (FWD-4),
+        or its RSS within 2 delta of the exact-fit edge (FWD-5; every
+        candidate below about 4e-8 RSS_s, so the band never decides)."""
         k, v, kind, knot = key
         out, w = [], self.kept.w
         b, x = self.B[:, k], self.kept.X[:, v]
@@ -429,10 +476,13 @@ class _Step:
                 if abs(rho - self.tau) <= BAND * self.tau:
                     out.append("LA-3")
         red = self.rss_s - self.value(key)
-        if h is not None and abs(red - self.limit) <= 11 * DELTA * self.R_delta:
+        if h is not None and abs(red - self.limit) <= 22 * self.delta(self.R_delta):
             out.append("FWD-4 MaxLegal")
-        if abs(red) <= DELTA * self.R_red:
+        if abs(red) <= 2 * self.delta(self.R_red):
             out.append("FWD-4 zero")
+        rss_new = self.rss_s - red
+        if abs(rss_new - EXACT_FIT * self.rss_s) <= 2 * self.delta(self.R_cand):
+            out.append("FWD-5 exact fit")
         return out
 
     def queue_bands(self) -> list[str]:
@@ -457,7 +507,7 @@ class _Step:
             if len(trace) >= t and table != list(trace[t - 1]["table"]):
                 _fail(self.case, f"step {t}: queue table {table}, trace {trace[t - 1]}")
             values = [
-                (e, lam, 2 * DELTA * self.path[max(kappa // 2 - 2, 0)])
+                (e, lam, 4 * self.delta(self.path[max(kappa // 2 - 2, 0)]))
                 for e, (lam, kappa) in enumerate(entries)
                 if 0.0 <= lam < math.inf
             ]
@@ -498,28 +548,31 @@ class _Step:
         d = prm.resolved_penalty()
         grsq = mars_ref.grsq(rss_new, m_new, tss, d, kept.N, kept.tau_N)
         out = []
-        near = (
-            math.isfinite(grsq) and abs(grsq + 10) <= DELTA * R * (1 - grsq) / rss_new
-        )
+        # GRSq' within 2 delta (1 - GRSq') / RSS' of -10 or of -1000 (STOP-3);
+        # at -inf the band would be infinite, so it does not count there.
+        width = 2 * self.delta(R) * (1 - grsq) / rss_new if math.isfinite(grsq) else 0
+        near = math.isfinite(grsq) and min(abs(grsq + 10), abs(grsq + 1000)) <= width
         if prm.thresh > 0 and near:
             out.append("STOP-3")
         gain = (self.rss_s - rss_new) / tss  # 0 exactly without a candidate
-        if key is not None and abs(gain - prm.thresh) <= DELTA * self.R_red / tss:
+        band = 2 * self.delta(self.R_red) / tss
+        if key is not None and abs(gain - prm.thresh) <= band:
             out.append("STOP-4")
         return out
 
 
 def _stop5_bands(case: Case, ref: dict, s: int) -> list[str]:
-    """STOP-7's bands of STOP-5 after step s: the new RSS within delta of the
-    floor 1e-10 TSS / (N - 1), or the new RSq within delta / TSS of
+    """STOP-7's bands of STOP-5 after step s: the new RSS within 2 delta of
+    the floor 1e-10 TSS / (N - 1), or the new RSq within 2 delta / TSS of
     1 - thresh, with R the RSS before the step."""
     kept, thresh = case.kept, mars_ref.as_params(case.params).thresh
     path = np.ldexp(np.asarray(ref["rss"], dtype=float), 2 * kept.j)
     tss, rss, R = path[0], path[s], path[s - 1]
     out = []
-    if abs(rss - 1e-10 * tss / (kept.N - 1)) <= DELTA * R:
+    d = delta(R, tss)
+    if abs(rss - 1e-10 * tss / (kept.N - 1)) <= 2 * d:
         out.append("STOP-5 floor")
-    if abs(thresh - rss / tss) <= DELTA * R / tss:
+    if abs(thresh - rss / tss) <= 2 * d / tss:
         out.append("STOP-5 RSq")
     return out
 
@@ -540,7 +593,7 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
         _fail(case, f"step {s}: {cf[0]} and {cr[0]} have equal columns (FWD-5)")
     vf, vr = step.value(cf[0]), step.value(cr[0])
     rss_f = math.ldexp(float(fast["rss"][s]), 2 * case.kept.j)
-    if abs(rss_f - vf) > LA5 * R:
+    if abs(rss_f - vf) > eps(vf, R, step.tss):
         _fail(case, f"step {s}: the fast RSS {rss_f!r} of {cf[0]} is not {vf!r} (LA-5)")
     f_legal = any(k in step.legal_keys for k in cf)
     if f_legal and vf < vr - TIE * R:
@@ -572,8 +625,9 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         raw = [np.array([log[f][i] for f in fields]) for log in (lf, lr)]
         if not np.array_equal(*raw, equal_nan=True):
             _fail(case, f"step {s}: the second's fields: fast {raw[0]}, ref {raw[1]}")
-        R = LA5 * ref["rss"][i]
-        _close(case, lf["second_rss"][i], lr["second_rss"][i], R, f"second, {s}")
+        tss, V = ref["rss"][0], lr["second_rss"][i]
+        bound = eps(V, ref["rss"][i], tss) if math.isfinite(V) else 0.0
+        _close(case, lf["second_rss"][i], V, bound, f"second, {s}")
         return None
     if kf is not None and kf in _choice(case, fast, s):
         _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
@@ -583,7 +637,7 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
     if kf is not None:
         vf = step.value(kf)
         rss_f = math.ldexp(float(lf["second_rss"][i]), 2 * case.kept.j)
-        if abs(rss_f - vf) > LA5 * step.rss_s:
+        if abs(rss_f - vf) > eps(vf, step.rss_s, step.tss):
             _fail(case, f"step {s}: the fast second {kf} has RSS {rss_f!r}, not {vf!r}")
     f_bands = [] if kf is None else step.bands(kf)
     r_bands = [] if kr is None else step.bands(kr)
@@ -677,13 +731,15 @@ def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
         for key, value in {**rec, **(rec["candidates"] or {})}.items():
             if key in DTYPES and np.asarray(value).dtype != DTYPES[key]:
                 _fail(case, f"the {who} {key} has dtype {np.asarray(value).dtype}")
-    _close(case, fast["rss"][0], ref["rss"][0], LA5 * ref["rss"][0], "TSS, rss[0]")
+    tss = ref["rss"][0]
+    _close(case, fast["rss"][0], tss, eps(tss, tss, tss), "TSS, rss[0]")
     S = min(len(fast["rss"]), len(ref["rss"])) - 1
     for s in range(1, S + 1):
-        if _terms(fast, s) != _terms(ref, s):
+        if _rows(fast, s) != _rows(ref, s):
             return _diverged(case, fast, ref, s)
         R = ref["rss"][s - 1]
-        _close(case, fast["rss"][s], ref["rss"][s], LA5 * R, f"RSS after step {s}")
+        bound = eps(ref["rss"][s], R, tss)
+        _close(case, fast["rss"][s], ref["rss"][s], bound, f"RSS after step {s}")
         if None in logs:
             continue
         for rec, who in ((fast, "fast"), (ref, "reference")):
@@ -693,9 +749,14 @@ def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
             TALLY[f"second best differs at a near-tie ({reason})"] += 1
     if len(fast["rss"]) != len(ref["rss"]) or fast["termination"] != ref["termination"]:
         return _stopped_apart(case, fast, ref, S + 1)
-    for key in ("dirs", "cuts", "parent", "step", "kept", "dropped"):
+    for key in ("dirs", "cuts", "step", "kept", "dropped"):
         if not np.array_equal(fast[key], ref[key]):
             _fail(case, f"{key}: fast {fast[key].tolist()}, ref {ref[key].tolist()}")
+    for r, (pf, pr) in enumerate(zip(fast["parent"], ref["parent"], strict=True)):
+        # FWD-12: a different parent is fine when the rows are the same and
+        # each parent gives the row (its row, less one covariate).
+        if pf != pr and not all(_parent_gives(ref, int(p), r) for p in (pf, pr)):
+            _fail(case, f"parent of term {r}: fast {pf}, ref {pr}")
     return Outcome(S)
 
 
@@ -729,17 +790,19 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     pruning indices) and ``coef``, ``rss``, ``gcv``, ``rsq`` and ``grsq`` of
     the final model; w holds the weights (ones for none). The removals are
     compared stage by stage. At the first stage where they differ, the
-    reference's RSS of the two drops decides whether it is a near-tie (within
-    PRUNE_TIE of the larger); then only the sizes m >= pos, which the earlier
-    stages fix, are compared. An offer can tie as well: two subsets of one
-    size within PRUNE_TIE. The selected size and the final fit are compared
-    when no removal tied. An RSS below STOP-5's floor 1e-10 TSS / (N - 1) is an
-    exact fit, whose value is rounding: two such values count as equal.
+    reference's RSS of the two drops decides whether it is a near-tie (PRUNE-10:
+    within PRUNE_TIE of the lower plus 2 eps(V, V)); then only the sizes
+    m >= pos, which the earlier stages fix, are compared. An offer can tie as
+    well: two subsets of one size, by the same bound. The selected size and
+    the final fit are compared when no removal tied. An RSS below STOP-5's
+    floor 1e-10 TSS / (N - 1) is an exact fit, whose value is rounding: two
+    such values count as equal.
     """
     Mf, several = B.shape[1], Y.shape[1] >= 2
     rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
     N = float(np.sum(w))  # a degenerate fit (N <= 1, EDGE-1) has no exact fits
-    floor = 1e-10 * ref["rss_per_size"][0] / (N - 1) if N > 1 else 0.0
+    tss = ref["rss_per_size"][0]
+    floor = 1e-10 * tss / (N - 1) if N > 1 else 0.0
     for rec, who in ((fast, "fast"), (ref, "reference")):
         for key, (dtype, shape) in {
             "removed": (np.int64, (Mf - 1,)),
@@ -752,11 +815,28 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
             if a.dtype != dtype or a.shape != shape:
                 _fail(case, f"the {who} {key} is {a.dtype} {a.shape} (CORE-3, PRUNE-8)")
 
-    def same(a, b, rtol) -> bool:  # two RSS values
-        return (a <= floor and b <= floor) or abs(a - b) <= rtol * max(a, b)
+    def same(a, b, near=False) -> bool:
+        """Two RSS values of one subset: within LA-5's eps(V, V) of the
+        exact value (b stands for it; also an exact fit, whose value is
+        rounding, as the third term of eps allows), or, where the subsets
+        differ, PRUNE-10's near-tie bound."""
+        if a <= floor and b <= floor:
+            return True
+        V = min(a, b) if near else b
+        bound = eps(V, V, tss) * (2 if near else 1) + (PRUNE_TIE * V if near else 0)
+        return abs(a - b) <= bound
+
+    def rtol(V, near=False) -> float:
+        """The relative bound on a GCV value whose RSS is V (GCV-2 passes
+        the bound of the RSS on)."""
+        return (
+            math.inf
+            if V <= 0
+            else (eps(V, V, tss) * (2 if near else 1)) / V + (PRUNE_TIE if near else 0)
+        )
 
     def tied(Ta, Tb) -> bool:
-        return same(rss_of(frozenset(Ta)), rss_of(frozenset(Tb)), PRUNE_TIE)
+        return same(rss_of(frozenset(Ta)), rss_of(frozenset(Tb)), near=True)
 
     first, near_tie = 1, None  # the smallest size that the compared stages fix
     stages = _working_sets(ref["removed"], Mf, several)
@@ -772,23 +852,24 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
             set(np.flatnonzero(T[m - 1]).tolist())
             for T in (fast["subsets"], ref["subsets"])
         )
-        tol = LA5
-        if Tf != Tr:
+        near = Tf != Tr
+        if near:
             if not tied(Tf, Tr):
                 _fail(case, f"size {m}: fast {sorted(Tf)}, reference {sorted(Tr)}")
-            near_tie, tol = near_tie or f"subset of size {m}", PRUNE_TIE
+            near_tie = near_tie or f"subset of size {m}"
         rf, rr = fast["rss_per_size"][m - 1], ref["rss_per_size"][m - 1]
-        if not same(rf, rr, tol):
+        if not same(rf, rr, near):
             _fail(case, f"rss_per_size[{m - 1}]: fast {rf!r}, reference {rr!r}")
         gf, gr = fast["gcv_per_size"][m - 1], ref["gcv_per_size"][m - 1]
         if not (rf <= floor and rr <= floor) or np.isinf(gf) or np.isinf(gr):
-            _rel(case, gf, gr, tol, f"gcv_per_size[{m - 1}]")
+            bound = rtol(min(rf, rr) if near else rr, near)
+            _rel(case, gf, gr, bound, f"gcv_per_size[{m - 1}]")
     if first > 1:
         return Outcome(Mf - first, near_tie, Mf - first + 1)
     mf, mr = fast["selected_size"], ref["selected_size"]
     if mf != mr:
         gf, gr = ref["gcv_per_size"][mf - 1], ref["gcv_per_size"][mr - 1]
-        exact = same(*(ref["rss_per_size"][m - 1] for m in (mf, mr)), 0.0)
+        exact = all(ref["rss_per_size"][m - 1] <= floor for m in (mf, mr))
         by_gcv = case.params.get("pmethod", "backward") == "backward"  # PRUNE-7
         if not (by_gcv and (exact or abs(gf - gr) <= PRUNE_TIE * max(gf, gr))):
             _fail(case, f"selected size: fast {mf}, reference {mr}")
@@ -797,11 +878,11 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
         if near_tie is None:
             _fail(case, f"selected: fast {fast['selected']}, ref {ref['selected']}")
         return Outcome(Mf - 1, near_tie, Mf)
-    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w, same, floor)
+    _compare_final(case, fast, ref, B[:, ref["selected"]], Y, w, same, rtol, floor)
     return Outcome(Mf - 1, near_tie, None if near_tie is None else Mf)
 
 
-def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, floor) -> None:
+def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> None:
     """The final fit of the same terms (PRUNE-8), by the plan's tolerance
     table: per response, the coefficients normwise within 1e-6 where
     kappa(B) <= 1e5; the fitted values with their weighted mean removed
@@ -809,9 +890,10 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, floor) -> None:
     difference within rounding, 4 ulp of max |y| plus kappa u ||y - mean||
     (a fitted value near 1e13 has an ulp of 2e-3); the RSS of the fast
     coefficients, the reference's RSS plus the weighted sum of squares of
-    the centered difference of the fitted values (least squares), within a
-    relative 1e-8 of the reference's RSS; RSS and GCV within a relative 1e-8
-    (``same``, for exact fits); RSq and GRSq within 1e-8."""
+    the centered difference of the fitted values (least squares), within
+    LA-5's eps of the reference's RSS; the final RSS and GCV within the same
+    bound (``same`` and ``rtol``, also for exact fits); RSq and GRSq within
+    1e-8."""
     m, sw = BS.shape[1], np.sqrt(w)[:, None]
     kappa = np.linalg.cond(BS * sw) if m > 1 else 1.0
     cf = np.asarray(fast["coef"], dtype=float).reshape(m, -1)
@@ -833,12 +915,12 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, floor) -> None:
     if np.any(np.abs(d_mean) > rounding):
         _fail(case, f"mean of the fitted values: {d_mean.tolist()}, {rounding}")
     excess = float(np.sum(w[:, None] * dc**2))
-    if not same(ref["rss"] + excess, ref["rss"], LA5):
+    if not same(ref["rss"] + excess, ref["rss"]):
         _fail(case, f"RSS of the fast coefficients: {ref['rss']!r} + {excess!r}")
-    if not same(fast["rss"], ref["rss"], LA5):
+    if not same(fast["rss"], ref["rss"]):
         _fail(case, f"final rss: fast {fast['rss']!r}, reference {ref['rss']!r}")
     if not (fast["rss"] <= floor and ref["rss"] <= floor) or np.isinf(ref["gcv"]):
-        _rel(case, fast["gcv"], ref["gcv"], LA5, "final gcv")
+        _rel(case, fast["gcv"], ref["gcv"], rtol(ref["rss"]), "final gcv")
     for key in ("rsq", "grsq"):
         _close(case, fast[key], ref[key], 1e-8, f"final {key}")
         if m == 1 and not fast[key] == ref[key] == 0.0:  # by definition (GCV-7)
