@@ -16,6 +16,12 @@ Who does what in ``fit_mars``:
   scales Y by its own power of 2 (EDGE-6) and centers it (FWD-10), so the core
   does neither for it, and its record is on the original scale (LA-6). It
   also picks the kept terms (FWD-11).
+- The core scales each column of X by 2^j_v (EDGE-7, ``ldexp``) and runs the
+  forward pass, the basis and the pruning on the scaled X. It scales the
+  forward cuts and the candidates' ``second_knot`` back, so every record is on
+  the original scale, and multiplies row k of the coefficients by 2^(Σ j_v
+  over the term - j) in one ``ldexp``; a coefficient that leaves the normal
+  range raises ValueError.
 - ``_pruning.pruning_pass`` and ``_pruning.final_fit`` get the basis of the
   kept terms and Y times s = 2^j, the power of 2 of EDGE-6, which ``_pruning``
   leaves to its caller. The core multiplies their sums of squares and GCVs by
@@ -458,6 +464,42 @@ def _back(value: Any, k: int) -> Any:
         return np.ldexp(value, k)
 
 
+def _column_exponents(X: FloatArray) -> npt.NDArray[np.int64]:
+    """The j_v of EDGE-7: the integer with 2^j_v·max|x_iv| in [1, 2), and 0 for
+    a column of zeros. Complexity: O(n·p)."""
+    top = np.max(np.abs(X), axis=0)
+    return np.array(
+        [0 if m == 0.0 else 1 - math.frexp(m)[1] for m in top.tolist()],
+        dtype=np.int64,
+    )
+
+
+def _knots_back(cuts: FloatArray, jv: npt.NDArray[np.int64]) -> FloatArray:
+    """The knots of the scaled X on the original scale (EDGE-7), exact unless
+    the result leaves the normal range. A cut of 0 stays 0."""
+    with np.errstate(over="ignore"):
+        return np.ldexp(cuts, -jv[None, :])
+
+
+def _coef_back(
+    coef: FloatArray, dirs: npt.NDArray[np.int8], jv: npt.NDArray[np.int64], j: int
+) -> FloatArray:
+    """The coefficients on the original scales (EDGE-6, EDGE-7): row k is
+    multiplied by 2^(e_k - j), e_k the sum of the j_v over the covariates of
+    term k, by one ``ldexp``. Raises ValueError when a result is not finite or
+    when a nonzero coefficient becomes 0 or a subnormal. Complexity: O(M·p + M·K)."""
+    e = (dirs != 0).astype(np.int64) @ jv - j
+    with np.errstate(over="ignore"):
+        out = np.ldexp(coef, e[:, None])
+    bad = ~np.isfinite(out) | ((coef != 0.0) & (np.abs(out) < _TINY))
+    if bad.any():
+        raise ValueError(
+            "the scale of X is out of range: a coefficient on the original "
+            "scale of X and y is not a normal float64 (EDGE-7)"
+        )
+    return out
+
+
 def _intercept_record(p: int, tss: float, record: bool) -> ForwardRecord:
     """The forward record of a degenerate fit: the intercept alone, rss [TSS],
     code ``DEGENERATE`` and an empty log when one is asked for (EDGE-1)."""
@@ -526,6 +568,8 @@ def fit_mars(
     max_terms = _gcv.default_max_terms(p) if max_terms is None else max_terms
     penalty = params.penalty
     penalty = _gcv.default_penalty(params.max_degree) if penalty is None else penalty
+    jv = _column_exponents(X)
+    Xs = np.ldexp(X, jv[None, :])  # EDGE-7: the fit runs on the scaled X
     D = float(np.max(np.abs(Y)))
     j = 0 if D == 0.0 else 1 - math.frexp(D)[1]
     Ys = np.ldexp(Y, j)
@@ -537,10 +581,11 @@ def fit_mars(
         )
     if _gcv.is_degenerate(Y, N):
         forward = _intercept_record(p, float(_back(tss, -2 * j)), record_candidates)
+        scaled = forward.cuts
     else:
         kw = {name: getattr(params, name) for name in _FORWARD_PARAMS}
         fp = _forward.forward_pass(
-            X,
+            Xs,
             Y,
             w,
             **kw,
@@ -548,20 +593,30 @@ def fit_mars(
             penalty=penalty,
             record_candidates=record_candidates,
         )
-        forward = ForwardRecord(
-            **{f.name: getattr(fp, f.name) for f in dataclasses.fields(ForwardRecord)}
-        )
+        fields = {
+            f.name: getattr(fp, f.name) for f in dataclasses.fields(ForwardRecord)
+        }
+        scaled = fields["cuts"]
+        fields["cuts"] = _knots_back(scaled, jv)
+        log = fields["candidates"]
+        if log is not None:  # the knot of a candidate is on the original scale
+            shift = jv[np.maximum(log.second_variable, 0)]
+            with np.errstate(over="ignore"):
+                knot = np.ldexp(log.second_knot, -shift)  # NaN stays NaN
+            fields["candidates"] = log._replace(second_knot=knot)
+        forward = ForwardRecord(**fields)
     kept = forward.kept
-    B = _terms.basis_matrix(X, forward.dirs[kept], forward.cuts[kept])
+    B = _terms.basis_matrix(Xs, forward.dirs[kept], scaled[kept])
     pruned = _pruning.pruning_pass(
         B, Ys, w, penalty=penalty, pmethod=params.pmethod, nprune=params.nprune
     )
     final = _pruning.final_fit(B, Ys, pruned.selected, w, penalty=penalty)
     selected = kept[pruned.selected]
+    coef = _coef_back(final.coef, forward.dirs[selected], jv, j)
     return MarsFit(
         dirs=forward.dirs[selected],
         cuts=forward.cuts[selected],
-        coef=_back(final.coef, -j),
+        coef=coef,
         selected=selected,
         rss=float(_back(final.rss, -2 * j)),
         gcv=float(_back(final.gcv, -2 * j)),
