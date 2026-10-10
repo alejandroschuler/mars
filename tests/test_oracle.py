@@ -68,7 +68,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from reference import mars_ref
 
-from pymars import _core, _forward, _pruning
+from pymars import _core, _forward, _linalg, _pruning
 
 # ---------------------------------------------------------------------------
 # The settings of the forward pass that the oracle draws: every degree (T11
@@ -1642,6 +1642,34 @@ def test_merged_candidates_record_the_reference_parents(case):
     for key in ("second_parent", "second_variable", "second_kind"):
         got, want = _plain(fast["candidates"])[key], ref["candidates"][key]
         assert got.tolist() == want.tolist()
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_fwd11_equals_the_references_la4(seed):
+    """FWD-11 (``_linalg.independent_terms``) against the reference's exact LA-4
+    (``mars_ref.la4_kept``) on the spec's kind of term lists: few levels at
+    large means, copies at other shifts, scaled by powers of 2 or off by one
+    unit in the last place, linear factors, hinges and products, weights with
+    zeros, in drawn orders."""
+    rng = np.random.default_rng(seed)
+    a = np.floor(rng.uniform(size=(24, 3)) * 3) / 4
+    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
+    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10], 4)
+    if seed % 3 == 0:
+        X[:, 1] = np.ldexp(X[:, 0] - X[:, 0].min() + 2.0**40, -int(rng.integers(1, 6)))
+    elif seed % 3 == 1:
+        X[3, 1] = np.nextafter(X[3, 1], np.inf)
+    w = rng.integers(0, 3, 24).astype(float) if seed % 2 else np.ones(24)
+    w[0] = 1.0
+    n_terms = 9
+    dirs = rng.integers(-1, 3, size=(n_terms, 4)).astype(np.int8)
+    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
+    dirs[0] = 0
+    cuts = np.where(dirs == 0, 0.0, np.median(X, axis=0))
+    cuts[dirs == 2] = 0.0
+    got = _linalg.independent_terms(X, dirs, cuts, None if seed % 2 == 0 else w)
+    want = mars_ref.la4_kept(X, dirs, cuts, w)
+    assert got.tolist() == want.tolist()
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
