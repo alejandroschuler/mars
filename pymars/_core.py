@@ -23,11 +23,12 @@ Who does what in ``fit_mars``:
   over the term - j) in one ``ldexp``; a coefficient that leaves the normal
   range raises ValueError.
 - ``_pruning.pruning_pass`` and ``_pruning.final_fit`` get the basis of the
-  kept terms and Y times s = 2^j, the power of 2 of EDGE-6, which ``_pruning``
-  leaves to its caller. The core multiplies their sums of squares and GCVs by
-  1/s² and their coefficients by 1/s, which changes no bit unless a value
-  leaves the normal range (then it is ±∞ or rounds toward 0, without a
-  warning), and keeps their RSq and GRSq, which come from the scaled values.
+  kept terms, the terms with X (for the shift of LA-4) and Y times s = 2^j,
+  the power of 2 of EDGE-6, which ``_pruning`` leaves to its caller. The core
+  multiplies their sums of squares and GCVs by 1/s² and their coefficients by
+  1/s, which changes no bit unless a value leaves the normal range (then it
+  is ±∞ or rounds toward 0, without a warning), and keeps their RSq and
+  GRSq, which come from the scaled values.
   Pruning index m is forward index ``kept[m]``.
 
 Records. ``MarsFit``, ``ForwardRecord`` and ``PruningRecord`` are frozen
@@ -607,10 +608,11 @@ def fit_mars(
         forward = ForwardRecord(**fields)
     kept = forward.kept
     B = _terms.basis_matrix(Xs, forward.dirs[kept], scaled[kept])
+    terms = {"X": Xs, "dirs": forward.dirs[kept], "cuts": scaled[kept]}  # LA-4
     pruned = _pruning.pruning_pass(
-        B, Ys, w, penalty=penalty, pmethod=params.pmethod, nprune=params.nprune
+        B, Ys, w, penalty=penalty, pmethod=params.pmethod, nprune=params.nprune, **terms
     )
-    final = _pruning.final_fit(B, Ys, pruned.selected, w, penalty=penalty)
+    final = _pruning.final_fit(B, Ys, pruned.selected, w, penalty=penalty, **terms)
     selected = kept[pruned.selected]
     coef = _coef_back(final.coef, forward.dirs[selected], jv, j)
     return MarsFit(
