@@ -1296,7 +1296,9 @@ def _solve_exact(A: list, b: list) -> list:
     k = len(b)
     M = [[*A[i], b[i]] for i in range(k)]
     for c in range(k):
-        r = next(i for i in range(c, k) if M[i][c] != 0)
+        r = next((i for i in range(c, k) if M[i][c] != 0), None)
+        if r is None:
+            raise ValueError("the exact system for the coefficients is singular")
         M[c], M[r] = M[r], M[c]
         for i in range(k):
             if i != c and M[i][c] != 0:
@@ -1475,6 +1477,8 @@ def _hinge_dependent(conditioned, S, parent_row, parent_cut, j, t, h, size, w):
         if not v:
             return True
         pivot = float(np.linalg.norm(sw * atoms.column(min(v, key=monomial_order))))
+        if pivot == 0.0:
+            return la4_dependent(atoms, S, e, w)  # the new part's norm decides
     bound = 1e3 * EPS * float(np.linalg.norm(sw * h))
     if math.sqrt(size) > DEPENDENT_TOL * pivot + bound:
         return False

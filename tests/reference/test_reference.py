@@ -680,8 +680,7 @@ class TestDependence:
             rss_s=rss_s,
         )
         linear = [c for c in cands if c.kind == ref.LINEAR and c.variable == 1]
-        assert linear == [] or linear[0].rss == rss_s
-        assert ref.reduction(linear[0], rss_s) == 0.0 if linear else True
+        assert all(c.rss == rss_s for c in linear)
         assert not any(
             c.variable == 1 and ref.reduction(c, rss_s) > 1e-8 * rss_s for c in cands
         )
