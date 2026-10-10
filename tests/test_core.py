@@ -777,6 +777,8 @@ def test_a_coefficient_out_of_range_raises_and_a_scale_of_1e200_fits():
         assert np.allclose(fit.cuts, c * base.cuts, rtol=1e-14, atol=0)
     with pytest.raises(ValueError, match="scale of X"):
         fit_mars(np.ldexp(X, [-600, -600, 0]), y, None, MarsParams(max_degree=2))
+    with pytest.raises(ValueError, match="scale of X"):  # the underflow branch
+        fit_mars(np.ldexp(X, [600, 600, 0]), y, None, MarsParams(max_degree=2))
 
 
 # The kept terms, pmethod and nprune, and the resolved values

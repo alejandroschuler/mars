@@ -310,3 +310,19 @@ def test_the_warning_follows_eta_beyond_30_over_positive_weights(eta, weight, wa
     with pytest.warns(ConvergenceWarning, match="numerically 0 or 1"):
         fit = _glm.fit_glm(B_far, codes_far, 2, w)
     assert fit.converged and fit.extreme
+
+
+@pytest.mark.parametrize("k", [600, -1000])
+def test_the_classifier_refit_runs_on_the_scaled_x(k):
+    """EDGE-7: the refit sees the basis of X with column 0 times 2^k, scaled by
+    the same powers of 2 as the core's fit, so the probabilities equal the
+    unscaled fit's up to rounding. (Unscaled, the standard deviation of the
+    column overflowed at 2^600 and the slope became 0 without a sign.)"""
+    rng = np.random.default_rng(5)
+    X = rng.uniform(size=(150, 2))
+    y = (X[:, 0] + 0.3 * rng.normal(size=150) > 0.5).astype(int)
+    Xk = X.copy()
+    Xk[:, 0] = np.ldexp(X[:, 0], k)
+    base = EarthClassifier().fit(X, y)
+    scaled = EarthClassifier().fit(Xk, y)
+    assert_allclose(scaled.predict_proba(Xk), base.predict_proba(X), atol=1e-8)

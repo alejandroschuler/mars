@@ -490,7 +490,7 @@ def _coef_back(
     when a nonzero coefficient becomes 0 or a subnormal. Complexity: O(M·p + M·K)."""
     e = (dirs != 0).astype(np.int64) @ jv - j
     with np.errstate(over="ignore"):
-        out = np.ldexp(coef, e[:, None])
+        out = np.ldexp(coef, e.reshape((-1,) + (1,) * (coef.ndim - 1)))
     bad = ~np.isfinite(out) | ((coef != 0.0) & (np.abs(out) < _TINY))
     if bad.any():
         raise ValueError(

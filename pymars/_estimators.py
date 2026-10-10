@@ -571,8 +571,14 @@ grsq_, max_terms_, penalty_, mars_
         fit = self._fit_core(X, Y, w, params)
         self.classes_ = classes
         self.term_coef_ = fit.coef[:, 0] if Q == 2 else fit.coef
-        B = _terms.basis_matrix(X, fit.dirs, fit.cuts)
-        self.glm_ = _glm.fit_glm(B, np.argmax(T, axis=1), Q, w, alpha).coef
+        # EDGE-7: the refit runs on the basis of the scaled X, as the core does,
+        # and its coefficients go back to the scale of X by the same rule.
+        jv = _core._column_exponents(X if w is None else X[w > 0.0])
+        B = _terms.basis_matrix(
+            np.ldexp(X, jv[None, :]), fit.dirs, np.ldexp(fit.cuts, jv[None, :])
+        )
+        coef = _glm.fit_glm(B, np.argmax(T, axis=1), Q, w, alpha).coef
+        self.glm_ = _core._coef_back(coef, fit.dirs, jv, 0)
         return self
 
     def _linear_predictors(self, X) -> np.ndarray:
