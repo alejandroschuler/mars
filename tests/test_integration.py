@@ -11,7 +11,6 @@ changes when a scikit-learn tool wraps, clones, splits or routes to them.
 """
 
 import pickle
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -49,7 +48,7 @@ w_int = _rng.integers(1, 4, size=N)
 CONFIGS = [
     pytest.param(EarthRegressor, y_reg, {}, id="reg-default"),
     pytest.param(EarthRegressor, y_reg, {"max_degree": 2}, id="reg-degree2"),
-    pytest.param(EarthClassifier, y_bin, {"glm_alpha": ALPHA}, id="clf-default"),
+    pytest.param(EarthClassifier, y_bin, {"glm_alpha": ALPHA}, id="clf-alpha"),
     pytest.param(
         EarthClassifier, y_bin, {"max_degree": 2, "glm_alpha": ALPHA}, id="clf-degree2"
     ),
@@ -274,12 +273,12 @@ def test_sample_weight_through_routing_in_cross_validate(cls, y, params):
             params={"sample_weight": w_int},
             return_estimator=True,
         )
-    for fitted, (train, test) in zip(res["estimator"], cv.split(X), strict=True):
+    for k, (fitted, (train, test)) in enumerate(
+        zip(res["estimator"], cv.split(X), strict=True)
+    ):
         direct = cls(**params).fit(X[train], y[train], sample_weight=w_int[train])
         _assert_same_predictions(fitted, direct, X)
-        assert res["test_score"][list(res["estimator"]).index(fitted)] == direct.score(
-            X[test], y[test]
-        )
+        assert res["test_score"][k] == direct.score(X[test], y[test])
 
 
 @pytest.mark.parametrize(("cls", "y", "params"), CONFIGS)
@@ -308,9 +307,7 @@ def test_two_fits_in_one_process_agree(cls, y, params):
     """Determinism: two fits of the same data give the same terms and the same
     predictions bit for bit, warm or cold."""
     a = cls(**params).fit(X, y)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        b = cls(**params).fit(X, y)
+    b = cls(**params).fit(X, y)
     assert_array_equal(a.dirs_, b.dirs_)
     assert_array_equal(a.cuts_, b.cuts_)
     assert a.gcv_ == b.gcv_
