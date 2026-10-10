@@ -22,6 +22,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from reference import mars_ref
+from reference.test_reference import exact_basis, exact_rss
 
 from pymars import _forward, _gcv, _linalg, _scan, _terms
 from pymars._forward import Termination
@@ -932,3 +933,21 @@ def test_every_step_equals_the_explicit_choice():
 def test_bad_input(X, y, w, match):
     with pytest.raises(ValueError, match=match):
         _forward.forward_pass(X, y, w, fast_k=0)
+
+
+def test_rss_meets_la5_with_an_exact_copy_of_a_large_mean_covariate():
+    """LA-5 (#85): x1 is a bitwise copy of x0 = 2^36 + u, so that u0 and u1 are
+    one symbol in the change of basis; degree 3 forms x0·x1·h(z) on the
+    parent x0·h(z). Each RSS is within 1e-8 of the RSS before its step of the
+    exact rational RSS of the same terms (the pass was off by 4e-6)."""
+    rng = np.random.default_rng(3)
+    u, z = rng.uniform(size=20), rng.uniform(size=20)
+    h = np.maximum(z - np.median(z), 0)
+    X = np.column_stack((2.0**36 + u, 2.0**36 + u, z))
+    y = 10 * h + 6 * h * u + 4 * h * u**2
+    fp = _forward.forward_pass(X, y, max_degree=3, thresh=0.0, fast_k=0, max_terms=9)
+    B = exact_basis(X, fp.dirs, fp.cuts)
+    for s in range(1, len(fp.rss)):
+        cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
+        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(20))
+        assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]

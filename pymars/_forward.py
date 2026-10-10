@@ -239,6 +239,8 @@ class _Pass:
         self.E, _ = _linalg.orthogonalize(self.Q, self.Yw)
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
+        self.cond = _linalg.Conditioner(X, self.center)  # LA-5
+        self.cond.append(self.dirs[0], self.cuts[0])
         self.parent, self.step_of = [-1], [0]
         self.slot, self.term_at = [1], {1: 0}  # slot 1 holds the intercept
         self.lam, self.kap = [math.inf], [0]
@@ -336,6 +338,32 @@ class _Pass:
         rss = self.rss[-1]
         return np.where(rss - red <= EXACT_FIT * rss, rss, red)
 
+    def linear_column(self, k: int, j: int) -> FloatArray:
+        """The unscaled column that stands for b·x_j in the projections, b the
+        column of term k: it spans with B what b·x_j spans, since B holds b.
+        That is b·(x_j - c_j), c_j the covariate's middle value (the plan's
+        "Fast path"), unless b has a linear factor, or a hinge (t - x)₊, of a
+        covariate with a large mean: then the reduced expansion of b·x_j
+        (``_linalg.Conditioner``), so that no digits go to the mean (LA-5).
+        Complexity: O(n) and, with a large mean, O(M·3^d) rational operations
+        and O(n·d·3^d) for the column of a term of degree d."""
+        if not self.cond.expands(self.dirs[k]):
+            return self.cols[k] * (self.X[:, j] - self.center[j])
+        return self.cond.linear(k, self.dirs[k], self.cuts[k], j)
+
+    def hinge_column(self, c: _Candidate, h: FloatArray) -> FloatArray:
+        """The unscaled column that stands for the hinge column h of the
+        candidate c in the projections: h itself, or, when the parent has a
+        linear factor, or a hinge (t - x)₊, of a covariate with a large mean,
+        its reduced expansion (``_linalg.Conditioner``), which spans the same
+        with B. Complexity: O(1), or see ``linear_column``."""
+        if not self.cond.expands(self.dirs[c.parent]):
+            return h
+        d, k = _terms.child_term(
+            self.dirs[c.parent], self.cuts[c.parent], c.variable, _terms.PLUS, c.knot
+        )
+        return self.cond.hinge(d, k)
+
     def setup(self, k: int, j: int) -> _Search:
         """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
         gives A of LA-7, and so the kind, where V holds the covariates of b
@@ -343,9 +371,15 @@ class _Pass:
         orthogonalized twice against G, as ``_scan.knot_scan`` requires.
         Every reduction goes through ``_capped``, here, in ``search`` and in
         ``refine``.
-        Complexity: O(n·r·K)."""
+        Complexity: O(n·r·K); with a large mean also the cost of
+        ``linear_column`` (worst case O(M²·3^d) rational operations over a
+        pass, O(n·d·3^d) for each column)."""
         x, b = self.X[:, j], self.cols[k]
-        gs = _linalg.gram_schmidt(self.Q, self.sw * b * (x - self.center[j]))
+        if self.cond.expands(self.dirs[k]):
+            v = self.sw * self.linear_column(k, j)
+        else:  # the product order of the plain path: (√w·b)·(x - c)
+            v = self.sw * b * (x - self.center[j])
+        gs = _linalg.gram_schmidt(self.Q, v)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
         if not pair:
@@ -407,7 +441,10 @@ class _Pass:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
                 h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
-                rho, gain = _scan.exact_knot(sr.Q, sr.E, h, self.w)
+                hg = self.hinge_column(c, h)  # same span with G (LA-5)
+                rho, gain = _scan.exact_knot(sr.Q, sr.E, hg, self.w)
+                if hg is not h:  # LA-3 is the ratio of the hinge column itself
+                    rho = _linalg.collinearity_ratio(sr.Q, h, self.w)
                 red = float(self._capped(gain + sr.lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
@@ -418,8 +455,10 @@ class _Pass:
         before the hinge of a pair, FWD-6) and its unscaled hinge column, or
         None. Complexity: O(n)."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
-        xc = b * (x - self.center[c.variable])  # centered, as in setup
-        h = None if c.kind == KIND_LINEAR else b * _terms.factor(_terms.PLUS, x, c.knot)
+        xc = self.linear_column(c.parent, c.variable)  # as in setup
+        h = None
+        if c.kind != KIND_LINEAR:
+            h = self.hinge_column(c, b * _terms.factor(_terms.PLUS, x, c.knot))
         cols = {KIND_PAIR: (xc, h), KIND_HINGE: (h,), KIND_LINEAR: (xc,)}[c.kind]
         return self.sw[:, None] * np.column_stack(cols), h
 
@@ -532,6 +571,7 @@ class _Pass:
             d, k = _terms.child_term(dirs, cuts, c.variable, code, cut)
             self.dirs = np.vstack((self.dirs, d))
             self.cuts = np.vstack((self.cuts, k))
+            self.cond.append(d, k)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
             self.degree.append(self.degree[c.parent] + 1)
@@ -657,7 +697,10 @@ def forward_pass(
     only with extreme weights: without weights the scaled Y has a value of
     size at least 1).
     Complexity: O(p·n·log n + S·P·p·n·r·K + n·M²) time for S steps of P
-    parents, O(n·(p + M_max + K)) memory.
+    parents, O(n·(p + M_max + K)) memory. With a covariate of a large mean
+    (``_linalg.Conditioner``) there are also O(M²·p·3^d) rational operations
+    in all, O(n·d·3^d) per column that is formed, and O(M·p·3^d) memory for
+    the coefficients, for terms of degree d.
     """
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
