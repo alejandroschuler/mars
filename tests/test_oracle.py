@@ -1537,3 +1537,19 @@ def test_pruning_pass_on_earth_forward_bases(case):
     group = case.name[:3] if case.name[:3] in ("S15", "pru") else "S01 to S20"
     group = {"pru": "components"}.get(group, group)
     _count(f"pruning, earth bases, {group}", check_pruning(case))
+
+
+def test_a_parent_gives_a_row_by_removing_one_covariate():
+    """FWD-12: the product h(x0 - .5) h(x1 - .3) comes from either factor as
+    its parent, and from no other term."""
+    rec = {
+        "dirs": np.array([[0, 0], [1, 0], [0, 1], [1, 1], [1, 0]]),
+        "cuts": np.array([[0, 0], [0.5, 0], [0, 0.3], [0.5, 0.3], [0.4, 0]]),
+    }
+    assert [_parent_gives(rec, p, 3) for p in range(5)] == [
+        False,
+        True,
+        True,
+        False,
+        False,
+    ]
