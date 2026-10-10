@@ -95,7 +95,8 @@ def build(run: Path) -> str:
         "Times are wall seconds of the fit alone. In the tables a cell reads "
         "`time (selected terms/forward terms)`. The data are Friedman #1 with fixed seeds, "
         "the same for every system; the baseline is 1,000 cases, 10 covariates, degree 2 "
-        "and a limit of 21 terms.",
+        "and a limit of 21 terms. `not run` means the setting is not in the design for that "
+        "system (the legacy code stops at 2,000 cases and takes no weights) or has not finished.",
         "",
     ]
     if meta:
