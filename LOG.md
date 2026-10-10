@@ -297,6 +297,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 ## 2026-10-09
 
 - 17:26 PDT: watchdog session local_31166e1b took the stale lock (heartbeat 16:00, the planned end of the pause; old lock now lock.stale.*). Weekly 65 % (the user used some since Monday), 5-hour 36 %. No new user message in local_a59469db. main a0ddca9 unchanged since gate C passed, so no gate C rerun. Pulled <main> to a0ddca9. Plan: four authors at once, per the Friday rule: t85-fast-la5 (sonnet, #85), t84-ref-pruning (sonnet, #84), t01-spec-v2 (opus, #44), t19-bench (sonnet, #21).
+- 17:45 Started authors (IDs resolve only in local_31166e1b): t85-fast-la5 aa4f0552809bbe25e (sonnet), t84-ref-pruning ad667dcfac78b5993 (sonnet), t01-spec-v2 aab76b3a0adb70a18 (opus), t19-bench a11c4cdb2a396f6e1 (sonnet).
 
 ## Core-hour ledger
 
