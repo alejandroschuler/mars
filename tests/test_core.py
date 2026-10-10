@@ -124,6 +124,31 @@ def _rel(actual, expected, rtol):
     np.testing.assert_allclose(actual[ok], expected[ok], rtol=rtol, atol=0)
 
 
+def _eps(V, R, tss):
+    """LA-5: ε(V*, R) = 1e-8 R + c sqrt(TSS V*) + (c/2)² TSS, c = 1e-14."""
+    return 1e-8 * R + 1e-14 * np.sqrt(tss * V) + (1e-14 / 2) ** 2 * tss
+
+
+def _la5(actual, expected, R, tss, k=1):
+    """Each value within k ε of the expected one; infinities must be equal."""
+    actual, expected = np.asarray(actual, float), np.asarray(expected, float)
+    np.testing.assert_array_equal(np.isinf(actual), np.isinf(expected))
+    ok = np.isfinite(expected)
+    R = np.broadcast_to(R, expected.shape)[ok]
+    assert np.all(np.abs(actual[ok] - expected[ok]) <= k * _eps(expected[ok], R, tss))
+
+
+def _la5_gcv(actual, expected, V, tss):
+    """GCV values inherit the bound of their RSS V* (R = V*, GCV-2): the
+    relative bound ε(V*, V*) / V*, which an exact fit (V* = 0) leaves open."""
+    actual, expected = np.asarray(actual, float), np.asarray(expected, float)
+    np.testing.assert_array_equal(np.isinf(actual), np.isinf(expected))
+    ok = np.isfinite(expected) & (np.asarray(V) > 0)
+    V = np.broadcast_to(V, expected.shape)[ok]
+    rtol = _eps(V, V, tss) / V
+    assert np.all(np.abs(actual[ok] - expected[ok]) <= rtol * np.abs(expected[ok]))
+
+
 def _same(a, b):
     """Two fits, or their dicts, hold the same keys, dtypes and values."""
     a = a.to_dict() if isinstance(a, MarsFit) else a
@@ -209,19 +234,20 @@ def _check_reference(X, Y, w, params):
     for key in ("kept", "dropped", "parent", "step", "termination"):
         assert np.array_equal(getattr(f, key), getattr(g, key)), key
     before = np.r_[f.rss[0], f.rss[:-1]]
-    assert np.all(np.abs(f.rss - g.rss) <= 1e-8 * before)
-    a, b = f.candidates.second_rss, g.candidates.second_rss  # each within 1e-8
-    np.testing.assert_array_equal(np.isinf(a), np.isinf(b))
-    ok = np.isfinite(b)
-    assert np.all(np.abs(a[ok] - b[ok]) <= 2e-8 * f.rss[:-1][ok])
+    tss = g.rss[0]
+    _la5(f.rss, g.rss, before, tss)
+    # the seconds: each within ε of the exact value, so within 2 ε of each other
+    _la5(f.candidates.second_rss, g.candidates.second_rss, f.rss[:-1], tss, k=2)
     for key in ("removed", "subsets", "selected_size"):
         assert np.array_equal(getattr(fit.pruning, key), getattr(ref.pruning, key)), key
-    _rel(fit.pruning.rss_per_size, ref.pruning.rss_per_size, 1e-8)
-    _rel(fit.pruning.gcv_per_size, ref.pruning.gcv_per_size, 1e-8)
+    V = ref.pruning.rss_per_size
+    _la5(fit.pruning.rss_per_size, V, V, tss)  # R = V* in the pruning pass
+    _la5_gcv(fit.pruning.gcv_per_size, ref.pruning.gcv_per_size, V, tss)
     np.testing.assert_array_equal(fit.selected, ref.selected)
     if np.linalg.cond(_terms.basis_matrix(X, fit.dirs, fit.cuts)) <= 1e5:
         assert np.linalg.norm(fit.coef - ref.coef) <= 1e-6 * np.linalg.norm(ref.coef)
-    _rel([fit.rss, fit.gcv], [ref.rss, ref.gcv], 1e-8)
+    _la5(fit.rss, ref.rss, ref.rss, tss)
+    _la5_gcv(fit.gcv, ref.gcv, ref.rss, tss)
     assert np.allclose([fit.rsq, fit.grsq], [ref.rsq, ref.grsq], rtol=0, atol=1e-8)
     assert (fit.n_eff, fit.max_terms, fit.penalty) == (
         ref.n_eff,
