@@ -66,6 +66,8 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running agents
 
+(2026-10-10 00:20) authors: t85-fast-la5 aa4f0552809bbe25e (#95 rebase), v2-ref acd6317eff3eb84c2, v2-core a393f524141ec8081, v2-tests af223056c9e00158c. Queue: gate C and merge of #95; then V2-FWD (#104) and V2-PRUNE (#105, takes over draft #96); T21 freeze after the V2 follow-ups.
+
 Started 2026-10-09 17:45 by local_31166e1b (IDs resolve only in that session): see LOG.
 
 ## Running jobs
