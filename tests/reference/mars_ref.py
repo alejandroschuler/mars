@@ -1,6 +1,6 @@
 """Reference implementation of the pymars 2.0 fitting algorithm (the test oracle).
 
-This module implements ``docs/algorithm.md`` (spec v1) literally, so that the
+This module implements ``docs/algorithm.md`` (spec v2) literally, so that the
 oracle tests can compare the fast code in ``pymars/`` with it
 (VALIDATION_PLAN.md, "Tests and validation folders" and "Fast path"). It was
 written from the spec alone. It imports nothing from ``pymars``, and its
@@ -1275,7 +1275,7 @@ def forward_pass(
         rsq_gain = rsq(rss_new, tss) - rsq(rss_s, tss)
         grsq_new = grsq(rss_new, M_new, tss, penalty, N, tau_N)
         if params.thresh > 0 and grsq_new < -10:  # [STOP-3]
-            termination = GRSQ_NEG_INF if grsq_new == -math.inf else GRSQ_LOW
+            termination = GRSQ_NEG_INF if grsq_new < -1000 else GRSQ_LOW
             break
         if rsq_gain < params.thresh:  # [STOP-4]
             termination = RSQ_CHANGE_SMALL

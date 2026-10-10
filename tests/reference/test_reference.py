@@ -1522,12 +1522,22 @@ class TestForwardPass:
 
     @pytest.mark.parametrize(
         ("penalty", "thresh", "code", "steps"),
-        [(2.899495, 0.001, 2, 1), (2.992898, 0.001, 3, 0), (4.0, 0.5, 3, 0)],
+        [
+            (2.899495, 0.001, 2, 1),
+            (2.992898, 0.001, 3, 0),
+            (4.0, 0.5, 3, 0),
+            (4.7846, 0.001, 3, 0),
+            (4.7851, 0.001, 2, 0),
+        ],
     )
-    def test_the_grsq_stop_at_minus_ten(self, penalty, thresh, code, steps):
+    def test_the_grsq_stops_at_minus_ten_and_minus_1000(
+        self, penalty, thresh, code, steps
+    ):
         # STOP-3 on the 8 alternating cases: GRSq' is -9.5 at step 1 with
         # penalty 2.899495 (the step is taken), and -10.5 with 2.992898 (no
         # step). It comes before STOP-4: with thresh 0.5 the code is 3, not 4.
+        # (v2) The code is 2 below -1000, also where GRSq' is finite: about
+        # -997.5 with penalty 4.7846 (code 3) and -1002.1 with 4.7851 (code 2).
         x = np.arange(8.0)[:, None]
         rec = run_forward(x, [1.0, -1.0] * 4, penalty=penalty, thresh=thresh)
         assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
