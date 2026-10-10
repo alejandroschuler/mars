@@ -517,9 +517,10 @@ class Conditioner:
     Complexity: a term with d factors has at most 2^d monomials in the test and
     3^d elements in a column; reducing it costs O(M·2^d) rational operations for
     M registered terms, forming a column O(n·d·3^d), and the exact test
-    O(M²·k²) rational operations on the Gram matrix of the monomials (k
-    monomials per row), which costs O(g) rational operations for each new
-    pair of monomials, g the distinct rows of X, once for the fit. The reduced
+    O(M·K²) integer operations on the Gram matrix of the K monomials of the
+    rows plus O(M³) rational ones, the Gram matrix costing O(g) integer
+    operations for each new pair of monomials, g the distinct rows of X, once
+    for the fit. The reduced
     coefficients of b·x_j are kept and reduced only by the terms that came
     after the last call. Memory O(M·p·3^d) coefficients, no columns, and O(g·K)
     rationals for K monomials in the Gram matrix of the exact test (O(K²)).
@@ -541,6 +542,8 @@ class Conditioner:
             top = float(np.max(np.abs(u))) if u.size else 0.0
             e = 0 if top == 0.0 else math.frexp(top)[1]
             unit = np.ldexp(u, -e)  # a power of 2 times u does not change the key
+            if not np.array_equal(np.ldexp(unit, e), u):  # underflow: no scaling
+                e, unit = 0, u
             key = hashlib.blake2b(unit.tobytes(), digest_size=16).digest()
             r, er = first.setdefault(key, (j, e))
             if r != j and np.array_equal(unit, np.ldexp(self._ucol(r), -er)):
@@ -560,6 +563,8 @@ class Conditioner:
         self._groups: tuple | None = None
         self._xcols: dict = {}
         self._grams: dict = {}
+        self._icols: dict = {}
+        self._wint: tuple | None = None
         self._shifted = False  # a registered term has a linear factor of a large one
         self.size = 0.0  # a bound on the magnitude of the last column formed
 
@@ -625,12 +630,17 @@ class Conditioner:
     # -- atoms and their columns
 
     def _atom(self, j: int, kind: int, t: float = 0.0) -> _Atom:
+        """The atom of covariate j, in the symbol of its copies: u_j =
+        2^pw·u_rep, and (x_j - t)₊ = 2^pw·(u_rep - (t - m_j)/2^pw)₊ (the
+        coefficient 2^pw is ``_ratio``)."""
         if kind == 0:
             return (self._rep[j], 0, 0.0)
-        r = self._rep[j] if self._pw[j] == 0 else j  # a hinge scales with u
-        key = (r, kind, float(t - self._m[j]))
+        key = (self._rep[j], kind, float(np.ldexp(t - self._m[j], -self._pw[j])))
         self._hat.setdefault(key, (j, t))
         return key
+
+    def _ratio(self, j: int) -> Fraction:
+        return Fraction(2) ** self._pw[j]
 
     def _atom_column(self, a: _Atom) -> FloatArray:
         if a not in self._acols:
@@ -642,6 +652,7 @@ class Conditioner:
                 j, t = self._hat[a]
                 x = self._X[:, j]
                 col = np.maximum(x - t, 0.0) if a[1] == 1 else np.maximum(t - x, 0.0)
+                col = np.ldexp(col, -self._pw[j])
             self._acols[a] = col
         return self._acols[a]
 
@@ -680,14 +691,14 @@ class Conditioner:
             code, t = int(row[j]), float(cut[j])
             m = Fraction(float(self._m[j]))
             if code == 1:
-                parts: dict = {self._atom(j, 1, t): Fraction(1)}
+                parts: dict = {self._atom(j, 1, t): self._ratio(j)}
             elif code == 2:
                 parts = self._u_parts(j, 1)
                 if j in self.large:
                     parts[None] = m
             else:  # (t - x)₊ = (x - t)₊ - u + (t - m), m = 0 if x is not shifted
                 parts = self._u_parts(j, -1)
-                parts[self._atom(j, 1, t)] = Fraction(1)
+                parts[self._atom(j, 1, t)] = self._ratio(j)
                 parts[None] = Fraction(t) - m
             new: dict = {}
             for e, f in out.items():
@@ -764,11 +775,11 @@ class Conditioner:
         for j in np.flatnonzero(row):
             code, t = int(row[j]), float(cut[j])
             if code == 2:
-                parts: dict = {(self._atom(j, 0),): Fraction(2) ** self._pw[j]}
+                parts: dict = {(self._atom(j, 0),): self._ratio(j)}
                 if j in self.large:
                     parts[()] = Fraction(float(self._m[j]))
             else:
-                parts = {(self._atom(j, 1 if code == 1 else 2, t),): Fraction(1)}
+                parts = {(self._atom(j, 1 if code == 1 else 2, t),): self._ratio(j)}
             new: dict = {}
             for e, f in out.items():
                 for q, g in parts.items():
@@ -891,57 +902,84 @@ class Conditioner:
                 else:
                     j, t = self._hat[a]
                     sign = 1 if a[1] == 1 else -1
+                    r = self._ratio(j)
                     vals = [
-                        max(sign * (Fraction(float(v)) - Fraction(t)), Fraction(0))
+                        max(sign * (Fraction(float(v)) - Fraction(t)), Fraction(0)) / r
                         for v in Xu[:, j]
                     ]
                 col = [c * v for c, v in zip(col, vals, strict=True)]
             self._xcols[e] = col
         return self._xcols[e]
 
+    @staticmethod
+    def _dyadic(vals: list) -> tuple[FloatArray, int]:
+        """Exact rationals with power-of-2 denominators as integers over one
+        common denominator."""
+        den = max(v.denominator for v in vals)
+        ints = [v.numerator * (den // v.denominator) for v in vals]
+        return np.array(ints, dtype=object), den
+
+    def _int_column(self, e: _Element) -> tuple:
+        """A monomial on the distinct rows of X as (integers, denominator)."""
+        if e not in self._icols:
+            col, den = self._dyadic(self._exact_column(e))
+            self._icols[e] = (col, den)
+        return self._icols[e]
+
     def _gram(self, a: _Element, b: _Element) -> Fraction:
-        """⟨a, b⟩_w of two monomials in exact arithmetic, kept for the fit.
-        Complexity: O(g) the first time."""
+        """⟨a, b⟩_w of two monomials in exact arithmetic (integers over powers
+        of 2), kept for the fit. Complexity: O(g) integer operations the first
+        time."""
         key = (a, b) if a <= b else (b, a)
         if key not in self._grams:
-            W = self._group_data()[2]
-            ca, cb = self._exact_column(a), self._exact_column(b)
-            self._grams[key] = sum(
-                (w * x * y for w, x, y in zip(W, ca, cb, strict=True)), Fraction(0)
-            )
+            if self._wint is None:
+                self._wint = self._dyadic(self._group_data()[2])
+            (ca, da), (cb, db) = self._int_column(a), self._int_column(b)
+            total = int(np.dot(self._wint[0] * ca, cb))
+            self._grams[key] = Fraction(total, self._wint[1] * da * db)
         return self._grams[key]
-
-    def _ip(self, a: dict, b: dict) -> Fraction:
-        """⟨a, b⟩_w of two polynomials, from the Gram matrix of their monomials."""
-        return sum(
-            (ca * cb * self._gram(m, n) for m, ca in a.items() for n, cb in b.items()),
-            Fraction(0),
-        )
-
-    def _project_out(self, v: dict, basis: list) -> dict:
-        for b, nb in basis:
-            c = self._ip(v, b) / nb
-            if c != 0:
-                v = {m: v.get(m, 0) - c * b.get(m, 0) for m in v.keys() | b.keys()}
-        return v
 
     def _exact_dependent(self, q: _Element, N: dict, rows: list) -> bool:
         """LA-4 in exact arithmetic: the weighted squared norm of N orthogonal to
         the rows is below LM_TOL² times that of the pivot monomial q (of N when
-        q is 0 at every case). Gram-Schmidt on the coefficient vectors with the
-        Gram matrix of the monomials (rational, cached): O(g) per new pair of
-        monomials, O(M²·k²) per test for k monomials per row."""
-        basis: list = []  # orthogonal polynomials with their squared norms
-        for _, R in rows:
-            v = self._project_out(dict(R), basis)
-            nv = self._ip(v, v)
-            if nv != 0:
-                basis.append((v, nv))
+        q is 0 at every case). The Gram matrix of the polynomials is C·Gm·Cᵀ
+        with the cached Gram matrix Gm of their monomials, in integers over one
+        denominator, and the squared distance is the Schur complement of the
+        rows in it (Gaussian elimination that skips a zero pivot).
+        Complexity: O(K²) lookups and O(M·K²) integer operations for K monomials
+        in M rows, then O(M³) rational operations."""
+        polys = [R for _, R in rows] + [N]
+        mons = sorted(set().union(*polys))
+        gm = [[self._gram(a, b) for b in mons] for a in mons]
+        D = max(g.denominator for r in gm for g in r)
+        Gm = np.array([[int(g * D) for g in r] for r in gm], dtype=object)
+        scale, C = [], []
+        for poly in polys:
+            L = math.lcm(*(c.denominator for c in poly.values()))
+            scale.append(L)
+            C.append([int(poly.get(m, 0) * L) for m in mons])
+        C = np.array(C, dtype=object)
+        Gi = C @ Gm @ C.T
+        n = len(polys)
+        A = [
+            [Fraction(int(Gi[i, j]), scale[i] * scale[j] * D) for j in range(n)]
+            for i in range(n)
+        ]
+        for k in range(n - 1):
+            if A[k][k] == 0:
+                continue
+            for i in range(k + 1, n):
+                f = A[i][k] / A[k][k]
+                if f != 0:
+                    for j in range(k + 1, n):
+                        A[i][j] -= f * A[k][j]
         ref = self._gram(q, q)
         if ref == 0:
-            ref = self._ip(N, N)
-        res = self._project_out(dict(N), basis)
-        return ref == 0 or self._ip(res, res) < Fraction(LM_TOL) ** 2 * ref
+            ref = sum(
+                (c * d * self._gram(a, b) for a, c in N.items() for b, d in N.items()),
+                Fraction(0),
+            )
+        return ref == 0 or A[n - 1][n - 1] < Fraction(LM_TOL) ** 2 * ref
 
 
 def independent_terms(
@@ -974,10 +1012,11 @@ def independent_terms(
     for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
         v = sw * cond.hinge(row, cut)
         gs = gram_schmidt(Q, v)
-        if gs.q is None or cond.dependent(row, cut, gs.norm, cond.size, kappa=kappa):
+        if cond.dependent(row, cut, gs.norm, cond.size, kappa=kappa):
             continue
-        kappa = max(kappa, cond.size / gs.norm)
+        if gs.q is not None:  # a term that adds no direction is kept, as LA-4 says
+            kappa = max(kappa, cond.size / gs.norm)
+            Q = np.column_stack((Q, gs.q))
         cond.append(row, cut)
-        Q = np.column_stack((Q, gs.q))
         kept[k] = True
     return kept

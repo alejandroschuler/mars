@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from reference import mars_ref
 
 from pymars import _linalg as la
 from pymars import _terms
@@ -713,38 +714,37 @@ def test_independent_terms_without_a_shift_is_independent_columns(seed):
     assert got.tolist() == la.independent_columns(B, w).tolist()
 
 
-@pytest.mark.parametrize("seed", range(40))
-def test_the_float_test_of_la4_decides_as_the_exact_one(seed, monkeypatch):
-    """LA-4 at a large mean on few levels, with a copy of a covariate at another
-    shift, scaled by a power of 2 (EDGE-7's column scales) or off by one unit in
-    the last place, with hinges in the terms and weights that include 0: the
-    decision from the float64 distance, trusted only inside its error bound, is
-    that of exact rational arithmetic (the distance passed as NaN forces the
-    exact test)."""
+@pytest.mark.parametrize("seed", range(60))
+def test_independent_terms_equal_the_references_la4(seed):
+    """FWD-11 against the reference's exact LA-4 (``mars_ref.la4_kept``) on drawn
+    term lists: few levels at large means, a copy of a covariate at another
+    shift, scaled by a power of 2 (the reference is told the EDGE-7 power) or
+    off by one unit in the last place, linear factors, hinges and products,
+    repeated terms, weights (rows of weight 0 are not cases, W-3, so they are
+    dropped first). The reference and the fast code are written apart."""
     rng = np.random.default_rng(seed)
     a = np.floor(rng.uniform(size=(24, 3)) * 3) / 4
-    shifts = rng.choice([1e3, 2.0**26, 1e9, -1e6], 4)
-    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2])) + shifts
+    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
+    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10], 4)
+    powers = np.zeros(4, dtype=np.int64)
     if seed % 3 == 0:
-        X[:, 1] = np.ldexp(X[:, 0] - X[:, 0].min() + 2.0**40, -int(rng.integers(1, 6)))
+        k = int(rng.integers(1, 6))
+        X[:, 1] = np.ldexp(X[:, 0] - X[:, 0].min() + 2.0**40, -k)
+        powers[1] = -k
     elif seed % 3 == 1:
         X[3, 1] = np.nextafter(X[3, 1], np.inf)
-    w = rng.integers(0, 3, 24).astype(float) if seed % 2 else None
-    if w is not None:
-        w[0] = 1.0
-    L = [[(j, 2, 0.0)] for j in range(4)]
-    H = [(2, 1, float(np.median(X[:, 2]))), (3, -1, float(np.median(X[:, 3])))]
-    spec = [[], L[0], L[1], L[2], L[0] + L[2], L[1] + L[3], L[0] + L[1], L[3]]
-    spec += [L[0] + L[2] + L[3], L[1] + L[2] + L[3], L[0] + [H[0]], L[1] + [H[1]]]
-    dirs, cuts = _term_rows(spec, 4)
-    got = la.independent_terms(X, dirs, cuts, w)
-    real = la.Conditioner.dependent
-
-    def exact(self, row, cut, dist, size, extra=(), kappa=1.0):
-        return real(self, row, cut, float("nan"), size, extra, kappa)
-
-    monkeypatch.setattr(la.Conditioner, "dependent", exact)
-    assert la.independent_terms(X, dirs, cuts, w).tolist() == got.tolist()
+    w = rng.integers(0, 3, 24).astype(float) if seed % 2 else np.ones(24)
+    w[0] = 1.0
+    dirs = rng.integers(-1, 3, size=(9, 4)).astype(np.int8)
+    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
+    dirs[0] = 0
+    cuts = np.where(dirs == 0, 0.0, np.median(X, axis=0))
+    cuts[dirs == 2] = 0.0
+    keep = w > 0
+    X, w = X[keep], w[keep]
+    got = la.independent_terms(X, dirs, cuts, None if seed % 2 == 0 else w)
+    want = mars_ref.la4_kept(X, dirs, cuts, w, mars_ref.Atoms(X, powers))
+    assert got.tolist() == want.tolist()
 
 
 def test_a_scaled_copy_is_kept_as_the_exact_test_says():
