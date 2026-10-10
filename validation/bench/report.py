@@ -44,7 +44,12 @@ def load(run: Path) -> list[dict]:
 
 
 def index(records: list[dict]) -> dict[core.Cell, dict]:
-    return {core.Cell(**r["cell"]): r for r in records}
+    """One record per cell: the newest by its start time (a results folder can
+    hold files of older code versions)."""
+    newest: dict[core.Cell, dict] = {}
+    for r in sorted(records, key=lambda r: r.get("started", "")):
+        newest[core.Cell(**r["cell"])] = r
+    return newest
 
 
 def seconds(s: float) -> str:
@@ -96,7 +101,9 @@ def build(run: Path) -> str:
         "`time (selected terms/forward terms)`. The data are Friedman #1 with fixed seeds, "
         "the same for every system; the baseline is 1,000 cases, 10 covariates, degree 2 "
         "and a limit of 21 terms. `not run` means the setting is not in the design for that "
-        "system (the legacy code stops at 2,000 cases and takes no weights) or has not finished.",
+        "system (the legacy code stops at 2,000 cases and takes no weights) or has not finished. "
+        "Each run is a fresh process, so one-time start costs of pymars fall inside the "
+        "timed fit; the numbers are the cost of a single fit, not of a repeated one.",
         "",
     ]
     if meta:
@@ -104,7 +111,7 @@ def build(run: Path) -> str:
             f"Run on {meta.get('cpu') or meta.get('machine')} ({meta.get('cpu_count')} cores), "
             f"Python {meta.get('python')}, numpy {meta.get('numpy')}, {meta.get('R')}, "
             f"earth {meta.get('earth')}, {meta.get('jobs')} cells at a time, "
-            f"1-minute load average {meta.get('load_1min_at_start', 0):.1f} at the start, "
+            f"1-minute load average {meta.get('load_1min_at_start') or 0:.1f} at the start, "
             f"pymars commit `{str(meta.get('commit'))[:10]}`. "
             "Several cells ran at once on a shared machine, so times carry some noise.",
             "",
