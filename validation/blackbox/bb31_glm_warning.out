@@ -1,0 +1,13 @@
+R version 4.4.3 (2025-02-28) 
+  c 29    : intercept +3.91e-17, largest |eta| 29.0000, smallest fitted p 2.544e-13, warning FALSE
+  c 29.9  : intercept +4.34e-18, largest |eta| 29.9000, smallest fitted p 1.034e-13, warning FALSE
+  c 29.99 : intercept -7.33e-17, largest |eta| 29.9900, smallest fitted p 9.452e-14, warning FALSE
+  c 30.01 : intercept -1.57e-16, largest |eta| 30.0100, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 30.1  : intercept -1.57e-16, largest |eta| 30.1000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 31    : intercept +7.49e-23, largest |eta| 31.0000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 33    : intercept +1.11e-16, largest |eta| 33.0000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 33.6  : intercept +1.23e-31, largest |eta| 33.6000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 33.8  : intercept +1.50e-22, largest |eta| 33.8000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+  c 35    : intercept +1.11e-16, largest |eta| 35.0000, smallest fitted p 2.22e-16, warning TRUE (glm.fit: fitted probabilities numerically 0 or 1 occurred)
+CHECK bb31.1 TRUE glm warns exactly when the largest |eta| is above 30 (10 fits)
+CHECK bb31.2 FALSE HYPOTHESIS glm warns exactly when a fitted probability is within 10*eps of 0 or 1 (|eta| > 33.74)
