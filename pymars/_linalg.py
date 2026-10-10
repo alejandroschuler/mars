@@ -34,6 +34,8 @@ Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
 - ``weighted_variances``, ``pair_search``: the kind of a search (LA-7).
 - ``independent_columns``, ``lm_fit``: least squares with the dependent columns
   of LA-4, the analogue of R's ``lm.fit`` (FWD-11, PRUNE-8).
+- ``Conditioner``: columns that span what the terms span, free of the large
+  mean of a covariate (LA-5).
 - ``r_factor``, ``prefix_rss``, ``drop_costs``, ``move_column``: the R factor of
   the pruning pass and its downdates (PRUNE-3, PRUNE-9).
 
@@ -50,6 +52,7 @@ from __future__ import annotations
 
 import math
 import operator
+from fractions import Fraction
 from typing import NamedTuple
 
 import numpy as np
@@ -70,6 +73,11 @@ COLLINEARITY_TOL_LATE = 1e-5
 COLLINEARITY_LAST_EARLY_STEP = 7
 #: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
 PAIR_SEARCH_FACTOR = 0.01
+#: LA-5: a covariate has a large mean when its smallest absolute value is more
+#: than LARGE_MEAN times its range; its linear factors are then expanded
+#: (``Conditioner``). 64³·2^-53 is 3e-11, inside the 1e-8 of LA-5 even before
+#: the conditioning of the columns, so a smaller ratio needs no change of basis.
+LARGE_MEAN = 64.0
 
 
 class GramSchmidt(NamedTuple):
@@ -433,3 +441,156 @@ def move_column(
         R2[lo : hi + 1, lo:] = Rb
         Z2[lo : hi + 1] = Qb.T @ Z[lo : hi + 1]
     return R2, Z2
+
+
+_Element = tuple  # ((covariate, code, knot), ...): a product of factors
+
+
+class Conditioner:
+    """Columns for the projections of the forward pass that span what the terms
+    span, with no digits lost to the large mean of a covariate (LA-5).
+
+    A product with a linear factor x_j of a covariate with a large mean m_j is
+    the sum of the products with u_j = x_j - m_j and with m_j, and a pair of
+    hinges spans x_j with the constant, (t - x)₊ = (x - t)₊ - u_j + (t - m_j),
+    where m_j = 0 and u_j = x_j for a covariate that is not large; so every
+    hinge (t - x)₊ expands once an expanding term exists.
+    So each term is a sum of elements, products of hinges (x_j - t)₊ and of
+    u_j, with exact rational coefficients, and exact Gaussian elimination in
+    that coefficient space removes the part of a term that earlier terms span:
+    the column left has coefficients of size about 1 on elements of the size of
+    the range, not of the size of the mean. A covariate is large when its
+    smallest absolute value exceeds ``LARGE_MEAN`` times its range; then every
+    x_j - m_j is exact in float64 (Sterbenz), with m_j a data value, and a
+    covariate that is not large keeps its factors as they are. With no term
+    that expands (a linear factor, or a hinge (t - x)₊, of a large covariate)
+    in the parent b, the caller uses b·(x_j - m_j) for b·x_j, which spans the
+    same with the terms, since they hold b, and the hinge as it is.
+
+    ``append`` registers the rows of ``dirs`` and ``cuts`` in the order of the
+    terms. ``linear`` and ``hinge`` return unscaled columns that span with the
+    terms so far what b·x_j and the hinge term span with them. Complexity: a
+    term with d factors has at most 3^d elements; reducing it costs O(M·3^d)
+    rational operations for M terms and forming its column O(n·d·3^d), and
+    the reduced coefficients of b·x_j are kept and reduced only by the terms
+    that came after the last call. Memory: O(M·3^d) coefficients, no columns.
+    """
+
+    def __init__(self, X: FloatArray, center: FloatArray):
+        X = np.asarray(X, dtype=np.float64)
+        self._X = X
+        self._m = np.asarray(center, dtype=np.float64)
+        lo, hi = X.min(axis=0), X.max(axis=0)
+        near = np.where(lo * hi > 0.0, np.minimum(np.abs(lo), np.abs(hi)), 0.0)
+        big = (hi > lo) & (near > LARGE_MEAN * (hi - lo))
+        self.large = frozenset(int(j) for j in np.flatnonzero(big))
+        self._rows: list[tuple[FloatArray, FloatArray]] = []
+        self._pivots: list[tuple[_Element, dict]] = []
+        self._done = 0  # the rows that the pivots cover
+        self._norms: dict = {}
+        self._lin: dict = {}
+
+    def expands(self, row: npt.ArrayLike) -> bool:
+        """Whether a term row has a factor that is expanded: a linear factor or
+        a hinge (t - x)₊ of a covariate with a large mean. Complexity: O(p)."""
+        row = np.asarray(row)
+        return any(row[j] in (2, -1) for j in self.large)
+
+    def append(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> None:
+        """Register the next term. Complexity: O(p)."""
+        self._rows.append((np.asarray(row), np.asarray(cut)))
+
+    def _element_column(self, e: _Element) -> FloatArray:
+        out = np.ones(self._X.shape[0])
+        for j, code, t in e:
+            x = self._X[:, j]
+            if code == 2:
+                out = out * (x - self._m[j] if j in self.large else x)
+            else:
+                out = out * np.maximum(x - t, 0.0)
+        return out
+
+    def _norm(self, e: _Element) -> float:
+        if e not in self._norms:
+            self._norms[e] = float(np.linalg.norm(self._element_column(e)))
+        return self._norms[e]
+
+    def _expansion(self, row: FloatArray, cut: FloatArray) -> dict:
+        """The term as {element: Fraction}. Complexity: O(3^d)."""
+        out: dict = {(): Fraction(1)}
+        for j in np.flatnonzero(row):
+            code, t = int(row[j]), float(cut[j])
+            large = int(j) in self.large
+            m = Fraction(float(self._m[j])) if large else Fraction(0)
+            if code == 1:
+                parts: dict = {(int(j), 1, t): Fraction(1)}
+            elif code == 2:
+                parts = {(int(j), 2, 0.0): Fraction(1)}
+                if large:
+                    parts[None] = m
+            else:  # (t - x)₊ = (x - t)₊ - u + (t - m), m = 0 if x is not large
+                parts = {
+                    (int(j), 1, t): Fraction(1),
+                    (int(j), 2, 0.0): Fraction(-1),
+                    None: Fraction(t) - m,
+                }
+            new: dict = {}
+            for e, f in out.items():
+                for q, g in parts.items():
+                    key = e if q is None else (*e, q)
+                    new[key] = new.get(key, 0) + f * g
+            out = {e: f for e, f in new.items() if f != 0}
+        return out
+
+    def _reduce(self, v: dict, start: int) -> dict:
+        """v minus its components along the pivots from ``start`` on."""
+        for p, r in self._pivots[start:]:
+            f = v.get(p, 0)
+            if f != 0:
+                for q, g in r.items():
+                    v[q] = v.get(q, 0) - f * g
+                v = {q: g for q, g in v.items() if g != 0}
+        return v
+
+    def _sync(self) -> None:
+        """Make a pivot of every registered term that the pivots miss: the
+        element with the largest share of the reduced term (by coefficient
+        times column norm, the first in key order among equals), with the
+        coefficients divided by its own. Complexity: O(M·3^d) per term."""
+        while self._done < len(self._rows):
+            v = self._reduce(self._expansion(*self._rows[self._done]), 0)
+            self._done += 1
+            if v:
+                p = max(sorted(v), key=lambda q: abs(float(v[q])) * self._norm(q))
+                self._pivots.append((p, {q: f / v[p] for q, f in v.items()}))
+
+    def _column(self, v: dict) -> FloatArray:
+        out = np.zeros(self._X.shape[0])
+        for e in sorted(v):
+            out += float(v[e]) * self._element_column(e)
+        return out
+
+    def linear(
+        self, k: int, row: npt.ArrayLike, cut: npt.ArrayLike, j: int
+    ) -> FloatArray:
+        """A column that spans with the terms so far what b·x_j spans with them:
+        the reduced expansion of b·x_j, for the term k with ``row`` and ``cut``
+        as b and the covariate j that it lacks. The part of the work that the
+        earlier calls for (k, j) did is kept. Complexity: see the class."""
+        row, cut = np.array(row), np.array(cut, dtype=np.float64)
+        row[j], cut[j] = 2, 0.0
+        self._sync()
+        ent = self._lin.get((k, j))
+        if ent is None:
+            ent = self._lin[k, j] = [0, self._expansion(row, cut)]
+        ent[1] = self._reduce(ent[1], ent[0])
+        ent[0] = len(self._pivots)
+        return self._column(ent[1])
+
+    def hinge(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> FloatArray:
+        """A column that spans with the terms so far what the term with
+        ``row`` and ``cut`` spans with them: its reduced expansion.
+        Complexity: see the class."""
+        self._sync()
+        v = self._expansion(np.asarray(row), np.asarray(cut, dtype=np.float64))
+        return self._column(self._reduce(v, 0))

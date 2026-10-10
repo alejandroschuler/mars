@@ -1078,15 +1078,10 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 
 
 # #79 fixed the reference's forward pass for covariates with a large mean at
-# degree 2 and 3 (#77). Three cases still miss LA-5, so there the draws at
-# degree 2 and 3 keep the ratio of a covariate shift to its spread at or
-# below SHIFT_CAP. Two are in the fast forward pass (#85): an exact duplicate
-# covariate at a large mean, and a product of two linear factors of
-# covariates with large means at degree 3 (the "scaled" kind at degree 2 and
-# 3, and the "shifted" kind at degree 3). The third is the fast pruning
-# pass at intermediate means, near a ratio of 2^20 (#84, #96): the reference's
-# is fixed, the fast one still misses LA-5, so the whole fit keeps the cap
-# until #96 lifts it.
+# degree 2 and 3 (#77), and #85 fixed the fast one. One case still misses
+# LA-5: the fast pruning pass at intermediate means, near a ratio of 2^20
+# (#84, #96; the reference's is fixed), so the whole fit keeps the ratio of a
+# covariate shift to its spread at or below SHIFT_CAP until #96 lifts it.
 SHIFT_CAP = 2.0**10
 
 
@@ -1102,9 +1097,7 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
     runs from none (exact fits and STOP-5) to as large as the signal. At
     degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread with a duplicated covariate, in the ``scaled`` kind, in the
-    ``shifted`` kind at degree 3, and with ``pruning_path`` (the whole
-    fit)."""
+    spread with ``pruning_path`` (the whole fit, #84)."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
@@ -1120,7 +1113,6 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
         X = np.floor(X * levels) / levels
         if p >= 2 and rng.uniform() < 0.5:
             X[:, 1] = X[:, 0]
-            capped = capped or params["max_degree"] >= 2
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
@@ -1136,7 +1128,7 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     if kind == "scaled":
         scale = rng.uniform(-6, 6, p)
         shift = rng.uniform(0, 8, p)
-        if params["max_degree"] >= 2:
+        if capped:
             shift = np.minimum(shift, scale + math.log10(SHIFT_CAP))
         X = X * 10.0**scale + rng.choice([0, 1, -1], p) * 10.0**shift
         Y = Y * 10.0 ** rng.uniform(-6, 6) + rng.choice(
@@ -1144,8 +1136,7 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
         big = [2.0**26, 2.0**36]
-        small = capped or params["max_degree"] == 3  # #85
-        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if small else [0.0, *big], p)
+        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:
@@ -1234,6 +1225,77 @@ def _on_binary_grids(design: str) -> tuple[np.ndarray, np.ndarray]:
     return X, np.round(y * 2**8) / 2**8
 
 
+def _large_mean_cases() -> list[Case]:
+    """Products with a linear factor of a covariate with a large mean (LA-5,
+    #85). The fast forward pass was off from the exact rational RSS of its
+    terms by 7e-7 (the first, degree 2, 1e10), 1.7e-7 (the second, covariates
+    with means of 1e9 and 4e6 times their spreads, degree 3), 3e-5 (the third,
+    covariates + 2^26 and + 2^36, degree 3) and 5e-7 of the RSS before the
+    step (the fourth, a covariate that another one repeats after a shift of
+    each, degree 3); the reference was exact."""
+    x0 = 1e10 + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
+    x1 = np.array([1, 0, 0, 1, 1, 1, 2, 2, 2, 2.0])
+    x2 = np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
+    y = np.array([0.2431975046920717, 0, 0, 1.2431975046920716, 2.909297426825682])
+    y = np.r_[y, 0.2431975046920717, 0.9092974268256817, -0.7568024953079283]
+    y = np.r_[y, 1.9092974268256817, 2.0]
+    spans = {"thresh": 0.0, "fast_k": 0, "adjust_endspan": 0.0}
+    cases = [
+        Case(
+            "x0 + 1e10, x0 x2",
+            np.column_stack((x0, x1, x2)),
+            y,
+            None,
+            spans | {"max_degree": 2},
+        )
+    ]
+    for kind, seed in [("scaled", 176), ("shifted", 588), ("repeated", 126)]:
+        rng = np.random.default_rng(seed)
+        n, p = int(rng.integers(20, 80 if kind == "repeated" else 60)), 3
+        if kind == "repeated":
+            X = np.floor(rng.uniform(size=(n, p)) * rng.choice([5, 10, 20])) / 10
+            X[:, 1] = X[:, 0]
+            X = X + 10.0 ** rng.uniform(6, 9, p)
+            m = X.min(axis=0)
+            noise = 0.01 * rng.standard_normal(n)
+            f = np.sin(4 * (X[:, 0] - m[0])) + (X[:, 2] - X[:, 2].mean()) ** 2 * (
+                X[:, 0] - m[0]
+            )
+            kw = {
+                "max_degree": 3,
+                "fast_k": 0,
+                "thresh": 0.0,
+                "minspan": 1,
+                "endspan": 1,
+            }
+            cases.append(Case("a repeated covariate, shifted", X, f + noise, None, kw))
+            continue
+        p = int(rng.integers(2, 4))
+        X = rng.uniform(size=(n, p))
+        f = np.sin(3 * X[:, 0]) + X[:, 0] * X[:, -1]
+        f = f + 3 * X[:, 0] * X[:, 1] * np.maximum(X[:, -1] - 0.5, 0)
+        f = f + 0.01 * rng.standard_normal(n)
+        if kind == "scaled":
+            scale, shift = rng.uniform(-6, 6, p), rng.uniform(0, 8, p)
+            X = X * 10.0**scale + rng.choice([0, 1, -1], p) * 10.0**shift
+        else:
+            X = X + rng.choice([0.0, 2.0**26, 2.0**36], p)
+        kw = {
+            "max_degree": int(rng.choice([2, 3])),
+            "fast_k": int(rng.choice([0, 1, 5, 20])),
+        }
+        cases.append(
+            Case(
+                f"{kind} covariates, seed {seed}",
+                X,
+                f,
+                None,
+                kw | {"thresh": 0.0, "adjust_endspan": float(rng.choice([0.0, 2.0]))},
+            )
+        )
+    return cases
+
+
 def _designed_cases() -> list[Case]:
     """Designs that earlier tests and reviews built for one rule each; here the
     reference gives the answer."""
@@ -1303,6 +1365,7 @@ def _designed_cases() -> list[Case]:
     cases.append(
         Case("a duplicated covariate", Xd, yd, None, {"fast_k": 0, "thresh": 0.0})
     )
+    cases += _large_mean_cases()
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 
