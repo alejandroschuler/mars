@@ -1320,12 +1320,8 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
     return f
 
 
-# #79 fixed the reference's forward pass for covariates with a large mean at
-# degree 2 and 3 (#77), #85 fixed the fast one, and #94 and #96 the pruning
-# passes (#84, #105), so the whole fit has no cap. The `ties` kind with a
-# duplicated covariate keeps the ratio of a covariate shift to its spread at
-# or below SHIFT_CAP at degree 2 and 3 (#99, #101, #104).
-SHIFT_CAP = 2.0**10
+# #79, #85, #94 and #96 fixed the large-mean cases, #104 the copies at other shifts,
+# so no covariate shift is capped.
 
 
 @st.composite
@@ -1338,14 +1334,11 @@ def forward_cases(draw, kind: str) -> Case:
     and covariates + 2^26 or 2^36, where only centering keeps the sums of
     squares within LA-5 (FWD-10, the plan's "Fast path"); ``small``, 1 to 15
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
-    runs from none (exact fits and STOP-5) to as large as the signal. At
-    degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread in the ``ties`` kind with a duplicated covariate (#99, #101, #104)."""
+    runs from none (exact fits and STOP-5) to as large as the signal."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
-    capped = False
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
@@ -1356,16 +1349,12 @@ def forward_cases(draw, kind: str) -> Case:
         X = np.floor(X * levels) / levels
         if p >= 2 and rng.uniform() < 0.5:
             X[:, 1] = X[:, 0]
-            # copies that are shifted apart are near-copies at a large mean:
-            # #99, #101 (reference) and #104 (fast) settle them (LA-4, LA-2)
-            capped = capped or params["max_degree"] >= 2
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
             X[:] = X[0]
         if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
-            low, high = (1, math.log10(SHIFT_CAP)) if capped else (6, 9)
-            X = X + 10.0 ** rng.uniform(low, high, p)
+            X = X + 10.0 ** rng.uniform(6, 9, p)
     smooth = kind == "smooth" or rng.uniform() < 0.3
     Y = np.column_stack([_truth(rng, X, smooth) for _ in range(K)])
     Y = Y + noise * np.std(Y) * rng.standard_normal((n, K))
@@ -1374,15 +1363,13 @@ def forward_cases(draw, kind: str) -> Case:
     if kind == "scaled":
         scale = rng.uniform(-6, 6, p)
         shift = rng.uniform(0, 8, p)
-        if capped:
-            shift = np.minimum(shift, scale + math.log10(SHIFT_CAP))
         X = X * 10.0**scale + rng.choice([0, 1, -1], p) * 10.0**shift
         Y = Y * 10.0 ** rng.uniform(-6, 6) + rng.choice(
             [0, 1, -1]
         ) * 10.0 ** rng.uniform(0, 10)
     if kind == "shifted":
         big = [2.0**26, 2.0**36]
-        X = X + rng.choice([0.0, 2.0**6, SHIFT_CAP] if capped else [0.0, *big], p)
+        X = X + rng.choice([0.0, *big], p)
         Y = Y + rng.choice([0.0, 1e10, -1e10, 1e13, -1e13])
     w = None
     if weighted:

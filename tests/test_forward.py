@@ -800,9 +800,9 @@ def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
     real = _forward._scan.rebuild
     calls = []
 
-    def failing(Q, Y, columns):
+    def failing(Q, Y, columns, sizes=None):
         calls.append(1)
-        return None if len(calls) == 1 else real(Q, Y, columns)
+        return None if len(calls) == 1 else real(Q, Y, columns, sizes)
 
     monkeypatch.setattr(_forward._scan, "rebuild", failing)
     chosen, _, new_second = st_.best()

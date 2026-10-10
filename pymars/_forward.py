@@ -173,7 +173,9 @@ class _Candidate(NamedTuple):
 class _Search(NamedTuple):
     """The search of one covariate x on the parent b: its kind (LA-7), the
     linear candidate's reduction (0.0 in a single-hinge search), and the
-    orthonormal basis and residuals on G (B, and b·x in a pair search)."""
+    orthonormal basis and residuals on G (B, and b·x in a pair search).
+    ``dep``: LA-4 finds b·x dependent on B in a pair search, so it counts as 0
+    (LA-1, LA-2): no linear candidate, and G is B."""
 
     x: FloatArray
     b: FloatArray
@@ -181,6 +183,8 @@ class _Search(NamedTuple):
     lin: float
     Q: FloatArray
     E: FloatArray
+    dep: bool = False
+    kappa: float = 1.0
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -257,6 +261,7 @@ class _Pass:
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.cond = _linalg.Conditioner(X, w)  # LA-4, LA-5
         self.cond.append(self.dirs[0], self.cuts[0])
+        self.kappa = 1.0  # the loss of digits in Q (LA-4's error bound)
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
         self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
         self.parent, self.step_of = [-1], [0]
@@ -447,18 +452,52 @@ class _Pass:
             return self.cols[k] * (self.X[:, j] - self.center[j])
         return self.cond.linear(k, self.dirs[k], self.cuts[k], j)
 
-    def hinge_column(self, c: _Candidate, h: FloatArray) -> FloatArray:
+    def hinge_column(self, c: _Candidate, h: FloatArray) -> tuple[FloatArray, float]:
         """The unscaled column that stands for the hinge column h of the
-        candidate c in the projections: h itself, or, when the parent has a
+        candidate c in the projections, and a bound on its entries' magnitude
+        (the scaled norm, for LA-4's test): h itself, or, when the parent has a
         linear factor, or a hinge (t - x)₊, of a covariate with a large mean,
         its reduced expansion (``_linalg.Conditioner``), which spans the same
-        with B. Complexity: O(1), or see ``linear_column``."""
+        with B. Complexity: O(n), or see ``linear_column``."""
         if not self.cond.expands(self.dirs[c.parent]):
-            return h
+            return h, float(np.linalg.norm(self.sw * h))
         d, k = _terms.child_term(
             self.dirs[c.parent], self.cuts[c.parent], c.variable, _terms.PLUS, c.knot
         )
-        return self.cond.hinge(d, k)
+        col = self.cond.hinge(d, k)
+        return col, self.cond.size
+
+    def _linear_row(self, k: int, j: int) -> tuple[IntArray, FloatArray]:
+        """The row of b·x_j, b the term k (a linear factor in j). O(p)."""
+        return _terms.child_term(self.dirs[k], self.cuts[k], j, _terms.LINEAR)
+
+    def _linear_dependent(self, k: int, j: int, dist: float, size: float) -> bool:
+        """LA-2, LA-4: whether the column b·x_j is dependent on B, given the
+        norm ``dist`` of its part orthogonal to B (from a column that spans the
+        same with B) and the magnitude ``size`` of that column. Complexity: O(n)
+        and, with a large mean, see ``_linalg.Conditioner``."""
+        row, cut = self._linear_row(k, j)
+        if self.cond.shifted(row):
+            return self.cond.dependent(row, cut, dist, size, kappa=self.kappa)
+        raw = self.sw * self.cols[k] * self.X[:, j]
+        return _linalg.plain_dependent(dist, float(np.linalg.norm(raw)))
+
+    def _hinge_dependent(
+        self, c: _Candidate, sr: _Search, h: FloatArray, hg: FloatArray, size: float
+    ) -> bool:
+        """LA-2, LA-4: whether the hinge column of candidate c is dependent on G
+        (B, and b·x when LA-4 keeps it in a pair search). Complexity: O(n·r)
+        and, with a large mean, see ``_linalg.Conditioner``."""
+        dist = _linalg.gram_schmidt(sr.Q, self.sw * hg).norm
+        row, cut = _terms.child_term(
+            self.dirs[c.parent], self.cuts[c.parent], c.variable, _terms.PLUS, c.knot
+        )
+        extra = (
+            [self._linear_row(c.parent, c.variable)] if sr.pair and not sr.dep else []
+        )
+        if self.cond.shifted(row, *(r for r, _ in extra)):
+            return self.cond.dependent(row, cut, dist, size, extra, sr.kappa)
+        return _linalg.plain_dependent(dist, float(np.linalg.norm(self.sw * h)))
 
     def setup(self, k: int, j: int) -> _Search:
         """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
@@ -473,16 +512,22 @@ class _Pass:
         x, b = self.X[:, j], self.cols[k]
         if self.cond.expands(self.dirs[k]):
             v = self.sw * self.linear_column(k, j)
+            size = self.cond.size
         else:  # the product order of the plain path: (√w·b)·(x - c)
             v = self.sw * b * (x - self.center[j])
+            size = float(np.linalg.norm(v))
         gs = _linalg.gram_schmidt(self.Q, v)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
         if not pair:
-            return _Search(x, b, False, 0.0, self.Q, self.E)
+            return _Search(x, b, False, 0.0, self.Q, self.E, False, self.kappa)
+        if self._linear_dependent(k, j, gs.norm, size):  # LA-2: it counts as 0
+            return _Search(x, b, True, 0.0, self.Q, self.E, True, self.kappa)
         Q = np.column_stack((self.Q, gs.q))
         lin = float(self._capped(float(np.sum((gs.q @ self.E) ** 2))))
-        return _Search(x, b, True, lin, Q, _linalg.orthogonalize(Q, self.E)[0])
+        kappa = max(self.kappa, size / gs.norm)
+        E = _linalg.orthogonalize(Q, self.E)[0]
+        return _Search(x, b, True, lin, Q, E, False, kappa)
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
         """Pass 1 for parent k and covariate j: every candidate that can be one
@@ -538,26 +583,39 @@ class _Pass:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
                 h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
-                hg = self.hinge_column(c, h)  # same span with G (LA-5)
+                hg, size = self.hinge_column(c, h)  # same span with G (LA-5)
                 rho, gain = _scan.exact_knot(sr.Q, sr.E, hg, self.w)
                 if hg is not h:  # LA-3 is the ratio of the hinge column itself
                     rho = _linalg.collinearity_ratio(sr.Q, h, self.w)
+                if self._hinge_dependent(c, sr, h, hg, size):  # LA-2: counts as 0
+                    gain = 0.0
                 red = float(self._capped(gain + sr.lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
 
-    def columns(self, c: _Candidate) -> tuple[FloatArray, FloatArray | None]:
+    def columns(
+        self, c: _Candidate
+    ) -> tuple[FloatArray, FloatArray | None, list[float]]:
         """Return the √w-scaled columns that span the candidate's terms (b·x
-        before the hinge of a pair, FWD-6) and its unscaled hinge column, or
-        None. Complexity: O(n)."""
+        before the hinge of a pair, FWD-6), its unscaled hinge column, or None,
+        and a bound on the magnitude of each scaled column (for the error
+        bound of LA-4). Complexity: O(n)."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
-        xc = self.linear_column(c.parent, c.variable)  # as in setup
-        h = None
+        h, sizes, cols = None, [], []
+        if c.kind != KIND_HINGE and not (
+            c.kind == KIND_PAIR and self.setup(c.parent, c.variable).dep
+        ):  # a b·x that LA-4 finds dependent is not in the span
+            cols.append(self.linear_column(c.parent, c.variable))  # as in setup
+            plain = not self.cond.expands(self.dirs[c.parent])
+            sizes.append(
+                float(np.linalg.norm(self.sw * cols[-1])) if plain else self.cond.size
+            )
         if c.kind != KIND_LINEAR:
-            h = self.hinge_column(c, b * _terms.factor(_terms.PLUS, x, c.knot))
-        cols = {KIND_PAIR: (xc, h), KIND_HINGE: (h,), KIND_LINEAR: (xc,)}[c.kind]
-        return self.sw[:, None] * np.column_stack(cols), h
+            h, size = self.hinge_column(c, b * _terms.factor(_terms.PLUS, x, c.knot))
+            cols.append(h)
+            sizes.append(size)
+        return self.sw[:, None] * np.column_stack(cols), h, sizes
 
     def check(self, c: _Candidate) -> _scan.Rebuild | None:
         """Build the candidate again (``_scan.rebuild``) and apply FWD-4 to its
@@ -566,8 +624,8 @@ class _Pass:
         columns, so the ratio would be the same up to rounding. The rebuilt RSS and
         pass 2's reduction can differ in the last bits, so a knot at MaxLegal
         can fail here. Complexity: O(n·r·K)."""
-        cols, _ = self.columns(c)
-        rb = _scan.rebuild(self.Q, self.Yw, cols)
+        cols, _, sizes = self.columns(c)
+        rb = _scan.rebuild(self.Q, self.Yw, cols, sizes)
         if rb is None:
             return None
         reduction = self.rss[-1] - rb.rss
@@ -712,6 +770,7 @@ class _Pass:
             self.lam.append(math.inf)
             self.kap.append(kappa)
         self.Q, self.E = rb.Q, rb.resid
+        self.kappa = max(self.kappa, rb.kappa)
         self.rss.append(rb.rss)
 
 
@@ -886,7 +945,7 @@ def forward_pass(
     with np.errstate(over="ignore"):  # EDGE-6: an RSS above the range is inf
         rss = np.ldexp(np.array(st.rss), -2 * shift)
     B = _terms.basis_matrix(X, st.dirs, st.cuts)
-    kept = _linalg.independent_columns(B, w)  # FWD-11
+    kept = _linalg.independent_terms(X, st.dirs, st.cuts, w, B)  # FWD-11
     return ForwardPass(
         st.dirs,
         st.cuts,
