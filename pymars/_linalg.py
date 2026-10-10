@@ -75,8 +75,10 @@ COLLINEARITY_LAST_EARLY_STEP = 7
 PAIR_SEARCH_FACTOR = 0.01
 #: LA-5: a covariate has a large mean when its smallest absolute value is more
 #: than LARGE_MEAN times its range; its linear factors are then expanded
-#: (``Conditioner``). 64³·2^-53 is 3e-11, inside the 1e-8 of LA-5 even before
-#: the conditioning of the columns, so a smaller ratio needs no change of basis.
+#: (``Conditioner``). The ratio is a pymars constant: the spec does not fix it
+#: or the point m_j (spec v2, PR #92, will). 64³·2^-53 is 3e-11, inside the
+#: 1e-8 of LA-5 even before the conditioning of the columns, so a smaller ratio
+#: needs no change of basis.
 LARGE_MEAN = 64.0
 
 
@@ -473,7 +475,12 @@ class Conditioner:
     term with d factors has at most 3^d elements; reducing it costs O(M·3^d)
     rational operations for M terms and forming its column O(n·d·3^d), and
     the reduced coefficients of b·x_j are kept and reduced only by the terms
-    that came after the last call. Memory: O(M·3^d) coefficients, no columns.
+    that came after the last call. Over a pass of M terms and p covariates
+    that is O(M²·p·3^d) rational operations, and the memory is O(M·p·3^d)
+    coefficients, no columns.
+
+    Covariates whose columns are bitwise equal are one symbol in the elements,
+    so that the copy of a large-mean covariate cancels exactly.
     """
 
     def __init__(self, X: FloatArray, center: FloatArray):
@@ -484,6 +491,8 @@ class Conditioner:
         near = np.where(lo * hi > 0.0, np.minimum(np.abs(lo), np.abs(hi)), 0.0)
         big = (hi > lo) & (near > LARGE_MEAN * (hi - lo))
         self.large = frozenset(int(j) for j in np.flatnonzero(big))
+        first: dict = {}  # a covariate's symbol: the first with the same column
+        self._rep = [first.setdefault(X[:, j].tobytes(), j) for j in range(X.shape[1])]
         self._rows: list[tuple[FloatArray, FloatArray]] = []
         self._pivots: list[tuple[_Element, dict]] = []
         self._done = 0  # the rows that the pivots cover
@@ -521,23 +530,24 @@ class Conditioner:
         for j in np.flatnonzero(row):
             code, t = int(row[j]), float(cut[j])
             large = int(j) in self.large
+            r = self._rep[j]
             m = Fraction(float(self._m[j])) if large else Fraction(0)
             if code == 1:
-                parts: dict = {(int(j), 1, t): Fraction(1)}
+                parts: dict = {(r, 1, t): Fraction(1)}
             elif code == 2:
-                parts = {(int(j), 2, 0.0): Fraction(1)}
+                parts = {(r, 2, 0.0): Fraction(1)}
                 if large:
                     parts[None] = m
             else:  # (t - x)₊ = (x - t)₊ - u + (t - m), m = 0 if x is not large
                 parts = {
-                    (int(j), 1, t): Fraction(1),
-                    (int(j), 2, 0.0): Fraction(-1),
+                    (r, 1, t): Fraction(1),
+                    (r, 2, 0.0): Fraction(-1),
                     None: Fraction(t) - m,
                 }
             new: dict = {}
             for e, f in out.items():
                 for q, g in parts.items():
-                    key = e if q is None else (*e, q)
+                    key = e if q is None else tuple(sorted((*e, q)))
                     new[key] = new.get(key, 0) + f * g
             out = {e: f for e, f in new.items() if f != 0}
         return out

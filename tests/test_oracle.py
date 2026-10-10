@@ -1232,7 +1232,8 @@ def _large_mean_cases() -> list[Case]:
     with means of 1e9 and 4e6 times their spreads, degree 3), 3e-5 (the third,
     covariates + 2^26 and + 2^36, degree 3) and 5e-7 of the RSS before the
     step (the fourth, a covariate that another one repeats after a shift of
-    each, degree 3); the reference was exact."""
+    each, degree 3); the reference was exact. (The reference itself misses LA-5
+    for a bitwise copy at a large mean; ``test_forward`` checks that case.)"""
     x0 = 1e10 + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
     x1 = np.array([1, 0, 0, 1, 1, 1, 2, 2, 2, 2.0])
     x2 = np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
