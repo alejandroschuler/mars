@@ -155,7 +155,9 @@ class _Candidate(NamedTuple):
     ``err`` on its error (0.0 for an explicit value), whether it is legal for
     sure (``sure``: no error within the bounds can change its LA-3 and FWD-4
     decisions), its place in the order of FWD-5, and what it adds. ``parent``
-    is the parent's forward index (TERM-6)."""
+    is the parent's forward index (TERM-6). ``key`` names the rows that a single
+    hinge or a linear candidate on a parent of degree 1 or more adds, so that two
+    occurrences of one candidate have one key (FWD-12)."""
 
     reduction: float
     order: tuple[int, int, int]  # (table row of the parent, covariate, place)
@@ -165,6 +167,7 @@ class _Candidate(NamedTuple):
     knot: float  # NaN for a linear term
     err: float = 0.0
     sure: bool = True
+    key: tuple | None = None  # FWD-12: (kind, rows added); None never merges
 
 
 class _Search(NamedTuple):
@@ -181,9 +184,20 @@ class _Search(NamedTuple):
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
-    """Return the best two, by reduction and then by the order of FWD-5.
-    Complexity: O(c·log c) for c candidates."""
-    return _ranked(candidates)[:2]
+    """Return the best two, by reduction and then by the order of FWD-5, of
+    different keys: later occurrences of a merged candidate do not count
+    (FWD-12, FWD-8). Complexity: O(c·log c) for c candidates."""
+    out: list[_Candidate] = []
+    seen: set = set()
+    for c in _ranked(candidates):
+        if c.key is not None:
+            if c.key in seen:
+                continue
+            seen.add(c.key)
+        out.append(c)
+        if len(out) == 2:
+            break
+    return out
 
 
 def _ranked(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -243,6 +257,8 @@ class _Pass:
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.cond = _linalg.Conditioner(X, self.center)  # LA-5
         self.cond.append(self.dirs[0], self.cuts[0])
+        self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
+        self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
         self.parent, self.step_of = [-1], [0]
         self.slot, self.term_at = [1], {1: 0}  # slot 1 holds the intercept
         self.lam, self.kap = [math.inf], [0]
@@ -270,6 +286,84 @@ class _Pass:
             adjust_endspan=prm["adjust_endspan"],
             tau=self.tau,
         )
+
+    @staticmethod
+    def _row_key(dirs_row: IntArray, cuts_row: FloatArray) -> tuple[bytes, bytes]:
+        """The key of a term's row (TERM-6). Complexity: O(p)."""
+        return dirs_row.tobytes(), cuts_row.tobytes()
+
+    def _adds(self, kind: int, j: int, knot: float) -> tuple[int, float]:
+        """The factor (code and cut) that a candidate of this kind adds on the
+        covariate j (FWD-6). Complexity: O(1)."""
+        if kind == KIND_HINGE:
+            return _terms.PLUS, knot
+        if self.params["auto_linpreds"]:
+            return _terms.LINEAR, 0.0
+        return _terms.PLUS, self.lin_knot[j]
+
+    def _child(self, c: _Candidate) -> tuple[IntArray, FloatArray]:
+        """The row of the term that candidate c adds (a single hinge or a
+        linear candidate). Complexity: O(p)."""
+        code, cut = self._adds(c.kind, c.variable, c.knot)
+        return _terms.child_term(
+            self.dirs[c.parent], self.cuts[c.parent], c.variable, code, cut
+        )
+
+    def keyed(self, c: _Candidate) -> _Candidate:
+        """c with its FWD-12 key: that of the rows it adds, for a single hinge
+        or a linear candidate on a parent of degree 1 or more (the others add
+        rows that no other search adds). Complexity: O(p)."""
+        if c.kind == KIND_PAIR or self.degree[c.parent] == 0:
+            return c
+        d, k = self._child(c)
+        return c._replace(key=(c.kind, *self._row_key(d, k)))
+
+    def occurrences(self, c: _Candidate) -> list[_Candidate]:
+        """The occurrences of candidate c in this step, c included, in the order
+        of FWD-5 (FWD-12): the searches of a parent that this step visits and a
+        covariate g, of the same kind as c (single hinge, or pair search for a
+        linear candidate), that add the same rows, with the same knot. The first
+        one decides. Only the factors g of the added term that a search of c's
+        kind adds can be the new one. Complexity: O(p·n·r) for each alternate
+        search that exists, O(p) otherwise, and O(1) when c.key is None."""
+        out = [c]
+        if c.key is None:
+            return out
+        d, k = self._child(c)
+        for g in np.flatnonzero(d).tolist():
+            code, cut = self._adds(c.kind, g, float(k[g]))
+            if g == c.variable or d[g] != code or k[g] != cut:
+                continue
+            d2, k2 = d.copy(), k.copy()
+            d2[g], k2[g] = _terms.ABSENT, 0.0
+            parent = self.index.get(self._row_key(d2, k2))
+            if parent is None or parent not in self.rows:
+                continue
+            place = 0
+            if c.kind == KIND_HINGE:
+                at = np.flatnonzero(self.knots_of(parent, g).knots == cut)
+                if at.size == 0:
+                    continue
+                place = int(at[0]) + 1
+            if self.setup(parent, g).pair != (c.kind == KIND_LINEAR):
+                continue
+            order = (self.rows[parent], g, place)
+            knot = cut if c.kind == KIND_HINGE else math.nan
+            out.append(c._replace(order=order, parent=parent, variable=g, knot=knot))
+        return sorted(out, key=lambda o: o.order)
+
+    def decide(self, first: _Candidate) -> _Candidate | None:
+        """The explicit values of the first occurrence of a merged candidate, or
+        None when it is not legal (FWD-12: its LA-3 decision, its reduction and
+        its legality hold for every occurrence). Complexity: O(n·(r + K))."""
+        if first.kind == KIND_LINEAR:
+            sr = self.setup(first.parent, first.variable)
+            lin = sr.lin
+            if not sr.pair or lin <= 0.0:
+                return None
+            return first._replace(reduction=lin, err=0.0, sure=True)
+        out = self.refine([first])
+        return out[0] if out else None
 
     def max_legal(self) -> float:
         """FWD-4: MaxLegal_s = min(1.01·RSS_s, 10·Δ_s), and 1.01·RSS_0 first.
@@ -415,7 +509,8 @@ class _Pass:
                 possible[place - 1] = False
         found = []
         if sr.pair and sr.lin > 0.0 and (row, j, 0) not in excluded:
-            found.append(_Candidate(sr.lin, (row, j, 0), k, j, KIND_LINEAR, math.nan))
+            lin = _Candidate(sr.lin, (row, j, 0), k, j, KIND_LINEAR, math.nan)
+            found.append(self.keyed(lin))
         floor = _second_largest(
             [*(red - err)[possible & sure], *(c.reduction for c in found)]
         )
@@ -425,7 +520,7 @@ class _Pass:
             c = _Candidate(
                 float(red[i]), (row, j, i + 1), k, j, kind, t, e, bool(sure[i])
             )
-            found.append(c)
+            found.append(self.keyed(c))
         return _ranked(found)
 
     def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
@@ -509,21 +604,43 @@ class _Pass:
             (k, j): self.search(k, j, excluded) for k in parents for j in searched[k]
         }
         explicit: dict = {}  # order -> the candidate with explicit values, or None
+        decided: dict = {}  # key -> (first occurrence with explicit values or None)
         while True:
             kept = [c for cands in found.values() for c in cands]
             want = self._contenders(kept)
-            new = [c for c in want if c.order not in explicit]
+            new = [c for c in want if c.key is None and c.order not in explicit]
             explicit.update((c.order, None) for c in new)
             explicit.update((c.order, c) for c in self.refine(new))
-            legal = [explicit[c.order] for c in want if explicit[c.order] is not None]
+            legal = []
+            for c in want:
+                if c.key is None:
+                    r = explicit[c.order]
+                else:  # FWD-12: the first occurrence decides for all
+                    if c.key not in decided:
+                        decided[c.key] = self.decide(self.occurrences(c)[0])
+                    r = decided[c.key]
+                    if r is not None and r.order != c.order:
+                        legal.append(r)
+                        r = r._replace(
+                            order=c.order, parent=c.parent, variable=c.variable
+                        )
+                if r is not None:
+                    legal.append(r)
             top = _top_two(legal)
             rb = self.check(top[0]) if top else None
             if not top or rb is not None:
                 break
             c = top[0]
-            excluded.add(c.order)
-            explicit[c.order] = None
-            found[(c.parent, c.variable)] = self.search(c.parent, c.variable, excluded)
+            if c.key is None:
+                dead = [c]
+                explicit[c.order] = None
+            else:
+                dead = self.occurrences(c)
+                decided[c.key] = None
+            for d in dead:
+                excluded.add(d.order)
+            for k, j in {(d.parent, d.variable) for d in dead}:
+                found[k, j] = self.search(k, j, excluded)
         kappa = 2 * len(self.rss)
         for k in parents:
             own = [c.reduction for c in legal if c.parent == k]
@@ -574,6 +691,7 @@ class _Pass:
             self.dirs = np.vstack((self.dirs, d))
             self.cuts = np.vstack((self.cuts, k))
             self.cond.append(d, k)
+            self.index[self._row_key(d, k)] = len(self.cols)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
             self.degree.append(self.degree[c.parent] + 1)

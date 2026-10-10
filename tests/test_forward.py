@@ -599,6 +599,75 @@ def test_the_stop_after_a_step(rss, thresh, high):
     assert _forward._rsq_high(_ns(tss=4.0, thresh=thresh), rss) is high
 
 
+def _merge_case(seed):
+    """Discrete covariates, a product in the truth: x_i·x_j is often chosen from
+    its two linear parents (FWD-12)."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.choice([12, 20, 40, 100]))
+    p = int(rng.choice([2, 3]))
+    levels = int(rng.choice([2, 3, 4, 6, 10]))
+    X = np.floor(rng.uniform(size=(n, p)) * levels) / levels
+    if rng.uniform() < 0.5:
+        X = X * float(rng.choice([1, 10, 1000]))
+    y = sum(
+        rng.normal() * np.maximum(X[:, i] - np.median(X[:, i]), 0) for i in range(p)
+    )
+    y = y + rng.normal() * np.prod(X[:, :2], axis=1) + 0.01 * rng.normal(size=n)
+    return X, y, int(rng.choice([2, 3])), bool(rng.integers(2))
+
+
+@pytest.mark.parametrize("seed", [6, 9, 74])
+def test_the_second_best_does_not_merge_with_the_chosen(seed):
+    """FWD-12, FWD-8: two linear candidates on the two linear parents of one
+    product add the same row, so they are one candidate; the log's second best
+    is another candidate. Before, the second best was the other occurrence at
+    steps 4 and 6 of these fits (equal up to rounding)."""
+    X, y, degree, auto = _merge_case(seed)
+    fp = _fit(X, y, max_degree=degree, auto_linpreds=auto, thresh=0.0, max_terms=13)
+    log = fp.candidates
+    for s in range(len(log.best_rss)):
+        if log.second_kind[s] != _forward.KIND_LINEAR:
+            continue
+        p, j = log.second_parent[s], log.second_variable[s]
+        d, k = _terms.child_term(fp.dirs[p], fp.cuts[p], j, _terms.LINEAR)
+        for t in np.flatnonzero(fp.step == s + 1):
+            assert not (fp.dirs[t] == d).all() or not (fp.cuts[t] == k).all()
+
+
+def test_two_searches_that_add_the_same_hinge_product_are_one_candidate(monkeypatch):
+    """FWD-12: with h(x0 - t0) and h(x1 - t1) in the model, the single hinge on
+    the first with covariate x1 and knot t1 and the one on the second with
+    covariate x0 and knot t0 add the same row; the first in the order of FWD-5
+    decides, and its reduction and legality hold for both. A pair search on one
+    of the parents breaks the match, since the kinds differ."""
+    rng = np.random.default_rng(2)
+    X = rng.uniform(size=(30, 2))
+    y = np.maximum(X[:, 0] - 0.4, 0) + np.maximum(X[:, 1] - 0.5, 0)
+    st_ = _state(X, y + 0.1 * rng.normal(size=30), max_degree=2, minspan=1, endspan=1)
+    t = [float(np.sort(X[:, j])[12]) for j in (0, 1)]
+    for j in (0, 1):
+        c = _forward._Candidate(1.0, (0, j, 1), 0, j, _forward.KIND_PAIR, t[j])
+        st_.add(c, _scan.rebuild(st_.Q, st_.Yw, st_.columns(c)[0]))
+    assert sorted(st_.parents()) == [0, 1, 2, 3, 4]
+    k0, k1 = 1, 3  # the terms h(x0 - t0) and h(x1 - t1)
+    place = int(np.flatnonzero(st_.knots_of(k0, 1).knots == t[1])[0]) + 1
+    first = _forward._Candidate(
+        1.0, (st_.rows[k0], 1, place), k0, 1, _forward.KIND_HINGE, t[1]
+    )
+    first = st_.keyed(first)
+    assert len(st_.occurrences(first)) == 1  # the real rule: a pair search on k1
+    monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: False)
+    occ = st_.occurrences(first)
+    assert {(c.parent, c.variable, c.knot) for c in occ} == {
+        (k0, 1, t[1]),
+        (k1, 0, t[0]),
+    }
+    assert occ[0].order < occ[1].order and len({c.key for c in occ}) == 1
+    got = [st_.decide(c) for c in occ]
+    assert got[0] is not None
+    assert got[1].reduction == pytest.approx(got[0].reduction, rel=1e-9)
+
+
 def _fixed_gain(monkeypatch, gain):
     """Make the scan accept every knot and give each the share ``gain(split)``
     of the RSS, as exact values (bounds of 0)."""
