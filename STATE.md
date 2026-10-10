@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-05 15:04 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-10-09 17:40 PDT, by executor session `local_31166e1b-5c39-4d70-92bd-50af6adc1056` (watchdog run, runs in `<main>`).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -15,7 +15,9 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 
 ## Phase
 
-PAUSED UNTIL FRIDAY 2026-10-09 17:00 PDT. The user, in executor session local_a59469db at 15:00 Monday 2026-10-05: "Resume your work on Friday at 5pm. At that point you can use all of the weekly usage i have left by then." This is the week-3 rule that #91 asked for (#91 is closed). The lock's heartbeat is 1791586800 (Friday 2026-10-09 16:00 PDT). The first hourly watchdog run after 17:00 Friday finds it stale and takes the lock; the runs come at about 20 to 40 minutes past the hour. A session that takes the lock before Friday 17:00 PDT starts nothing, writes 1791586800 into the heartbeat of its own lock, pushes a one-line LOG entry, and stops. No agent, job or timer runs until then. caffeinate stays on.
+RUNNING since Friday 2026-10-09 17:26 PDT under the Friday budget rule below (the pause ended). This executor runs in `<main>`: journal worktree `<main>/.worktrees/journal` (detached at origin/executor; push with `git push origin HEAD:executor`), task worktrees `<main>/.worktrees/<branch>`. Briefs COMMON.md and dual_review.js now point there. New briefs: T85-fast-la5, T84-pruning-accuracy, T01v2-spec, T19-bench.
+
+OLD PAUSE NOTE: PAUSED UNTIL FRIDAY 2026-10-09 17:00 PDT. The user, in executor session local_a59469db at 15:00 Monday 2026-10-05: "Resume your work on Friday at 5pm. At that point you can use all of the weekly usage i have left by then." This is the week-3 rule that #91 asked for (#91 is closed). The lock's heartbeat is 1791586800 (Friday 2026-10-09 16:00 PDT). The first hourly watchdog run after 17:00 Friday finds it stale and takes the lock; the runs come at about 20 to 40 minutes past the hour. A session that takes the lock before Friday 17:00 PDT starts nothing, writes 1791586800 into the heartbeat of its own lock, pushes a one-line LOG entry, and stops. No agent, job or timer runs until then. caffeinate stays on.
 
 BUDGET RULE FOR FRIDAY 2026-10-09 17:00 PDT TO THE WEEKLY RESET (get_usage gives 2026-10-11T23:59:59Z, which is Sunday 16:59 PDT): use all of the weekly usage that is left at that time. The user may use some of it before Friday, so read get_usage first. Pacing:
 - Work at full speed: up to 4 authors and 3 reviewers, with Sonnet 5.5 by the model rule below. Run the resume steps 3 to 5 in parallel where their files do not overlap.
@@ -64,13 +66,15 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running agents
 
-None since 2026-09-29 14:25. Agent IDs from earlier sessions do not resolve in a new session.
+Started 2026-10-09 17:45 by local_31166e1b (IDs resolve only in that session): see LOG.
 
 ## Running jobs
 
 - None. The legacy full run (T04) finished at 16:13 PDT Saturday 2026-09-26 (ALL BLOCKS DONE); results in `<main>/.worktrees/runner-legacy/validation/runs/legacy_full` (49,441 files), logs `driver.log` (6 workers) and `driver_n4.log` (4 workers). Keep the runner worktree until T04 step 6 has collected the results into `validation/sims/results/legacy/`.
 
 ## Usage and resets
+
+- 2026-10-09 17:26 PDT: 5-hour 36 % (resets 18:20 PDT); weekly all models 65 % (resets 2026-10-11 17:00 PDT).
 
 - 2026-10-05 15:00 PDT: 5-hour 3 % (resets 16:20 PDT); weekly all models 1 % (resets 2026-10-11 16:59 PDT).
 - 2026-09-27 23:56 PDT: 5-hour 44 % (resets 2026-09-28 03:20 PDT); weekly 21 % (resets 2026-10-04 17:00 PDT).

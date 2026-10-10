@@ -1,11 +1,11 @@
 # Common rules for every agent (authors, reviewers, helpers)
 
-The executor (session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5`, since 2026-09-29; before it `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`) runs `VALIDATION_PLAN.md` in the fork `alejandroschuler/mars`. Your own brief names your task. These rules hold for every agent.
+The executor (session `local_31166e1b-5c39-4d70-92bd-50af6adc1056`, since 2026-10-09; earlier `local_b1a9357f` and `local_a59469db`) runs `VALIDATION_PLAN.md` in the fork `alejandroschuler/mars`. Your own brief names your task. These rules hold for every agent.
 
 ## Paths
 
 - `<main>` = `/Users/aschuler/Documents/research/projects/pymars`, the main clone. Its `.git` folder is shared by all worktrees.
-- `<S>` = `/Users/aschuler/Documents/research/projects/pymars/.claude/worktrees/competent-poincare-5a4d49`, the executor's session worktree. The desktop app lets the Write and Edit tools change files only inside `<S>`. So task worktrees go in `<S>/.worktrees/<branch>`, in place of the plan's `<main>/.worktrees/<branch>`.
+- `<S>` = `<main>` for this executor (it runs in `<main>` itself, not in a desktop session worktree). Task worktrees go in `<main>/.worktrees/<branch>`, as the plan says. The journal worktree is `<main>/.worktrees/journal` (detached; the executor pushes it to `executor`).
 - Gate logs: `<main>/.git/pymars-executor/gates/`. Use absolute paths in every command.
 
 ## What to read
@@ -37,7 +37,7 @@ The executor (session `local_b1a9357f-16f5-4b56-b94e-6e87786227a5`, since 2026-0
 ## Worktree, branch, lease
 
 - Claim your issue first: a comment `CLAIM <agent name> <ISO time>` and the label `claimed` (remove `todo`). A claim with no push for 2 hours is stale.
-- Make the worktree: `bash <main-or-worktree>/dev/tools/new_worktree.sh <branch>` with `PYMARS_WORKTREES=<S>/.worktrees` (read the script first), or the recipe in the plan appendix with `<S>/.worktrees/<branch>`. Branch names are `t<id>-<slug>` from `origin/main`. If the branch exists (a restart), continue from `origin/<branch>`.
+- Make the worktree: `bash <main-or-worktree>/dev/tools/new_worktree.sh <branch>` (read the script first); it puts the worktree in `<main>/.worktrees/<branch>`. Branch names are `t<id>-<slug>` from `origin/main`. If the branch exists (a restart), continue from `origin/<branch>`.
 - Rebase on `origin/main` before review and before merge. Force-push only your own branch, with `--force-with-lease`.
 
 ## Long jobs

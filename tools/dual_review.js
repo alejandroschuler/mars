@@ -4,7 +4,7 @@ export const meta = {
   phases: [{ title: 'Review', detail: 'two reviewers check the same head independently and each posts a verdict' }],
 }
 
-const B = '/Users/aschuler/Documents/research/projects/pymars/.claude/worktrees/competent-poincare-5a4d49/.worktrees/journal/briefs'
+const B = '/Users/aschuler/Documents/research/projects/pymars/.worktrees/journal/briefs'
 const VERDICT = {
   type: 'object',
   properties: {

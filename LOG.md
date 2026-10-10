@@ -294,6 +294,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:01 PDT: watchdog session local_d36235f4 took the stale lock (heartbeat from 08:00). Weekly 0 % (reset 2026-10-11 17:00 PDT), 5-hour 0 %. #91 has no answer and the last executor session has no user message. Started nothing. Heartbeat set to 22:21 PDT.
 - 15:04 The user (this session, local_a59469db): "Resume your work on Friday at 5pm. At that point you can use all of the weekly usage i have left by then." This answers #91. Took the idle lock of local_948927a6 (now lock.stale.1791237788) and set the heartbeat to 1791586800 (Friday 2026-10-09 16:00 PDT), so the first watchdog run after 17:00 Friday takes over. The Friday rule is in STATE (Phase). The watchdog prompt's step 2 now runs a shell test that prints fresh for a future heartbeat (local_948927a6 had read the future 22:21 heartbeat as stale). local_948927a6's journal push had timed out; this commit pushes its commit 0d2a327 too. Weekly 1 %, 5-hour 3 %.
 
+## 2026-10-09
+
+- 17:26 PDT: watchdog session local_31166e1b took the stale lock (heartbeat 16:00, the planned end of the pause; old lock now lock.stale.*). Weekly 65 % (the user used some since Monday), 5-hour 36 %. No new user message in local_a59469db. main a0ddca9 unchanged since gate C passed, so no gate C rerun. Pulled <main> to a0ddca9. Plan: four authors at once, per the Friday rule: t85-fast-la5 (sonnet, #85), t84-ref-pruning (sonnet, #84), t01-spec-v2 (opus, #44), t19-bench (sonnet, #21).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
