@@ -655,9 +655,15 @@ class _Pass:
     def _contenders(kept: list[_Candidate]) -> list[_Candidate]:
         """The candidates of pass 1 that pass 2 values: those whose upper bound
         reaches the second largest lower bound of the sure candidates (the
-        step's best two, FWD-8) or the largest one of their own parent (its
-        λ, FAST-5). Complexity: O(c) for c candidates."""
-        floor = _second_largest([c.reduction - c.err for c in kept if c.sure])
+        step's best two, FWD-8, the occurrences of one merged candidate counted
+        once, FWD-12) or the largest one of their own parent (its λ, FAST-5).
+        Complexity: O(c) for c candidates."""
+        lower: dict = {}  # the occurrences of a merged candidate count once
+        for c in kept:
+            if c.sure:
+                at = c.key if c.key is not None else c.order
+                lower[at] = max(lower.get(at, -math.inf), c.reduction - c.err)
+        floor = _second_largest(list(lower.values()))
         own: dict = {}
         for c in kept:
             if c.sure:
