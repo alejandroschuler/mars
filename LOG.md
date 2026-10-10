@@ -312,6 +312,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:50 #94 at ec50e2c (final rss pinned; pruning_path cap kept until #96; weighted N - 1; body refreshed; gate B PASS); asked review-94-adversarial for the narrow recheck and a spec update check. t85-fast-la5: main's thorough ties seed-23 failure is a fast-forward LA-5 miss (shifts 1e8 to 4e8); on #95 the same class of draw is within 2.4e-15 of exact; no push.
 - 21:00 #92 spec recheck REQUEST_CHANGES at cb95e23 (round-1 items fixed; new blocking: LA-4's shifted rule still drops x2 in the order 1, x0, x0*x2, x2 on #75's data and its new part is defined only up to a coset). Decision sent to t01-spec-v2: an order-independent test by leading monomials in the shifted coordinates (reduced echelon form, as #95's Conditioner), or else document the order dependence. The adversarial recheck waits for that head.
 - 21:10 #94 recheck APPROVE (adversarial, and spec update check; diff since 0d1f611 test-only). Merged #94 (the reference's pruning at intermediate means) as fc7cb9d. #84 stays open for the fast pruning (#96).
+- 21:20 review-95-spec APPROVE at 827e110 (thorough oracle 700 passed; bit-identical to a0ddca9 on 454 fits except large-mean ones and weighted ones: sw*(b*(x-c)) vs (sw*b)*(x-c), 5.7e-14; non-blocking: keep the old product order, update the complexity lines (O(M^2 3^d) worst case), LARGE_MEAN = 64 not in the spec, v2 follow-up to reuse Conditioner). Waiting for the adversarial review before sending fixes.
 
 ## Core-hour ledger
 
