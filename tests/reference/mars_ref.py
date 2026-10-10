@@ -1047,28 +1047,36 @@ class Echelon:
     {pivot monomial: row}, each row with coefficient 1 at its pivot and 0 at
     the other pivots."""
 
-    def __init__(self, rows=None, screen=None):
+    def __init__(self, rows=None, cache=None):
         self.rows = dict(rows or {})
-        self._screen = screen  # (w, Basis, Q, cond) for la4_dependent
+        # the factor of ``factor``, shared with copies until a row is added
+        self._cache = {} if cache is None else cache
 
     def copy(self) -> Echelon:
-        return Echelon(self.rows, self._screen)
+        return Echelon(self.rows, self._cache)
 
-    def screen(self, atoms, w) -> tuple:
-        """A float64 view of the span for la4_dependent: a Basis of the rows,
-        an orthonormal basis Q of its sqrt(w)-scaled columns, and the ratio
-        of the largest to the smallest diagonal entry of R in their QR (the
-        columns scaled to unit norm), which bounds the rounding. Cached
-        until a row is added."""
-        if self._screen is None or self._screen[0] is not w:
-            basis = Basis(atoms, self.ordered())
-            A = basis.columns() * np.sqrt(w)[:, None]
-            A = A / np.linalg.norm(A, axis=0)
-            Q, R, _ = scipy.linalg.qr(A, mode="economic", pivoting=True)
-            diag = np.abs(np.diag(R))
-            rank = int(np.count_nonzero(diag > max(A.shape) * EPS * diag[0]))
-            self._screen = (w, basis, Q[:, :rank], float(diag[0] / diag[rank - 1]))
-        return self._screen[1:]
+    def factor(self, atoms, w) -> tuple:
+        """The exact Gram matrix H of the evaluated rows (in ``ordered``
+        order) in the w inner product, as L D L' by elimination, for
+        la4_dependent; cached until a row is added. Cost: O(k^2 q^2) Gram
+        lookups for k rows of q monomials and O(k^3) operations on
+        fractions."""
+        if self._cache.get("w") is not w:
+            rows = self.ordered()
+            k = len(rows)
+            H = [[_inner(atoms, w, x, y) for y in rows] for x in rows]
+            L = [[Fraction(0)] * k for _ in range(k)]
+            D = [Fraction(0)] * k
+            for i in range(k):
+                D[i] = H[i][i] - sum(L[i][t] ** 2 * D[t] for t in range(i) if D[t])
+                for r in range(i + 1, k):
+                    if D[i]:
+                        acc = H[r][i] - sum(
+                            L[r][t] * L[i][t] * D[t] for t in range(i) if D[t]
+                        )
+                        L[r][i] = acc / D[i]
+            self._cache.update(w=w, factor=(rows, L, D))
+        return self._cache["factor"]
 
     def reduce(self, e) -> dict:
         """e minus its components along the rows, exactly."""
@@ -1090,7 +1098,7 @@ class Echelon:
             if r.get(p, 0) != 0:
                 self.rows[q] = _combine(r, -r[p], v)
         self.rows[p] = v
-        self._screen = None
+        self._cache = {}
         return p
 
     def ordered(self) -> list:
@@ -1117,6 +1125,14 @@ def _dyadic(v) -> tuple[list, int]:
     return [a << (e - d.bit_length() + 1) for a, d in ratios], e
 
 
+def _inner(atoms, w, x: dict, y: dict) -> Fraction:
+    """The exact w inner product of two evaluated rows."""
+    return sum(
+        (f * g * atoms.gram(a, b, w) for a, f in x.items() for b, g in y.items()),
+        Fraction(0),
+    )
+
+
 def _exact_rest_sq(atoms: Atoms, new: dict, others: list, w) -> Fraction:
     """The squared w-norm of the part of the evaluated row ``new`` orthogonal
     to the evaluated rows ``others``, in exact arithmetic on the float64
@@ -1128,9 +1144,7 @@ def _exact_rest_sq(atoms: Atoms, new: dict, others: list, w) -> Fraction:
     vectors = [*others, new]
 
     def inner(x, y):
-        return sum(
-            f * g * atoms.gram(a, b, w) for a, f in x.items() for b, g in y.items()
-        )
+        return _inner(atoms, w, x, y)
 
     k = len(vectors)
     H = [[inner(x, y) for y in vectors] for x in vectors]
@@ -1156,9 +1170,14 @@ def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
     other evaluated reduced rows is less than 1e-7 times the w-norm of the
     evaluated pivot monomial (of the new part, when the monomial is 0 at
     every case). With a shifted covariate the orthogonal part is computed
-    in exact arithmetic (_exact_rest_sq), since the other rows can carry
-    large factors m_j; without one, every row is a monomial, and this is the
-    plain test of LA-4 on the columns, in float64.
+    in exact arithmetic, always, since the other rows can carry large
+    factors m_j whose digits no float64 bound sees: from S's cached exact
+    factor (Echelon.factor) when no row of S holds the new pivot, else by
+    _exact_rest_sq. Without one, every row is a monomial, and this is the
+    plain test of LA-4 on the columns, in float64. Cost with a shift: O(k^2)
+    operations on fractions per test for k kept terms, after the factor; a
+    fit of degree 3 with 48 terms, n = 100 and two shifted covariates takes
+    about 45 s (1.4 s without the shift).
     """
     v = S.reduce(e)
     if not v:
@@ -1176,17 +1195,17 @@ def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
     threshold = DEPENDENT_TOL * size
     if not atoms.plain:
         if S.rows and all(r.get(p, 0) == 0 for r in S.rows.values()):
-            # the other rows are S's, so they span S's span; a float64
-            # residual on a well-scaled Basis of it decides when its rounding
-            # bound, n eps cond |v| times 10, keeps it clear of the threshold
-            basis, Q, cond = S.screen(atoms, w)
-            vb = sw * atoms.evaluate(basis.reduce(e)) / abs(float(v[p]))
-            rest = float(np.linalg.norm(_residual(Q, vb)))
-            bound = 10 * len(vb) * EPS * cond * float(np.linalg.norm(vb))
-            if rest > threshold + bound:
-                return False
-            if rest < threshold - bound:
-                return True
+            # the other rows are S's rows: their exact factor is cached, and
+            # the squared rest is <new, new> - y' D^-1 y with L y = h
+            rows, L, D = S.factor(atoms, w)
+            h = [_inner(atoms, w, r, new) for r in rows]
+            rest_sq = _inner(atoms, w, new, new)
+            y: list = []
+            for i in range(len(rows)):
+                y.append(h[i] - sum(L[i][t] * y[t] for t in range(i) if D[t]))
+                if D[i]:
+                    rest_sq -= y[i] ** 2 / D[i]
+            return rest_sq < Fraction(threshold) ** 2
         return _exact_rest_sq(atoms, new, others, w) < Fraction(threshold) ** 2
     b = sw * part
     if not others:

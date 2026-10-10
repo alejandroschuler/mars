@@ -612,6 +612,22 @@ class TestDependence:
         np.testing.assert_array_equal(
             ref.la4_kept(Z, dirs, cuts, np.ones(6)), [True, True, False]
         )
+        # an affine copy x3 = 3 x2 + 1 under a hinge of x1, at a shift of 1e15:
+        # x0 h x3 = 3 x0 h x2 + x0 h, so the last term is in the span
+        s15 = 1e15 + np.array([0, 1, 1, 0, 1, 2, 0, 1, 2, 2, 1.0])
+        x1 = np.array([0.187, 0.167, 0.206, 0.557, 0.58, 0.585, 0.841, 0.6, 0.738])
+        x1 = np.concatenate([x1, [0.783, 0.39]])
+        x2 = np.array([0, 1, 1, 3, 2, 2, 0, 0, 0, 0, 1.0])
+        Z = np.column_stack([s15, x1, x2, 3 * x2 + 1])
+        dirs = np.array(
+            [[0, 0, 0, 0], [2, -1, 0, 0], [0, -1, 2, 0], [2, -1, 0, 2], [2, -1, 2, 0]],
+            np.int8,
+        )
+        cuts = np.zeros((5, 4))
+        cuts[1:, 1] = 0.585
+        np.testing.assert_array_equal(
+            ref.la4_kept(Z, dirs, cuts, np.ones(11)), [True] * 4 + [False]
+        )
         x = np.concatenate(
             [np.arange(10) * 1e-9, np.random.default_rng(2).uniform(0.1, 1, 90)]
         )
