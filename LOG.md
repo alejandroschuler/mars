@@ -356,6 +356,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 11:05 Started s113-spec af7c145dd97843f6c (opus) and r115-ref af01a6fb043c769f2 (sonnet); IDs resolve only in local_a59469db.
 - 11:36 #117 ready (S113 spec: LA-4/LA-5/EDGE-7, OQ-10, OQ-11; 3032457; gate B PASS; docs only). Follow-ups: the fast Conditioner must map -0 to +0 before hashing; _pruning's affine-copy symbols must not change an LA-4 decision in final_fit. Started review-117-single a995abcdc9e2c8442 (sonnet). Weekly 95 %.
 - 11:49 review-117-single REQUEST_CHANGES at 3032457 (copy gloss and OQ-10 too narrow: x2 + c is not a copy unless the shift removes c; order-free and scale claims in LA-1, LA-4, EDGE-7, Conventions need qualifying; kind (a) margin is 37, not 100). Sent one short round to s113-spec (blocking items plus one-line fixes). Weekly 96 %: nothing new starts; at 98 % the agents push a checkpoint and stop.
+- 12:05 review-117-single APPROVE at b32ba46 (narrow recheck). Merged #117 (spec: LA-4 copies as power-of-2 multiples on u, LA-5 scope, OQ-10, OQ-11) as f50d1cc; #113 closed. Follow-ups (fast Conditioner -0, final_fit affine symbols, spec items 4/8/10 and nits) in #119. Told r115-ref to follow main.
 
 ## Core-hour ledger
 
