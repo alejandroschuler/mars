@@ -1646,6 +1646,10 @@ def _designed_cases() -> list[Case]:
     )
     cases += _large_mean_cases()
     cases += _merge_cases()
+    # STOP-3: GRSq' of the first candidate is -14.6, between -20 and -10: code 3
+    rng = np.random.default_rng(2)
+    Xs, ys = rng.uniform(size=(10, 2)), rng.normal(size=10)
+    cases.append(Case("GRSq' between -20 and -10", Xs, ys, None, {"penalty": 5.0}))
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 
