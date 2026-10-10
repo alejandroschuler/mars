@@ -635,6 +635,73 @@ class TestDependence:
         cuts = np.array([[0.0], [x[8]], [x[8]]])
         assert ref.la4_kept(x[:, None], dirs, cuts, np.ones(100)).all()
 
+    @pytest.mark.parametrize("shift", [0.0, 1e10])
+    def test_a_part_that_is_nonzero_only_at_a_row_of_weight_0_is_dependent(self, shift):
+        # LA-4 with W-3: the hinge h(x - 5) is nonzero only at the last row.
+        # That row is a case with weight 1, so the term counts; with weight 0
+        # it is no case, the column is 0 at every case, and it is dependent.
+        X = (shift + np.array([0, 1, 2, 3, 9.0]))[:, None]
+        dirs, cuts = np.array([[0], [1]], np.int8), np.array([[0.0], [shift + 5]])
+        kept = ref.la4_kept(X, dirs, cuts, np.ones(5))
+        np.testing.assert_array_equal(kept, [True, True])
+        kept = ref.la4_kept(X, dirs, cuts, np.array([1, 1, 1, 1, 0.0]))
+        np.testing.assert_array_equal(kept, [True, False])
+
+    def test_the_orthogonal_part_is_exact_on_the_exact_products(self):
+        # LA-4: n = 6, x0 = x1 and the other columns at large means (a drawn
+        # case, EDGE-7 scaled, of the kind of seed 3002 in #112's recheck).
+        # x1·x2·x3 is a combination of the earlier terms, so the exact
+        # orthogonal part of its new part is 0. The float64 products that
+        # the reference used before leave 6e-57 of it, above 1e-7 times the
+        # tiny pivot, and it kept the term.
+        h = float.fromhex
+        X = np.array(
+            [
+                [h(a), h(a), h(b), h(c)]
+                for a, b, c in [
+                    (
+                        "0x1.dcd6500000000p+0",
+                        "0x1.d1a94a2000000p+0",
+                        "0x1.f400000000000p+0",
+                    ),
+                    (
+                        "0x1.dcd6500000000p+0",
+                        "0x1.d1a94a2000000p+0",
+                        "0x1.f400000000000p+0",
+                    ),
+                    (
+                        "0x1.dcd6500555555p+0",
+                        "0x1.d1a94a2000aabp+0",
+                        "0x1.f400000000000p+0",
+                    ),
+                    (
+                        "0x1.dcd6500555555p+0",
+                        "0x1.d1a94a2000aabp+0",
+                        "0x1.f42aaaaaaaaabp+0",
+                    ),
+                    (
+                        "0x1.dcd6500555555p+0",
+                        "0x1.d1a94a2000aabp+0",
+                        "0x1.f455555555555p+0",
+                    ),
+                    (
+                        "0x1.dcd6500000000p+0",
+                        "0x1.d1a94a2001555p+0",
+                        "0x1.f455555555555p+0",
+                    ),
+                ]
+            ]
+        )
+        dirs = np.array(
+            [[0, 0, 0, 0], [2, 1, 0, -1], [0, 2, 0, 0], [0, 0, 0, 1], [0, 2, 2, 2]],
+            np.int8,
+        )
+        cuts = np.zeros((5, 4))
+        cuts[1, 1], cuts[1, 3] = X[0, 1], h("0x1.f455555555555p+0")
+        cuts[3, 3] = h("0x1.f400000000000p+0")
+        kept = ref.la4_kept(X, dirs, cuts, np.array([1, 1, 1, 1, 2, 1.0]))
+        np.testing.assert_array_equal(kept, [True, True, True, True, False])
+
     def test_the_reduced_echelon_form_does_not_depend_on_the_order(self):
         # LA-4: the rows of the terms of #75 with hinges, in every order
         X = issue75(2.0**36)

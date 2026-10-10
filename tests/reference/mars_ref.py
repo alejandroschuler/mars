@@ -964,6 +964,7 @@ class Atoms:
         # without a shift every term is one monomial with coefficient 1
         self.plain = not large and all(r == 1 for r in self.ratio)
         self._columns: dict = {}
+        self._exact: dict = {}
         self._ints: dict = {}
         self._gram: dict = {}
 
@@ -1001,8 +1002,10 @@ class Atoms:
         return {mono: f for mono, f in out.items() if f != 0}
 
     def gram(self, a, b, w) -> Fraction:
-        """sum_i w_i a_i b_i for the monomials a and b, exactly on the float64
-        columns and weights, cached (for one weight vector)."""
+        """sum_i w_i a_i b_i for the monomials a and b, exactly: the monomials
+        are the exact products of their atoms (``exact_column``), not float64
+        products, which round, so that a part that is 0 in exact arithmetic
+        is 0 here. Cached (for one weight vector)."""
         if self._gram.get("w") is not w:
             self._gram = {"w": w, "W": _dyadic(w)}
             self._ints = {}
@@ -1010,11 +1013,34 @@ class Atoms:
         if key not in self._gram:
             for q in key:
                 if q not in self._ints:
-                    self._ints[q] = _dyadic(self.column(q))
+                    self._ints[q] = _dyadic(self.exact_column(q))
             (W, ew), (A, ea), (B, eb) = self._gram["W"], self._ints[a], self._ints[b]
             total = sum(x * y * z for x, y, z in zip(W, A, B, strict=True))
             self._gram[key] = Fraction(total, 1 << (ew + ea + eb))
         return self._gram[key]
+
+    def exact_column(self, mono) -> list:
+        """The monomial on the n cases in exact arithmetic (Fractions): the
+        product of its atoms, u_s = x_s - m_s without rounding and each hinge
+        (u_s - knot)+ or (knot - u_s)+."""
+        if mono not in self._exact:
+            n = self.X.shape[0]
+            out = [Fraction(1)] * n
+            for s, kind, knot in mono:
+                if ("u", s) not in self._exact:
+                    m = Fraction(self.m[s])
+                    self._exact["u", s] = [Fraction(float(x)) - m for x in self.X[:, s]]
+                u = self._exact["u", s]
+                if kind == U_ATOM:
+                    out = [o * v for o, v in zip(out, u, strict=True)]
+                else:
+                    sign = 1 if kind == PLUS_ATOM else -1
+                    out = [
+                        o * max(sign * (v - knot), 0)
+                        for o, v in zip(out, u, strict=True)
+                    ]
+            self._exact[mono] = out
+        return self._exact[mono]
 
     def column(self, mono) -> np.ndarray:
         """The monomial on the data, its factors multiplied in key order."""
@@ -1120,7 +1146,10 @@ def _combine(a: dict, f, b: dict) -> dict:
 
 def _dyadic(v) -> tuple[list, int]:
     """Integers a_i and e with v_i = a_i 2^-e exactly, for floats v_i."""
-    ratios = [float(x).as_integer_ratio() for x in v]
+    ratios = [
+        x.as_integer_ratio() if isinstance(x, Fraction) else float(x).as_integer_ratio()
+        for x in v
+    ]
     e = max(d.bit_length() for _, d in ratios) - 1
     return [a << (e - d.bit_length() + 1) for a, d in ratios], e
 
@@ -1186,27 +1215,38 @@ def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
     new = {q: f / v[p] for q, f in v.items()}
     others = [r if r.get(p, 0) == 0 else _combine(r, -r[p], new) for r in S.ordered()]
     sw = np.sqrt(np.asarray(w, dtype=np.float64))
-    part = atoms.evaluate(new)
-    if not np.any(part):
-        return True
-    size = float(np.linalg.norm(sw * atoms.column(p)))
-    if size == 0.0:
-        size = float(np.linalg.norm(sw * part))
-    threshold = DEPENDENT_TOL * size
     if not atoms.plain:
+        # Exact on the exact monomial columns (Atoms.exact_column), whose
+        # Gram matrix a row of weight 0 does not enter [W-3]: a part that is
+        # 0 at every case in exact arithmetic is dependent, whatever a float
+        # sum says. The pivot's norm is exact too.
+        new_sq = _inner(atoms, w, new, new)
+        if new_sq == 0:
+            return True
+        size_sq = atoms.gram(p, p, w)
+        if size_sq == 0:
+            size_sq = new_sq  # the new part's norm decides
+        limit = Fraction(DEPENDENT_TOL) ** 2 * size_sq
         if S.rows and all(r.get(p, 0) == 0 for r in S.rows.values()):
             # the other rows are S's rows: their exact factor is cached, and
             # the squared rest is <new, new> - y' D^-1 y with L y = h
             rows, L, D = S.factor(atoms, w)
             h = [_inner(atoms, w, r, new) for r in rows]
-            rest_sq = _inner(atoms, w, new, new)
+            rest_sq = new_sq
             y: list = []
             for i in range(len(rows)):
                 y.append(h[i] - sum(L[i][t] * y[t] for t in range(i) if D[t]))
                 if D[i]:
                     rest_sq -= y[i] ** 2 / D[i]
-            return rest_sq < Fraction(threshold) ** 2
-        return _exact_rest_sq(atoms, new, others, w) < Fraction(threshold) ** 2
+            return rest_sq < limit
+        return _exact_rest_sq(atoms, new, others, w) < limit
+    part = atoms.evaluate(new)
+    if not np.any(part[np.asarray(w) > 0]):  # a row of weight 0 is not a case [W-3]
+        return True
+    size = float(np.linalg.norm(sw * atoms.column(p)))
+    if size == 0.0:
+        size = float(np.linalg.norm(sw * part))
+    threshold = DEPENDENT_TOL * size
     b = sw * part
     if not others:
         return float(np.linalg.norm(b)) < threshold
