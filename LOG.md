@@ -298,6 +298,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 - 17:26 PDT: watchdog session local_31166e1b took the stale lock (heartbeat 16:00, the planned end of the pause; old lock now lock.stale.*). Weekly 65 % (the user used some since Monday), 5-hour 36 %. No new user message in local_a59469db. main a0ddca9 unchanged since gate C passed, so no gate C rerun. Pulled <main> to a0ddca9. Plan: four authors at once, per the Friday rule: t85-fast-la5 (sonnet, #85), t84-ref-pruning (sonnet, #84), t01-spec-v2 (opus, #44), t19-bench (sonnet, #21).
 - 17:45 Started authors (IDs resolve only in local_31166e1b): t85-fast-la5 aa4f0552809bbe25e (sonnet), t84-ref-pruning ad667dcfac78b5993 (sonnet), t01-spec-v2 aab76b3a0adb70a18 (opus), t19-bench a11c4cdb2a396f6e1 (sonnet).
+- 18:10 #92 ready (spec v2, 7168847; about 115 lines; bb29 to bb31; gate B PASS). Changed rules: FWD-5 band, FWD-12 new (one candidate from two parents), STOP-3/CORE-4/FAST-6 code 2 at GRSq' < -1000, GLM-4 |eta| > 30, EDGE-7 new (power-of-2 scaling of X), W-6 scalar weights, EDGE-6 order, LA-1, PRUNE-8, LA-5 error floor 1e-13 sqrt(TSS V*), PRUNE-10 new (OQ-2), STOP-7, W-3, FWD-11; OQ-6 open, OQ-8 new. Started review-92-spec a103fea7bc76585af and review-92-adversarial af4a6415fe4b1bc2b (opus). Drafts: #93 (T19), #94 (#84). Weekly 66 %, 5-hour 42 %.
 
 ## Core-hour ledger
 
