@@ -70,6 +70,8 @@ ONE_HOT_RECIPE = (
     'make_column_transformer((OneHotEncoder(drop="first"), cols), '
     'remainder="passthrough")'
 )
+#: W-6: the total weight is below 2^52, the bound of W-4.
+_MAX_WEIGHT_TOTAL = 2.0**52
 #: W-7: the weights warn when their mean differs from 1 by more than this.
 _MEAN_WEIGHT_TOL = 1e-6
 
@@ -123,15 +125,30 @@ def _check_numeric(X: object, owner: BaseEstimator) -> None:
 def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | None:
     """Return the weights as a float64 array of shape (n,), or None (W-6, W-7).
 
-    Raises ValueError unless the weights are 1-D with one weight per row of X,
-    finite and at least 0, with some weight positive; for weights that are
-    all 0 the message matches ``weight.*zero``. Issues a UserWarning when some
+    A scalar (a Python or numpy int or float) is the weight of every row; a
+    bool and a 0-d array raise ValueError. Otherwise the weights must be 1-D
+    with one weight per row of X, finite and at least 0, with some weight
+    positive; for weights that are all 0 the message matches ``weight.*zero``.
+    A total weight that overflows or is 2^52 or more raises ValueError that
+    says the total is out of range; this check precedes EDGE-6. Issues a UserWarning when some
     weight is not an integer and the mean of the weights differs from 1 by
     more than 1e-6. The zero weights stay, since the core drops their rows
     (W-3). Complexity: O(n).
     """
     if sample_weight is None:
         return None
+    if isinstance(sample_weight, (bool, np.bool_)) or (
+        isinstance(sample_weight, np.ndarray) and sample_weight.ndim == 0
+    ):
+        raise ValueError(
+            "sample_weight is not a weight: a bool or a 0-d array; give a "
+            "number or an array with one weight per row of X"
+        )
+    if isinstance(sample_weight, (numbers.Integral, numbers.Real)):
+        try:
+            sample_weight = np.full(n, float(sample_weight))
+        except OverflowError:
+            raise ValueError("the total weight is out of range") from None
     w = np.asarray(sample_weight)
     if w.shape != (n,):
         raise ValueError(
@@ -143,6 +160,15 @@ def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | 
         raise ValueError("sample_weight must be at least 0")
     if not (w > 0.0).any():
         raise ValueError("every sample weight is zero; at least one must be positive")
+    try:
+        total = math.fsum(w)
+    except OverflowError:
+        total = math.inf
+    if not total < _MAX_WEIGHT_TOTAL:
+        raise ValueError(
+            "the total weight is out of range: it must be below 2^52 "
+            f"(W-4), not {total}"
+        )
     if (w != np.floor(w)).any():
         mean = math.fsum(w) / n
         if abs(mean - 1.0) > _MEAN_WEIGHT_TOL:

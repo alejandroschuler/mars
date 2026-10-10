@@ -171,7 +171,12 @@ def test_text_columns_raise_an_error_that_names_one_hot_encoder(kind):
 @pytest.mark.parametrize(
     ("weights", "match"),
     [
-        (2.0, "one weight per row"),
+        (True, "not a weight"),  # W-6 (v2): a bool is more likely a mask
+        (np.bool_(True), "not a weight"),
+        (np.array(2.0), "not a weight"),  # a 0-d array
+        (-1.0, "at least 0"),
+        (np.full(n, 1e308), "out of range"),  # fsum overflows
+        (np.r_[2.0**52 - 8, np.ones(n - 1)], "out of range"),  # N = 2^52
         (np.r_[-1.0, np.ones(n - 1)], "at least 0"),
         (np.r_[np.nan, np.ones(n - 1)], "sample_weight contains NaN"),
         (np.r_[np.inf, np.ones(n - 1)], "sample_weight contains infinity"),
@@ -184,6 +189,16 @@ def test_weights_outside_the_rules_raise_value_error(weights, match):
     ``weight.*zero``."""
     with pytest.raises(ValueError, match=match):
         EarthRegressor().fit(X, y, sample_weight=weights)
+
+
+@pytest.mark.parametrize("c", [2, np.int32(2), 2.0, np.float32(2.0)])
+def test_a_scalar_weight_goes_to_every_row(c):
+    """W-6 (v2): an int or float scalar, Python or numpy, is the weight of
+    every row, so the fit is that of the array np.full(n, c)."""
+    scalar = EarthRegressor().fit(X, y, sample_weight=c)
+    array = EarthRegressor().fit(X, y, sample_weight=np.full(n, 2.0))
+    assert np.array_equal(scalar.term_coef_, array.term_coef_)
+    assert np.array_equal(scalar.cuts_, array.cuts_)
 
 
 HALVES = np.tile([0.5, 1.5], n // 2)  # not integers, mean 1

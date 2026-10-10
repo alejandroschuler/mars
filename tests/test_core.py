@@ -830,5 +830,5 @@ def test_weights_with_a_total_that_is_too_large(weights):
     """W-6: a total weight of 2^52 or more (W-4) raises ValueError, and so does
     a total that overflows float64; no OverflowError comes from a later sum."""
     x = np.arange(9.0)[:, None]
-    with pytest.raises(ValueError, match="total below 2"):
+    with pytest.raises(ValueError, match="total weight is out of range"):
         fit_mars(x, x[:, 0], weights, MarsParams())
