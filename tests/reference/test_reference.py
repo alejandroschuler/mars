@@ -602,6 +602,16 @@ class TestDependence:
                 np.testing.assert_array_equal(kept, [True] * 4 + [False])
         # no shift: x = 0, 1e-9, ..., 9e-9 and 90 values in (0.1, 1); the
         # pair at the knot x[8] keeps both hinges
+        # the pivot monomial u0 h(x1 - 0.5) of x0 h(x1 - 0.5) is 0 at every
+        # case, so the new part m0 h(x1 - 0.5) decides; it equals h(x2 - 1.5)
+        # at the cases (x2 = x1 + 1), so the term is dependent
+        x1 = np.array([0.9, 0.1, 0.2, 0.3, 0.4, 0.5])
+        Z = np.column_stack([1e10 + np.array([0, 1, 2, 1, 2, 3.0]), x1, x1 + 1])
+        dirs = np.array([[0, 0, 0], [0, 0, 1], [2, 1, 0]], np.int8)
+        cuts = np.array([[0, 0, 0], [0, 0, 1.5], [0, 0.5, 0]])
+        np.testing.assert_array_equal(
+            ref.la4_kept(Z, dirs, cuts, np.ones(6)), [True, True, False]
+        )
         x = np.concatenate(
             [np.arange(10) * 1e-9, np.random.default_rng(2).uniform(0.1, 1, 90)]
         )
@@ -685,11 +695,11 @@ class TestDependence:
             c.variable == 1 and ref.reduction(c, rss_s) > 1e-8 * rss_s for c in cands
         )
 
-    @pytest.mark.parametrize("copy", ["equal", "plus 2^-16"])
+    @pytest.mark.parametrize("copy", ["equal", "plus 2^-16", "minus 2^35"])
     def test_copies_of_a_large_mean_covariate_meet_la_5(self, copy):
         # #99: X = (2^36 + u, a copy, z), y = 10 h + 6 h u + 4 h u^2 with h a
-        # hinge of z; the copy is equal bit for bit, or 2^-16 above in every
-        # row, so its u = x - m is equal. Both share one symbol, so every RSS
+        # hinge of z; the copy is equal bit for bit, 2^-16 above in every row,
+        # or 2^35 below, so its u = x - m is equal. Both share one symbol, so every RSS
         # of the forward pass, of the pruning pass and the final rss meet LA-5
         # against exact arithmetic; the final rss is the LA-1 value, which is
         # rss_per_size of the selected size; the coefficients are those of
@@ -699,8 +709,12 @@ class TestDependence:
         x0 = 2.0**36 + rng.uniform(size=n)
         u = x0 - 2.0**36
         z = rng.uniform(size=n)
-        x1 = x0 if copy == "equal" else x0 + 2.0**-16
-        assert copy == "equal" or np.array_equal(x1 - x1.min(), u - u.min())
+        x1 = {"equal": x0, "plus 2^-16": x0 + 2.0**-16, "minus 2^35": x0 - 2.0**35}[
+            copy
+        ]
+        # x - m is equal bit for bit; for "minus 2^35" EDGE-7 scales the two
+        # columns by different powers of 2, and the symbol is still shared
+        assert np.array_equal(x1 - x1.min(), x0 - x0.min())
         X = np.column_stack([x0, x1, z])
         h = np.maximum(z - 0.4, 0)
         y = 10 * h + 6 * h * u + 4 * h * u**2

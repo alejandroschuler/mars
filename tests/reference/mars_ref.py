@@ -941,27 +941,40 @@ def monomial_order(monomial) -> tuple:
 
 class Atoms:
     """The atoms of LA-4 on the data X: the shifts m_j, the symbols, the
-    expansion of a term and the column of a monomial."""
+    expansion of a term and the column of a monomial.
 
-    def __init__(self, X):
+    ``x_powers`` are the exponents j_v of EDGE-7 when X is the scaled X (else
+    0). Covariates whose columns x - m are equal bit for bit on the original
+    scale share one symbol, that of the lowest index s (#99); on the scaled
+    X their columns u then differ by the exact factor r_j = 2^(j_j - j_s),
+    so u_j = r_j u_s, and a hinge of x_j is r_j times a hinge of u_s."""
+
+    def __init__(self, X, x_powers=None):
         self.X = np.asarray(X, dtype=np.float64)
         p = self.X.shape[1]
+        powers = np.zeros(p, dtype=np.int64) if x_powers is None else x_powers
         large = _large_mean(self.X)
         self.m = [float(self.X[:, j].min()) if j in large else 0.0 for j in range(p)]
         self.U = self.X - np.array(self.m)
-        self.symbol = [
-            next(i for i in range(j + 1) if np.array_equal(self.U[:, i], self.U[:, j]))
-            for j in range(p)
+        original = [np.ldexp(self.U[:, j], -int(powers[j])).tobytes() for j in range(p)]
+        self.symbol = [original.index(original[j]) for j in range(p)]
+        self.ratio = [
+            Fraction(2) ** int(powers[j] - powers[self.symbol[j]]) for j in range(p)
         ]
-        self.plain = not large  # every term is one monomial with coefficient 1
+        # without a shift every term is one monomial with coefficient 1
+        self.plain = not large and all(r == 1 for r in self.ratio)
         self._columns: dict = {}
+        self._ints: dict = {}
+        self._gram: dict = {}
 
     def atom(self, j: int, code: int, knot: float) -> tuple:
-        s = self.symbol[j]
+        """The atom of the factor (code, knot) of x_j and its coefficient
+        r_j: x_j - m_j = r_j u_s, (x_j - t)+ = r_j (u_s - (t - m_j) / r_j)+."""
+        s, r = self.symbol[j], self.ratio[j]
         if code == 2:
-            return (s, U_ATOM, Fraction(0))
+            return (s, U_ATOM, Fraction(0)), r
         kind = PLUS_ATOM if code == 1 else MINUS_ATOM
-        return (s, kind, Fraction(float(knot)) - Fraction(self.m[j]))
+        return (s, kind, (Fraction(float(knot)) - Fraction(self.m[j])) / r), r
 
     def expansion(self, row, cut, rewrite: bool = False) -> dict:
         """The term (rows of dirs and cuts) as {monomial: coefficient}. With
@@ -972,11 +985,11 @@ class Atoms:
         for j in np.flatnonzero(row):
             code = int(row[j])
             if rewrite and code == -1:
-                plus = self.atom(j, 1, cut[j])
-                parts = {plus: Fraction(1), self.atom(j, 2, 0.0): Fraction(-1)}
-                parts[None] = plus[2]
+                (plus, r), (u, _) = self.atom(j, 1, cut[j]), self.atom(j, 2, 0.0)
+                parts = {plus: r, u: -r, None: plus[2] * r}
             else:
-                parts = {self.atom(j, code, cut[j]): Fraction(1)}
+                a, r = self.atom(j, code, cut[j])
+                parts = {a: r}
             if code == 2 and self.m[j] != 0.0:
                 parts[None] = Fraction(self.m[j])  # x_j = u_j + m_j
             new: dict = {}
@@ -986,6 +999,22 @@ class Atoms:
                     new[key] = new.get(key, 0) + f * g
             out = new
         return {mono: f for mono, f in out.items() if f != 0}
+
+    def gram(self, a, b, w) -> Fraction:
+        """sum_i w_i a_i b_i for the monomials a and b, exactly on the float64
+        columns and weights, cached (for one weight vector)."""
+        if self._gram.get("w") is not w:
+            self._gram = {"w": w, "W": _dyadic(w)}
+            self._ints = {}
+        key = (a, b) if (len(a), a) <= (len(b), b) else (b, a)
+        if key not in self._gram:
+            for q in key:
+                if q not in self._ints:
+                    self._ints[q] = _dyadic(self.column(q))
+            (W, ew), (A, ea), (B, eb) = self._gram["W"], self._ints[a], self._ints[b]
+            total = sum(x * y * z for x, y, z in zip(W, A, B, strict=True))
+            self._gram[key] = Fraction(total, 1 << (ew + ea + eb))
+        return self._gram[key]
 
     def column(self, mono) -> np.ndarray:
         """The monomial on the data, its factors multiplied in key order."""
@@ -1018,11 +1047,28 @@ class Echelon:
     {pivot monomial: row}, each row with coefficient 1 at its pivot and 0 at
     the other pivots."""
 
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, screen=None):
         self.rows = dict(rows or {})
+        self._screen = screen  # (w, Basis, Q, cond) for la4_dependent
 
     def copy(self) -> Echelon:
-        return Echelon(self.rows)
+        return Echelon(self.rows, self._screen)
+
+    def screen(self, atoms, w) -> tuple:
+        """A float64 view of the span for la4_dependent: a Basis of the rows,
+        an orthonormal basis Q of its sqrt(w)-scaled columns, and the ratio
+        of the largest to the smallest diagonal entry of R in their QR (the
+        columns scaled to unit norm), which bounds the rounding. Cached
+        until a row is added."""
+        if self._screen is None or self._screen[0] is not w:
+            basis = Basis(atoms, self.ordered())
+            A = basis.columns() * np.sqrt(w)[:, None]
+            A = A / np.linalg.norm(A, axis=0)
+            Q, R, _ = scipy.linalg.qr(A, mode="economic", pivoting=True)
+            diag = np.abs(np.diag(R))
+            rank = int(np.count_nonzero(diag > max(A.shape) * EPS * diag[0]))
+            self._screen = (w, basis, Q[:, :rank], float(diag[0] / diag[rank - 1]))
+        return self._screen[1:]
 
     def reduce(self, e) -> dict:
         """e minus its components along the rows, exactly."""
@@ -1044,6 +1090,7 @@ class Echelon:
             if r.get(p, 0) != 0:
                 self.rows[q] = _combine(r, -r[p], v)
         self.rows[p] = v
+        self._screen = None
         return p
 
     def ordered(self) -> list:
@@ -1074,22 +1121,16 @@ def _exact_rest_sq(atoms: Atoms, new: dict, others: list, w) -> Fraction:
     """The squared w-norm of the part of the evaluated row ``new`` orthogonal
     to the evaluated rows ``others``, in exact arithmetic on the float64
     monomial columns and weights: a Gram matrix of the monomials, then the
-    Schur complement. Cost: O(n K^2) integer products for K monomials and
-    O(k^3) operations on fractions for k rows."""
-    monos = sorted(set(new).union(*others), key=monomial_order)
-    W, ew = _dyadic(w)
-    ints = {q: _dyadic(atoms.column(q)) for q in monos}
-    G: dict = {}
-    for i, a in enumerate(monos):
-        A, ea = ints[a]
-        for b in monos[i:]:
-            Bv, eb = ints[b]
-            total = sum(x * y * z for x, y, z in zip(W, A, Bv, strict=True))
-            G[a, b] = G[b, a] = Fraction(total, 1 << (ew + ea + eb))
+    Schur complement. Cost: O(n) integer products for each entry of the
+    Gram matrix that the Atoms has not cached yet (O(n K^2) at most for K
+    monomials over the fit), O(k^2 q^2) operations on fractions for k rows of
+    q monomials, and O(k^3) for the elimination."""
     vectors = [*others, new]
 
     def inner(x, y):
-        return sum(f * g * G[a, b] for a, f in x.items() for b, g in y.items())
+        return sum(
+            f * g * atoms.gram(a, b, w) for a, f in x.items() for b, g in y.items()
+        )
 
     k = len(vectors)
     H = [[inner(x, y) for y in vectors] for x in vectors]
@@ -1134,6 +1175,18 @@ def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
         size = float(np.linalg.norm(sw * part))
     threshold = DEPENDENT_TOL * size
     if not atoms.plain:
+        if S.rows and all(r.get(p, 0) == 0 for r in S.rows.values()):
+            # the other rows are S's, so they span S's span; a float64
+            # residual on a well-scaled Basis of it decides when its rounding
+            # bound, n eps cond |v| times 10, keeps it clear of the threshold
+            basis, Q, cond = S.screen(atoms, w)
+            vb = sw * atoms.evaluate(basis.reduce(e)) / abs(float(v[p]))
+            rest = float(np.linalg.norm(_residual(Q, vb)))
+            bound = 10 * len(vb) * EPS * cond * float(np.linalg.norm(vb))
+            if rest > threshold + bound:
+                return False
+            if rest < threshold - bound:
+                return True
         return _exact_rest_sq(atoms, new, others, w) < Fraction(threshold) ** 2
     b = sw * part
     if not others:
@@ -1396,8 +1449,9 @@ def _parent_candidates(
         x = X[:, j]
         # b x enters only through its span with B, which holds b, so b (x - m)
         # with m the smallest x serves in its place: the same A_w, the same
-        # linear candidate and the same G in exact arithmetic, and x - m is
-        # exact when x has a large mean, so no digits go to the mean [LA-5]
+        # linear candidate and the same G in exact arithmetic, and x - m
+        # loses no digits to a large mean (it is exact for m > 0 by
+        # Sterbenz's lemma, and rounded once otherwise) [LA-5]
         bx_dependent, S = False, None
         if conditioned is None:
             bx = b * (x - x.min())
@@ -1561,7 +1615,17 @@ def _candidate_log(log) -> dict:
 
 
 def forward_pass(
-    X, Y, w, params=None, *, N, tau_N, tss, record_candidates=False, trace=None
+    X,
+    Y,
+    w,
+    params=None,
+    *,
+    N,
+    tau_N,
+    tss,
+    record_candidates=False,
+    trace=None,
+    x_powers=None,
 ):
     """The forward pass of a fit that is not degenerate [FWD-1 to FWD-11], with
     its stopping rules [STOP-1 to STOP-6] and the queue [FAST-1 to FAST-6].
@@ -1572,9 +1636,10 @@ def forward_pass(
     the n x M_a matrix of the columns of the terms. When ``trace`` is a
     list, each step appends a dict with its queue table, the visited
     entries, the searched parents (forward indices), the queue entries after
-    the search, and the chosen candidate. Cost: a step searches up to M
-    parents, so it takes O(p n^2 M^2) time at worst, and O(n (p + M) + n^2)
-    memory.
+    the search, and the chosen candidate. ``x_powers`` are EDGE-7's
+    exponents when X is scaled (for the symbols of LA-4, ``Atoms``). Cost: a
+    step searches up to M parents, so it takes O(p n^2 M^2) time at worst,
+    and O(n (p + M) + n^2) memory, plus LA-4's tests (la4_dependent).
     """
     params = as_params(params)
     X = np.asarray(X, dtype=np.float64)
@@ -1589,7 +1654,7 @@ def forward_pass(
     slots = {1: 0}  # slot -> forward index of its term [FWD-9]
     entries = [[math.inf, 0]]  # entry e at index e - 1: [lambda_e, kappa_e]
     log = []
-    atoms, kept = Atoms(X), [0]  # the terms that LA-4 keeps [LA-1, FWD-11]
+    atoms, kept = Atoms(X, x_powers), [0]  # the terms that LA-4 keeps [FWD-11]
     s = 0
     while True:
         kappa = 2 * (s + 1)
@@ -1836,10 +1901,11 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         tau_N=tau_N,
         tss=tss,
         record_candidates=record_candidates,
+        x_powers=jx,
     )
     kept = forward["kept"]
     conditioned = Conditioned(
-        X, forward["dirs"][kept], forward["cuts"][kept], B[:, kept]
+        X, forward["dirs"][kept], forward["cuts"][kept], B[:, kept], Atoms(X, jx)
     )
     pruned = prune(
         B[:, kept],
