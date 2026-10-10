@@ -1083,14 +1083,13 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 # below SHIFT_CAP. Two are in the fast forward pass (#85): an exact duplicate
 # covariate at a large mean, and a product of two linear factors of
 # covariates with large means at degree 3 (the "scaled" kind at degree 2 and
-# 3, and the "shifted" kind at degree 3). The third is the
-# reference's pruning pass at intermediate means, near 2^23 (#84), which the
-# whole fit compares.
+# 3, and the "shifted" kind at degree 3). The reference's pruning pass met
+# LA-5 at intermediate means only after #84, so the whole fit draws it now.
 SHIFT_CAP = 2.0**10
 
 
 @st.composite
-def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
+def forward_cases(draw, kind: str) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
     covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
     constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
@@ -1101,14 +1100,13 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
     runs from none (exact fits and STOP-5) to as large as the signal. At
     degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread with a duplicated covariate, in the ``scaled`` kind, in the
-    ``shifted`` kind at degree 3, and with ``pruning_path`` (the whole
-    fit)."""
+    spread with a duplicated covariate, in the ``scaled`` kind and in the
+    ``shifted`` kind at degree 3."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
-    capped = params["max_degree"] >= 2 and pruning_path
+    capped = False
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
@@ -1327,7 +1325,7 @@ def test_whole_fit_on_hypothesis_data(data):
     (CORE-1 to CORE-5, PRUNE-5 to PRUNE-8, EDGE-1, EDGE-6), up to the first
     near-tie of either pass."""
     kind = data.draw(st.sampled_from(DATA_KINDS), label="kind")
-    case = data.draw(forward_cases(kind, pruning_path=True), label="case")
+    case = data.draw(forward_cases(kind), label="case")
     case.params["pmethod"] = data.draw(st.sampled_from(["backward", "none"]))
     case.params["nprune"] = data.draw(st.sampled_from([None, 1, 3, 10]))
     params = _core.MarsParams(**case.params)

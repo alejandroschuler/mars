@@ -1247,6 +1247,7 @@ class TestForwardPass:
             (2, "binary", (2.0**36, 0.0)),
             (3, "near the range", (1.001, -1.001, 0.5)),
             (2, "mixed", (2.0**40, 0.0, 0.0)),
+            (2, "pruning", 2.0**23),
         ],
     )
     def test_an_exact_shift_of_a_covariate_keeps_the_pass(
@@ -1269,7 +1270,11 @@ class TestForwardPass:
         # the range, where the float columns lose no digits, so the pass must
         # be the same with and without the exact change of basis. "mixed": x0
         # shifted, x1 and x2 not, with integer weights, so that mirror hinges
-        # of covariates without a large mean enter expanded terms.
+        # of covariates without a large mean enter expanded terms. "pruning":
+        # covariates of spread 8 at the mean 2^23, a linear factor that LA-4
+        # still keeps (at a spread of 1 it drops it); the pruning pass then
+        # misses LA-5 on the float columns when it does not expand them
+        # (#84), and every case here checks rss_per_size of the whole fit.
         w = None
         opts = {"max_degree": degree, "auto_linpreds": case != "hinges"}
         opts["max_terms"] = 11 if case == "hinges" else 13
@@ -1304,6 +1309,15 @@ class TestForwardPass:
             y = y + 0.1 * rng.normal(size=n)
             w = rng.integers(1, 4, size=n).astype(float)
             opts["max_terms"] = 11
+        elif case == "pruning":
+            rng = np.random.default_rng(35)
+            n = 40
+            noise = rng.choice([0.01, 0.2, 1.0])
+            U = rng.uniform(size=(n, 3))
+            h = np.maximum(U[:, 0] - 0.3, 0)
+            y = 2 * h + 3 * h * U[:, 1] + U[:, 1] * U[:, 2]
+            y = y + noise * rng.normal(size=n)
+            X = 8 * U
         elif case == "near the range":
             rng = np.random.default_rng(27)
             n = 14
@@ -1372,6 +1386,17 @@ class TestForwardPass:
                 cut_rows[-1][j] = log["second_knot"][s - 1] if code == 1 else 0.0
             exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, w)
             assert abs(log["second_rss"][s - 1] - exact) <= 1e-8 * before[s - 1]
+        # the pruning pass of the whole fit: rss_per_size of each size, in
+        # exact arithmetic on the terms of its subset, within 1e-8 of itself
+        # [LA-5, PRUNE-9]; a floor for the exact fits, as STOP-5 has
+        fit = ref.fit_mars(shifted_X, y, w, opts)
+        kept, pruning = fit["forward"]["kept"], fit["pruning"]
+        B = exact_basis(shifted_X, dirs[kept], fit["forward"]["cuts"][kept])
+        floor = 1e-10 * pruning["rss_per_size"][0] / (n - 1)
+        for m, got in enumerate(pruning["rss_per_size"], start=1):
+            columns = np.flatnonzero(pruning["subsets"][m - 1])
+            exact = exact_rss([[row[c] for c in columns] for row in B], y, w)
+            assert abs(got - exact) <= 1e-8 * max(exact, floor)
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
