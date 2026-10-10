@@ -122,13 +122,13 @@ LIMIT_CODES = {mars_ref.NO_ROOM, mars_ref.TERM_LIMIT}
 TALLY: collections.Counter = collections.Counter()
 
 # v2 allowance (temporary). The reference follows spec v2's FWD-12 (one
-# candidate per kind and added rows), LA-2, LA-4 and FWD-11 (dependence after
-# the exact shift) and STOP-3 (code 2 below -1000); the fast forward pass
-# follows them with #104 (PR #110). Until then, with FAST_FOLLOWS_V2 False,
-# a difference that those rules explain ends the comparison of the fit with
-# the label "v2 allowance: ...", counted in TALLY (gate C reports it), and
-# every other difference fails. #110 sets FAST_FOLLOWS_V2 = True and removes
-# this block, _v2_allowance, _la4_applies and their calls.
+# candidate per kind and added rows) and STOP-3 (code 2 for a finite GRSq'
+# below -1000); the fast forward pass follows them with #104 (PR #110).
+# Until then, with FAST_FOLLOWS_V2 False, a difference that those rules
+# explain ends the comparison of the fit (or of a second best) with the label
+# "v2 allowance: ...", counted in TALLY (gate C reports it), and every other
+# difference fails. #110 sets FAST_FOLLOWS_V2 = True and removes this block,
+# _v2_allowance and its calls.
 FAST_FOLLOWS_V2 = False
 
 
@@ -139,18 +139,6 @@ def _v2_allowance(rule: str) -> str | None:
         return None
     TALLY[f"v2 allowance ({rule})"] += 1
     return f"v2 allowance: {rule}"
-
-
-def _la4_applies(case) -> bool:
-    """LA-4 (v2) can differ from v1's float test on this case: a covariate
-    whose smallest value is larger in size than its range (shifted), or two
-    covariates whose columns x - m are equal bit for bit (one symbol, #99)."""
-    X = case.kept.X
-    low, high = X.min(axis=0), X.max(axis=0)
-    shifted = np.abs(low) > high - low
-    U = X - np.where(shifted, low, 0.0)
-    columns = {U[:, j].tobytes() for j in range(X.shape[1])}
-    return bool(shifted.any()) or len(columns) < X.shape[1]
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -635,6 +623,18 @@ class _Step:
         return out
 
 
+def _grsq_new(case: Case, step: _Step, key) -> float:
+    """GRSq' of the reference's step for the candidate ``key``, or for a step
+    without a legal candidate (None), as STOP-3 says."""
+    prm, kept = mars_ref.as_params(case.params), case.kept
+    if key is None:
+        rss_new, m_new = step.rss_s, step.M + 1
+    else:
+        rss_new, m_new = step.value(key), step.M + (2 if key[2] == PAIR else 1)
+    d = prm.resolved_penalty()
+    return mars_ref.grsq(rss_new, m_new, step.tss, d, kept.N, kept.tau_N)
+
+
 def _stop5_bands(case: Case, ref: dict, s: int) -> list[str]:
     """STOP-7's bands of STOP-5 after step s: the new RSS within 2 delta of
     the floor 1e-10 TSS / (N - 1), or the new RSq within 2 delta / TSS of
@@ -679,9 +679,6 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
         return Outcome(s - 1, "gap" if f_legal and gap else _join(f_bands + r_bands), s)
     if queue := step.queue_bands():  # the two passes searched other parents
         return Outcome(s - 1, _join(queue + f_bands + r_bands), s)
-    if not f_legal and _la4_applies(case) and (label := _v2_allowance("LA-2")):
-        # the reference finds the fast choice dependent after the exact shift
-        return Outcome(s - 1, label, s)
     _fail(
         case,
         f"step {s}: fast {_terms(fast, s)}, reference {_terms(ref, s)}; values "
@@ -708,7 +705,12 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         return None
     step = _Step(case, ref, s)
     if kf is not None and kr is not None and step.rows_of(kf) == step.rows_of(kr):
-        return None  # one candidate from two parents (FWD-12): rows, not parent
+        # one candidate from two parents (FWD-12): rows, not parent
+        vf = step.value(kf)
+        rss_f = math.ldexp(float(lf["second_rss"][i]), 2 * case.kept.j)
+        if abs(rss_f - vf) > eps(vf, step.rss_s, step.tss):
+            _fail(case, f"step {s}: the fast second {kf} has RSS {rss_f!r}, not {vf!r}")
+        return None
     if kf is not None and step.rows_of(kf) in [
         step.rows_of(k) for k in _choice(case, fast, s)
     ]:
@@ -734,11 +736,6 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         ok = f_ok and r_ok and (gap or f_bands or r_bands)
     if not ok and (queue := step.queue_bands()):
         return _join(queue)
-    # the reference finds the fast second dependent (LA-2)
-    dependent = kf is not None and step.merged(kf) not in step.legal_keys
-    explained = not ok and dependent and _la4_applies(case)
-    if explained and (label := _v2_allowance("LA-2")):
-        return label
     if not ok:
         _fail(case, f"step {s}: second fast {kf}, reference {kr}; {f_bands}, {r_bands}")
     return _join(f_bands + r_bands) or "gap"
@@ -775,9 +772,13 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
     codes = (int(fast["termination"]), int(ref["termination"]))
-    same = len(fast["rss"]) == len(ref["rss"])
-    if same and codes == (3, 2) and (label := _v2_allowance("STOP-3")):
-        return Outcome(t - 1, label, t)  # code 2 below GRSq' -1000 (v2)
+    if len(fast["rss"]) == len(ref["rss"]) and codes == (3, 2):
+        # v2's code 2 for a finite GRSq' below -1000 (at -inf v1 gives 2 too)
+        step = _Step(case, ref, t)
+        best = step.best()
+        g = _grsq_new(case, step, None if best is None else step.key_of(best))
+        if -math.inf < g < -1000 and (label := _v2_allowance("STOP-3")):
+            return Outcome(t - 1, label, t)
     _fail(
         case,
         f"after {t - 1} equal steps: fast {len(fast['rss']) - 1} steps, code "
@@ -844,9 +845,6 @@ def _compare_forward(case: Case, fast: dict, ref: dict) -> Outcome:
         return _stopped_apart(case, fast, ref, S + 1)
     for key in ("dirs", "cuts", "step", "kept", "dropped"):
         if not np.array_equal(fast[key], ref[key]):
-            explained = key in ("kept", "dropped") and _la4_applies(case)
-            if explained and (label := _v2_allowance("FWD-11")):
-                return Outcome(S, label, S + 1)
             _fail(case, f"{key}: fast {fast[key].tolist()}, ref {ref[key].tolist()}")
     for r, (pf, pr) in enumerate(zip(fast["parent"], ref["parent"], strict=True)):
         # FWD-12: a different parent is fine when the rows are the same and

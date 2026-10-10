@@ -2125,6 +2125,11 @@ class TestFit:
         assert (fit(X, product, max_degree=2)["dirs"] != 0).sum(axis=1).max() == 2
         with pytest.raises(ValueError, match="scale of X is out of range"):
             fit(X * scale, product, max_degree=2)
+        # a coefficient that the scale of y alone makes subnormal raises too
+        Z = np.random.default_rng(34).normal(size=(30, 2))
+        tiny_y = (Z[:, 0] + 0.1 * np.random.default_rng(35).normal(size=30)) * 1e-310
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(Z, tiny_y)
 
     def test_a_tiny_response_has_a_positive_tss(self):
         # seven 0s and one 1e-170: the fit is not degenerate, although its TSS

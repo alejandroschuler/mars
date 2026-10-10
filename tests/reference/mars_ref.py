@@ -1406,19 +1406,16 @@ def _coef_back(coef, dirs, jx, jy: int) -> np.ndarray:
     """The coefficients of the fit on the scaled X and Y on the original
     scales: row k times 2 to the sum of j_v over the covariates of term k,
     and divided by 2**jy, in one ldexp [EDGE-7, EDGE-6]. ValueError when a
-    result is not finite, or when the scale of X turns a nonzero
-    coefficient into 0 or a subnormal (that of Y alone may, as EDGE-6
-    allows)."""
+    result is not finite, or when a nonzero coefficient becomes 0 or a
+    subnormal, whatever scale causes it [EDGE-7]."""
     power = (np.asarray(dirs) != 0) @ jx - jy
     with np.errstate(over="ignore", under="ignore"):
         out = np.ldexp(coef, power[:, None])
-        y_only = np.ldexp(coef, -jy)
-    tiny = np.finfo(np.float64).tiny
-    lost = (coef != 0) & (np.abs(out) < tiny) & (np.abs(y_only) >= tiny)
+    lost = (coef != 0) & (np.abs(out) < np.finfo(np.float64).tiny)
     if not np.all(np.isfinite(out)) or lost.any():
         raise ValueError(
-            "the scale of X is out of range: a coefficient leaves the normal "
-            "range of float64 when it is scaled back"
+            "the scale of X is out of range (or that of y): a coefficient "
+            "leaves the normal range of float64 when it is scaled back"
         )
     return out
 
