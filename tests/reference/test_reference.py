@@ -702,6 +702,55 @@ class TestDependence:
         kept = ref.la4_kept(X, dirs, cuts, np.array([1, 1, 1, 1, 2, 1.0]))
         np.testing.assert_array_equal(kept, [True, True, True, True, False])
 
+    @pytest.mark.parametrize(
+        ("second", "symbol", "ratio"),
+        [
+            (lambda u: u.copy(), [0, 0], [1, 1]),  # equal bit for bit
+            (lambda u: u + 2.0**20, [0, 0], [1, 1]),  # a copy at another shift
+            (lambda u: u / 8 + 2.0**20, [0, 0], [1, Fraction(1, 8)]),  # x/8 + c
+            (lambda u: 8 * u, [0, 0], [1, 8]),  # a power of 2 at no shift
+            (lambda u: 3 * u + 1, [0, 1], [1, 1]),  # slope 3: its own symbol
+            (lambda u: -u, [0, 1], [1, 1]),  # a negative multiple
+            (lambda u: np.where(u == 1.0, np.nextafter(u, 2), u), [0, 1], [1, 1]),
+            (lambda u: np.where(u == 0.0, 5e-324, u), [0, 1], [1, 1]),  # subnormal
+        ],
+        ids=["equal", "shift", "x/8+c", "8x", "3x+1", "-x", "one ulp", "subnormal"],
+    )
+    def test_the_symbols_of_la_4_are_power_of_2_copies_on_the_scaled_x(
+        self, second, symbol, ratio
+    ):
+        # S113 on #113: covariates j and s share a symbol when u_j = 2^k u_s
+        # at every case exactly, for an integer k (u = x - m on the scaled X);
+        # the symbol is the lowest index. An affine copy with another slope,
+        # a negative multiple, a near copy and a column that differs from the
+        # other only in a subnormal value (a check that scales down would
+        # merge them) are their own symbols.
+        u = np.array([0.0, 0.25, 0.5, 1.0])
+        atoms = ref.Atoms(np.column_stack([u, second(u)]))
+        assert atoms.symbol == symbol
+        assert atoms.ratio == ratio
+
+    def test_constant_columns_are_one_symbol_and_the_cases_decide_it(self):
+        # S113: the u of a constant covariate is 0 (k = 0), and -0 equals +0;
+        # a constant column next to a varying one is no copy. Rows of weight 0
+        # are no cases (W-3): they do not make a column vary or move a shift.
+        X = np.column_stack([[0.0, 0, 0, 0], [-0.0, 0, 0, 0], [0.0, 1, 2, 3]])
+        assert ref.Atoms(X).symbol == [0, 0, 2]
+        assert ref.Atoms(X).ratio == [1, 1, 1]
+        X = np.column_stack([1e10 + np.arange(5.0), [1e10, 1e10, 1e10, 1e10, 5.0]])
+        w = np.array([1, 1, 1, 1, 0.0])
+        assert ref.Atoms(X, w=w).symbol == [0, 1] and ref.Atoms(X, w=w).m[1] == 1e10
+        assert ref.Atoms(X).m[1] == 0.0  # with the row, 5 is within the range
+        # la4_kept builds its shifts from the cases: x0 = 1e10 + (1, ..., 4)
+        # counts after the intercept (u0 is its new part), whatever the row
+        # of weight 0 holds; with its 5 in the shift's range there would be
+        # no shift, and the part would be 1e-10 of its norm, dependent
+        x0 = np.array([1e10 + 1, 1e10 + 2, 1e10 + 3, 1e10 + 4, 5.0])
+        dirs, cuts = np.array([[0], [2]], np.int8), np.zeros((2, 1))
+        np.testing.assert_array_equal(
+            ref.la4_kept(x0[:, None], dirs, cuts, w), [True, True]
+        )
+
     def test_the_reduced_echelon_form_does_not_depend_on_the_order(self):
         # LA-4: the rows of the terms of #75 with hinges, in every order
         X = issue75(2.0**36)
@@ -801,27 +850,83 @@ class TestDependence:
         X = np.column_stack([x0, x1, z])
         h = np.maximum(z - 0.4, 0)
         y = 10 * h + 6 * h * u + 4 * h * u**2
-        opts = {"max_degree": 3, "fast_k": 0, "thresh": 0.0}
-        result = fit(X, y, **opts)
-        fwd, w = result["forward"], np.ones(n)
-        tss = fwd["rss"][0]
-        for s in range(1, len(fwd["rss"])):
-            terms = np.flatnonzero(fwd["step"] <= s)
-            exact = exact_rss(
-                exact_basis(X, fwd["dirs"][terms], fwd["cuts"][terms]), y, w
-            )
-            assert abs(fwd["rss"][s] - exact) <= la5(exact, fwd["rss"][s - 1], tss)
-        kept, pruning = fwd["kept"], result["pruning"]
-        Bk = exact_basis(X, fwd["dirs"][kept], fwd["cuts"][kept])
-        for m, got in enumerate(pruning["rss_per_size"], start=1):
-            columns = np.flatnonzero(pruning["subsets"][m - 1])
-            exact = exact_rss([[row[c] for c in columns] for row in Bk], y, w)
-            assert abs(got - exact) <= la5(exact, exact, tss)
+        result = assert_fit_meets_la5(X, y, max_degree=3, fast_k=0, thresh=0.0)
         B = exact_basis(X, result["dirs"], result["cuts"])
-        exact = exact_rss(B, y, w)
-        assert abs(result["rss"] - exact) <= la5(exact, exact, tss)
-        assert result["rss"] == pruning["rss_per_size"][pruning["selected_size"] - 1]
         np.testing.assert_allclose(result["coef"][:, 0], exact_coef(B, y), rtol=1e-6)
+
+    def test_a_power_of_2_copy_at_another_shift_meets_la_5(self):
+        # #115 (the review of #110): x1 = 2^26 + u0/8 is a copy of x0 =
+        # -1e9 + u0 up to a power of 2 (S113: one symbol, u1 = u0/8), and x2
+        # is at 1e12. The reference gave 7.8353e-05 after step 3 where the
+        # exact RSS of its span is 7.836609779870418e-05, below it.
+        X = np.array(
+            [
+                [-999999999.3333334, 67108864.08333333, 1e12],
+                [-999999999.3333334, 67108864.08333333, 1e12],
+                [-999999999.6666666, 67108864.04166667, 1000000000000.3334],
+                [-999999999.6666666, 67108864.04166667, 1000000000000.3334],
+                [-999999999.6666666, 67108864.04166667, 1e12],
+                [-1e9, 67108864.0, 1000000000000.3334],
+            ]
+        )
+        y = np.array(
+            [
+                1.0091143405685823,
+                0.9986976788689693,
+                -0.00303819589316845,
+                0.00390625186264515,
+                -0.00303819589316845,
+                -0.01519097511967023,
+            ]
+        )
+        opts = {"max_degree": 2, "fast_k": 0, "thresh": 0.0, "adjust_endspan": 0.0}
+        result = assert_fit_meets_la5(X, y, **opts)
+        assert result["forward"]["rss"][3] == pytest.approx(7.836609779870418e-05)
+
+    @pytest.mark.parametrize("seed", [14, 21])
+    def test_a_one_ulp_copy_at_a_large_mean_meets_la_5(self, seed):
+        # #115: x1 is x0 = -2^30 + (0 or 1/2) with one value one ulp up, x2 is
+        # at -1e9, and y is near 1e6. x1 is its own symbol (not a copy), and
+        # its columns are within an angle of 1e-7 of the others', so a float
+        # projection loses digits; every RSS of the forward pass, of the
+        # pruning pass and the final rss must meet LA-5 (the reference was off
+        # by 24 and 38 times the bound on these draws).
+        rng = np.random.default_rng(seed)
+        n = 30
+        x0 = -(2.0**30) + 0.5 * rng.integers(0, 2, n)
+        x1 = x0.copy()
+        i = int(rng.integers(n))
+        x1[i] = np.nextafter(x1[i], np.inf)
+        x2 = -1e9 + 0.5 * rng.integers(0, 2, n)
+        y = np.maximum(x0 - np.median(x0), 0) * 3 + (x1 - x1.mean()) * (x2 - x2.mean())
+        y = y + 0.3 * rng.standard_normal(n) + 1e6
+        opts = {"max_degree": 2, "fast_k": 0, "thresh": 0.001, "adjust_endspan": 2.0}
+        assert_fit_meets_la5(np.column_stack([x0, x1, x2]), y, **opts)
+
+
+def assert_fit_meets_la5(X, y, **opts):
+    """Fit with the reference; every RSS of its forward pass (each step, on the
+    span of the terms added so far), of its pruning pass (each size, on its
+    subset) and its final rss meet LA-5 against exact arithmetic. Returns the
+    result."""
+    result = fit(X, y, **opts)
+    fwd, w = result["forward"], np.ones(len(y))
+    tss = fwd["rss"][0]
+    for s in range(1, len(fwd["rss"])):
+        terms = np.flatnonzero(fwd["step"] <= s)
+        exact = exact_rss(exact_basis(X, fwd["dirs"][terms], fwd["cuts"][terms]), y, w)
+        assert abs(fwd["rss"][s] - exact) <= la5(exact, fwd["rss"][s - 1], tss)
+    kept, pruning = fwd["kept"], result["pruning"]
+    Bk = exact_basis(X, fwd["dirs"][kept], fwd["cuts"][kept])
+    for m, got in enumerate(pruning["rss_per_size"], start=1):
+        columns = np.flatnonzero(pruning["subsets"][m - 1])
+        exact = exact_rss([[row[c] for c in columns] for row in Bk], y, w)
+        assert abs(got - exact) <= la5(exact, exact, tss)
+    B = exact_basis(X, result["dirs"], result["cuts"])
+    exact = exact_rss(B, y, w)
+    assert abs(result["rss"] - exact) <= la5(exact, exact, tss)
+    assert result["rss"] == pruning["rss_per_size"][pruning["selected_size"] - 1]
+    return result
 
 
 def exact_coef(B, y):
