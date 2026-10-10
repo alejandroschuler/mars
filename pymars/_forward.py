@@ -77,8 +77,10 @@ IntArray = npt.NDArray[np.int64]
 KIND_NONE, KIND_PAIR, KIND_HINGE, KIND_LINEAR = 0, 1, 2, 3
 #: FWD-4: a knot's reduction is at most min(1.01·RSS_s, 10·Δ_s).
 MAX_LEGAL_RSS, MAX_LEGAL_DELTA = 1.01, 10.0
-#: STOP-3: the pass stops when GRSq' is below this value.
+#: STOP-3: the pass stops when GRSq' is below this value, with code 3 (v2: code
+#: 2 when GRSq' is below GRSQ_NEG_INF_FLOOR, -inf included).
 GRSQ_FLOOR = -10.0
+GRSQ_NEG_INF_FLOOR = -1000.0
 #: STOP-5: the pass stops when RSS_s < 1e-10·TSS/(N - 1).
 RSS_FLOOR = 1e-10
 #: A candidate RSS at most EXACT_FIT·RSS_s is an exact fit, 0 (issue #81).
@@ -601,7 +603,8 @@ def _stop(
     prm, tss = st.params, st.tss
     grsq = _gcv.grsq(rss_new, tss, m_new, prm["penalty"], st.N, st.tau)
     if prm["thresh"] > 0.0 and grsq < GRSQ_FLOOR:
-        return Termination.GRSQ_NEG_INF if grsq == -math.inf else Termination.GRSQ_LOW
+        low = grsq < GRSQ_NEG_INF_FLOOR  # -inf too (STOP-3, FAST-6)
+        return Termination.GRSQ_NEG_INF if low else Termination.GRSQ_LOW
     if (st.rss[-1] - rss_new) / tss < prm["thresh"]:
         return Termination.RSQ_CHANGE_SMALL
     if chosen is None:
@@ -731,23 +734,28 @@ def forward_pass(
         "fast_k": int(fast_k),
         "fast_beta": float(fast_beta),
     }
-    # EDGE-1 comes before EDGE-6 here, so a degenerate fit never raises. The
-    # core checks EDGE-6 first (its TSS is uncentered): the two differ only when
-    # N <= 1 and Y is not constant with an out-of-range TSS, where the core raises.
+    # EDGE-6 (v2): the scale of Y and the TSS check come before the degenerate
+    # test of EDGE-1, as in the core, so that a degenerate fit whose scaled TSS
+    # underflows raises here too. The check needs a response that is not constant.
+    D = float(np.max(np.abs(Y)))
+    shift = 0 if D == 0.0 else 1 - math.frexp(D)[1]  # D·2^shift in [1, 2)
+    constant = bool(np.all(Y[0] == Y))
+    if not constant:
+        tss0 = _gcv.tss(np.ldexp(Y, shift), w)
+        if not (math.isfinite(tss0) and tss0 >= np.finfo(np.float64).tiny):
+            raise ValueError(
+                "the scale of y or of the weights is out of range: the total sum "
+                f"of squares of y·2^{shift} is {tss0}, not a positive normal "
+                "float64 (EDGE-6)"
+            )
     if _gcv.is_degenerate(Y, _gcv.total_weight(n, w)[0]):  # EDGE-1, GCV-7
         return _intercept_only(
             p, _gcv.tss(Y, w), Termination.DEGENERATE, record_candidates
         )
-    shift = 1 - int(np.frexp(np.max(np.abs(Y)))[1])  # EDGE-6: D·2^shift in [1, 2)
     # FWD-10: shift each response by its data value nearest its weighted mean,
     # then by the weighted mean; the TSS too comes from Yc (CORE-3: rss[0]).
     Yc, _ = _pruning._centered(np.ldexp(Y, shift), w)
     tss = _gcv.tss(Yc, w)
-    if not (math.isfinite(tss) and tss >= np.finfo(np.float64).tiny):
-        raise ValueError(
-            "the scale of y or of the weights is out of range: the total sum of "
-            f"squares of y·2^{shift} is {tss}, not a positive normal float64 (EDGE-6)"
-        )
     st = _Pass(X, Yc, tss, params, w)
     log: list = []
     termination = _run(st, max_terms, log)

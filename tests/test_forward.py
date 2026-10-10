@@ -568,7 +568,12 @@ def _ns(rss=(12.0,), tss=1.0, N=11.0, penalty=-1.0, thresh=0.001):
         (_ns(), True, 11.0, 3, None),  # GRSq' = -10 exactly: not below
         (_ns(), True, 11.5, 3, Termination.GRSQ_LOW),
         (_ns(thresh=0.0), True, 11.5, 3, None),  # STOP-3 needs thresh > 0
-        (_ns(penalty=2.0), True, 1.0, 11, Termination.GRSQ_NEG_INF),
+        (_ns(penalty=2.0), True, 1.0, 11, Termination.GRSQ_NEG_INF),  # -inf
+        # STOP-3 (v2): code 2 below -1000, not only at -inf
+        (_ns(), True, 1000.0, 3, Termination.GRSQ_LOW),  # GRSq' = -999
+        (_ns(), True, 1001.0, 3, Termination.GRSQ_LOW),  # -1000
+        (_ns(), True, 1001.5, 3, Termination.GRSQ_NEG_INF),  # -1000.5
+        (_ns(), None, 1.0e6, 3, Termination.GRSQ_NEG_INF),  # FAST-6: no candidate
         (_ns((1.0,), thresh=0.25), True, 0.75, 3, None),  # a change of thresh
         (_ns((1.0,), thresh=0.25), True, 0.76, 3, Termination.RSQ_CHANGE_SMALL),
         (_ns((1.0,), thresh=0.0), None, 1.0, 2, Termination.NO_GAIN),
@@ -928,6 +933,8 @@ def test_every_step_equals_the_explicit_choice():
         (np.eye(3, 1), np.arange(3.0), [0.0, 0.0, 0.0], "every weight is zero"),
         # EDGE-6: the scaled TSS underflows, possible only with extreme weights
         (np.eye(3, 1), [0.0, 1.0, 1.0], [1e-310, 1e-310, 2.0], "scale of y"),
+        # the check comes before the degenerate test (N = 0.5 <= 1 here)
+        (np.eye(2, 1), [0.0, 1.0], [1e-310, 0.5], "scale of y"),
     ],
 )
 def test_bad_input(X, y, w, match):
