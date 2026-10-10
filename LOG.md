@@ -318,9 +318,11 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 22:30 Merged #98 (FU1: #86 test ids; #79 items were already done) as 02f788c; #97 closed by it. #92 round-2 rechecks at 099bf0c: both REQUEST_CHANGES on LA-4's denominator (spec: rewriting (t-x)+ changes the test with no shift; adversarial: with a duplicate covariate the shift of x0 decides which product counts). Round 3 sent to t01-spec-v2: keep (t-x)+ as its own atom, norm by the evaluated pivot monomial, total monomial order, cost note; if a part cannot be made shift- and order-free, record it instead of iterating.
 - 22:40 Weekly 70 %, 5-hour 16 %, load 4. Started t21-prepilot a9f701926d23529a7 (sonnet; brief T21a: a pre-freeze sizing pilot for the parity claim on current main plus E-def on D7, detached, at most 4 workers). #93 rebase pending (head b4ffca1 seen).
 - 23:00 #93 rebased to b4ffca1, but main moved again (#98); asked for one more rebase, other merges held until #93 is in. #92 round 3 at c49e25a (hinges as atoms, pivot-monomial denominator, total order, cost note, OQ-9 for the one-far-case limit); both reviewers recheck, told it is the last LA-4 round. #95 round 2 at 1392a97 (shared symbol for bitwise copies; reduced hinge in refine; plain path bit-equal to main; complexity lines; gate B PASS; thorough 700 passed); adversarial recheck started; spec update check waits for a slot. Opened #99 (reference misses LA-5 with an exact copy of a large-mean covariate, 7e-6).
+- 23:20 #93 update check APPROVE at 4a68111; merged #93 (T19 benchmark harness) as 23355fe; #21 closed. Pre-freeze pilot (t21-prepilot, PR #100 draft, runner-t21a at 02f788c): 8.6 min on 4 workers (about 0.6 core-hours); no failures; P-fix/E-def ratios 0.996 to 1.021 at 1,000 cases; n_sim from 6 (D7 lo) to 564 (D5 lo); D3 lo identical to earth; the full parity cells cost about 1.9 core-hours at 564 reps. E-def on D7 (300 reps): E-pym/E-def 0.60 to 0.65. Asked for gate B and ready.
 
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
 |---|---|---|---|
+| 2026-10-09 | T21a pre-freeze pilot (runner-t21a at 02f788c), 4 workers, 8.6 min | about 0.6 | no failures |
 | 2026-09-26 | T04 legacy full run (runner at 8760cee): 6 workers 01:47 to 11:08, 4 workers 11:08 to 16:13 PDT | about 76 | all blocks done; 49,441 result files; failures to be counted in T04 step 6 |
