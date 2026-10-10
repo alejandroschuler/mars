@@ -121,6 +121,25 @@ LIMIT_CODES = {mars_ref.NO_ROOM, mars_ref.TERM_LIMIT}
 # The counts of the fits compared, by group (module docstring).
 TALLY: collections.Counter = collections.Counter()
 
+# v2 allowance (temporary). The reference follows spec v2's FWD-12 (one
+# candidate per kind and added rows) and STOP-3 (code 2 for a finite GRSq'
+# below -1000); the fast forward pass follows them with #104 (PR #110).
+# Until then, with FAST_FOLLOWS_V2 False, a difference that those rules
+# explain ends the comparison of the fit (or of a second best) with the label
+# "v2 allowance: ...", counted in TALLY (gate C reports it), and every other
+# difference fails. #110 sets FAST_FOLLOWS_V2 = True and removes this block,
+# _v2_allowance and its calls.
+FAST_FOLLOWS_V2 = False
+
+
+def _v2_allowance(rule: str) -> str | None:
+    """The label of a difference that the v2 ``rule`` explains, counted, or
+    None once the fast code follows v2 (then the difference fails)."""
+    if FAST_FOLLOWS_V2:
+        return None
+    TALLY[f"v2 allowance ({rule})"] += 1
+    return f"v2 allowance: {rule}"
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _write_tally():
@@ -146,7 +165,9 @@ class Outcome:
 def _count(group: str, outcome: Outcome) -> None:
     TALLY[f"{group}: fits"] += 1
     TALLY[f"{group}: steps compared"] += outcome.steps
-    if outcome.near_tie is not None:
+    if outcome.near_tie is not None and outcome.near_tie.startswith("v2 allowance"):
+        TALLY[f"{group}: {outcome.near_tie}"] += 1
+    elif outcome.near_tie is not None:
         TALLY[f"{group}: near-tie stops"] += 1
         TALLY[f"{group}: near-tie stops ({outcome.near_tie})"] += 1
     TALLY[f"{group}: plan near-ties"] += outcome.plan_tie
@@ -222,16 +243,21 @@ class Case:
 
     @functools.cached_property
     def kept(self) -> SimpleNamespace:
-        """The reference's view of the cases of the fit (W-3, W-4, EDGE-6):
-        the rows with positive weight, N, tau_N and the power of 2 on Y."""
+        """The reference's view of the cases of the fit (W-3, W-4, EDGE-6,
+        EDGE-7): the rows with positive weight, N, tau_N, the power of 2 on
+        Y, and the powers of 2 on the columns of X, with Xs the scaled X on
+        which the reference's searches (``searches``) run."""
         w = np.ones(len(self.X)) if self.w is None else self.w
         rows = w > 0
         N0 = mars_ref.weight_sum(w[rows])
         tau_N = mars_ref.weight_tol(N0)
         Y = self.Y[rows]
         j = mars_ref.y_scale_power(Y)
+        jx = mars_ref.x_scale_powers(self.X[rows])
         return SimpleNamespace(
             X=self.X[rows],
+            Xs=np.ldexp(self.X[rows], jx),
+            jx=jx,
             Y=Y,
             Ys=np.ldexp(Y, j),
             w=w[rows],
@@ -392,16 +418,20 @@ class _Step:
         self.M, self.s, self.ref = M, s, ref
         self.dirs = ref["dirs"][:M]
         calls = [c for c in case.searches if c.B.shape[1] == M]
-        self.cuts = ref["cuts"][:M]
+        # The reference searches the scaled X (EDGE-7): its columns, knots and
+        # cuts are on that scale here; keys stay on the original scale.
+        self.cuts = np.ldexp(ref["cuts"][:M], kept.jx)
         self.B = (
-            calls[0].B if calls else mars_ref.basis_matrix(kept.X, self.dirs, self.cuts)
+            calls[0].B
+            if calls
+            else mars_ref.basis_matrix(kept.Xs, self.dirs, self.cuts)
         )
         # The reference's columns for its projections (#79): those of its
         # Conditioned when it used one, else B.
         self.cond = calls[0].cond if calls else None
         self.G = self.B if self.cond is None else self.cond.columns
         self.P_B = mars_ref.Projector(self.G, kept.w)
-        self.sigma2 = mars_ref.covariate_variances(kept.X, kept.w, kept.N)
+        self.sigma2 = mars_ref.covariate_variances(kept.Xs, kept.w, kept.N)
         self.tau = mars_ref.collinearity_tol(s - 1)
         self.path = np.ldexp(np.asarray(ref["rss"], dtype=float), 2 * kept.j)
         self.rss_s = self.path[s - 1]
@@ -413,13 +443,44 @@ class _Step:
             self.path[max(s - i, 0)] for i in (1, 2, 3)
         )
         found = [c for call in calls for c in call.found]
-        self.values = {mars_ref.candidate_key(c): c.rss for c in found}
+        self.values = {self.key_of(c): c.rss for c in found}
         self.legal = [
             c
             for c in found
             if mars_ref.is_legal(c.kind, self.rss_s - c.rss, self.limit)
         ]
-        self.legal_keys = {mars_ref.candidate_key(c) for c in self.legal}
+        self.legal_keys = {self.key_of(c) for c in self.legal}
+        # FWD-12: occurrences of one kind that add the same rows are one
+        # candidate, so a key of the fast code from another parent finds the
+        # reference's value and legality through its rows
+        self.by_rows = {self.rows_of(self.key_of(c)): self.key_of(c) for c in found}
+
+    def key_of(self, c) -> tuple:
+        """The key (``_key``) of a reference Candidate, its knot on the
+        original scale of X (EDGE-7)."""
+        knot = (
+            c.knot
+            if c.kind == LINEAR
+            else math.ldexp(c.knot, -int(self.kept.jx[c.variable]))
+        )
+        return _key(c.parent, c.variable, c.kind, knot)
+
+    def rows_of(self, key) -> tuple:
+        """The kind and the rows (dirs, cuts) that a candidate adds (FWD-6)."""
+        return (key[2], tuple(t[:2] for t in _render(self.case, self.ref, key)))
+
+    def merged(self, key) -> tuple:
+        """The reference's key of the candidate that ``key`` merges with
+        (FWD-12), or ``key``."""
+        return self.by_rows.get(self.rows_of(key), key)
+
+    def scaled(self, key) -> tuple[np.ndarray, np.ndarray, float]:
+        """The parent column, the covariate and the knot of a key, on the
+        scaled X that the reference searched (EDGE-7)."""
+        k, v, kind, knot = key
+        x = self.kept.Xs[:, v]
+        t = math.nan if kind == LINEAR else math.ldexp(knot, int(self.kept.jx[v]))
+        return self.B[:, k], x, t
 
     def delta(self, R: float) -> float:
         """STOP-7's delta for the RSS R (scaled Y)."""
@@ -432,7 +493,7 @@ class _Step:
     def _linear(self, k: int, v: int) -> np.ndarray:
         """A column that spans with B what b x_v spans, as the reference forms
         it: b (x - min x), or the Conditioned's linear column (#72, #79)."""
-        b, x = self.B[:, k], self.kept.X[:, v]
+        b, x = self.B[:, k], self.kept.Xs[:, v]
         if self.cond is None:
             return b * (x - x.min())
         return self.cond.linear_column(self.dirs[k], self.cuts[k], v, b)
@@ -440,10 +501,11 @@ class _Step:
     def value(self, key) -> float:
         """The RSS of LA-2 of a candidate: the reference's own value when it
         found the candidate, else a least-squares fit of its columns."""
+        key = self.merged(key)
         if key in self.values:
             return self.values[key]
-        k, v, kind, knot = key
-        b, x = self.B[:, k], self.kept.X[:, v]
+        k, v, kind, _ = key
+        b, x, knot = self.scaled(key)
         h = None if kind == LINEAR else b * np.maximum(x - knot, 0.0)
         lin = None if kind == SINGLE else self._linear(k, v)
         cols = {PAIR: [lin, h], SINGLE: [h], LINEAR: [lin]}[kind]
@@ -456,9 +518,9 @@ class _Step:
         reduction within 22 delta of MaxLegal or within 2 delta of 0 (FWD-4),
         or its RSS within 2 delta of the exact-fit edge (FWD-5; every
         candidate below about 4e-8 RSS_s, so the band never decides)."""
-        k, v, kind, knot = key
+        k, v, kind, _ = key
         out, w = [], self.kept.w
-        b, x = self.B[:, k], self.kept.X[:, v]
+        b, x, knot = self.scaled(key)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), v]
         thr = 0.01 * math.prod(self.sigma2[u] for u in V)
         searchable = all(self.sigma2[u] > 0 for u in V)
@@ -561,6 +623,18 @@ class _Step:
         return out
 
 
+def _grsq_new(case: Case, step: _Step, key) -> float:
+    """GRSq' of the reference's step for the candidate ``key``, or for a step
+    without a legal candidate (None), as STOP-3 says."""
+    prm, kept = mars_ref.as_params(case.params), case.kept
+    if key is None:
+        rss_new, m_new = step.rss_s, step.M + 1
+    else:
+        rss_new, m_new = step.value(key), step.M + (2 if key[2] == PAIR else 1)
+    d = prm.resolved_penalty()
+    return mars_ref.grsq(rss_new, m_new, step.tss, d, kept.N, kept.tau_N)
+
+
 def _stop5_bands(case: Case, ref: dict, s: int) -> list[str]:
     """STOP-7's bands of STOP-5 after step s: the new RSS within 2 delta of
     the floor 1e-10 TSS / (N - 1), or the new RSq within 2 delta / TSS of
@@ -595,7 +669,7 @@ def _diverged(case: Case, fast: dict, ref: dict, s: int) -> Outcome:
     rss_f = math.ldexp(float(fast["rss"][s]), 2 * case.kept.j)
     if abs(rss_f - vf) > eps(vf, R, step.tss):
         _fail(case, f"step {s}: the fast RSS {rss_f!r} of {cf[0]} is not {vf!r} (LA-5)")
-    f_legal = any(k in step.legal_keys for k in cf)
+    f_legal = any(step.merged(k) in step.legal_keys for k in cf)
     if f_legal and vf < vr - TIE * R:
         _fail(case, f"step {s}: the reference chose {cr[0]} over the better {cf[0]}")
     f_bands = [b for k in cf for b in step.bands(k)]
@@ -629,9 +703,21 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         bound = eps(V, ref["rss"][i], tss) if math.isfinite(V) else 0.0
         _close(case, lf["second_rss"][i], V, bound, f"second, {s}")
         return None
-    if kf is not None and kf in _choice(case, fast, s):
-        _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
     step = _Step(case, ref, s)
+    if kf is not None and kr is not None and step.rows_of(kf) == step.rows_of(kr):
+        # one candidate from two parents (FWD-12): rows, not parent
+        vf = step.value(kf)
+        rss_f = math.ldexp(float(lf["second_rss"][i]), 2 * case.kept.j)
+        if abs(rss_f - vf) > eps(vf, step.rss_s, step.tss):
+            _fail(case, f"step {s}: the fast second {kf} has RSS {rss_f!r}, not {vf!r}")
+        return None
+    if kf is not None and step.rows_of(kf) in [
+        step.rows_of(k) for k in _choice(case, fast, s)
+    ]:
+        # the fast second adds the chosen rows from another parent (FWD-12)
+        if kf not in _choice(case, fast, s) and (label := _v2_allowance("FWD-12")):
+            return label
+        _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
     if kf is not None and kr is not None and _identical(step, kf, kr):
         _fail(case, f"step {s}: the seconds {kf} and {kr} have equal columns (FWD-5)")
     if kf is not None:
@@ -645,8 +731,8 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         ok = bool(f_bands or r_bands)
     else:
         gap = abs(step.value(kf) - step.value(kr)) < TIE * step.rss_s
-        f_ok = kf in step.legal_keys or f_bands
-        r_ok = kr in step.legal_keys or r_bands
+        f_ok = step.merged(kf) in step.legal_keys or f_bands
+        r_ok = step.merged(kr) in step.legal_keys or r_bands
         ok = f_ok and r_ok and (gap or f_bands or r_bands)
     if not ok and (queue := step.queue_bands()):
         return _join(queue)
@@ -675,7 +761,7 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
     else:
         step = _Step(case, ref, t)
         best = step.best()
-        keys = [] if best is None else [mars_ref.candidate_key(best)]
+        keys = [] if best is None else [step.key_of(best)]
         for rec in (fast, ref):
             if len(rec["rss"]) - 1 >= t:
                 keys += _choice(case, rec, t)
@@ -685,6 +771,14 @@ def _stopped_apart(case: Case, fast: dict, ref: dict, t: int) -> Outcome:
         reasons += step.queue_bands()
     if reasons:
         return Outcome(t - 1, _join(reasons), t)
+    codes = (int(fast["termination"]), int(ref["termination"]))
+    if len(fast["rss"]) == len(ref["rss"]) and codes == (3, 2):
+        # v2's code 2 for a finite GRSq' below -1000 (at -inf v1 gives 2 too)
+        step = _Step(case, ref, t)
+        best = step.best()
+        g = _grsq_new(case, step, None if best is None else step.key_of(best))
+        if -math.inf < g < -1000 and (label := _v2_allowance("STOP-3")):
+            return Outcome(t - 1, label, t)
     _fail(
         case,
         f"after {t - 1} equal steps: fast {len(fast['rss']) - 1} steps, code "

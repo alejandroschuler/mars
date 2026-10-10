@@ -1077,19 +1077,33 @@ class TestForwardPass:
         np.testing.assert_array_equal(hinge["dirs"], [[0], [1]])
         np.testing.assert_array_equal(hinge["cuts"], [[0.0], [0.0]])  # min x
 
-    def test_at_an_exact_fit_the_second_best_may_round_below_the_best(self):
-        # y = 1 + 2x: the linear candidate and many knots reduce the RSS to
-        # rounding noise, with equal reductions in float64; FWD-5 takes the
-        # linear candidate, and the logged second best (a knot) may have an
-        # RSS a few 1e-31 below it, far inside 1e-12 of the RSS before the step
+    def test_exact_fits_tie_exactly_in_the_band(self):
+        # FWD-5 (v2): y = 1 + 2x, so the linear candidate and many pairs fit
+        # exactly, with computed RSS values that are rounding noise. In the
+        # band every such reduction is RSS_s exactly, so the linear candidate
+        # (first in FWD-5's order) wins in every row order, its lambda is
+        # RSS_0 (FAST-5), and the logged second best has the RSS 0, below the
+        # computed best_rss of the new basis (CORE-3)
         x = np.arange(32.0) / 32
-        rec = run_forward(x[:, None], 1 + 2 * x, minspan=1, endspan=1)
-        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
-        log = rec["candidates"]
-        assert log["second_kind"][0] == ref.PAIR
-        assert log["second_rss"][0] >= log["best_rss"][0] - 1e-12 * rec["rss"][0]
+        perms = [
+            np.arange(32),
+            *(np.random.default_rng(s).permutation(32) for s in range(4)),
+        ]
+        for perm in perms:
+            trace = []
+            rec = run_forward(
+                x[perm, None], 1 + 2 * x[perm], trace=trace, minspan=1, endspan=1
+            )
+            np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+            log = rec["candidates"]
+            assert log["second_kind"][0] == ref.PAIR
+            assert log["second_rss"][0] == 0.0
+            assert log["best_rss"][0] == rec["rss"][1] <= 1e-14 * rec["rss"][0]
+            assert trace[0]["entries"][0][0] == rec["rss"][0]
+        # the band's edge: 1e-14 of RSS_s
+        assert ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 1e-14), 1.0) == 1.0
         assert (
-            rec["rss"][0] - log["second_rss"][0] == rec["rss"][0] - log["best_rss"][0]
+            ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 2e-14), 1.0) == 1 - 2e-14
         )
 
     def test_a_binary_covariate_offers_only_its_linear_term(self):
@@ -1522,12 +1536,22 @@ class TestForwardPass:
 
     @pytest.mark.parametrize(
         ("penalty", "thresh", "code", "steps"),
-        [(2.899495, 0.001, 2, 1), (2.992898, 0.001, 3, 0), (4.0, 0.5, 3, 0)],
+        [
+            (2.899495, 0.001, 2, 1),
+            (2.992898, 0.001, 3, 0),
+            (4.0, 0.5, 3, 0),
+            (4.7846, 0.001, 3, 0),
+            (4.7851, 0.001, 2, 0),
+        ],
     )
-    def test_the_grsq_stop_at_minus_ten(self, penalty, thresh, code, steps):
+    def test_the_grsq_stops_at_minus_ten_and_minus_1000(
+        self, penalty, thresh, code, steps
+    ):
         # STOP-3 on the 8 alternating cases: GRSq' is -9.5 at step 1 with
         # penalty 2.899495 (the step is taken), and -10.5 with 2.992898 (no
         # step). It comes before STOP-4: with thresh 0.5 the code is 3, not 4.
+        # (v2) The code is 2 below -1000, also where GRSq' is finite: about
+        # -997.5 with penalty 4.7846 (code 3) and -1002.1 with 4.7851 (code 2).
         x = np.arange(8.0)[:, None]
         rec = run_forward(x, [1.0, -1.0] * 4, penalty=penalty, thresh=thresh)
         assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
@@ -1623,6 +1647,71 @@ class TestForwardPass:
                 cols.append(np.maximum(X[:, c.variable] - c.knot, 0))
             exact = exact_rss(np.column_stack(cols), y, w)
             assert abs(c.rss - exact) <= 1e-8 * before
+
+    def test_candidates_of_one_kind_that_add_the_same_rows_merge(self):
+        # FWD-12, FAST-5: two searches of one step that add the same rows.
+        # Linear candidates on the linear parents x0 and x1 both add x0 x1;
+        # with the products h0 x1 and h1 x0 in B, the searches of h0 = h(x0 -
+        # t) on x1 and of h1 = h(x1 - u) on x0 are single-hinge searches
+        # (A_w = 0, LA-7), and the knots u and t both add h0 h1. The later
+        # search meets the first occurrence: the same Candidate, with its
+        # parent and RSS, so its lambda counts that reduction.
+        rng = np.random.default_rng(30)
+        n, w = 40, np.ones(40)
+        X = rng.uniform(size=(n, 2))
+        y = X[:, 0] * X[:, 1] + 0.1 * rng.normal(size=n)
+        t, u = float(np.sort(X[:, 0])[19]), float(np.sort(X[:, 1])[15])
+        h0, h1 = np.maximum(X[:, 0] - t, 0), np.maximum(X[:, 1] - u, 0)
+        cases = [
+            (
+                np.column_stack([np.ones(n), X]),
+                [[0, 0], [2, 0], [0, 2]],
+                [[0, 0], [0, 0], [0, 0]],
+                ref.LINEAR,
+                math.nan,
+            ),
+            (
+                np.column_stack([np.ones(n), h0, h1, h0 * X[:, 1], h1 * X[:, 0]]),
+                [[0, 0], [1, 0], [0, 1], [1, 2], [2, 1]],
+                [[0, 0], [t, 0], [0, u], [t, 0], [0, u]],
+                ref.SINGLE,
+                u,
+            ),
+        ]
+        sigma2 = ref.covariate_variances(X, w, 40.0)
+        for B, rows, cut_rows, kind, knot in cases:
+            P_B = ref.Projector(B, w)
+            met, found = {}, []
+            for k in (1, 2):
+                cands, _ = ref._parent_candidates(
+                    k,
+                    np.array(rows[k], np.int8),
+                    X,
+                    y[:, None],
+                    w,
+                    B,
+                    P_B,
+                    P_B.residual(y[:, None]),
+                    sigma2,
+                    40.0,
+                    ref.weight_tol(40.0),
+                    ref.Params(max_degree=2, minspan=1, endspan=1),
+                    0.01,
+                    parent_cut=np.array(cut_rows[k], float),
+                    met=met,
+                )
+                found.append(cands)
+            if kind == ref.SINGLE:
+                assert all(c.kind == ref.SINGLE for c in found[0] + found[1])
+            first = [
+                c
+                for c in found[0]
+                if c.kind == kind and (kind == ref.LINEAR or c.knot == knot)
+            ]
+            assert len(first) == 1 and first[0].parent == 1
+            assert sum(c is first[0] for c in found[1]) == 1
+            lam = ref.queue_value(found[1], True, P_B.rss(y), math.inf)
+            assert lam >= P_B.rss(y) - first[0].rss
 
     def test_the_second_best_candidate_of_the_first_step(self):
         # CORE-3 against every legal candidate of the intercept at step 1
@@ -1987,6 +2076,61 @@ class TestFit:
             2.0**-80 * base["forward"]["candidates"]["second_rss"],
         )
 
+    def test_a_power_of_two_scale_of_x_changes_no_bit(self):
+        # EDGE-7 (v2): X is scaled column by column to a largest |x| in [1, 2),
+        # so X and X with each column times its own power of 2 give the same
+        # fit bit for bit; the knots (cuts, the forward cuts, second_knot)
+        # come back on the original scale, and row k of coef by 2 to the sum
+        # of the exponents of its covariates
+        X, y = noisy_data(32, n=50, p=3)
+        powers = np.array([10, -20, 3])
+        base = fit(X, y, max_degree=3)
+        got = fit(np.ldexp(X, powers), y, max_degree=3)
+        assert (base["forward"]["dirs"][:, :2] != 0).any(axis=1).sum() > 2
+
+        def knots(dirs, cuts):
+            return np.where(np.abs(dirs) == 1, np.ldexp(cuts, powers), 0.0)
+
+        for a, b in ((got, base), (got["forward"], base["forward"])):
+            np.testing.assert_array_equal(a["dirs"], b["dirs"])
+            np.testing.assert_array_equal(a["cuts"], knots(b["dirs"], b["cuts"]))
+        exponents = (base["dirs"] != 0) @ powers
+        np.testing.assert_array_equal(
+            got["coef"], np.ldexp(base["coef"], -exponents[:, None])
+        )
+        for key in ("rss", "gcv", "rsq", "grsq"):
+            assert got[key] == base[key]
+        np.testing.assert_array_equal(got["forward"]["rss"], base["forward"]["rss"])
+        a, b = got["forward"]["candidates"], base["forward"]["candidates"]
+        hinge = np.isin(b["second_kind"], [ref.PAIR, ref.SINGLE])
+        assert hinge.any()
+        np.testing.assert_array_equal(
+            a["second_knot"][hinge],
+            np.ldexp(b["second_knot"], powers[b["second_variable"]])[hinge],
+        )
+
+    @pytest.mark.parametrize("scale", [1e200, 1e-300])
+    def test_an_extreme_scale_of_x(self, scale):
+        # EDGE-7: at degree 1, X 1e200 and X 1e-300 give the model of X; at
+        # degree 2 the coefficient of a product of the two columns is about
+        # y / scale^2, which underflows or overflows: ValueError
+        X, y = noisy_data(33, n=50)
+        base = fit(X, y)
+        got = fit(X * scale, y)
+        np.testing.assert_array_equal(got["dirs"], base["dirs"])
+        np.testing.assert_allclose(got["cuts"], base["cuts"] * scale, rtol=1e-15)
+        np.testing.assert_allclose(got["coef"][1:], base["coef"][1:] / scale, rtol=1e-9)
+        assert got["rss"] == pytest.approx(base["rss"], rel=1e-12)
+        product = X[:, 0] * X[:, 1] + 0.01 * np.random.default_rng(33).normal(size=50)
+        assert (fit(X, product, max_degree=2)["dirs"] != 0).sum(axis=1).max() == 2
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(X * scale, product, max_degree=2)
+        # a coefficient that the scale of y alone makes subnormal raises too
+        Z = np.random.default_rng(34).normal(size=(30, 2))
+        tiny_y = (Z[:, 0] + 0.1 * np.random.default_rng(35).normal(size=30)) * 1e-310
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(Z, tiny_y)
+
     def test_a_tiny_response_has_a_positive_tss(self):
         # seven 0s and one 1e-170: the fit is not degenerate, although its TSS
         # (about 1e-340) underflows to 0 when it is reported [EDGE-6]
@@ -2003,10 +2147,37 @@ class TestFit:
         X = np.arange(4.0)[:, None]
         with pytest.raises(ValueError, match="scale of y or of the weights"):
             fit(X, [0.0, 1.0, 0.0, 1.0], np.full(4, 1e-310))
-        # weights 8e307 keep N finite, but the scaled TSS overflows; under the
-        # repository's filterwarnings = error a warning would fail this test
-        with pytest.raises(ValueError, match="scale of y or of the weights"):
-            fit(np.array([[0.0], [1.0]]), np.array([-1.9, 1.9]), np.full(2, 8e307))
+
+    @pytest.mark.parametrize("w", [2, 2.0, np.int64(2), np.float64(2.0), np.float32(2)])
+    def test_a_scalar_weight_is_given_to_every_row(self, w):
+        # W-6 (v2): an int or float scalar, Python or numpy
+        X, y = noisy_data(31, n=30)
+        expected = fit(X, y, np.full(30, 2.0))
+        got = fit(X, y, w)
+        for key in ("dirs", "cuts", "coef", "rss", "n_eff"):
+            np.testing.assert_array_equal(got[key], expected[key])
+
+    @pytest.mark.parametrize(
+        ("w", "message"),
+        [
+            (True, "bool"),
+            (np.bool_(True), "bool"),
+            (np.array(2.0), "0-d"),
+            # W-6 before EDGE-6: N = 1.6e308 is finite, so the scaled TSS
+            # would overflow; and 2^52, the bound of W-4
+            (np.full(2, 8e307), "total weight is out of range"),
+            (np.array([1e308, 1e308]), "total weight is out of range"),
+            (np.array([2.0**52, 0.0]), "total weight is out of range"),
+        ],
+    )
+    def test_weights_that_w_6_rejects(self, w, message):
+        X = np.array([[0.0], [1.0]])
+        with pytest.raises(ValueError, match=message):
+            fit(X, np.array([-1.9, 1.9]), w)
+        # just below the bound is a weight sum like any other
+        assert fit(X, np.array([-1.9, 1.9]), np.array([2.0**52 - 2, 1.0]))["n_eff"] == (
+            2.0**52 - 1
+        )
 
     def test_several_responses_share_one_basis(self):
         X, y = noisy_data(19, p=3)

@@ -1,6 +1,6 @@
 """Reference implementation of the pymars 2.0 fitting algorithm (the test oracle).
 
-This module implements ``docs/algorithm.md`` (spec v1) literally, so that the
+This module implements ``docs/algorithm.md`` (spec v2) literally, so that the
 oracle tests can compare the fast code in ``pymars/`` with it
 (VALIDATION_PLAN.md, "Tests and validation folders" and "Fast path"). It was
 written from the spec alone. It imports nothing from ``pymars``, and its
@@ -29,10 +29,9 @@ How it computes, and how that differs from the fast code:
   the other.
 
 It is slow on purpose, and practical up to n <= 300, p <= 6 and
-max_degree <= 3 [CORE-7]. Sums of squares are formed from the values as
-they are, so values whose squares leave the normal range of float64 (above
-about 1e150 or below about 1e-150 in absolute value, in a covariate or in a
-product of factors) are outside its range; Y is scaled first [EDGE-6].
+max_degree <= 3 [CORE-7]. Y and each column of X are scaled by powers of
+2 first [EDGE-6, EDGE-7], and the knots and coefficients are scaled back;
+sums of squares are formed from the scaled values as they are.
 Bracketed IDs such as [GCV-2] cite the rules of the spec. Indices are
 0-based, as in the spec. No function changes its inputs.
 """
@@ -51,6 +50,7 @@ import scipy.linalg
 
 ALPHA = 0.05  # the probability in Friedman's span formulas [Notation]
 DEPENDENT_TOL = 1e-7  # the dependency test for coefficients [LA-4]
+EXACT_FIT = 1e-14  # the exact-fit band of FWD-5
 EPS = float(np.finfo(np.float64).eps)
 
 
@@ -799,8 +799,8 @@ NO_KIND, PAIR, SINGLE, LINEAR = 0, 1, 2, 3
 
 @dataclasses.dataclass(frozen=True)
 class Candidate:
-    """One candidate of a forward step [FWD-3]; two candidates differ when they
-    differ in the parent, the variable, the kind or the knot [CORE-3]."""
+    """One candidate of a forward step [FWD-3]. Occurrences of one kind that
+    add the same rows share one Candidate, that of the first [FWD-12]."""
 
     parent: int  # the forward index of the parent term
     variable: int
@@ -831,21 +831,35 @@ def is_legal(kind: int, reduction: float, limit: float) -> bool:
     return 0 < reduction <= limit
 
 
+def reduction(c, rss_s: float) -> float:
+    """The RSS reduction of candidate c, RSS_s minus its RSS, after the
+    exact-fit band of FWD-5: RSS_s exactly when its computed RSS is at most
+    EXACT_FIT RSS_s."""
+    return rss_s if c.rss <= EXACT_FIT * rss_s else rss_s - c.rss
+
+
 def queue_value(candidates, searchable: bool, rss_s: float, limit: float) -> float:
     """lambda_e of a searched entry [FAST-5]: the largest legal reduction among
-    its candidates, linear candidates of any size included; 0 when none is
-    legal, and -1 when no covariate could be searched."""
+    its candidates, after the exact-fit band, linear candidates of any size
+    included; 0 when none is legal, and -1 when no covariate could be
+    searched."""
     if not searchable:
         return -1.0
     return max(
-        (rss_s - c.rss for c in candidates if is_legal(c.kind, rss_s - c.rss, limit)),
+        (
+            reduction(c, rss_s)
+            for c in candidates
+            if is_legal(c.kind, reduction(c, rss_s), limit)
+        ),
         default=0.0,
     )
 
 
 def candidate_key(c) -> tuple:
-    """What tells two candidates apart [CORE-3]: the parent, the variable, the
-    kind and the knot, with None as the knot of a linear candidate."""
+    """How the candidate log names a candidate [CORE-3]: the parent, the
+    variable, the kind and the knot, with None as the knot of a linear
+    candidate. Two occurrences of one kind that add the same rows are one
+    candidate, named by the first [FWD-12, merge_key]."""
     return (c.parent, c.variable, c.kind, None if c.kind == LINEAR else c.knot)
 
 
@@ -1049,9 +1063,17 @@ def _parent_candidates(
     tau,
     conditioned=None,
     parent_cut=None,
+    met=None,
 ):
     """The candidates of parent term k (column k of B), in the order of FWD-5,
     and whether some covariate could be searched for it [FWD-2, FWD-3].
+
+    ``met`` maps the candidates that earlier searches of the step met, by
+    their kind and added rows (``merge_key``), to the Candidate of the first
+    occurrence, or to None when LA-3 rejected it there. A candidate met
+    before is that Candidate, with its parent, its RSS and so its legality,
+    or no candidate at all when it was rejected [FWD-12]; the dict is
+    updated with the new ones.
 
     For each covariate that the parent lacks, in increasing order: the kind
     of the search by the pymars rule of LA-7; in a pair search the linear
@@ -1090,7 +1112,18 @@ def _parent_candidates(
             params.adjust_endspan,
         )
     B_proj = B if conditioned is None else conditioned.columns
+    met = {} if met is None else met
+    cut_row = np.zeros(p) if parent_cut is None else parent_cut
     out = []
+
+    def first(candidate, j, kind, knot):
+        # the first occurrence decides [FWD-12]
+        key = merge_key(parent_row, cut_row, j, kind, knot, X, params.auto_linpreds)
+        if key not in met:
+            met[key] = candidate
+        if met[key] is not None:
+            out.append(met[key])
+
     for j in covariates:
         x = X[:, j]
         # b x enters only through its span with B, which holds b, so b (x - m)
@@ -1108,7 +1141,8 @@ def _parent_candidates(
         if pair:
             P_G = Projector(np.column_stack([B_proj, bx]), w)
             e_G = P_G.residual(Y)
-            out.append(Candidate(k, j, LINEAR, math.nan, float(np.sum(e_G**2))))
+            value = float(np.sum(e_G**2))
+            first(Candidate(k, j, LINEAR, math.nan, value), j, LINEAR, math.nan)
         else:
             P_G, e_G = P_B, e_B
         if spans is None:
@@ -1124,20 +1158,42 @@ def _parent_candidates(
         constant = np.all(H[0] == H, axis=0)
         with np.errstate(divide="ignore", invalid="ignore"):
             accept = ~constant & (size / spread >= tau)  # [LA-3]
-        for i in np.flatnonzero(accept):
-            h = H_perp[:, i]
-            residual = e_G - np.outer(h, (h @ e_G) / size[i])
-            kind = PAIR if pair else SINGLE
-            out.append(Candidate(k, j, kind, float(t[i]), float(np.sum(residual**2))))
+        kind = PAIR if pair else SINGLE
+        for i in range(len(t)):
+            c = None  # a knot that LA-3 rejects is no candidate
+            if accept[i]:
+                h = H_perp[:, i]
+                residual = e_G - np.outer(h, (h @ e_G) / size[i])
+                c = Candidate(k, j, kind, float(t[i]), float(np.sum(residual**2)))
+            first(c, j, kind, float(t[i]))
     return out, True
 
 
+def merge_key(parent_row, parent_cut, j, kind, knot, X, auto_linpreds) -> tuple:
+    """The kind of a candidate and the rows of dirs and cuts that it adds, in
+    order [FWD-6]: candidates with equal keys are one candidate [FWD-12]."""
+    if kind == PAIR:
+        codes = [(1, knot), (-1, knot)]
+    elif kind == SINGLE:
+        codes = [(1, knot)]
+    elif auto_linpreds:
+        codes = [(2, 0.0)]
+    else:
+        codes = [(1, float(np.min(X[:, j])))]
+    rows = []
+    for code, cut in codes:
+        row, cuts = list(np.asarray(parent_row).tolist()), list(map(float, parent_cut))
+        row[j], cuts[j] = code, cut + 0.0
+        rows.append((tuple(row), tuple(cuts)))
+    return (kind, tuple(rows))
+
+
 def _first_best(candidates, rss_s):
-    """The candidate with the largest reduction; equal reductions go to the one
-    found first [FWD-5]."""
+    """The candidate with the largest reduction after the exact-fit band;
+    equal reductions go to the one found first [FWD-5]."""
     best = None
     for c in candidates:
-        if best is None or rss_s - c.rss > rss_s - best.rss:
+        if best is None or reduction(c, rss_s) > reduction(best, rss_s):
             best = c
     return best
 
@@ -1163,20 +1219,25 @@ def _new_terms(c, X, columns, dirs, cuts, auto_linpreds):
 
 
 def _candidate_log(log) -> dict:
-    """The CandidateLog of CORE-3 from (chosen, second) pairs, one per step."""
+    """The CandidateLog of CORE-3 from (chosen, second, RSS_s) triples, one per
+    step: second_rss is RSS_s minus the second's reduction after the band of
+    FWD-5, and best_rss the computed RSS of the new basis."""
 
     def field(name, none, dtype):
         return np.array(
-            [none if s is None else getattr(s, name) for _, s in log], dtype
+            [none if s is None else getattr(s, name) for _, s, _ in log], dtype
         )
 
     return {
-        "best_rss": np.array([c.rss for c, _ in log], dtype=np.float64),
-        "second_rss": field("rss", math.inf, np.float64),
+        "best_rss": np.array([c.rss for c, _, _ in log], dtype=np.float64),
+        "second_rss": np.array(
+            [math.inf if s is None else r - reduction(s, r) for _, s, r in log],
+            dtype=np.float64,
+        ),
         "second_parent": field("parent", -1, np.int64),
         "second_variable": field("variable", -1, np.int64),
         "second_knot": np.array(
-            [math.nan if s is None or s.kind == LINEAR else s.knot for _, s in log],
+            [math.nan if s is None or s.kind == LINEAR else s.knot for _, s, _ in log],
             dtype=np.float64,
         ),
         "second_kind": field("kind", NO_KIND, np.int8),
@@ -1227,7 +1288,7 @@ def forward_pass(
         tau = collinearity_tol(s)
         table = queue_table(entries, s, params.fast_beta)
         visited = window(table, params.fast_k)
-        found, searched = [], []
+        found, searched, met, seen = [], [], {}, set()
         for e in visited:
             k = slots.get(e)
             if k is None or term_degree(dirs[k]) >= params.max_degree:
@@ -1248,11 +1309,13 @@ def forward_pass(
                 tau,
                 conditioned,
                 cuts[k],
+                met,
             )
             entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
-            found.extend(cands)
+            found.extend(c for c in cands if id(c) not in seen)
+            seen.update(id(c) for c in cands)
             searched.append(k)
-        legal = [c for c in found if is_legal(c.kind, rss_s - c.rss, limit)]
+        legal = [c for c in found if is_legal(c.kind, reduction(c, rss_s), limit)]
         chosen = _first_best(legal, rss_s)
         if trace is not None:
             trace.append(
@@ -1275,7 +1338,7 @@ def forward_pass(
         rsq_gain = rsq(rss_new, tss) - rsq(rss_s, tss)
         grsq_new = grsq(rss_new, M_new, tss, penalty, N, tau_N)
         if params.thresh > 0 and grsq_new < -10:  # [STOP-3]
-            termination = GRSQ_NEG_INF if grsq_new == -math.inf else GRSQ_LOW
+            termination = GRSQ_NEG_INF if grsq_new < -1000 else GRSQ_LOW
             break
         if rsq_gain < params.thresh:  # [STOP-4]
             termination = RSQ_CHANGE_SMALL
@@ -1295,8 +1358,8 @@ def forward_pass(
         s += 1
         rss_path.append(chosen.rss)
         if record_candidates:
-            others = [c for c in legal if candidate_key(c) != candidate_key(chosen)]
-            log.append((chosen, _first_best(others, rss_s)))
+            others = [c for c in legal if c is not chosen]  # merged already [FWD-12]
+            log.append((chosen, _first_best(others, rss_s), rss_s))
         floor = 1e-10 * tss / (N - 1)
         if rsq(chosen.rss, tss) >= 1 - params.thresh or chosen.rss < floor:
             termination = RSQ_HIGH  # [STOP-5]
@@ -1330,6 +1393,33 @@ def _unscale(value, power: int):
     return float(out) if out.ndim == 0 else out
 
 
+def x_scale_powers(X) -> np.ndarray:
+    """j_v of EDGE-7 for each column v: the largest |x_iv| times 2**j_v lies
+    in [1, 2); 0 for a column of zeros."""
+    top = np.max(np.abs(X), axis=0) if X.shape[0] else np.zeros(X.shape[1])
+    return np.array(
+        [0 if t == 0.0 else 1 - math.frexp(float(t))[1] for t in top], dtype=np.int64
+    )
+
+
+def _coef_back(coef, dirs, jx, jy: int) -> np.ndarray:
+    """The coefficients of the fit on the scaled X and Y on the original
+    scales: row k times 2 to the sum of j_v over the covariates of term k,
+    and divided by 2**jy, in one ldexp [EDGE-7, EDGE-6]. ValueError when a
+    result is not finite, or when a nonzero coefficient becomes 0 or a
+    subnormal, whatever scale causes it [EDGE-7]."""
+    power = (np.asarray(dirs) != 0) @ jx - jy
+    with np.errstate(over="ignore", under="ignore"):
+        out = np.ldexp(coef, power[:, None])
+    lost = (coef != 0) & (np.abs(out) < np.finfo(np.float64).tiny)
+    if not np.all(np.isfinite(out)) or lost.any():
+        raise ValueError(
+            "the scale of X is out of range (or that of y): a coefficient "
+            "leaves the normal range of float64 when it is scaled back"
+        )
+    return out
+
+
 def y_scale_power(Y) -> int:
     """j of EDGE-6: D 2**j lies in [1, 2), where D is the largest |Y_ik|;
     0 when D = 0."""
@@ -1337,14 +1427,43 @@ def y_scale_power(Y) -> int:
     return 0 if D == 0.0 else 1 - math.frexp(D)[1]
 
 
+def case_weights(w, n: int) -> np.ndarray:
+    """The weights as an (n,) float64 array [W-5, W-6]: None is 1 for every
+    row; a Python or numpy int or float scalar is given to every row; a bool
+    (Python or numpy) and a 0-d array raise ValueError."""
+    if w is None:
+        return np.ones(n)
+    if isinstance(w, (bool, np.bool_)):
+        raise ValueError("a bool is not a weight (W-6)")
+    if isinstance(w, np.ndarray) and w.ndim == 0:
+        raise ValueError("a 0-d array is not a weight; give a scalar or 1-D array")
+    if isinstance(w, (int, float, np.integer, np.floating)):
+        return np.full(n, float(w))
+    return np.asarray(w, dtype=np.float64)
+
+
+def total_weight(w) -> float:
+    """N = math.fsum of the weights; ValueError when the sum overflows or is
+    2^52 or more, the bound of W-4 [W-6]."""
+    try:
+        N = weight_sum(w)
+    except OverflowError:
+        N = math.inf
+    if not N < 2.0**52:
+        raise ValueError(f"the total weight is out of range: {N!r}, not below 2^52")
+    return N
+
+
 def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     """The fit of CORE-1, returned as the dict of CORE-5.
 
     X is (n, p); Y is (n, K), or (n,) for K = 1 [RESP-2]; w is (n,) with a
-    positive sum, or None for w_i = 1 exactly [W-5]. The input is valid,
-    as the estimators check it first [CORE-1]. Rows with zero weight are
-    dropped before anything else [W-3]. Y is multiplied by 2**j before any
-    sum, and every value on the scale of Y is scaled back [EDGE-6]. The
+    positive sum, a scalar for every row, or None for w_i = 1 exactly [W-5,
+    W-6]; a total weight that W-6 rejects raises ValueError before EDGE-6.
+    Otherwise the input is valid, as the estimators check it first [CORE-1].
+    Rows with zero weight are dropped before anything else [W-3]. Y is
+    multiplied by 2**j before any sum, and every value on the scale of Y is
+    scaled back [EDGE-6]. The
     keys follow CORE-3; ``forward``, ``pruning`` and ``candidates`` are
     nested dicts and ``termination`` is the integer code [CORE-5].
     """
@@ -1352,11 +1471,11 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
     Y = Y.reshape(Y.shape[0], -1)
-    w = np.ones(X.shape[0]) if w is None else np.asarray(w, dtype=np.float64)
+    w = case_weights(w, X.shape[0])
     rows = w > 0
     X, Y, w = X[rows], Y[rows], w[rows]
     n, p = X.shape
-    N0 = weight_sum(w)
+    N0 = total_weight(w)
     tau_N = weight_tol(N0)
     N = snap(N0, tau_N)
     j = y_scale_power(Y)
@@ -1380,6 +1499,8 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
     }
     if N <= 1 or constant:
         return _degenerate_fit(Y, Ys, w, j, constant, tss, p, record_candidates, common)
+    jx = x_scale_powers(X)
+    X = np.ldexp(X, jx)  # the fit runs on the scaled X [EDGE-7]
     forward, B = forward_pass(
         X,
         Ys,
@@ -1406,18 +1527,24 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         columns_of=conditioned.span_columns,
     )
     selected = kept[pruned["selected"]]
-    forward = {**forward, "rss": _unscale(forward["rss"], -2 * j)}
+    # the knots back on the original scale, exactly [EDGE-7]
+    cuts = np.ldexp(forward["cuts"], -jx)
+    forward = {**forward, "cuts": cuts, "rss": _unscale(forward["rss"], -2 * j)}
     if forward["candidates"] is not None:
         log = forward["candidates"]
         forward["candidates"] = {
             **log,
             "best_rss": _unscale(log["best_rss"], -2 * j),
             "second_rss": _unscale(log["second_rss"], -2 * j),
+            "second_knot": np.ldexp(
+                log["second_knot"], -jx[np.maximum(log["second_variable"], 0)]
+            ),
         }
+    coef = _coef_back(pruned["coef"], forward["dirs"][selected], jx, j)
     return {
         "dirs": forward["dirs"][selected],
-        "cuts": forward["cuts"][selected],
-        "coef": _unscale(pruned["coef"], -j),
+        "cuts": cuts[selected],
+        "coef": coef,
         "selected": selected,
         "rss": _unscale(pruned["rss"], -2 * j),
         "gcv": _unscale(pruned["gcv"], -2 * j),
