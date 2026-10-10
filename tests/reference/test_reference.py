@@ -1077,19 +1077,33 @@ class TestForwardPass:
         np.testing.assert_array_equal(hinge["dirs"], [[0], [1]])
         np.testing.assert_array_equal(hinge["cuts"], [[0.0], [0.0]])  # min x
 
-    def test_at_an_exact_fit_the_second_best_may_round_below_the_best(self):
-        # y = 1 + 2x: the linear candidate and many knots reduce the RSS to
-        # rounding noise, with equal reductions in float64; FWD-5 takes the
-        # linear candidate, and the logged second best (a knot) may have an
-        # RSS a few 1e-31 below it, far inside 1e-12 of the RSS before the step
+    def test_exact_fits_tie_exactly_in_the_band(self):
+        # FWD-5 (v2): y = 1 + 2x, so the linear candidate and many pairs fit
+        # exactly, with computed RSS values that are rounding noise. In the
+        # band every such reduction is RSS_s exactly, so the linear candidate
+        # (first in FWD-5's order) wins in every row order, its lambda is
+        # RSS_0 (FAST-5), and the logged second best has the RSS 0, below the
+        # computed best_rss of the new basis (CORE-3)
         x = np.arange(32.0) / 32
-        rec = run_forward(x[:, None], 1 + 2 * x, minspan=1, endspan=1)
-        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
-        log = rec["candidates"]
-        assert log["second_kind"][0] == ref.PAIR
-        assert log["second_rss"][0] >= log["best_rss"][0] - 1e-12 * rec["rss"][0]
+        perms = [
+            np.arange(32),
+            *(np.random.default_rng(s).permutation(32) for s in range(4)),
+        ]
+        for perm in perms:
+            trace = []
+            rec = run_forward(
+                x[perm, None], 1 + 2 * x[perm], trace=trace, minspan=1, endspan=1
+            )
+            np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+            log = rec["candidates"]
+            assert log["second_kind"][0] == ref.PAIR
+            assert log["second_rss"][0] == 0.0
+            assert log["best_rss"][0] == rec["rss"][1] <= 1e-14 * rec["rss"][0]
+            assert trace[0]["entries"][0][0] == rec["rss"][0]
+        # the band's edge: 1e-14 of RSS_s
+        assert ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 1e-14), 1.0) == 1.0
         assert (
-            rec["rss"][0] - log["second_rss"][0] == rec["rss"][0] - log["best_rss"][0]
+            ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 2e-14), 1.0) == 1 - 2e-14
         )
 
     def test_a_binary_covariate_offers_only_its_linear_term(self):

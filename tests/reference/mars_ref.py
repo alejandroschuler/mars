@@ -51,6 +51,7 @@ import scipy.linalg
 
 ALPHA = 0.05  # the probability in Friedman's span formulas [Notation]
 DEPENDENT_TOL = 1e-7  # the dependency test for coefficients [LA-4]
+EXACT_FIT = 1e-14  # the exact-fit band of FWD-5
 EPS = float(np.finfo(np.float64).eps)
 
 
@@ -831,14 +832,26 @@ def is_legal(kind: int, reduction: float, limit: float) -> bool:
     return 0 < reduction <= limit
 
 
+def reduction(c, rss_s: float) -> float:
+    """The RSS reduction of candidate c, RSS_s minus its RSS, after the
+    exact-fit band of FWD-5: RSS_s exactly when its computed RSS is at most
+    EXACT_FIT RSS_s."""
+    return rss_s if c.rss <= EXACT_FIT * rss_s else rss_s - c.rss
+
+
 def queue_value(candidates, searchable: bool, rss_s: float, limit: float) -> float:
     """lambda_e of a searched entry [FAST-5]: the largest legal reduction among
-    its candidates, linear candidates of any size included; 0 when none is
-    legal, and -1 when no covariate could be searched."""
+    its candidates, after the exact-fit band, linear candidates of any size
+    included; 0 when none is legal, and -1 when no covariate could be
+    searched."""
     if not searchable:
         return -1.0
     return max(
-        (rss_s - c.rss for c in candidates if is_legal(c.kind, rss_s - c.rss, limit)),
+        (
+            reduction(c, rss_s)
+            for c in candidates
+            if is_legal(c.kind, reduction(c, rss_s), limit)
+        ),
         default=0.0,
     )
 
@@ -1133,11 +1146,11 @@ def _parent_candidates(
 
 
 def _first_best(candidates, rss_s):
-    """The candidate with the largest reduction; equal reductions go to the one
-    found first [FWD-5]."""
+    """The candidate with the largest reduction after the exact-fit band;
+    equal reductions go to the one found first [FWD-5]."""
     best = None
     for c in candidates:
-        if best is None or rss_s - c.rss > rss_s - best.rss:
+        if best is None or reduction(c, rss_s) > reduction(best, rss_s):
             best = c
     return best
 
@@ -1163,20 +1176,25 @@ def _new_terms(c, X, columns, dirs, cuts, auto_linpreds):
 
 
 def _candidate_log(log) -> dict:
-    """The CandidateLog of CORE-3 from (chosen, second) pairs, one per step."""
+    """The CandidateLog of CORE-3 from (chosen, second, RSS_s) triples, one per
+    step: second_rss is RSS_s minus the second's reduction after the band of
+    FWD-5, and best_rss the computed RSS of the new basis."""
 
     def field(name, none, dtype):
         return np.array(
-            [none if s is None else getattr(s, name) for _, s in log], dtype
+            [none if s is None else getattr(s, name) for _, s, _ in log], dtype
         )
 
     return {
-        "best_rss": np.array([c.rss for c, _ in log], dtype=np.float64),
-        "second_rss": field("rss", math.inf, np.float64),
+        "best_rss": np.array([c.rss for c, _, _ in log], dtype=np.float64),
+        "second_rss": np.array(
+            [math.inf if s is None else r - reduction(s, r) for _, s, r in log],
+            dtype=np.float64,
+        ),
         "second_parent": field("parent", -1, np.int64),
         "second_variable": field("variable", -1, np.int64),
         "second_knot": np.array(
-            [math.nan if s is None or s.kind == LINEAR else s.knot for _, s in log],
+            [math.nan if s is None or s.kind == LINEAR else s.knot for _, s, _ in log],
             dtype=np.float64,
         ),
         "second_kind": field("kind", NO_KIND, np.int8),
@@ -1252,7 +1270,7 @@ def forward_pass(
             entries[e - 1] = [queue_value(cands, searchable, rss_s, limit), kappa]
             found.extend(cands)
             searched.append(k)
-        legal = [c for c in found if is_legal(c.kind, rss_s - c.rss, limit)]
+        legal = [c for c in found if is_legal(c.kind, reduction(c, rss_s), limit)]
         chosen = _first_best(legal, rss_s)
         if trace is not None:
             trace.append(
@@ -1296,7 +1314,7 @@ def forward_pass(
         rss_path.append(chosen.rss)
         if record_candidates:
             others = [c for c in legal if candidate_key(c) != candidate_key(chosen)]
-            log.append((chosen, _first_best(others, rss_s)))
+            log.append((chosen, _first_best(others, rss_s), rss_s))
         floor = 1e-10 * tss / (N - 1)
         if rsq(chosen.rss, tss) >= 1 - params.thresh or chosen.rss < floor:
             termination = RSQ_HIGH  # [STOP-5]
