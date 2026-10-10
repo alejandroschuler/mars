@@ -1392,11 +1392,15 @@ class TestForwardPass:
         fit = ref.fit_mars(shifted_X, y, w, opts)
         kept, pruning = fit["forward"]["kept"], fit["pruning"]
         B = exact_basis(shifted_X, dirs[kept], fit["forward"]["cuts"][kept])
-        floor = 1e-10 * pruning["rss_per_size"][0] / (n - 1)
+        floor = 1e-10 * pruning["rss_per_size"][0] / (np.sum(w) - 1)
         for m, got in enumerate(pruning["rss_per_size"], start=1):
             columns = np.flatnonzero(pruning["subsets"][m - 1])
             exact = exact_rss([[row[c] for c in columns] for row in B], y, w)
             assert abs(got - exact) <= 1e-8 * max(exact, floor)
+        # the final model's rss is the RSS of the selected size
+        assert fit["rss"] == pytest.approx(
+            pruning["rss_per_size"][pruning["selected_size"] - 1], rel=1e-10
+        )
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
