@@ -596,7 +596,7 @@ class TestDependence:
         # 1, x0, x3, x0 x2, x0 x3 with x3 = x2 or 3 x2 + 1: the last term is
         # dependent at every shift; the other terms count
         for copy in ("equal", "affine"):
-            for shift in (0.0, 0.5, 1e4, 1e10):
+            for shift in (0.0, 0.5, 1e4, 1e10, 3e15):
                 dirs, cuts = rows({}, {0: 2}, {3: 2}, {0: 2, 2: 2}, {0: 2, 3: 2})
                 kept = ref.la4_kept(issue75(shift, copy), dirs, cuts, w)
                 np.testing.assert_array_equal(kept, [True] * 4 + [False])
