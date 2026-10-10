@@ -951,7 +951,7 @@ class Conditioner:
         polys = [R for _, R in rows] + [N]
         mons = sorted(set().union(*polys))
         gm = [[self._gram(a, b) for b in mons] for a in mons]
-        D = max(g.denominator for r in gm for g in r)
+        D = math.lcm(*(g.denominator for r in gm for g in r))
         Gm = np.array([[int(g * D) for g in r] for r in gm], dtype=object)
         scale, C = [], []
         for poly in polys:

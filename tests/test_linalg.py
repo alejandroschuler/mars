@@ -714,7 +714,9 @@ def test_independent_terms_without_a_shift_is_independent_columns(seed):
     assert got.tolist() == la.independent_columns(B, w).tolist()
 
 
-@pytest.mark.parametrize("seed", range(60))
+# 288 and 405: a copy scaled by a power of 2 (the symbol key); 1142 and 1173: a
+# pivot monomial that is 0 at every case (LA-4's fallback to the new part).
+@pytest.mark.parametrize("seed", [*range(60), 288, 405, 1142, 1173])
 def test_independent_terms_equal_the_references_la4(seed):
     """FWD-11 against the reference's exact LA-4 (``mars_ref.la4_kept``) on drawn
     term lists: few levels at large means, a copy of a covariate at another
