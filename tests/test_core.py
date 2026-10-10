@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 from reference import mars_ref  # the oracle (tests/reference), as a black box
 
-from pymars import _forward, _gcv, _terms
+from pymars import _core, _forward, _gcv, _terms
 from pymars._core import (
     ForwardRecord,
     MarsFit,
@@ -59,6 +59,20 @@ class Stub:
     def __call__(self, X, Y, w=None, **kw):
         self.calls.append((X, Y, w, kw))
         return self.record
+
+
+@pytest.fixture(autouse=True)
+def _stub_records_are_on_the_scale_of_x(monkeypatch):
+    """A stub forward pass returns terms on the scale of the test's X, so with a
+    stub the core does not scale X (EDGE-7); the real pass gets scaled X."""
+    real = _core._column_exponents
+
+    def exponents(X):
+        if isinstance(_forward.forward_pass, Stub):
+            return np.zeros(X.shape[1], dtype=np.int64)
+        return real(X)
+
+    monkeypatch.setattr(_core, "_column_exponents", exponents)
 
 
 def _no_forward(*args, **kw):
@@ -710,6 +724,63 @@ def test_a_tss_out_of_range_raises(monkeypatch, Y, w, j):
         mars_ref.fit_mars(X, Y.reshape(len(X), -1), w, MarsParams())
 
 
+def _x_scale_data(seed=3, n=120):
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(size=(n, 3))
+    y = 4.0 * np.maximum(X[:, 0] - 0.4, 0) * np.maximum(0.6 - X[:, 1], 0) + X[:, 2]
+    return X, y + 0.05 * rng.normal(size=n)
+
+
+@pytest.mark.parametrize(
+    "k", [(0, 0, 0), (3, -5, 7), (600, -600, 300), (-1000, 1000, 5)]
+)
+def test_a_power_of_two_on_each_column_of_x_changes_no_bit(k):
+    """EDGE-7: X with column v times 2^k_v gives the same fit, bit for bit,
+    with the knots multiplied by 2^k_v (the forward cuts, the selected cuts
+    and the candidate log's second_knot) and row m of coef by 2^-(sum of the
+    k_v over the term). The sizes reach where a float s_v, or the product of
+    the scales of a term, would overflow or underflow. Degree 2, so that a
+    term has two scales."""
+    X, y = _x_scale_data()
+    k = np.array(k)
+    p = MarsParams(max_degree=2, fast_k=0)
+    a = fit_mars(X, y, None, p, record_candidates=True)
+    b = fit_mars(np.ldexp(X, k), y, None, p, record_candidates=True)
+    assert (a.forward.dirs != 0).sum(axis=1).max() == 2
+    assert np.array_equal(a.selected, b.selected)
+    assert np.array_equal(a.dirs, b.dirs)
+    for ca, cb in ((a.cuts, b.cuts), (a.forward.cuts, b.forward.cuts)):
+        assert np.array_equal(np.ldexp(ca, k), cb)
+    la, lb = a.forward.candidates, b.forward.candidates
+    var = np.maximum(la.second_variable, 0)
+    assert np.array_equal(
+        np.ldexp(la.second_knot, k[var]), lb.second_knot, equal_nan=True
+    )
+    assert np.array_equal(la.second_rss, lb.second_rss)
+    e = (a.dirs != 0).astype(int) @ k
+    assert np.array_equal(a.coef, np.ldexp(b.coef, e[:, None]))
+    for key in ("rss", "gcv", "rsq", "grsq"):
+        assert getattr(a, key) == getattr(b, key)
+    assert np.array_equal(a.forward.rss, b.forward.rss)
+    assert np.array_equal(a.pruning.gcv_per_size, b.pruning.gcv_per_size)
+
+
+def test_a_coefficient_out_of_range_raises_and_a_scale_of_1e200_fits():
+    """EDGE-7: at degree 1, X·1e200 and X·1e-300 fit (v1 raised OverflowError
+    and changed the model); with a product term, a coefficient of about 2^1200
+    on the original scale raises ValueError that names the scale of X."""
+    X, y = _x_scale_data()
+    base = fit_mars(X, y, None, MarsParams(fast_k=0), record_candidates=False)
+    for c in (1e200, 1e-300):
+        fit = fit_mars(X * c, y, None, MarsParams(fast_k=0))
+        assert np.array_equal(fit.dirs, base.dirs)
+        assert np.allclose(fit.cuts, c * base.cuts, rtol=1e-14, atol=0)
+    with pytest.raises(ValueError, match="scale of X"):
+        fit_mars(np.ldexp(X, [-600, -600, 0]), y, None, MarsParams(max_degree=2))
+    with pytest.raises(ValueError, match="scale of X"):  # the underflow branch
+        fit_mars(np.ldexp(X, [600, 600, 0]), y, None, MarsParams(max_degree=2))
+
+
 # The kept terms, pmethod and nprune, and the resolved values
 
 
@@ -830,5 +901,5 @@ def test_weights_with_a_total_that_is_too_large(weights):
     """W-6: a total weight of 2^52 or more (W-4) raises ValueError, and so does
     a total that overflows float64; no OverflowError comes from a later sum."""
     x = np.arange(9.0)[:, None]
-    with pytest.raises(ValueError, match="total below 2"):
+    with pytest.raises(ValueError, match="total weight is out of range"):
         fit_mars(x, x[:, 0], weights, MarsParams())
