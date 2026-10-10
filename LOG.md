@@ -354,6 +354,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:01 The user (session local_a59469db, 10:00 PDT) answered #116: for week 4, the same rule as week 3: wait until Friday 2026-10-16 17:00 PDT, then use all the usage that is left. Took the idle lock of local_31166e1b (not running) and set the heartbeat to 1792191600 (Friday 16:00 PDT). Rule and pacing in STATE (Phase); from 92 % small single-PR tasks may start too, so the week's usage is used. Weekly 94 %, 5-hour 0 %.
 - 11:04 The user asked to try to finish #113 and #115 with the rest of week 3's usage (weekly 94 %, 5-hour 2 %). Brief briefs/W3-copies.md; starting S113 (opus) and R115 (sonnet). Stop at 98 %.
 - 11:05 Started s113-spec af7c145dd97843f6c (opus) and r115-ref af01a6fb043c769f2 (sonnet); IDs resolve only in local_a59469db.
+- 11:36 #117 ready (S113 spec: LA-4/LA-5/EDGE-7, OQ-10, OQ-11; 3032457; gate B PASS; docs only). Follow-ups: the fast Conditioner must map -0 to +0 before hashing; _pruning's affine-copy symbols must not change an LA-4 decision in final_fit. Started review-117-single a995abcdc9e2c8442 (sonnet). Weekly 95 %.
 
 ## Core-hour ledger
 
