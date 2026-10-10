@@ -24,7 +24,7 @@ cat("Part A\n")
 XA <- matrix(0:7, ncol = 1, dimnames = list(NULL, "x")); yA <- rep(c(1, -1), 4)
 f0 <- earth(XA, yA, thresh = 0, nk = 3, pmethod = "none")
 cat(sprintf("  step-1 model at thresh 0: %d terms, RSS' %.10g\n", nrow(f0$dirs), f0$rss))
-pensA <- c(4.0, 4.7, 4.75, 4.78, 4.79, 4.8, 4.9)
+pensA <- c(4.0, 4.7, 4.75, seq(4.780, 4.790, by = 0.0005), 4.8, 4.9)
 rA <- scan(XA, yA, f0$rss, nrow(f0$dirs), pensA)
 cat("Part B\n")
 XB <- cbind(a = rep(1, 10), b = rep(2, 10)); yB <- 0:9
@@ -38,4 +38,7 @@ cat(sprintf("CHECK bb30.2 %s code 2 occurs with a finite GRSq' (so -Inf is not t
   any(fin & r[, "code"] == 2)))
 cat(sprintf("CHECK bb30.3 %s the same switch applies to a step without a legal candidate (Part B)\n",
   all(rB[rB[, "grsq"] < -10, "code"] == ifelse(rB[rB[, "grsq"] < -10, "grsq"] < -1000, 2, 3)) && any(rB[, "code"] == 2) && any(rB[, "code"] == 3)))
+below <- r[is.finite(r[, "grsq"]) & r[, "code"] == 3, "grsq"]; above <- r[r[, "code"] == 2 & is.finite(r[, "grsq"]), "grsq"]
+cat(sprintf("CHECK bb30.5 %s the switch is bracketed by GRSq' = %.1f (code 3) and %.1f (code 2)\n",
+  max(above) < -1000 && min(below) > -1000, min(below), max(above)))
 cat(sprintf("CHECK bb30.4 %s HYPOTHESIS code 2 only when GRSq' = -Inf\n", all((r[, "code"] == 2) == !fin)))
