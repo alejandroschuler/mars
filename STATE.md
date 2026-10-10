@@ -66,9 +66,7 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running agents
 
-(2026-10-10 00:20) authors: t85-fast-la5 aa4f0552809bbe25e (#95 rebase), v2-ref acd6317eff3eb84c2, v2-core a393f524141ec8081, v2-tests af223056c9e00158c. Queue: gate C and merge of #95; then V2-FWD (#104) and V2-PRUNE (#105, takes over draft #96); T21 freeze after the V2 follow-ups.
-
-Started 2026-10-09 17:45 by local_31166e1b (IDs resolve only in that session): see LOG.
+(2026-10-09 22:10 PDT) v2-ref acd6317eff3eb84c2 (adding the oracle EDGE-7 keying fix and the FAST_FOLLOWS_V2 allowance to #108/#109), v2-prune a8c731af70f61e53d (#96 round 2 test). Paused: v2-fwd a7f0d83e7625099ca (#111 <- #112 <- #110; resume after #108/#109 merge). Reviewers to reuse: #96 adversarial aeff6b68aae0eae12, spec a96816c41ef9a74f4. IDs resolve only in session local_31166e1b. Merge order: #96 (gate C); #108, #109; then #111, #112, #110 rebased on main (the last sets FAST_FOLLOWS_V2 True). After that: T21 freeze and the full run (the pre-freeze pilot says about 2 core-hours), T20 (ratio already 7 at 10k x 10 x deg 2; pruning cost at large means), #113, #99 near copies, T22 to T24.
 
 ## Running jobs
 
