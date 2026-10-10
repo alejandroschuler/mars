@@ -1160,12 +1160,10 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 
 
 # #79 fixed the reference's forward pass for covariates with a large mean at
-# degree 2 and 3 (#77), and #85 fixed the fast one. One case still misses
-# LA-5: the fast pruning pass at intermediate means, near a ratio of 2^20
-# (#84, #96; the reference's is fixed), so the whole fit keeps the ratio of a
-# covariate shift to its spread at or below SHIFT_CAP until #96 lifts it. The
-# `ties` kind with a duplicated covariate keeps the cap at degree 2 and 3 too
-# (#99, #101, #104).
+# degree 2 and 3 (#77), #85 fixed the fast one, and #94 and #96 the pruning
+# passes (#84, #105), so the whole fit has no cap. The `ties` kind with a
+# duplicated covariate keeps the ratio of a covariate shift to its spread at
+# or below SHIFT_CAP at degree 2 and 3 (#99, #101, #104).
 SHIFT_CAP = 2.0**10
 
 
@@ -1181,13 +1179,13 @@ def forward_cases(draw, kind: str, pruning_path: bool = False) -> Case:
     cases, now and then with a constant y (EDGE-1, EDGE-2, STOP-3). The noise
     runs from none (exact fits and STOP-5) to as large as the signal. At
     degree 2 and 3 the covariate shifts stay at or below SHIFT_CAP times the
-    spread with ``pruning_path`` (the whole fit, #84, #96) and, in the ``ties``
-    kind, with a duplicated covariate (#99, #101, #104)."""
+    spread in the ``ties`` kind with a duplicated covariate (#99, #101, #104);
+    ``pruning_path`` (the whole fit) no longer changes the draws (#96)."""
     seed = draw(st.integers(0, 2**32 - 1))
     p = draw(st.integers(1, 3 if kind == "small" else 4))
     n = draw(st.integers(1, 15) if kind == "small" else st.integers(20, 120))
     params = draw(_settings())
-    capped = params["max_degree"] >= 2 and pruning_path
+    capped = False  # #96 lifted the cap of the pruning path (#84, #105)
     noise = draw(st.sampled_from([0.0, 1e-6, 0.01, 0.3, 1.0]))
     K = draw(st.sampled_from(SUPPORTED["responses"]))
     weighted = draw(st.sampled_from(SUPPORTED["weights"]))
