@@ -532,13 +532,17 @@ class Conditioner:
         self.large = frozenset(int(j) for j in np.flatnonzero(big))
         self._ucols: dict = {}
         self._rep = list(range(X.shape[1]))  # a symbol: the first with the same u
+        self._pw = [0] * X.shape[1]  # u_j = 2^pw·u_rep, bit for bit (EDGE-7 scales)
         first: dict = {}
         for j in range(X.shape[1]):
             u = self._ucol(j)
-            r = first.setdefault(
-                hashlib.blake2b(u.tobytes(), digest_size=16).digest(), j
-            )
-            self._rep[j] = r if np.array_equal(u, self._ucol(r)) else j
+            top = float(np.max(np.abs(u))) if u.size else 0.0
+            e = 0 if top == 0.0 else math.frexp(top)[1]
+            unit = np.ldexp(u, -e)  # a power of 2 times u does not change the key
+            key = hashlib.blake2b(unit.tobytes(), digest_size=16).digest()
+            r, er = first.setdefault(key, (j, e))
+            if r != j and np.array_equal(unit, np.ldexp(self._ucol(r), -er)):
+                self._rep[j], self._pw[j] = r, e - er
         self._diff = self._near_copies()
         self._rows: list[tuple[IntArray, FloatArray]] = []
         self._pivots: list[tuple[_Element, dict]] = []
@@ -618,9 +622,9 @@ class Conditioner:
     # -- atoms and their columns
 
     def _atom(self, j: int, kind: int, t: float = 0.0) -> _Atom:
-        r = self._rep[j]
         if kind == 0:
-            return (r, 0, 0.0)
+            return (self._rep[j], 0, 0.0)
+        r = self._rep[j] if self._pw[j] == 0 else j  # a hinge scales with u
         key = (r, kind, float(t - self._m[j]))
         self._hat.setdefault(key, (j, t))
         return key
@@ -659,7 +663,7 @@ class Conditioner:
     def _u_parts(self, j: int, sign: int) -> dict:
         """sign·u_j as {element: Fraction}: u_r + d_j for a near-copy."""
         if j not in self._diff:
-            return {self._atom(j, 0): Fraction(sign)}
+            return {self._atom(j, 0): sign * Fraction(2) ** self._pw[j]}
         return {
             self._atom(self._diff[j][0], 0): Fraction(sign),
             (j, 3, 0.0): Fraction(sign),
@@ -757,7 +761,7 @@ class Conditioner:
         for j in np.flatnonzero(row):
             code, t = int(row[j]), float(cut[j])
             if code == 2:
-                parts: dict = {(self._atom(j, 0),): Fraction(1)}
+                parts: dict = {(self._atom(j, 0),): Fraction(2) ** self._pw[j]}
                 if j in self.large:
                     parts[()] = Fraction(float(self._m[j]))
             else:
