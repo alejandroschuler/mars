@@ -363,6 +363,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-10-16
 - 16:07 The user (this session, 16:07 PDT): "go ahead and start up again, use whatever remaining tokens i got". Week-4 rule applies from now. Weekly 26 %, 5-hour 20 %. Heartbeat made stale so that the watchdog starts a fresh executor session.
+- 16:08 Watchdog session local_f8e3ee8e took the stale lock (owner local_a59469db had made it stale on purpose). Weekly 26 %, 5-hour 20 % (reset 17:20 PDT). Starting: gate C on main d477f6d; then #120, #119, T20, T21.
 
 ## Core-hour ledger
 
