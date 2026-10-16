@@ -745,7 +745,7 @@ def test_independent_terms_equal_the_references_la4(seed):
     keep = w > 0
     X, w = X[keep], w[keep]
     got = la.independent_terms(X, dirs, cuts, None if seed % 2 == 0 else w)
-    want = mars_ref.la4_kept(X, dirs, cuts, w, mars_ref.Atoms(X, powers))
+    want = mars_ref.la4_kept(X, dirs, cuts, w, mars_ref.Atoms(X))
     assert got.tolist() == want.tolist()
 
 
