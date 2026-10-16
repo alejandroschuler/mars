@@ -954,7 +954,8 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     (a fitted value near 1e13 has an ulp of 2e-3); the RSS of the fast
     coefficients, the reference's RSS plus the weighted sum of squares of
     the centered difference of the fitted values (least squares), within
-    LA-5's eps of the reference's RSS; the final RSS and GCV within the same
+    LA-5's eps of the reference's RSS plus the effect of coefficients 8 u |c|
+    apart (PRUNE-8); the final RSS and GCV within the same
     bound (``same`` and ``rtol``, also for exact fits); RSq and GRSq within
     1e-8."""
     m, sw = BS.shape[1], np.sqrt(w)[:, None]
@@ -978,7 +979,18 @@ def _compare_final(case, fast: dict, ref: dict, BS, Y, w, same, rtol, floor) -> 
     if np.any(np.abs(d_mean) > rounding):
         _fail(case, f"mean of the fitted values: {d_mean.tolist()}, {rounding}")
     excess = float(np.sum(w[:, None] * dc**2))
-    if not same(ref["rss"] + excess, ref["rss"]):
+    # PRUNE-8: the RSS of the returned coefficients can differ from the LA-1
+    # value by more than LA-5 allows, through the rounding of the coefficients
+    # themselves (#120 item 5: exactly rounded coefficients exceed eps at
+    # means of 1e9 to 1e15). So the excess may also reach that of coefficients
+    # 8 u |c_k| apart (u = 2^-53), (8 u sum_k |c_k| ||B_k - mean||_w)^2 per
+    # response.
+    Bc = BS - np.average(BS, axis=0, weights=w)
+    spread = np.sqrt(np.sum(w[:, None] * Bc**2, axis=0))
+    coef_rounding = float(
+        np.sum((8 * u * (spread @ np.maximum(abs(cf), abs(cr)))) ** 2)
+    )
+    if not same(ref["rss"] + max(excess - coef_rounding, 0.0), ref["rss"]):
         _fail(case, f"RSS of the fast coefficients: {ref['rss']!r} + {excess!r}")
     if not same(fast["rss"], ref["rss"]):
         _fail(case, f"final rss: fast {fast['rss']!r}, reference {ref['rss']!r}")
