@@ -38,3 +38,16 @@ Read the plan's sections "Fast path" and "Profiling", and `validation/bench/REPO
 Stage 1, now: on current main, profile the 10,000 x 10 x degree 2 baseline and the cases in REPORT.md where pymars is slowest relative to earth (small n: 13 times at n = 250; pruning cost at large covariate means, 150 degree-3 shifted terms 2.3 s). Use `py-spy` or `cProfile` (install into the uv venv only). Report the top costs and a plan of passes to the executor, with expected gains. Do not change code in stage 1.
 Stage 2, after the executor's go: each pass a commit, gated on the oracle tests (`bash dev/gate_c.sh` before the pull request is ready) and the benchmark smoke. Files: the fast modules your plan names; F120P and F120F own `_pruning.py`, `_linalg.py`, `_forward.py` and `_scan.py` until they merge, so start with other files or wait. Then rerun the benchmark grid on main as a detached job (validation/bench/run.py; read it first) and refresh REPORT.md.
 Reviewers: 2 (`spec` and `adversarial`).
+
+## T22a: user docs (branch `t22-docs`; Part of #24)
+
+Files: `README.md`, `CHANGELOG.md`, and new pages `docs/usage.md`, `docs/weights.md`, `docs/differences.md`. Do not change `pymars/`, `docs/algorithm.md` or `validation/`.
+
+Read the plan's T22 row, the definition of done (items 1, 3, 5 and 7), `dev/DECISIONS.md`, `validation/DIFFERENCES.md`, `validation/bench/REPORT.md`, and the public API in `pymars/__init__.py` and the estimators' docstrings. Then write:
+
+1. README: what pymars is, install, a short regression and classification example that runs, the scikit-learn integration in a few lines, the status (validated against earth; link the reports), speed in one sentence with the measured factor, and the legacy section. Every code block must run; add a test only if the repo already has a docs test pattern, else run them by hand and say so in the PR body.
+2. `docs/usage.md`: the parameters of each estimator with defaults and their earth names, the fitted attributes, `summary` or its equivalent, GLM and classification, pandas feature names, pipelines and grid search.
+3. `docs/weights.md`: what `sample_weight` means, zero weights (W-3), how weights enter GCV and pruning, with the spec sections cited.
+4. `docs/differences.md`: the user-facing differences from earth, from `validation/DIFFERENCES.md` and DECISIONS.md, in plain words with the label of each (rule, quirk, tie, numeric).
+5. CHANGELOG: the 2.0.0.dev0 entry gains "Added" for the estimators and the validation.
+Leave simulation results out: T22b adds them after T21. Plain prose (COMMON.md). Reviewer: 1 (`single`) now; the plan asks for two agent reviews of the docs, and the second comes in T23.
