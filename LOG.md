@@ -361,6 +361,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:47 review-118-adversarial REQUEST_CHANGES at c88ad0c, one blocking: the one-ulp copy test (seeds 14, 21) does not pin _ExactSpan.residual (mutant a + f*b survives; seeds 13, 36, 58 kill it). Independent exact LA-4 agrees on 59,700 draws; triage claims confirmed. Started r115-fix a555392f457578c74 (sonnet; seeds [13, 14], two one-line fixes). Weekly 97 %: this round finishes #118 only; the session stops at 99 % at most.
 - 13:02 review-118-adversarial APPROVE at c32a5a8 (narrow recheck; the mutant now fails seed 13). Merged #118 (R115) as d477f6d; #115 closed. Non-blocking items 3, 5, 7 added to #119. Extra round done; the session stops. Heartbeat stays at 1792191600 (Friday 2026-10-16 16:00 PDT).
 
+## 2026-10-16
+- 16:07 The user (this session, 16:07 PDT): "go ahead and start up again, use whatever remaining tokens i got". Week-4 rule applies from now. Weekly 26 %, 5-hour 20 %. Heartbeat made stale so that the watchdog starts a fresh executor session.
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |

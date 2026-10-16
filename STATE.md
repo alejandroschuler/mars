@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-10 13:02 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-10-16 16:07 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+RESUMED EARLY BY THE USER at 16:07 PDT Friday 2026-10-16 (session local_a59469db): "go ahead and start up again, use whatever remaining tokens i got". The week-4 budget rule below applies from now, not from 17:00; ignore the line that says a session taking the lock before 17:00 starts nothing. Weekly 26 % at 16:07 (reset 2026-10-19T00:00Z, Sunday 17:00 PDT), 5-hour 20 % (reset 17:20 PDT). Session local_a59469db made the heartbeat stale so that the hourly watchdog starts a fresh executor session (cheaper than its own long context). First steps: gate C on main d477f6d; then #120 (fast-code misses on copy cases and pruning seeds; then the copy kinds in the oracle's ties draws), #119 (small follow-ups), T20 (performance; 7.0 times earth, target 10), T21 (gate D, the freeze tag sim-freeze-1, the full run), T22 to T24.
 
 EXTRA ROUND DONE (Saturday 2026-10-10, 10:10 to 13:20 PDT, session local_a59469db, at the user's request): merged #117 (spec: LA-4 copies as power-of-2 multiples on u, LA-5 scope, OQ-10, OQ-11; closes #113) as f50d1cc and #118 (the reference's LA-4, symbols and near-copy projections; closes #115) as d477f6d. main is d477f6d. New issues for the Friday executor: #120 (fast-code LA-5 and LA-4 misses on copy cases and pruning seeds 90 and 213; the _compare_final bound; then add copy kinds to the oracle's ties draws) and #119 (small spec and reference follow-ups). Gate C passed on #118's earlier head c88ad0c; run gate C on main first on Friday. Next after them: T20, T21, T22 to T24.
 
