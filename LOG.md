@@ -366,6 +366,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:08 Watchdog session local_f8e3ee8e took the stale lock (owner local_a59469db had made it stale on purpose). Weekly 26 %, 5-hour 20 % (reset 17:20 PDT). Starting: gate C on main d477f6d; then #120, #119, T20, T21.
 - 16:15 Gate C on main d477f6d running (worktree .worktrees/gatec-main). Brief briefs/W4-followups.md. Started f120p-pruning adfbe4a766e05de0b (opus), f120f-forward ad943c64d22fb2346 (opus), s119-nits a646f6469dfdd2a8c (sonnet), t20-perf a52e7276fb171c99e (opus, stage 1 profiling only). IDs resolve only in session local_f8e3ee8e.
 - 16:22 Gate C PASS on main d477f6d (400 s; smoke 1.104 times the a0ddca9 baseline).
+- 16:50 #121 (S119) ready at ff2fcef (gates A, B, C PASS); asked s119-nits to add #118 item 5 (drop Atoms x_powers; one call in tests/test_linalg.py). T20 stage 1 (draft #124, profile script): 7.6x earth at 10k x 10 x deg 2 (3.49 s vs 0.46 s); n=250 15x (call overhead); >99 % in the forward pass (cumsum in knot_scan 1.36 s, candidate_knots recomputed 0.71 s). Tail risk: _linalg independent_terms on shifted random deg-3 terms 5.7 to 7.7 s at M=80, no finish at M=160 (Fraction Gram in Conditioner._exact_dependent). Decision: stage 2 only bit-equal passes (P1 knot cache, P3 lean path, P4 integer Bareiss with a hang case; P2 incremental scan only if bit-equal). _knots.py part of P3 now; the rest after #122 merges.
 
 ## Core-hour ledger
 
