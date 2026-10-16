@@ -80,6 +80,11 @@ COLLINEARITY_TOL_LATE = 1e-5
 COLLINEARITY_LAST_EARLY_STEP = 7
 #: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
 PAIR_SEARCH_FACTOR = 0.01
+#: LA-5: a column whose part orthogonal to the span of the earlier ones is below
+#: NEAR_SPAN times its size keeps only about u/NEAR_SPAN of that part's digits
+#: in a float64 projection, so the exact residual takes its place
+#: (``Conditioner.exact_residual``). The reference uses the same angle.
+NEAR_SPAN = 1e-4
 
 
 class GramSchmidt(NamedTuple):
@@ -514,6 +519,13 @@ class Conditioner:
     form that hold the new pivot change, since their evaluation carries the
     mean.
 
+    Exact residuals (``span_append``, ``exact_residual``). The caller registers
+    the terms whose columns its float64 basis holds, and ``exact_residual``
+    gives a term's column minus its exact projection on their span, on the
+    distinct rows of X, rounded once. A column within NEAR_SPAN of that span
+    takes this form, so that its direction is right to working precision
+    (LA-5): a float64 projection keeps only rounding there.
+
     Complexity: a term with d factors has at most 2^d monomials in the test and
     3^d elements in a column; reducing it costs O(M·2^d) rational operations for
     M registered terms, forming a column O(n·d·3^d), and the exact test
@@ -523,7 +535,8 @@ class Conditioner:
     for the fit. The reduced
     coefficients of b·x_j are kept and reduced only by the terms that came
     after the last call. Memory O(M·p·3^d) coefficients, no columns, and O(g·K)
-    rationals for K monomials in the Gram matrix of the exact test (O(K²)).
+    rationals for K monomials in the Gram matrix of the exact test (O(K²));
+    the exact span of ``exact_residual``, once it is needed, O(g·M) rationals.
     """
 
     def __init__(self, X: npt.ArrayLike, w: npt.ArrayLike | None = None):
@@ -568,6 +581,10 @@ class Conditioner:
         self._icols: dict = {}
         self._wint: tuple | None = None
         self._shifted = False  # a registered term has a linear factor of a large one
+        self._span_rows: list = []  # the terms of ``exact_residual``'s span
+        self._span: list = []  # their exact orthogonal vectors and squared norms
+        self._span_done = 0
+        self._inverse: npt.NDArray[np.intp] | None = None
         self.size = 0.0  # a bound on the magnitude of the last column formed
 
     def _ucol(self, j: int) -> FloatArray:
@@ -891,7 +908,61 @@ class Conditioner:
                 for g, wi in zip(inv.tolist(), self._w.tolist(), strict=True):
                     W[g] += Fraction(wi)
             self._groups = (Xu, Xu - self._m, W)
+            self._inverse = inv
         return self._groups
+
+    # -- exact residuals for the projections (LA-5)
+
+    def span_append(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> None:
+        """Register a term whose column the caller's basis of the projections
+        holds, in order, for ``exact_residual``. Complexity: O(p)."""
+        self._span_rows.append((np.array(row), np.array(cut, dtype=np.float64)))
+
+    def _term_values(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> list:
+        """The term on the distinct rows of X, as exact rationals."""
+        Xu = self._group_data()[0]
+        out = [Fraction(1)] * len(Xu)
+        for j in np.flatnonzero(row):
+            code, t = int(row[j]), Fraction(float(cut[j]))
+            vals = [Fraction(float(v)) for v in Xu[:, j]]
+            if code == 1:
+                vals = [max(v - t, Fraction(0)) for v in vals]
+            elif code == -1:
+                vals = [max(t - v, Fraction(0)) for v in vals]
+            out = [a * b for a, b in zip(out, vals, strict=True)]
+        return out
+
+    def _span_residual(self, z: list) -> list:
+        """z minus its exact w-projection on the registered span (by
+        Gram-Schmidt on the distinct rows, with their weight sums)."""
+        W = self._group_data()[2]
+        for u, d in self._span:
+            f = sum((wi * a * b for wi, a, b in zip(W, u, z, strict=True)), Fraction(0))
+            if f:
+                f /= d
+                z = [a - f * b for a, b in zip(z, u, strict=True)]
+        return z
+
+    def exact_residual(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> FloatArray:
+        """The column of the term minus its exact w-projection on the span of
+        the terms registered by ``span_append``, rounded once to float64
+        (unscaled). It spans with them what the term spans, and it is accurate
+        relative to its own size, also when the term lies within rounding of
+        that span in float64, where a float64 projection keeps only the
+        rounding (a covariate that is a copy up to rounding of another, such
+        as x/8 + c at a large mean, LA-5's scope paragraph). Complexity:
+        O(g·r) rational operations for g distinct rows of X and r registered
+        terms, and O(g·r) for each term registered since the last call."""
+        W = self._group_data()[2]
+        while self._span_done < len(self._span_rows):
+            span_row, span_cut = self._span_rows[self._span_done]
+            z = self._span_residual(self._term_values(span_row, span_cut))
+            self._span_done += 1
+            d = sum((wi * a * a for wi, a in zip(W, z, strict=True)), Fraction(0))
+            if d:
+                self._span.append((z, d))
+        z = self._span_residual(self._term_values(row, cut))
+        return np.array([float(v) for v in z])[self._inverse]
 
     def _exact_column(self, e: _Element) -> list:
         """The monomial on the distinct rows of X, as exact rationals."""
@@ -995,7 +1066,11 @@ def independent_terms(
     (FWD-11): the rule of ``independent_columns`` on the columns of the terms,
     and, when a term has a linear factor of a shifted covariate (``Conditioner``,
     ``large_covariates``), after the exact shift of such covariates, so that the
-    result does not depend on the order of the terms. ``B`` is the basis matrix
+    result does not depend on the order of the terms. A kept term within
+    NEAR_SPAN of the span of the kept earlier ones enters the float64 basis as
+    its exact residual (``Conditioner.exact_residual``), so that the basis holds
+    its direction and a later term that the kept ones span exactly is found
+    dependent. ``B`` is the basis matrix
     of the terms if the caller has it. Without a shifted covariate in a linear
     factor this is ``independent_columns`` of B, bit for bit. Complexity: that of
     ``independent_columns`` and, with a shifted covariate, of ``Conditioner``
@@ -1013,12 +1088,18 @@ def independent_terms(
     kept, kappa = np.zeros(len(dirs), dtype=bool), 1.0
     for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
         v = sw * cond.hinge(row, cut)
+        size = cond.size
         gs = gram_schmidt(Q, v)
-        if cond.dependent(row, cut, gs.norm, cond.size, kappa=kappa):
+        if cond.dependent(row, cut, gs.norm, size, kappa=kappa):
             continue
+        if gs.norm < NEAR_SPAN * size:  # Q must hold its direction (LA-5)
+            v = sw * cond.exact_residual(row, cut)
+            size = float(np.linalg.norm(v))
+            gs = gram_schmidt(Q, v)
         if gs.q is not None:  # a term that adds no direction is kept, as LA-4 says
-            kappa = max(kappa, cond.size / gs.norm)
+            kappa = max(kappa, size / gs.norm)
             Q = np.column_stack((Q, gs.q))
         cond.append(row, cut)
+        cond.span_append(row, cut)
         kept[k] = True
     return kept

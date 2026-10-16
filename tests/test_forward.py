@@ -1048,6 +1048,40 @@ def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
         assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
 
 
+def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale():
+    """LA-5's scope paragraph: x1 = x0/8 + 2^26 is a copy of x0 up to the
+    rounding of the shift, not a copy of LA-4 (x0 is not shifted), so x1 is
+    its own symbol. x0 has 3 levels, so B spans x1 at the cases after two
+    hinges of x0, and the column x2·x1 (x2 = 1e15 + a few levels of 1/8) is
+    in the span of B up to its part u1·u2, about 1e-16 of it. Its float64
+    projection kept only rounding there, and the linear candidate x2·x1 of
+    step 6 had an RSS 2e6 times LA-5's bound off (#110's generator, seed
+    1014, copy kind 2); the exact residual takes its place now
+    (``Conditioner.exact_residual``). Each RSS is within 1e-8 of the RSS
+    before its step of the exact rational RSS of the same terms."""
+    x0 = np.array([int(c) for c in "2011122000102221020000120220220202020111"]) / 3
+    k2 = "4116754141254576305512621857032774736314"
+    X = np.column_stack((x0, x0 / 8 + 2.0**26, 1e15 + np.array([*k2], float) / 8))
+    y = (
+        np.array(
+            [
+                *[996, 20, 1, 10, -5, 1018, 1008, -7, 10, 7, 8, -8, 995, 1006, 1006],
+                *[3, -21, 997, -20, -9, 5, 12, -2, 1025, 16, 1020, 1012, -28, 1009],
+                *[987, 14, 1024, -18, 1008, -24, 989, -12, -2, -20, -11],
+            ]
+        )
+        / 1000
+    )
+    kw = {"max_degree": 3, "thresh": 0.0, "adjust_endspan": 0.0, "endspan": 1}
+    fp = _forward.forward_pass(X, y, fast_k=1, **kw)
+    B = exact_basis(X, fp.dirs, fp.cuts)
+    assert len(fp.rss) > 6
+    for s in range(1, len(fp.rss)):
+        cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
+        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(40))
+        assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
+
+
 @pytest.mark.parametrize("shifted", [False, True])
 def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, shifted):
     """LA-2: x2 is a combination of the intercept and x1 at the n cases (x2 =
