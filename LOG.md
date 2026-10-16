@@ -364,6 +364,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 ## 2026-10-16
 - 16:07 The user (this session, 16:07 PDT): "go ahead and start up again, use whatever remaining tokens i got". Week-4 rule applies from now. Weekly 26 %, 5-hour 20 %. Heartbeat made stale so that the watchdog starts a fresh executor session.
 - 16:08 Watchdog session local_f8e3ee8e took the stale lock (owner local_a59469db had made it stale on purpose). Weekly 26 %, 5-hour 20 % (reset 17:20 PDT). Starting: gate C on main d477f6d; then #120, #119, T20, T21.
+- 16:15 Gate C on main d477f6d running (worktree .worktrees/gatec-main). Brief briefs/W4-followups.md. Started f120p-pruning adfbe4a766e05de0b (opus), f120f-forward ad943c64d22fb2346 (opus), s119-nits a646f6469dfdd2a8c (sonnet), t20-perf a52e7276fb171c99e (opus, stage 1 profiling only). IDs resolve only in session local_f8e3ee8e.
 
 ## Core-hour ledger
 

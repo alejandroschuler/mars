@@ -76,6 +76,9 @@ Old list from 2026-09-28. Items 1 to 4 are done (T11 to T15 merged). Check items
 
 ## Running agents
 
+Session local_f8e3ee8e (from 2026-10-16 16:15 PDT): f120p-pruning adfbe4a766e05de0b (opus; #120 items 1, 2, 5, #119 item 2; branch t120-fast-pruning), f120f-forward ad943c64d22fb2346 (opus; #120 items 3, 4, ties draws, #119 item 1; branch t120-fast-forward), s119-nits a646f6469dfdd2a8c (sonnet; #119 spec and reference; branch t119-spec-ref-nits), t20-perf a52e7276fb171c99e (opus; stage 1 profiling; branch t20-perf; waits for go). Brief briefs/W4-followups.md. Gate C on main d477f6d running.
+
+Older: 
 None since 2026-10-10 06:15 PDT. Older note: (2026-10-09 22:10 PDT) v2-ref acd6317eff3eb84c2 (adding the oracle EDGE-7 keying fix and the FAST_FOLLOWS_V2 allowance to #108/#109), v2-prune a8c731af70f61e53d (#96 round 2 test). Paused: v2-fwd a7f0d83e7625099ca (#111 <- #112 <- #110; resume after #108/#109 merge). Reviewers to reuse: #96 adversarial aeff6b68aae0eae12, spec a96816c41ef9a74f4. IDs resolve only in session local_31166e1b. Merge order: #96 (gate C); #108, #109; then #111, #112, #110 rebased on main (the last sets FAST_FOLLOWS_V2 True). After that: T21 freeze and the full run (the pre-freeze pilot says about 2 core-hours), T20 (ratio already 7 at 10k x 10 x deg 2; pruning cost at large means), #113, #99 near copies, T22 to T24.
 
 ## Running jobs
