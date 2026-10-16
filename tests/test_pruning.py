@@ -675,7 +675,9 @@ def test_fit_mars_passes_the_terms_to_the_pruning_pass():
 
 
 @pytest.mark.parametrize("shift", [0.5, 1e4, 1e10])
-@pytest.mark.parametrize("terms", ["plain", "copy last", "copy before x2"])
+@pytest.mark.parametrize(
+    "terms", ["plain", "copy last", "copy before x2", "power-of-2 copy before x2"]
+)
 @pytest.mark.parametrize("shift2", [0.0, 2.0**20])
 def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
     """LA-4 after the exact shift in the final fit (PRUNE-8), on the examples
@@ -688,13 +690,16 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
     power of 2), so it is its own symbol in the test: in the order 1, x0,
     x0·x3, x2, LA-4 drops x2 at 1e10 and keeps it at the other shifts, as the
     reference does (#119 item 2: with x3 one symbol with x2, the final fit
-    kept x2 at 1e10). With x2 shifted by 2^20 too, x3 is an affine copy of a
+    kept x2 at 1e10). x4 = 2·x2 is a copy of LA-4, one symbol with x2 (u4 =
+    2·u2), so the order 1, x0, x0·x4, x2, x0·(t - x4)+ keeps every term at
+    every shift, as the spec says for 2·x2 and as the reference does. With
+    x2 shifted by 2^20 too, x3 is an affine copy of a
     shifted covariate, and its linear factor is x3 itself, not x3 - m_3 (PR
     #96's review: an O(1) error). The RSS and the coefficients are those of
     the kept terms in rational arithmetic, to 1e-8 and to normwise 1e-6."""
     x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
     x2 = shift2 + np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
-    X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1])
+    X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1, 2 * x2])
     rows = {
         "plain": [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 2, 0], [0, 0, 2, 0]],
         "copy last": [
@@ -705,10 +710,18 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
             [2, 0, 0, 2],
         ],
         "copy before x2": [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 0, 2], [0, 0, 2, 0]],
+        "power-of-2 copy before x2": [
+            [0, 0, 0, 0, 0],
+            [2, 0, 0, 0, 0],
+            [2, 0, 0, 0, 2],
+            [0, 0, 2, 0, 0],
+            [2, 0, 0, 0, -1],
+        ],
     }[terms]
     dropped = {"copy last": True, "copy before x2": shift == 1e10}.get(terms, False)
-    dirs = np.array(rows)
+    dirs = np.array([row + [0] * (5 - len(row)) for row in rows])
     cuts = np.zeros(dirs.shape)
+    cuts[dirs[:, 4] == -1, 4] = 2 * (shift2 + 1)  # a value of x4
     y = np.random.default_rng(3).normal(size=10)
     B = _terms.basis_matrix(X, dirs, cuts)
     sel = np.arange(len(rows))
