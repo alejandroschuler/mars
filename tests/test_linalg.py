@@ -696,6 +696,21 @@ def test_a_product_that_the_terms_span_at_the_data_is_dependent(shift, a, b):
     assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4 + [False]
 
 
+@pytest.mark.parametrize("a", [1.0, 2.0, 4.0, -0.0])
+def test_a_copy_shares_its_symbol_and_keeps_x2_in_the_shifted_order(a):
+    """LA-4's copies on #75's data with x0 + 1e10: x3 = a·x2 for a power of 2
+    a is one symbol with x2, so the relation is formal and the order 1, x0,
+    x0·x3, x2 keeps x2 (affine x3 drops it). a = -0.0 stands for x3 = x2 with
+    one 0 written as -0, which compares equal to +0: still a copy (#119)."""
+    x3 = _X75[:, 2] * (a or 1.0)
+    if a == 0.0:
+        x3[1] = -0.0
+    X = np.column_stack((_X75, x3))
+    lin = [(0, 2, 0.0)], [(0, 2, 0.0), (3, 2, 0.0)], [(2, 2, 0.0)]
+    dirs, cuts = _term_rows([[], *lin], 4)
+    assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4
+
+
 @pytest.mark.parametrize("seed", range(8))
 def test_independent_terms_without_a_shift_is_independent_columns(seed):
     """Without a linear factor of a shifted covariate the test is the plain one

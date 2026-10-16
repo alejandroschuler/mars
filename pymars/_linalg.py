@@ -544,7 +544,9 @@ class Conditioner:
             unit = np.ldexp(u, -e)  # a power of 2 times u does not change the key
             if not np.array_equal(np.ldexp(unit, e), u):  # underflow: no scaling
                 e, unit = 0, u
-            key = hashlib.blake2b(unit.tobytes(), digest_size=16).digest()
+            # LA-4's copy rule compares values, so -0 is +0: map it before the
+            # bytes are hashed (x + 0.0 is +0 for x = -0 and x otherwise).
+            key = hashlib.blake2b((unit + 0.0).tobytes(), digest_size=16).digest()
             r, er = first.setdefault(key, (j, e))
             if r != j and np.array_equal(unit, np.ldexp(self._ucol(r), -er)):
                 self._rep[j], self._pw[j] = r, e - er
