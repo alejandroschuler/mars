@@ -388,6 +388,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:37 #123 at 3f19178 (CI 3.10 failure was an exact tie at PRUNE-3's first stage and a 5.7e-9 subset near-tie; the permuted-row check now compares exact RSS per size within 1e-7): adversarial checked it (planted order errors still fail), waits for the rebased SHA. #122 adversarial REQUEST_CHANGES at 70c0b67 (hinge child's span_append unpinned; EDGE-3 ties draw); sent to f120f, which rebases after #123 merges. Opened #131 (LA-5 scope: copy off by many ulps at most cases misses in both programs, pre-existing). Merge order: #123, #122, #129. Load 3.6; 5-hour 26 %, weekly 35 %.
 - 18:41 #129 round 2 at c6ac22a (on b0f93b0): APPROVE (both). Held so that #123 merges first. #122 round 1 at c008d50 pre-checked by its adversarial reviewer (fixes confirmed; posts after the rebase).
 - 18:48 #123 rebased to ee8f0aa (gates B, C PASS; CI 12/12); update checks APPROVE (both). Merged #123 (F120P: fast pruning on near copies, _compare_final bound, LA-4 symbols in final_fit) as e3aa303. Asked f120f to rebase #122 on it.
+- 18:51 Gave #130 to f120p (adfbe4a766e05de0b; branch t130-pruning-near-levels; recheck on e3aa303 first) and #131 to s127 (ae1408769174e97f6; spec decision, branch t131-spec-la5-scope, rebase after #129). Load 2.1; 5-hour 34 %, weekly 36 %.
 
 ## Core-hour ledger
 
