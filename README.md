@@ -2,7 +2,7 @@
 
 pymars fits multivariate adaptive regression splines (MARS, Friedman 1991) in pure Python, with a scikit-learn API. The distribution name is `mars-earth` and the import name is `pymars`.
 
-Version 2 is a rewrite. The fitting code follows a written specification, [docs/algorithm.md](docs/algorithm.md), and is checked against the R package [earth](https://CRAN.R-project.org/package=earth). It has no release on PyPI yet.
+Version 2 is a rewrite. The fitting code follows a written specification, [docs/algorithm.md](docs/algorithm.md), and is validated against the R package [earth](https://CRAN.R-project.org/package=earth) as described under Status and validation below. It has no release on PyPI yet.
 
 ## Install
 
@@ -77,9 +77,9 @@ Columns of strings or categories raise an error that names `OneHotEncoder`; [doc
 
 ## Status and validation
 
-Two implementations of the specification exist: the fast code in `pymars/`, and a slow reference in `tests/reference/` that an agent wrote from the specification alone. The reference is compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws, and the fast code is compared with the reference by the oracle tests. Every difference from earth that was found has a label, and none is a bug. [docs/differences.md](docs/differences.md) lists the differences that a user can meet, and [validation/DIFFERENCES.md](validation/DIFFERENCES.md) has the full triage. [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made.
+Two implementations of the specification exist: the fast code in `pymars/`, and a slow reference in `tests/reference/` that an agent wrote from the specification alone. The reference is compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws; every difference found there has a label, and none is a bug. Those counts are from the reference at commit 2a00063 of `main`. The fast code is compared with the reference by the oracle tests, and its direct comparison with earth is pending (C07); T22b updates this text after it. [docs/differences.md](docs/differences.md) lists the differences that a user can meet, and [validation/DIFFERENCES.md](validation/DIFFERENCES.md) has the full triage. [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made.
 
-Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 7.0 times as long as earth at its defaults (3.9 s against 0.56 s, at commit `ae9d199`; later changes to the fast code are not in that run yet). Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
+Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 7.7 times as long as earth at its defaults for `EarthRegressor` (4.3 s against 0.56 s; 7.0 times for the internal `fit_mars`, at commit `ae9d199`; later changes to the fast code are not in that run yet). Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
 
 ## Legacy code
 

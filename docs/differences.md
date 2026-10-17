@@ -9,7 +9,7 @@ Each item has one of the labels of the plan's triage:
 - **tie**: a near-tie, where two choices are equal up to rounding and either program may take either.
 - **numeric**: a numerical difference, such as a rank-deficient solve.
 
-None of the differences below is a bug. On the fixtures, the reference implementation agrees with earth in full on 124 of 133 dataset fixtures and 197 of 200 random draws. The other 9 dataset fixtures and 3 draws fall under the entries E1 to E7 of the triage. They are covered below, and each has the label rule or quirk (no tie and no numeric difference occurred).
+None of the differences below is a bug. The counts in this page are those of the reference implementation at commit 2a00063 of `main`, compared with earth on the fixtures; the fast code is compared with the reference by the oracle tests and not yet directly with earth (C07 is pending, and T22b updates this page after it). On the fixtures, the reference implementation agrees with earth in full on 124 of 133 dataset fixtures and 197 of 200 random draws. The other 9 dataset fixtures and 3 draws fall under the entries E1 to E7 of the triage. They are covered below, and each has the label rule or quirk (no tie and no numeric difference occurred).
 
 ## Weights
 
@@ -19,14 +19,14 @@ None of the differences below is a bug. On the fixtures, the reference implement
 
 ## The fit
 
-- **rule** The fit does not depend on the units of the covariates. earth chooses between a pair of hinges and a single hinge by comparing an absolute number with 0.01, so a covariate in other units can change its choice. pymars scales that number by the variances of the covariates, and it agrees with earth when the covariates have variance 1. (LA-7; the triage entry E1 is an example in raw units, labeled quirk.)
-- **rule** The fit does not depend on the row order. earth's knots can depend on it where equal values have different activity. pymars fixes the order. (KNOT-2)
+- **quirk, not copied** The fit does not depend on the units of the covariates (E1). earth chooses between a pair of hinges and a single hinge by comparing an absolute number with 0.01, so a covariate in other units can change its choice. pymars scales that number by the variances of the covariates, and it agrees with earth when the covariates have variance 1. (LA-7)
+- **quirk, not copied** The fit does not depend on the row order. earth's knots can depend on it where equal values have different activity. pymars fixes the order. (KNOT-2)
 - **rule** Exact ties between candidates, and between subsets in pruning, follow a fixed order, where earth lets rounding decide. Candidates that fit the data exactly (within 1e-14 of the residual sum of squares) tie, and the fixed order decides. (FWD-5, PRUNE-3, FWD-12)
 - **rule** A linear column whose mean is large next to its range counts as a term, where R's `lm.fit` can drop it as a copy of the intercept. (LA-4)
-- **quirk, not copied** With `auto_linpreds=False`, earth sometimes adds a hidden term that takes a slot and a queue entry, and removes it at the end. pymars has no hidden term. In 3 of 200 random draws this made earth take another term at a late step (E5 to E7); earth's choice had the lower residual sum of squares on the common basis in each. (FWD-11)
+- **quirk, not copied** (E5 to E7) With `auto_linpreds=False`, earth sometimes adds a hidden term that takes a slot and a queue entry, and removes it at the end. pymars has no hidden term. In 3 of 200 random draws this made earth take another term at a late step; earth's choice had the lower residual sum of squares on the common basis in each. (FWD-11)
 - **quirk, not copied** With several responses, earth stops at an exact fit by an absolute floor, so its stop depends on the units of y. pymars uses a floor relative to the total sum of squares. (STOP-5)
 - **quirk, copied** A hinge or linear term that a step adds uses two slots of the term limit, so `max_terms=21` allows at most 10 steps. The queue of Fast MARS addresses parents by slot, so the newest terms can wait a few steps before they are searched. `fast_k` of 1 or 2 acts as 3. The full list of copied quirks is in the "Quirks" section of [algorithm.md](algorithm.md).
-- **rule** `pmethod="none"` with `nprune` keeps the first `nprune` forward terms, and the statistics `rss_`, `gcv_`, `rsq_` and `grsq_` are those of that model. earth reports the statistics of the backward subset of that size, which are not those of the model it returns. (PRUNE-7, PRUNE-8)
+- **quirk, not copied** `pmethod="none"` with `nprune` keeps the first `nprune` forward terms, and the statistics `rss_`, `gcv_`, `rsq_` and `grsq_` are those of that model. earth reports the statistics of the backward subset of that size, which are not those of the model it returns. (PRUNE-7, PRUNE-8)
 
 ## Statistics and degenerate data
 
