@@ -84,3 +84,12 @@ Reviewers: 2 (`spec` and `adversarial`). Gate B and gate C on the head.
 Files: `validation/harness/fit_earth.R`, `validation/harness/tests/test_driver.py`, and the tests that compare pymars's forward RSS with that path: `tests/test_conformance.py` (around lines 355 to 400), `tests/test_forward.py` (around 118), `tests/test_core.py` (around 551). If the fixtures must be made again, `validation/harness/gen_fixtures.py` makes them with R; the fixture diff must then be explained in the PR body.
 
 `forward_rss_path` refits earth's `bx` after earth's rank fix, so for a fit where the fix removes a term it is not earth's forward RSS (bb32 shows this). Use earth's trace RSq for the forward path, or skip the forward RSS after "Fixed rank deficient bx", whichever keeps the most comparisons true; black-box earth runs only (clean room). Reviewer: 1 (`single`). Gate B and gate C (it regenerates fixtures with R if the harness changed).
+
+## T21: the freeze, the pilot and the full run (branch `t21-full-run`; Closes #23)
+
+Read `T21a-prepilot.md` (same folder) and its result `validation/sims/results/prepilot/summary.md` on main, the plan's "Statistical performance study" (all of it), "Pilot and number of repetitions", "Compute ledger" and "Long computations". The executor sets the tag `sim-freeze-1` on main and gives you its commit; P-fix is the `EarthRegressor` at that commit.
+
+1. Runner worktree `<main>/.worktrees/runner-t21` at the tag's commit (record it). Post-freeze pilot step 3 (100 repetitions, D3, D4, D5, D7 at 1,000 cases, both noise levels, P-fix and E-def), then `pilot_check.py`; compare with the pre-freeze pilot and size every contrast.
+2. The full run: all cells and arms of the plan's design at the sized n_sim (the legacy arms are done, T04; reuse their results), as detached jobs (`nohup caffeinate -i nice -n 15`, at most 6 workers, R counts as one core), results per cell, atomic, manifest, `--resume`. Report the PID file, log path and an ETA as soon as the job starts, then stop; the executor restarts you when it ends.
+3. When it ends: failure counts per cell and arm, the core-hours, and `validation/sims/results/full/` (results.csv, failure_counts.csv, summary tables) in a PR. No figures or REPORT.md text (T22b does them).
+Files: `validation/sims/results/full/` (new) and harness fixes in `validation/sims/` only if a bug blocks the run (say so). No `pymars/` changes after the tag. Reviewer: 1 (`single`).
