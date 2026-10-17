@@ -259,6 +259,7 @@ def knot_scan(
     split: npt.ArrayLike,
     *,
     intercept: bool = False,
+    _checked: bool = False,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -272,6 +273,8 @@ def knot_scan(
     is √w for the intercept parent (1 without weights), and then D comes from
     terms ≥ 0. The bounds are those of the module docstring; the caller
     applies the tolerance tau and the legality rules with them.
+    ``_checked=True`` skips the checks of ``hinge_products``, for the forward
+    pass, whose x, b and split are float64 and int64 arrays that meet them.
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -281,7 +284,8 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     part = Q[:, 1:] if intercept else Q
-    x, b0, V, split = _check(x, b, np.hstack((part, E)), split)
+    V = np.hstack((part, E))
+    x, b0, V, split = (x, b, V, split) if _checked else _check(x, b, V, split)
     g, b = _to_unit(np.diff(x)), _to_unit(b0)
     HV, F = _products(g, b, V, split)
     k = part.shape[1]

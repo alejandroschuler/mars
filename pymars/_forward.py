@@ -616,7 +616,13 @@ class _Pass:
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
         bw = self.sw[o] * sr.b[o]  # √w·b in the order of x
         scan = _scan.knot_scan(
-            self.sorted_x[:, j], bw, sr.Q[o], sr.E[o], kc.split, intercept=k == 0
+            self.sorted_x[:, j],
+            bw,
+            sr.Q[o],
+            sr.E[o],
+            kc.split,
+            intercept=k == 0,
+            _checked=True,
         )
         red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
