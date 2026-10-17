@@ -793,8 +793,8 @@ class TestDependence:
         # LA-2 (v2): x1 has two levels at a large mean, so with the terms 1,
         # h0 = h(x0 - t) and h0 h(x1 - m1) in B, b x1 = h0 x1 equals a
         # combination of them at the cases but not as a formula. LA-4 finds
-        # it dependent: its RSS is RSS_s and its reduction 0, and its pair
-        # search has G = B
+        # it dependent: its RSS is RSS_s and its reduction 0, and the knots of
+        # its pair search take their RSS on B (LA-3's G still holds b x)
         rng = np.random.default_rng(4)
         n, w = 30, np.ones(30)
         X = np.column_stack([rng.uniform(size=n), 1e9 + rng.integers(0, 2, n)])
@@ -831,6 +831,52 @@ class TestDependence:
         assert not any(
             c.variable == 1 and ref.reduction(c, rss_s) > 1e-8 * rss_s for c in cands
         )
+
+    def test_a_pair_whose_b_x_la_2_rejects_adds_only_its_hinge(self):
+        # FWD-13 case (b), from the adversarial review of PR #129: F_1 = {1, x0}
+        # and the pair on parent x0 with covariate x2 at t = fl(1 + 0.5e-9).
+        # LA-2 rejects x0 x2, whose pivot u0 x2 is 0 at every case, and counts
+        # the hinge, so F_2 is F_1 with the hinge alone and RSS_2 = 35.24;
+        # FWD-11 keeps all four terms, whose RSS is 2.6e-14 (TSS 143). No fit
+        # reaches this step: the intercept's pair on x2 wins step 1.
+        i = np.arange(12.0)
+        x0 = 1e10 + np.r_[np.ones(8), np.zeros(12)]
+        x2 = np.r_[np.zeros(8), 1 + 1e-9 * (i - 5.5)]
+        X, y = np.column_stack((x0, x2)), np.r_[np.zeros(8), i - 5.5]
+        n, w, t = 20, np.ones(20), float(x2[14])
+        assert t == 1 + 0.5e-9
+        dirs, cuts = [np.array(r, np.int8) for r in ([0, 0], [2, 0])], [np.zeros(2)] * 2
+        F = ref.Conditioned(X, dirs, cuts, None, ref.Atoms(X), w)
+        P = ref.Projector(F.columns, w)
+        cands, _ = ref._parent_candidates(
+            1,
+            dirs[1],
+            X,
+            y[:, None],
+            w,
+            ref.basis_matrix(X, np.array(dirs), np.array(cuts)),
+            P,
+            P.residual(y[:, None]),
+            ref.covariate_variances(X, w, float(n)),
+            float(n),
+            ref.weight_tol(float(n)),
+            ref.Params(max_degree=2, minspan=1, endspan=1),
+            0.01,
+            F,
+            cuts[1],
+            rss_s=P.rss(y),
+        )
+        (c,) = [c for c in cands if c.kind == ref.PAIR and c.knot == t]
+        assert c.counted == (False, True)
+        new = ref._basis_rows(c, dirs, cuts)
+        assert [(r.tolist(), u.tolist()) for r, u in new] == [([2, 1], [0.0, t])]
+        f2 = exact_rss(exact_basis(X, [*dirs, new[0][0]], [*cuts, new[0][1]]), y, w)
+        assert f2 == pytest.approx(35.2414, abs=1e-4)
+        assert abs(c.rss - f2) <= la5(f2, P.rss(y), 143.0)
+        terms = np.array([[0, 0], [2, 0], [2, 1], [2, -1]], np.int8)
+        term_cuts = np.array([[0.0, 0.0], [0.0, 0.0], [0.0, t], [0.0, t]])
+        assert ref.la4_kept(X, terms, term_cuts, w).all()
+        assert exact_rss(exact_basis(X, terms, term_cuts), y, w) < 1e-13
 
     @pytest.mark.parametrize("copy", ["equal", "plus 2^-16", "minus 2^35"])
     def test_copies_of_a_large_mean_covariate_meet_la_5(self, copy):

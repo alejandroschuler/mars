@@ -1636,6 +1636,100 @@ def _designed_cases() -> list[Case]:
     return [dataclasses.replace(c, Y=np.reshape(c.Y, (-1, 1))) for c in cases]
 
 
+def _family_134(seed: int) -> Case:
+    """A draw of #134's family (the adversarial review of #122): x0 on three
+    levels, x1 = x0 / 8 + 2^10 or 2^26 (moved by delta z / 8 off the copy,
+    with delta = 0 at every fifth seed), x2 = m2 + k / 8, at degree 3."""
+    x0 = np.array([int(c) for c in "2011122000102221020000120220220202020111"]) / 3
+    k = np.array([*"4116754141254576305512621857032774736314"], float)
+    y0 = np.array([int(v) for v in _Y134.split()]) / 1000
+    rng = np.random.default_rng(seed)
+    n = 40
+    delta = 10.0 ** rng.uniform(-10, -5) if seed % 5 else 0.0
+    z = rng.integers(-4, 5, n).astype(float)
+    m2 = float(rng.choice([1e3, 1e6, 1e9, 1e15]))
+    x1 = x0 / 8 + 2.0 ** int(rng.choice([10, 26])) + delta * z / 8
+    X = np.column_stack((x0, x1, m2 + k / 8))
+    perm = rng.permutation(n) if rng.uniform() < 0.5 else np.arange(n)
+    y = y0 + rng.choice([0.0, 0.001, 0.05]) * rng.standard_normal(n)
+    y = y + rng.choice([0, 1]) * (X[:, 1] - X[:, 1].mean()) * 3
+    w = None if rng.uniform() < 0.6 else rng.integers(1, 4, n).astype(float)
+    X, y, w = X[perm], y[perm], None if w is None else w[perm]
+    kw = {"max_degree": 3, "thresh": 0.0, "adjust_endspan": 0.0, "endspan": 1}
+    kw |= {
+        "fast_k": int(rng.choice([1, 0, 20])),
+        "max_terms": int(rng.choice([13, 17])),
+    }
+    X = np.ldexp(X, mars_ref.x_scale_powers(X))
+    return Case(f"#134's family, seed {seed}", X, y[:, None], w, kw)
+
+
+_Y134 = """996 20 1 10 -5 1018 1008 -7 10 7 8 -8 995 1006 1006 3 -21 997 -20 -9 5 12
+    -2 1025 16 1020 1012 -28 1009 987 14 1024 -18 1008 -24 989 -12 -2 -20 -11"""
+
+
+def _forward_basis_cases() -> list[Case]:
+    """FWD-13: fits where the forward basis F_s holds a direction that the
+    kept terms of FWD-11 lack (case (a)), and a draw with large means.
+
+    - Seed 1258 of #110's generator with copy kind 2 (#127): step 5 is a pair
+      on x0 x2 with covariate x3, whose mirror FWD-11 drops (its part
+      orthogonal to the kept terms is 2.9e-9 of its norm), while F_5 keeps
+      its direction. The step-6 pair on x0 at the knot 1000000000.4358263 has
+      the RSS 0.0239 on F_5 (0.0505 on the kept terms), and after step 8 the
+      forward RSS is 0 while the kept terms leave 0.127.
+    - Seed 150 of #134's family (m1 = 2^26, x2 = 1e15 + k / 8), with x1
+      moved to the first column: as drawn, x1 and x0 tie at step 1 and the
+      comparison stops there.
+
+    Case (b) of FWD-13 is not here: there, x0 must enter as a linear term
+    while x2 nearly equals a combination of 1 and x0, and then the
+    intercept's pair on x2 (x2 and a hinge) reduces the RSS more than x0
+    does; ``test_reference`` checks the step itself."""
+    x0 = 2.0**40 + 0.5 * np.array([1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1])
+    x2 = 2.0**26 + 0.5 * np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0])
+    x3 = [
+        1000000000.4598327,
+        1000000000.4358263,
+        1000000000.7226093,
+        1000000000.804228,
+        1000000000.8673713,
+        1000000000.2454855,
+        1000000000.7557647,
+        1000000000.036599,
+        1000000000.3438735,
+        1000000000.2943207,
+        1000000000.5110854,
+        1000000000.619091,
+    ]
+    X = np.column_stack((x0, np.full(12, 1e15), x2, x3))
+    y = [
+        1.4743319253136067,
+        -0.08339515459289858,
+        0.5232893289862646,
+        1.4782697054181761,
+        0.009932056467236347,
+        -0.054518698339843644,
+        0.01595016972107863,
+        -0.5274573901665076,
+        1.274610687656645,
+        -0.11062351347638189,
+        2.156097949509147,
+        1.521171281556462,
+    ]
+    kw = {"max_degree": 3, "fast_k": 0, "thresh": 0.0, "adjust_endspan": 0.0}
+    seed1258 = Case(
+        "#110's generator, seed 1258, copy kind 2",
+        X,
+        np.reshape(y, (-1, 1)),
+        None,
+        kw | {"auto_linpreds": True, "minspan": None, "endspan": 1},
+    )
+    drawn = _family_134(150)
+    family = dataclasses.replace(drawn, X=drawn.X[:, [1, 0, 2]])
+    return [seed1258, family]
+
+
 # ---------------------------------------------------------------------------
 # The tests
 
@@ -1762,6 +1856,22 @@ def test_whole_fit_with_drops_that_tie_on_a_near_copy():
     other = {**rec, "removed": removed}
     out = compare_pruning(case, other, rec, B, kept.Y, kept.w, span)
     assert out.near_tie == "removal"
+
+
+@pytest.mark.parametrize("case", _forward_basis_cases(), ids=lambda c: c.name)
+def test_the_forward_basis_keeps_a_direction_that_fwd_11_drops(case):
+    """FWD-13 and FWD-11: both programs project each step on the forward
+    basis, so the forward records and the whole fits agree at every step,
+    with no near-tie stop; in seed 1258, FWD-11 drops a term after the pass,
+    and the kept terms' RSS is above the forward RSS."""
+    ref = case.reference_fit()
+    assert check_forward(case).near_tie is None
+    params = _core.MarsParams(**case.params)
+    fast = _core.fit_mars(case.X, case.Y, case.w, params, record_candidates=True)
+    assert compare_fits(case, fast, _core.MarsFit.from_dict(ref)).near_tie is None
+    if "1258" in case.name:
+        assert ref["forward"]["dropped"].tolist() == [7]
+        assert ref["pruning"]["rss_per_size"][-1] > 0.1 > ref["forward"]["rss"][-1]
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
