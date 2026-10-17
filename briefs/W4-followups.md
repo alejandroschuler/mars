@@ -74,7 +74,7 @@ Read #127 and the review comments it cites. Decide which basis the forward pass 
 Files: `tests/reference/mars_ref.py`, `tests/reference/test_reference.py`, and the draws in `tests/test_oracle.py`. Write from the spec only and never read `pymars/` (running tests is fine). The reference is the oracle.
 
 FWD-13 (merged with #129) defines the forward basis F_s: F_{s+1} is F_s plus the chosen candidate's columns that LA-2 counted, in LA-2's order; RSS_s = RSS(F_s); FWD-11 runs once after the pass and changes no forward value. Today `forward_pass` rebuilds B from the LA-4-kept terms at each step. Change it to build B and LA-2's echelon from F_s, and keep FWD-11's term test for kept and dropped only. The fast code already follows FWD-13 (checked on 6bce1d1). Then:
-1. Add #127's seed 1258 (#110's generator with copy kind 2 forced; the generator draws minspan, then endspan) and FWD-13's case (b) as oracle cases, so the fast-against-reference comparison pins FWD-13.
+1. Add #127's seed 1258 (#110's generator with copy kind 2 forced; the generator draws minspan, then endspan), FWD-13's case (b), and one draw of #134's family (seed 150: m1 = 2^26, x2 = 1e15 + k/8) as oracle cases, so the fast-against-reference comparison pins FWD-13.
 2. Remove any test that assumes rss_per_size[M_f-1] equals forward.rss[S].
 3. Run the thorough oracle (gate C) and report any new difference between the two programs with its seed.
 Reviewers: 2 (`spec` and `adversarial`). Gate B and gate C on the head.
