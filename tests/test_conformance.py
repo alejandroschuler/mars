@@ -120,7 +120,8 @@ class Fast:
     def basis_matrix(self, X, dirs, cuts) -> np.ndarray:
         from pymars import _terms
 
-        # earth stores a cut for a linear factor; TERM-2 wants 0.0 there
+        # earth stores a cut for a linear factor; TERM-2 wants 0.0 there (a
+        # cut at dirs 0 is zeroed too, which changes nothing: no factor)
         cuts = np.where(np.isin(dirs, (0, 2)), 0.0, cuts)
         return _terms.basis_matrix(X, dirs, cuts)
 
