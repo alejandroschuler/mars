@@ -178,10 +178,13 @@ class _Monomials(NamedTuple):
     ``_shifted_fit``. ``canon`` each of ``keys`` as an exact polynomial in the
     canonical monomials, whose columns are ``E`` (n, P), not centered, and
     ``cterms`` the terms in them; ``ckeys`` the canonical monomials; ``atoms``
-    the column of each atom of ``keys``. The canonical atoms are u_s, (u_s -
-    t_s)₊ and d_s only, so that the columns of a pair at one knot and of u_s
-    are not dependent on the data; they also use exact affine copies and near
-    copies, which LA-4 does not (#119)."""
+    the column of each atom of ``keys``. The canonical atoms are u_s, one
+    hinge of each pair at a knot ((u_s - t_s)₊, or its mirror when that is
+    tiny), and the differences of near copies, so that the columns of a pair
+    at one knot and of u_s are not dependent on the data; they also use exact
+    affine copies and near copies, which LA-4 does not (#119). A canonical
+    monomial ("raw", key) is the column of the LA-4 monomial key itself, for
+    a key whose expansion cancels (#130)."""
 
     keys: list
     terms: list
@@ -369,7 +372,7 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
                 atoms[atom] = U[:, s]
             elif kind == 3:
                 atoms[atom] = near[s][1]
-            elif kind in (4, 5):
+            elif kind == 4:
                 atoms[atom] = diffs[atom]
             else:
                 j, t, k = where[atom]
@@ -388,7 +391,7 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             return out | ({None: const} if const else {})
         return {(s, 0, _ZERO): Fraction(1)}
 
-    diffs: dict = {}  # (s, 3 + kind, t_s) -> the difference of a near copy's hinge
+    diffs: dict = {}  # (s, 4, t_s) -> the difference of a near copy's hinge
 
     def hinge_canon(atom: tuple) -> dict:
         # A hinge (u_s - t_s)₊ or (t_s - u_s)₊ that is the canonical one of its
@@ -396,21 +399,20 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
         # difference, when h is exact; h is 0 wherever x_s = x_r, as e_s is
         # (the adversarial review of PR #123). The hinge itself may be small,
         # as at a knot one ulp from a level, so h need not be small next to it.
-        s, kind, ts = atom
+        s, _, ts = atom
         j, t, k = where[atom]
-        if s in near and j == s and k == 0:
+        if s in near and j == s and k == 0:  # kind 1, by ``base_kind``
             r = near[s][0]
-            code = _terms.PLUS if kind == 1 else _terms.MINUS
-            hs, hr = column(atom), _terms.factor(code, X[:, r], t)
+            hs, hr = column(atom), _terms.factor(_terms.PLUS, X[:, r], t)
             h = hs - hr
             exact = np.all((hr == 0) | (hs == 0) | ((hs <= 2 * hr) & (hr <= 2 * hs)))
             if exact:
                 tr = Fraction(t) - Fraction(float(m[r]))
                 for q in (1, 2):
                     where.setdefault((r, q, tr), (r, t, 0))
-                out = dict(canonical((r, kind, tr)))
+                out = dict(canonical((r, 1, tr)))
                 if np.any(h != 0):
-                    key = (s, 3 + kind, ts)
+                    key = (s, 4, ts)
                     diffs[key] = h
                     out[key] = out.get(key, 0) + Fraction(1)
                 return out
@@ -456,6 +458,14 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
         out[None] = out.get(None, 0) - sign * ts
         return {q: f for q, f in out.items() if f != 0}
 
+    def mcol(ckey: tuple) -> FloatArray:  # the column of a canonical monomial
+        if ckey and ckey[0] == "raw":
+            return np.prod([column(a) for a in ckey[1]], axis=0)
+        col = np.ones(X.shape[0])
+        for atom in ckey:
+            col = col * column(atom)
+        return col
+
     catoms: dict = {}
     cindex: dict = {}
     cols: list = []
@@ -468,14 +478,6 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             if atom not in catoms:
                 catoms[atom] = canonical(atom)
             poly = _times(poly, catoms[atom])
-
-        def mcol(ckey):
-            if ckey and ckey[0] == "raw":
-                return np.prod([column(a) for a in ckey[1]], axis=0)
-            col = np.ones(X.shape[0])
-            for atom in ckey:
-                col = col * column(atom)
-            return col
 
         # A monomial whose column is far smaller than the parts of its
         # expansion, such as (x0 - t)₊·(t' - x3)₊ with a near copy x3, which is
