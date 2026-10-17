@@ -598,8 +598,9 @@ class Conditioner:
     def _near_copies(self) -> dict:
         """{j: (r, d)} for a shifted covariate j whose column u_j is a near-copy
         of that of an earlier symbol r: u_j = u_r + d exactly, d ≠ 0 (every
-        difference is exact, by Sterbenz, and |d| is within 2^-10 of |u_j| in
-        norm). The columns for the projections (``linear``, ``hinge``) then
+        difference is exact: by Sterbenz, or since one of the two values is 0,
+        as at a case one ulp above the smallest value; and |d| is within 2^-10
+        of |u_j| in norm). The columns for the projections (``linear``, ``hinge``) then
         write u_j as u_r + d, so that the part of a product that the terms
         span cancels as a formula and the small d is not lost under the large
         mean (the one-ulp copy of PR #95's review, LA-5). The test of LA-4
@@ -617,8 +618,9 @@ class Conditioner:
                     continue
                 ur = self._ucol(r)
                 d = uj - ur
+                # d = uj - ur is exact where one of them is 0, or by Sterbenz
                 ok = np.all(
-                    (d == 0) | ((ur != 0) & (uj != 0) & (uj <= 2 * ur) & (ur <= 2 * uj))
+                    (d == 0) | (ur == 0) | (uj == 0) | ((uj <= 2 * ur) & (ur <= 2 * uj))
                 )
                 if ok and 0 < np.linalg.norm(d) <= 2.0**-10 * np.linalg.norm(uj):
                     out[j] = (r, d)
