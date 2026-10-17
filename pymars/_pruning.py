@@ -427,7 +427,12 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
         # a linear factor's m_j multiplies the rounding of the line. A near
         # copy keeps (u_s - t_s)₊, since ``hinge_canon`` writes it as the hinge
         # of x_r, whose own choice is made here. Both are exact relations,
-        # which LA-4 allows in the sums of squares.
+        # which LA-4 allows in the sums of squares. The scope is knots that
+        # are data values, as the forward pass makes them: a knot 1e-6 to
+        # 3e-3 above a level has a ratio above 2^-20 and can miss LA-5, as on
+        # main; taking the smaller hinge always changed 6 of 533 fits of
+        # validation/bench/hash_fits.py and missed on another near copy (the
+        # adversarial review of PR #132).
         if s in near:
             return 1
         P, Q = column((s, 1, ts)), column((s, 2, ts))
