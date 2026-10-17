@@ -868,6 +868,11 @@ class TestDependence:
         )
         (c,) = [c for c in cands if c.kind == ref.PAIR and c.knot == t]
         assert c.counted == (False, True)
+        # LA-3's G holds x0 x2 although LA-2 rejects it: rho is 1.7e-32 and
+        # 0.003 at the two lowest knots of the second group (0.50 and 0.57
+        # on F_1 alone), so they are no candidates
+        pairs = [c.knot for c in cands if c.kind == ref.PAIR]
+        assert min(pairs) == x2[10] and len(pairs) == 7
         new = ref._basis_rows(c, dirs, cuts)
         assert [(r.tolist(), u.tolist()) for r, u in new] == [([2, 1], [0.0, t])]
         f2 = exact_rss(exact_basis(X, [*dirs, new[0][0]], [*cuts, new[0][1]]), y, w)
