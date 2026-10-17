@@ -582,7 +582,9 @@ class Conditioner:
         self._wint: tuple | None = None
         self._shifted = False  # a registered term has a linear factor of a large one
         self._span_rows: list = []  # the terms of ``exact_residual``'s span
-        self._span: list = []  # their exact orthogonal vectors and squared norms
+        self._span: list = []  # their columns on the distinct rows, (ints, den)
+        self._sgram: list = []  # their exact Gram matrix, by rows
+        self._xints: dict = {}
         self._span_done = 0
         self._inverse: npt.NDArray[np.intp] | None = None
         self.size = 0.0  # a bound on the magnitude of the last column formed
@@ -920,30 +922,32 @@ class Conditioner:
         holds, in order, for ``exact_residual``. Complexity: O(p)."""
         self._span_rows.append((np.array(row), np.array(cut, dtype=np.float64)))
 
-    def _term_values(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> list:
-        """The term on the distinct rows of X, as exact rationals."""
-        Xu = self._group_data()[0]
-        out = [Fraction(1)] * len(Xu)
-        for j in np.flatnonzero(row):
-            code, t = int(row[j]), Fraction(float(cut[j]))
-            vals = [Fraction(float(v)) for v in Xu[:, j]]
-            if code == 1:
-                vals = [max(v - t, Fraction(0)) for v in vals]
-            elif code == -1:
-                vals = [max(t - v, Fraction(0)) for v in vals]
-            out = [a * b for a, b in zip(out, vals, strict=True)]
-        return out
+    def _covariate_ints(self, j: int) -> tuple:
+        """Covariate j on the distinct rows of X as (integers, denominator),
+        exactly: every float64 is an integer over a power of 2."""
+        if j not in self._xints:
+            Xu = self._group_data()[0]
+            self._xints[j] = self._dyadic([Fraction(float(v)) for v in Xu[:, j]])
+        return self._xints[j]
 
-    def _span_residual(self, z: list) -> list:
-        """z minus its exact w-projection on the registered span (by
-        Gram-Schmidt on the distinct rows, with their weight sums)."""
-        W = self._group_data()[2]
-        for u, d in self._span:
-            f = sum((wi * a * b for wi, a, b in zip(W, u, z, strict=True)), Fraction(0))
-            if f:
-                f /= d
-                z = [a - f * b for a, b in zip(z, u, strict=True)]
-        return z
+    def _term_ints(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> tuple:
+        """The term on the distinct rows of X as (integers, denominator), the
+        denominator a power of 2, exactly. Complexity: O(g·d) integer
+        operations for g distinct rows and d factors."""
+        g = len(self._group_data()[0])
+        out, den = np.array([1] * g, dtype=object), 1
+        for j in np.flatnonzero(row):
+            vals, d = self._covariate_ints(int(j))
+            code = int(row[j])
+            if code != 2:
+                t = Fraction(float(cut[j]))
+                e = max(d, t.denominator)
+                a = vals * (e // d)
+                ti = t.numerator * (e // t.denominator)
+                a = a - ti if code == 1 else ti - a
+                vals, d = np.array([v if v > 0 else 0 for v in a], dtype=object), e
+            out, den = out * vals, den * d
+        return out, den
 
     def exact_residual(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> FloatArray:
         """The column of the term minus its exact w-projection on the span of
@@ -952,19 +956,55 @@ class Conditioner:
         relative to its own size, also when the term lies within rounding of
         that span in float64, where a float64 projection keeps only the
         rounding (a covariate that is a copy up to rounding of another, such
-        as x/8 + c at a large mean, LA-5's scope paragraph). Complexity:
-        O(g·r) rational operations for g distinct rows of X and r registered
-        terms, and O(g·r) for each term registered since the last call."""
-        W = self._group_data()[2]
+        as x/8 + c at a large mean, LA-5's scope paragraph).
+
+        Method: on the g distinct rows of X every column is integers over a
+        power of 2, so the Gram matrix of the registered columns and their
+        inner products with the term are exact integer dot products; the
+        normal equations are solved in rational arithmetic (a zero pivot of
+        the positive semidefinite system is a dependent column, coefficient
+        0), and the residual is formed in integers over one denominator and
+        divided once, which rounds correctly. Complexity: O(g·r) integer
+        operations and O(r³) rational ones for r registered terms, and O(g·r)
+        integer operations for each term registered since the last call."""
+        if self._wint is None:
+            self._wint = self._dyadic(self._group_data()[2])
+        wi, wd = self._wint
         while self._span_done < len(self._span_rows):
-            span_row, span_cut = self._span_rows[self._span_done]
-            z = self._span_residual(self._term_values(span_row, span_cut))
+            c, d = self._term_ints(*self._span_rows[self._span_done])
             self._span_done += 1
-            d = sum((wi * a * a for wi, a in zip(W, z, strict=True)), Fraction(0))
-            if d:
-                self._span.append((z, d))
-        z = self._span_residual(self._term_values(row, cut))
-        return np.array([float(v) for v in z])[self._inverse]
+            wc = wi * c
+            for i, (c2, d2) in enumerate(self._span):
+                self._sgram[i].append(Fraction(int(np.dot(wc, c2)), wd * d * d2))
+            self._span.append((c, d))
+            own = Fraction(int(np.dot(wc, c)), wd * d * d)
+            self._sgram.append([*(r[-1] for r in self._sgram), own])
+        v, dv = self._term_ints(row, cut)
+        wv = wi * v
+        r = len(self._span)
+        A = [list(self._sgram[i]) for i in range(r)]
+        b = [Fraction(int(np.dot(wv, c)), wd * dv * d) for c, d in self._span]
+        for k in range(r):  # Gaussian elimination, a zero pivot skipped
+            if A[k][k] == 0:
+                continue
+            for i in range(k + 1, r):
+                f = A[i][k] / A[k][k]
+                if f:
+                    for j in range(k + 1, r):
+                        A[i][j] -= f * A[k][j]
+                    b[i] -= f * b[k]
+        beta = [Fraction(0)] * r
+        for k in reversed(range(r)):
+            if A[k][k] != 0:
+                rest = sum((A[k][j] * beta[j] for j in range(k + 1, r)), Fraction(0))
+                beta[k] = (b[k] - rest) / A[k][k]
+        den = math.lcm(dv, *(d for _, d in self._span))
+        den *= math.lcm(1, *(f.denominator for f in beta))
+        z = v * (den // dv)
+        for f, (c, d) in zip(beta, self._span, strict=True):
+            if f:
+                z = z - (f.numerator * (den // (f.denominator * d))) * c
+        return np.array([int(x) / den for x in z])[self._inverse]
 
     def _exact_column(self, e: _Element) -> list:
         """The monomial on the distinct rows of X, as exact rationals."""
