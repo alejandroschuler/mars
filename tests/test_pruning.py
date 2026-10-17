@@ -749,7 +749,7 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
     assert np.linalg.norm(fit.coef[kept, 0] - beta[0]) <= 1e-6 * np.linalg.norm(beta)
 
 
-def _generated(seed):
+def _generated(seed, step=None):
     """X, y and w of seed ``seed`` of the generator in the adversarial review
     of PR #110 (#120): covariates on a few levels, shifted, with x1 a copy of
     x0 one ulp off at one case for these seeds. Seed None is the case of the
@@ -761,7 +761,9 @@ def _generated(seed):
     1/2 or 1) with x2 = -1e9 + U, or x0 = 1e4 + (0, 1/4, 1/2 or 3/4) with x2 =
     2^40 + U, and x2's column 1 here; x3 = x0 with one case one ulp up at the
     lowest level, or one ulp down at the highest."""
-    if seed in ("level", "product"):
+    if seed in ("level", "level 1e-8", "product"):
+        near = seed != "product"
+        seed = "level" if near else seed
         rng = np.random.default_rng(2 if seed == "level" else 1)
         n, levels = (20, 3) if seed == "level" else (24, 4)
         base, top = (1024.0, 1.0) if seed == "level" else (1e4, 0.75)
@@ -770,6 +772,8 @@ def _generated(seed):
         x3 = x0.copy()
         i = int(np.flatnonzero(x0 == (base if seed == "level" else base + top))[0])
         x3[i] = np.nextafter(x3[i], np.inf if seed == "level" else -np.inf)
+        if near and step:
+            x3[i] = 1024 + step
         y = rng.normal(size=n)
         if seed == "product":
             y = y + (x0 - x0.mean()) * (x2 - x2.mean())
@@ -854,6 +858,11 @@ def _generated(seed):
             {(3, 2): 1024 + 2.0**-42},
         ),
         (
+            "level 1e-8",
+            [[0, 0, 0], [2, 2, 0], [2, 0, 2], [0, 0, 1], [0, 2, 0]],
+            {(3, 2): 1024 + 1e-8},
+        ),
+        (
             "product",
             [[0, 0, 0], [1, 0, -1], [0, 2, 0], [0, 2, -1]],
             {(1, 0): 1e4 + 0.5, (1, 2): 1e4 + 0.75, (3, 2): 1e4 + 0.5},
@@ -865,6 +874,7 @@ def _generated(seed):
         "review of PR #123",
         "recheck of PR #123",
         "knot one ulp above a level (#130)",
+        "knot 1e-8 above a level (#130)",
         "a product 0 at all cases but one (#130)",
     ],
 )
@@ -890,12 +900,14 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     of one ulp; in the second the product (x0 - 1e4 - 1/2)+·(1e4 + 3/4 - x3)+
     is 0 at all cases but one. With the line or the expanded parts as the
     canonical columns, the rounding of those large columns times m_j missed
-    by 21 and 224 times ε. Every rss_per_size and the final RSS are within
+    by 21 and 224 times ε. With x3 1e-8 above the level (a mirror ratio of
+    about 1e-8, which a threshold of 2^-30 would not catch) the miss was 23.5
+    times ε. Every rss_per_size and the final RSS are within
     LA-5's ε of rational arithmetic on the exact basis, and the pass on the
     rows in another order keeps subsets whose exact RSS differ by at most a
     near-tie of PRUNE-10 (the choices must not follow the rounding beyond
     that)."""
-    X, y, w = _generated(seed)
+    X, y, w = _generated(seed, 1e-8 if seed == "level 1e-8" else None)
     dirs = np.array(dirs)
     cut = np.zeros(dirs.shape)
     for (k, j), t in cuts.items():
