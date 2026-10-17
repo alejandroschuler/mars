@@ -1701,6 +1701,50 @@ def test_whole_fit_of_two_cases_with_weights():
     compare_fits(case, fast, ref)
 
 
+def test_whole_fit_with_drops_that_tie_on_a_near_copy():
+    """PRUNE-10: seed 1287 of the generator of PR #110's adversarial review,
+    with x1 a copy of x0 one ulp off at one case (#130). At stage pos = 9 the
+    fast code drops term 5 and the reference term 12; the two drops tie to
+    4.5e-15 of the RSS in exact arithmetic. The near-tie check takes the
+    reference's RSS in LA-4's shifted atoms (``span``): the columns of B,
+    with x0 and x1 at 1e12, put the two RSS values 4.5e-6 apart."""
+    rng = np.random.default_rng(1287)
+    n, p, lv = (int(rng.integers(a, b)) for a, b in ((12, 60), (2, 5), (2, 5)))
+    X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
+    if rng.uniform() < 0.5:
+        X[:, p - 1] = rng.uniform(size=n)
+    rng.integers(0, 6)  # the copy kind of the generator, forced to 4 here
+    shifts = [2.0**10, 1e4, 2.0**26, 1e9, 2.0**40, 1e12, 1e15, -1e9, -(2.0**30)]
+    X = X + rng.choice(shifts, p) * (rng.uniform(size=p) < 0.8)
+    X[:, 1] = X[:, 0]
+    i = int(rng.integers(n))
+    X[i, 1] = np.nextafter(X[i, 1], np.inf)
+    y = np.maximum(X[:, 0] - np.median(X[:, 0]), 0) * 3
+    y = y + (X[:, 1] - X[:, 1].mean()) * (X[:, p - 1] - X[:, p - 1].mean())
+    y = y + rng.choice([0.0, 0.01, 0.3]) * rng.standard_normal(n)
+    y = y + rng.choice([0.0, 1e6])
+    w = None
+    if rng.uniform() < 0.4:
+        w = rng.integers(0, 3, n).astype(float)
+        w[:3] = 1.0
+    params = {
+        "max_degree": int(rng.integers(1, 4)),
+        "fast_k": int(rng.choice([0, 0, 1, 3, 20])),
+        "thresh": float(rng.choice([0.0, 0.001])),
+        "adjust_endspan": float(rng.choice([0.0, 2.0])),
+        "auto_linpreds": bool(rng.uniform() < 0.7),
+    }
+    for key in ("minspan", "endspan"):
+        v = rng.choice([None, 1])
+        params[key] = None if v is None else int(v)
+    case = Case("seed 1287, copy kind 4", X, y.reshape(-1, 1), w, params)
+    fast = _core.fit_mars(
+        X, case.Y, w, _core.MarsParams(**params), record_candidates=True
+    )
+    ref = _core.MarsFit.from_dict(case.reference_fit())
+    assert compare_fits(case, fast, ref).near_tie == "removal"
+
+
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
 def test_forward_pass_on_designed_data(case):
     """The same comparison on designs made for single rules (``_designed_cases``)."""
