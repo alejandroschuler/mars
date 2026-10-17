@@ -68,3 +68,19 @@ Reviewer: 1 (`single`). Run gate B and gate C on the head. The fast code changes
 Files: `docs/algorithm.md`, and `validation/blackbox/` for a new black-box experiment if you run one. You are the spec writer: you may run black-box earth experiments (trace logs, outputs) under the clean-room rules; never read earth's C code or print R function bodies.
 
 Read #127 and the review comments it cites. Decide which basis the forward pass projects onto after a step whose new term LA-4 drops, and what RSS_s is then, so that LA-1, LA-4 and FWD-11 read the same. Prefer the rule that earth follows, if a black-box run on a case of this kind shows it (earth's tolerances differ, so build a case where the drop is clear). Prefer a rule that keeps RSS_s equal to the RSS of the basis that the next step projects onto. State the modules that must follow it (the reference and the fast forward pass) in the PR body; the executor opens the implementation tasks. Reviewers: 2 (`spec` and `adversarial`).
+
+## R127: the reference follows FWD-13 (branch `t127-ref-fwd13`; Part of #127)
+
+Files: `tests/reference/mars_ref.py`, `tests/reference/test_reference.py`, and the draws in `tests/test_oracle.py`. Write from the spec only and never read `pymars/` (running tests is fine). The reference is the oracle.
+
+FWD-13 (merged with #129) defines the forward basis F_s: F_{s+1} is F_s plus the chosen candidate's columns that LA-2 counted, in LA-2's order; RSS_s = RSS(F_s); FWD-11 runs once after the pass and changes no forward value. Today `forward_pass` rebuilds B from the LA-4-kept terms at each step. Change it to build B and LA-2's echelon from F_s, and keep FWD-11's term test for kept and dropped only. The fast code already follows FWD-13 (checked on 6bce1d1). Then:
+1. Add #127's seed 1258 (#110's generator with copy kind 2 forced; the generator draws minspan, then endspan) and FWD-13's case (b) as oracle cases, so the fast-against-reference comparison pins FWD-13.
+2. Remove any test that assumes rss_per_size[M_f-1] equals forward.rss[S].
+3. Run the thorough oracle (gate C) and report any new difference between the two programs with its seed.
+Reviewers: 2 (`spec` and `adversarial`). Gate B and gate C on the head.
+
+## H127: the harness's earth forward path after earth's rank fix (branch `t127-harness-fwd-path`; Part of #127)
+
+Files: `validation/harness/fit_earth.R`, `validation/harness/tests/test_driver.py`, and the tests that compare pymars's forward RSS with that path: `tests/test_conformance.py` (around lines 355 to 400), `tests/test_forward.py` (around 118), `tests/test_core.py` (around 551). If the fixtures must be made again, `validation/harness/gen_fixtures.py` makes them with R; the fixture diff must then be explained in the PR body.
+
+`forward_rss_path` refits earth's `bx` after earth's rank fix, so for a fit where the fix removes a term it is not earth's forward RSS (bb32 shows this). Use earth's trace RSq for the forward path, or skip the forward RSS after "Fixed rank deficient bx", whichever keeps the most comparisons true; black-box earth runs only (clean room). Reviewer: 1 (`single`). Gate B and gate C (it regenerates fixtures with R if the harness changed).
