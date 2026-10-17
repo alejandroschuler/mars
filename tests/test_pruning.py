@@ -931,3 +931,55 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     assert_la5(res2.rss_per_size, exact2, exact[0])
     gap = np.abs(np.subtract(exact2, exact))
     assert np.all(gap <= 1e-7 * np.minimum(exact2, exact)), gap
+
+
+def _random_terms(seed):
+    """X (n, 4), dirs, cuts and y of seed ``seed`` of the LA-4 check of the
+    spec review of PR #132 (#137): x1 = x0 on other shifts (an affine copy),
+    with one or two cases one ulp up for some seeds, random terms of degree up
+    to 4, and knots at or one ulp off a data value."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(12, 30))
+    a = np.floor(rng.uniform(size=(n, 3)) * rng.integers(2, 5)) / 4
+    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
+    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10, 1e4], 4)
+    if seed % 4 == 1:
+        i = int(rng.integers(n))
+        X[i, 1] = np.nextafter(X[i, 1], rng.choice([-np.inf, np.inf]))
+    elif seed % 4 == 2:
+        for i in rng.choice(n, 2, replace=False):
+            X[i, 1] = np.nextafter(X[i, 1], np.inf)
+    M = int(rng.integers(5, 10))
+    dirs = rng.integers(-1, 3, size=(M, 4)).astype(np.int8)
+    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
+    dirs[0] = 0
+    cuts = np.zeros((M, 4))
+    for r in range(M):
+        for j in range(4):
+            if dirs[r, j] in (1, -1):
+                v = X[rng.integers(n), j]
+                cuts[r, j] = v + rng.choice([0, 0, np.spacing(v), -np.spacing(v)])
+    return X, dirs, cuts, rng.normal(size=n)
+
+
+@pytest.mark.parametrize(("seed", "nonzero"), [(42, [1, 1, 0, 0, 1, 1]), (295, None)])
+def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero):
+    """PRUNE-8 uses the test of LA-4 that FWD-11 uses (#137). At seed 42 the
+    term (t - x0)+·(x1 - t1)+·(x2 - t2)+ is 0 at every case, since x1 is an
+    affine copy of x0 and the two hinges never overlap; LA-4 drops it (the
+    new part is 0 at every case), and x1·x3 after it too, as mars_ref's
+    la4_kept does. The final fit kept the first, through the rounding of its
+    expanded columns. At seed 295 LA-4 keeps x0 after x0·x2 because its new
+    part counts as a formula, while u0·u2 is 0 at every case, so the data span
+    x0 exactly: the final fit raised LinAlgError, and now gives that column
+    the coefficient 0, as the reference does, with the RSS of the span."""
+    X, dirs, cuts, y = _random_terms(seed)
+    B = _terms.basis_matrix(X, dirs, cuts)
+    M = len(dirs)
+    fit = pr.final_fit(B, y, np.arange(M), None, penalty=2.0, X=X, dirs=dirs, cuts=cuts)
+    kept = np.any(fit.coef != 0.0, axis=1)
+    if nonzero is not None:
+        assert kept.astype(int).tolist() == nonzero
+    Bx = _exact_basis(X, dirs, cuts)
+    rss = _exact(Bx, y, None, np.flatnonzero(kept))[1]
+    assert_la5([fit.rss], [rss], _exact(Bx, y, None, [0])[1])

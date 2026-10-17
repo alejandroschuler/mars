@@ -891,12 +891,24 @@ def final_fit(
     m = sel.size
     mono = _terms_of(B, keep, X, dirs, cuts)
     if mono is not None:
+        X_cases = np.asarray(X, dtype=np.float64)
+        X_cases = X_cases if keep is None else X_cases[keep]
         mono = mono._replace(
             terms=[mono.terms[k] for k in sel], cterms=[mono.cterms[k] for k in sel]
         )
     Yc, constants = _centered(Y, w)
     if mono is not None:
-        coef, rss = _shifted_fit(mono, Yc, w)
+        # LA-4 on the selected terms in increasing order, by the test of FWD-11
+        # (``_linalg.independent_terms``), so that the final fit and the
+        # forward pass decide alike (#137)
+        keep_terms = _linalg.independent_terms(
+            X_cases,
+            np.asarray(dirs)[sel],
+            np.asarray(cuts, dtype=np.float64)[sel],
+            w,
+            B[:, sel],
+        )
+        coef, rss = _shifted_fit(mono, Yc, w, keep_terms)
     else:
         fit = _linalg.lm_fit(B[:, sel], Yc, w)
         coef, rss = fit.coef, fit.rss
@@ -910,34 +922,16 @@ def final_fit(
     return FinalFit(coef, rss, float(gcv), rsq, grsq)
 
 
-def _subtract(r: dict, f: Fraction, row: dict) -> dict:
-    out = dict(r)
-    for q, g in row.items():
-        out[q] = out.get(q, 0) - f * g
-    return {q: g for q, g in out.items() if g != 0}
-
-
 def _shifted_fit(
-    mono: _Monomials, Yc: FloatArray, w: FloatArray | None
+    mono: _Monomials, Yc: FloatArray, w: FloatArray | None, keep: BoolArray
 ) -> tuple[FloatArray, float]:
-    """Least squares of Yc on the terms of ``mono`` with LA-4 after the exact
-    shift (PRUNE-8): the coefficients (M, K), 0 for a dependent term, and
-    the RSS of the projection.
-
-    LA-4: the terms are taken in order. A term is dependent when its expansion
-    is in the span of those of the kept terms. Else the reduced echelon form
-    of the kept terms with it (monomials by degree, highest first, then by
-    their atoms) has one new pivot p, whose reduced row is the term's new
-    part, and the term is dependent when the w-norm of the part of the new
-    part orthogonal to the other reduced rows is less than 1e-7·‖p‖_w, or,
-    when p is 0 at every case, less than 1e-7 times the w-norm of the new
-    part, or when the new part is 0 at every case. The orthogonal part comes
-    from the rows reduced again as in ``_reduce``, so never from a column
-    that carries m_j. The coefficients solve the least
-    squares on the reduced kept terms, g, and b = T·g with T = U⁻¹ exact; the
-    intercept's takes the constants of the centered monomials.
-    Complexity: O(n·m²·(m + P)) and O(m²·f·3^d) rational operations for m
-    terms and P monomials.
+    """Least squares of Yc on the terms of ``mono`` that ``keep`` marks, the
+    terms that LA-4 keeps after the exact shift (PRUNE-8): the coefficients
+    (M, K), 0 for a dependent term, and the RSS of the projection. The
+    coefficients solve the least squares on the reduced kept terms, g, and
+    b = T·g with T = U⁻¹ exact; the intercept's takes the constants of the
+    centered monomials. Complexity: O(n·m·(m + P)) and the rational work of
+    ``_reduce`` for m terms and P monomials.
     """
     n, P = mono.E.shape
     sw = np.ones(n) if w is None else np.sqrt(w)
@@ -948,57 +942,22 @@ def _shifted_fit(
         Ec[:, rest], shift[rest] = _centered(Ec[:, rest], w)
     As = sw[:, None] * Ec
     share = np.sqrt(np.sum(np.square(As), axis=0))
-    Ew = sw[:, None] * mono.E
-
-    def pivot_norm(q: int) -> float:  # the w-norm of a monomial of LA-4
-        col = sw.copy()
-        for atom in mono.keys[q]:
-            col = col * mono.atoms[atom]
-        return float(scipy.linalg.norm(col))
-
-    rank = [(-len(key), key) for key in mono.keys]
-    rows: dict = {}  # the reduced echelon form: pivot -> row, pivot coefficient 1
-    kept: list = []
-    basis: list = []
-    for k, c in enumerate(mono.terms):
-        v = dict(c)
-        for p, r in rows.items():  # the rows are 0 at each other's pivots
-            if v.get(p, 0):
-                v = _subtract(v, v[p], r)
-        if not v:
-            continue
-        p = min(v, key=lambda q: rank[q])
-        new = {q: f / v[p] for q, f in v.items()}
-        others = {
-            p2: _subtract(r, r[p], new) if r.get(p, 0) else r for p2, r in rows.items()
-        }
-        cnew = _compose(new, mono.canon)
-        try:  # an exact dependence on the cases leaves cnew in the span
-            red = _reduce(
-                [*(_compose(r, mono.canon) for r in others.values()), cnew], share
-            )
-        except ValueError:
-            continue
-        G, e = _scaled_columns(red, share, P)
-        A = As @ G
-        Q, _ = np.linalg.qr(A[:, :-1])
-        perp, _ = _linalg.orthogonalize(Q, A[:, -1])
-        norm = math.ldexp(float(scipy.linalg.norm(perp)), int(e[-1]))
-        base = pivot_norm(p)
-        if base == 0.0:
-            base = float(
-                scipy.linalg.norm(Ew[:, list(cnew)] @ [float(f) for f in cnew.values()])
-            )
-        if base == 0.0 or norm < _linalg.LM_TOL * base:
-            continue
-        rows = {**others, p: new}
-        kept.append(k)
-        basis.append(mono.cterms[k])
+    kept = np.flatnonzero(keep).tolist()
+    basis = [mono.cterms[k] for k in kept]
     red = _reduce(basis, share)
     G, e = _scaled_columns(red, share, P)
-    Qa, Ra = np.linalg.qr(As @ G)
+    A = As @ G
+    Qa, Ra = np.linalg.qr(A)
+    # LA-4 can keep a term that the data span exactly (its new part counts as
+    # a formula), so a reduced column can be 0 after the earlier ones in
+    # float64 too; it adds nothing to the span and gets the coefficient 0
+    # (seed 295 of the spec review of PR #132, #137).
+    ok = np.diag(Ra) != 0.0
+    if not ok.all():
+        Qa, Ra = np.linalg.qr(A[:, ok])
     resid, z = _linalg.orthogonalize(Qa, sw[:, None] * Yc)
-    gamma = np.ldexp(scipy.linalg.solve_triangular(Ra, z), -e[:, None])
+    gamma = np.zeros((len(kept), Yc.shape[1]))
+    gamma[ok] = np.ldexp(scipy.linalg.solve_triangular(Ra, z), -e[ok, None])
     T = np.zeros((len(kept), len(kept)))
     for j, col in enumerate(red.inverse):
         for i, f in col.items():
