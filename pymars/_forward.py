@@ -551,6 +551,9 @@ class _Pass:
             size = float(np.linalg.norm(v))
         gs = _linalg.gram_schmidt(self.Q, v)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
+        # The kind comes first: where rounding could change it, the exact
+        # column decides it, and the LA-2 test below then runs on that column
+        # too (an exactly spanned b·x gives A_w = 0, a single-hinge search).
         if exact is None and self._kind_uncertain(gs.norm, size, self.variances[V]):
             return self._exact_setup(k, j)
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])

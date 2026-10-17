@@ -1048,7 +1048,8 @@ def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
         assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
 
 
-def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale():
+@pytest.mark.parametrize("draw", [None, 138])
+def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale(draw):
     """LA-5's scope paragraph: x1 = x0/8 + 2^26 is a copy of x0 up to the
     rounding of the shift, not a copy of LA-4 (x0 is not shifted), so x1 is
     its own symbol. x0 has 3 levels, so B spans x1 at the cases after two
@@ -1057,11 +1058,15 @@ def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale():
     projection kept only rounding there, and the linear candidate x2·x1 of
     step 6 had an RSS 2e6 times LA-5's bound off (#110's generator, seed
     1014, copy kind 2); the exact residual takes its place now
-    (``Conditioner.exact_residual``). Each RSS is within 1e-8 of the RSS
-    before its step of the exact rational RSS of the same terms."""
+    (``Conditioner.exact_residual``). Draw 138 of the adversarial review of
+    PR #122 perturbs x1 by about 7e-8·z/8, sets x2 = 1e6 + k2/8, permutes the
+    rows and scales X as EDGE-7 does; there the exact span must follow the
+    hinge of each single-hinge step (a wrong registered hinge missed LA-5 by
+    3.2e5 times). Each RSS is within 1e-8 of the RSS before its step of the
+    exact rational RSS of the same terms."""
     x0 = np.array([int(c) for c in "2011122000102221020000120220220202020111"]) / 3
-    k2 = "4116754141254576305512621857032774736314"
-    X = np.column_stack((x0, x0 / 8 + 2.0**26, 1e15 + np.array([*k2], float) / 8))
+    k2 = np.array([*"4116754141254576305512621857032774736314"], float) / 8
+    X = np.column_stack((x0, x0 / 8 + 2.0**26, 1e15 + k2))
     y = (
         np.array(
             [
@@ -1073,6 +1078,19 @@ def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale():
         / 1000
     )
     kw = {"max_degree": 3, "thresh": 0.0, "adjust_endspan": 0.0, "endspan": 1}
+    if draw is not None:
+        rng = np.random.default_rng(draw)
+        delta = 10.0 ** rng.uniform(-10, -5)
+        z = rng.integers(-4, 5, 40).astype(float)
+        m2 = float(rng.choice([1e3, 1e6, 1e9, 1e15]))
+        shift = 2.0 ** int(rng.choice([10, 26]))
+        X = np.column_stack((x0, x0 / 8 + shift + delta * z / 8, m2 + k2))
+        perm = rng.permutation(40) if rng.uniform() < 0.5 else np.arange(40)
+        y = y + rng.choice([0.0, 0.001, 0.05]) * rng.standard_normal(40)
+        y = y + rng.choice([0, 1]) * (X[:, 1] - X[:, 1].mean()) * 3
+        X, y = X[perm], y[perm]
+        X = np.ldexp(X, mars_ref.x_scale_powers(X))
+        kw["max_terms"] = 17
     fp = _forward.forward_pass(X, y, fast_k=1, **kw)
     B = exact_basis(X, fp.dirs, fp.cuts)
     assert len(fp.rss) > 6

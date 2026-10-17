@@ -1243,10 +1243,10 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 @st.composite
 def forward_cases(draw, kind: str) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
-    covariates; ``ties``, covariates on 2 to 20 levels, with a copied column
-    (exact, divided by 8, or one unit in the last place off at one case) or a
-    constant column, or all constant (FWD-5, KNOT-2, LA-4, LA-5, EDGE-3,
-    EDGE-4);
+    covariates; ``ties``, covariates on 2 to 20 levels, in about half of the
+    draws with a copied column (exact, divided by 8, or one unit in the last
+    place off at one case), or a constant column, or all constant (FWD-5,
+    KNOT-2, LA-4, LA-5, EDGE-3, EDGE-4);
     ``scaled``, covariates and y scaled and shifted by powers of 10 (LA-7,
     EDGE-6, FWD-10, FWD-11); ``shifted``, y + c with |c| of 1e10 or 1e13
     and covariates + 2^26 or 2^36, where only centering keeps the sums of
@@ -1280,7 +1280,8 @@ def forward_cases(draw, kind: str) -> Case:
         if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
             X = X + 10.0 ** rng.uniform(6, 9, p)
         i = int(np.argmax(np.abs(X[:, 0])))
-        if copy == "ulp" and X[i, 0] != 0.0:  # no subnormal value (EDGE-7)
+        # no subnormal value (EDGE-7), and an all-constant X stays so (EDGE-3)
+        if copy == "ulp" and X[i, 0] != 0.0 and np.ptp(X, axis=0).any():
             X[:, 1] = X[:, 0]
             X[i, 1] = np.nextafter(X[i, 1], np.inf)
     smooth = kind == "smooth" or rng.uniform() < 0.3
