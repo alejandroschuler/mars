@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0.dev0] - unreleased
 
-The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code will follow a written specification and will be checked against the R package earth, as VALIDATION_PLAN.md describes. This version has no estimators yet. The git tag `legacy-1.0.4-head` keeps the legacy code, upstream commit d68b54a with the version string 1.0.4.
+The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fitting code follows a written specification and is validated against the R package earth, as VALIDATION_PLAN.md describes. The git tag `legacy-1.0.4-head` keeps the legacy code, upstream commit d68b54a with the version string 1.0.4.
+
+### Added
+- `EarthRegressor` (also `pymars.Earth`) and `EarthClassifier`, scikit-learn estimators that fit MARS by the rules of `docs/algorithm.md`. The parameters map to earth's arguments (`max_degree`, `max_terms`, `penalty`, `thresh`, `minspan`, `endspan`, `adjust_endspan`, `auto_linpreds`, `fast_k`, `fast_beta`, `pmethod`, `nprune`), and the classifier adds `glm_alpha`.
+- Fitted attributes `dirs_`, `cuts_`, `term_coef_`, `rss_`, `gcv_`, `rsq_`, `grsq_`, `max_terms_`, `penalty_` and `mars_`; for the classifier `classes_` and `glm_`. Methods `predict`, `predict_proba`, `decision_function`, `basis_matrix` and `summary`.
+- Frequency weights through `sample_weight`: an integer weight acts as repeated rows, and a zero weight removes the row. Several responses share one set of terms. The classifier refits the selected terms with a binomial or multinomial logistic model.
+- Validation: a reference implementation written from the specification, compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws at commit 2a00063 with a triage of every difference found (`validation/DIFFERENCES.md`, none is a bug); oracle tests of the fast code against the reference (its direct comparison with earth is pending, C07), scikit-learn's estimator checks, integration tests with pipelines, searches and stacking, and a benchmark against earth (`validation/bench/REPORT.md`).
+- Documentation: `docs/algorithm.md` (the specification), `docs/usage.md`, `docs/weights.md` and `docs/differences.md`.
 
 ### Changed
 - The build backend is hatchling. The package is pure Python and depends only on numpy 1.24.4 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14. The numpy floor is 1.24.4 because the OpenBLAS in numpy 1.23.5 gives wrong matrix products on some CPUs (#88).
