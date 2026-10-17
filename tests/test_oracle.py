@@ -1243,8 +1243,10 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 @st.composite
 def forward_cases(draw, kind: str) -> Case:
     """A case of the given kind: ``smooth`` and ``hinge`` truths on uniform
-    covariates; ``ties``, covariates on 2 to 20 levels, with a duplicated or a
-    constant column, or all constant (FWD-5, KNOT-2, EDGE-3, EDGE-4);
+    covariates; ``ties``, covariates on 2 to 20 levels, in about half of the
+    draws with a copied column (exact, divided by 8, or one unit in the last
+    place off at one case), or a constant column, or all constant (FWD-5,
+    KNOT-2, LA-4, LA-5, EDGE-3, EDGE-4);
     ``scaled``, covariates and y scaled and shifted by powers of 10 (LA-7,
     EDGE-6, FWD-10, FWD-11); ``shifted``, y + c with |c| of 1e10 or 1e13
     and covariates + 2^26 or 2^36, where only centering keeps the sums of
@@ -1263,14 +1265,25 @@ def forward_cases(draw, kind: str) -> Case:
     if kind == "ties":
         levels = rng.choice([2, 3, 5, 10, 20])
         X = np.floor(X * levels) / levels
+        # LA-4's copies (#113, #120): x1 a copy of x0, x0/8 (a copy up to the
+        # rounding of a shift when only x1 is shifted), or one unit in the
+        # last place off at one case (a near copy, LA-5's scope paragraph)
+        copy = rng.choice(["copy", "eighth", "ulp"])
         if p >= 2 and rng.uniform() < 0.5:
-            X[:, 1] = X[:, 0]
+            X[:, 1] = X[:, 0] / 8 if copy == "eighth" else X[:, 0]
+        else:
+            copy = None
         if p >= 3 and rng.uniform() < 0.3:
             X[:, 2] = X[0, 2]
         if rng.uniform() < 0.1:  # no covariate has a candidate (EDGE-3)
             X[:] = X[0]
         if rng.uniform() < 0.3:  # a linear term that LA-4 drops (FWD-11)
             X = X + 10.0 ** rng.uniform(6, 9, p)
+        i = int(np.argmax(np.abs(X[:, 0])))
+        # no subnormal value (EDGE-7), and an all-constant X stays so (EDGE-3)
+        if copy == "ulp" and X[i, 0] != 0.0 and np.ptp(X, axis=0).any():
+            X[:, 1] = X[:, 0]
+            X[i, 1] = np.nextafter(X[i, 1], np.inf)
     smooth = kind == "smooth" or rng.uniform() < 0.3
     Y = np.column_stack([_truth(rng, X, smooth) for _ in range(K)])
     Y = Y + noise * np.std(Y) * rng.standard_normal((n, K))

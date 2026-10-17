@@ -1048,6 +1048,137 @@ def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
         assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
 
 
+@pytest.mark.parametrize("draw", [None, 138])
+def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale(draw):
+    """LA-5's scope paragraph: x1 = x0/8 + 2^26 is a copy of x0 up to the
+    rounding of the shift, not a copy of LA-4 (x0 is not shifted), so x1 is
+    its own symbol. x0 has 3 levels, so B spans x1 at the cases after two
+    hinges of x0, and the column x2·x1 (x2 = 1e15 + a few levels of 1/8) is
+    in the span of B up to its part u1·u2, about 1e-16 of it. Its float64
+    projection kept only rounding there, and the linear candidate x2·x1 of
+    step 6 had an RSS 2e6 times LA-5's bound off (#110's generator, seed
+    1014, copy kind 2); the exact residual takes its place now
+    (``Conditioner.exact_residual``). Draw 138 of the adversarial review of
+    PR #122 perturbs x1 by about 7e-8·z/8, sets x2 = 1e6 + k2/8, permutes the
+    rows and scales X as EDGE-7 does; there the exact span must follow the
+    hinge of each single-hinge step (a wrong registered hinge missed LA-5 by
+    3.2e5 times). Each RSS is within 1e-8 of the RSS before its step of the
+    exact rational RSS of the same terms."""
+    x0 = np.array([int(c) for c in "2011122000102221020000120220220202020111"]) / 3
+    k2 = np.array([*"4116754141254576305512621857032774736314"], float) / 8
+    X = np.column_stack((x0, x0 / 8 + 2.0**26, 1e15 + k2))
+    y = (
+        np.array(
+            [
+                *[996, 20, 1, 10, -5, 1018, 1008, -7, 10, 7, 8, -8, 995, 1006, 1006],
+                *[3, -21, 997, -20, -9, 5, 12, -2, 1025, 16, 1020, 1012, -28, 1009],
+                *[987, 14, 1024, -18, 1008, -24, 989, -12, -2, -20, -11],
+            ]
+        )
+        / 1000
+    )
+    kw = {"max_degree": 3, "thresh": 0.0, "adjust_endspan": 0.0, "endspan": 1}
+    if draw is not None:
+        rng = np.random.default_rng(draw)
+        delta = 10.0 ** rng.uniform(-10, -5)
+        z = rng.integers(-4, 5, 40).astype(float)
+        m2 = float(rng.choice([1e3, 1e6, 1e9, 1e15]))
+        shift = 2.0 ** int(rng.choice([10, 26]))
+        X = np.column_stack((x0, x0 / 8 + shift + delta * z / 8, m2 + k2))
+        perm = rng.permutation(40) if rng.uniform() < 0.5 else np.arange(40)
+        y = y + rng.choice([0.0, 0.001, 0.05]) * rng.standard_normal(40)
+        y = y + rng.choice([0, 1]) * (X[:, 1] - X[:, 1].mean()) * 3
+        X, y = X[perm], y[perm]
+        X = np.ldexp(X, mars_ref.x_scale_powers(X))
+        kw["max_terms"] = 17
+    fp = _forward.forward_pass(X, y, fast_k=1, **kw)
+    B = exact_basis(X, fp.dirs, fp.cuts)
+    assert len(fp.rss) > 6
+    for s in range(1, len(fp.rss)):
+        cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
+        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(40))
+        assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
+
+
+def _case_110(seed):
+    """#110's adversarial generator (the review comment of PR #110), with the
+    copy kind 4 forced after its draw (x1 = x0, one unit in the last place
+    off at one case), and X scaled as EDGE-7 does."""
+    rng = np.random.default_rng(seed)
+    n, p, lv = (
+        int(rng.integers(12, 60)),
+        int(rng.integers(2, 5)),
+        int(rng.integers(2, 5)),
+    )
+    X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
+    if rng.uniform() < 0.5:
+        X[:, p - 1] = rng.uniform(size=n)
+    rng.integers(0, 6)  # the drawn copy kind, replaced by 4
+    shifts = [2.0**10, 1e4, 2.0**26, 1e9, 2.0**40, 1e12, 1e15, -1e9, -(2.0**30)]
+    X = X + rng.choice(shifts, p) * (rng.uniform(size=p) < 0.8)
+    X[:, 1] = X[:, 0]
+    i = int(rng.integers(n))
+    X[i, 1] = np.nextafter(X[i, 1], np.inf)
+    y = (
+        np.maximum(X[:, 0] - np.median(X[:, 0]), 0) * 3
+        + (X[:, 1] - X[:, 1].mean()) * (X[:, p - 1] - X[:, p - 1].mean())
+        + rng.choice([0.0, 0.01, 0.3]) * rng.standard_normal(n)
+    ) + rng.choice([0.0, 1e6])
+    w = None
+    if rng.uniform() < 0.4:
+        w = rng.integers(0, 3, n).astype(float)
+        w[:3] = 1.0
+    kw = {
+        "max_degree": int(rng.integers(1, 4)),
+        "fast_k": int(rng.choice([0, 0, 1, 3, 20])),
+        "thresh": float(rng.choice([0.0, 0.001])),
+        "adjust_endspan": float(rng.choice([0.0, 2.0])),
+        "auto_linpreds": bool(rng.uniform() < 0.7),
+        "minspan": rng.choice([None, 1]),
+        "endspan": rng.choice([None, 1]),
+    }
+    return np.ldexp(X, mars_ref.x_scale_powers(X)), y, w, kw
+
+
+@pytest.mark.parametrize("seed", [1150, 1281])
+def test_every_linear_candidate_meets_la5_with_a_one_ulp_copy(monkeypatch, seed):
+    """#120 item 4: #110's generator with copy kind 4 (x1 one unit in the last
+    place off x0 at a large shift). The linear candidates x0·b of steps 4 and
+    5 (parents 5 and 4) were 3.8 and 1.6e4 times LA-5's bound off the exact
+    RSS of their span on main; they were never chosen, so only the candidates
+    show it. Every linear candidate of the pass is checked against exact
+    rational arithmetic, with LA-5's bound at R = RSS_s."""
+    X, y, w, kw = _case_110(seed)
+    seen = []
+    real = _forward._Pass.setup
+
+    def setup(self, k, j):
+        sr = real(self, k, j)
+        if sr.pair and not sr.dep and sr.lin > 0.0:
+            seen.append(
+                (self, self.dirs.copy(), self.cuts.copy(), self.rss[-1], k, j, sr.lin)
+            )
+        return sr
+
+    monkeypatch.setattr(_forward._Pass, "setup", setup)
+    _forward.forward_pass(X, y, w, **kw)
+    st = seen[0][0]
+    yc = st.Yw[:, 0] / st.sw
+    ww = np.ones(len(yc)) if st.w is None else st.w
+    done = set()
+    for _, dirs, cuts, rss_s, k, j, lin in seen:
+        if (len(dirs), k, j) in done:
+            continue
+        done.add((len(dirs), k, j))
+        row, cut = dirs[k].copy(), cuts[k].copy()
+        row[j], cut[j] = 2, 0.0
+        B = exact_basis(st.X, np.vstack((dirs, row)), np.vstack((cuts, cut)))
+        exact = float(exact_rss(B, yc, ww))
+        tss = st.tss
+        bound = 1e-8 * rss_s + 1e-14 * math.sqrt(tss * exact) + 0.25e-28 * tss
+        assert abs(rss_s - lin - exact) <= bound, (len(dirs), k, j)
+
+
 @pytest.mark.parametrize("shifted", [False, True])
 def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, shifted):
     """LA-2: x2 is a combination of the intercept and x1 at the n cases (x2 =

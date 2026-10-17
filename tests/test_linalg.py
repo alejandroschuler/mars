@@ -696,6 +696,46 @@ def test_a_product_that_the_terms_span_at_the_data_is_dependent(shift, a, b):
     assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4 + [False]
 
 
+@pytest.mark.parametrize("a", [1.0, 2.0, 4.0, -0.0])
+def test_a_copy_shares_its_symbol_and_keeps_x2_in_the_shifted_order(a):
+    """LA-4's copies on #75's data with x0 + 1e10: x3 = a·x2 for a power of 2
+    a is one symbol with x2, so the relation is formal and the order 1, x0,
+    x0·x3, x2 keeps x2 (affine x3 drops it). a = -0.0 stands for x3 = x2 with
+    one 0 written as -0, which compares equal to +0: still a copy (#119)."""
+    x3 = _X75[:, 2] * (a or 1.0)
+    if a == 0.0:
+        x3[1] = -0.0
+    X = np.column_stack((_X75, x3))
+    lin = [(0, 2, 0.0)], [(0, 2, 0.0), (3, 2, 0.0)], [(2, 2, 0.0)]
+    dirs, cuts = _term_rows([[], *lin], 4)
+    assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4
+
+
+@pytest.mark.parametrize("scale", [0, -29])
+def test_a_term_in_the_span_of_a_near_copy_term_is_dependent(scale):
+    """LA-4 (#120 item 3): x1 is x0 = 1e9 + a/4 one unit in the last place off
+    at one case, so it is its own symbol, and h = (x2 - min x2)₊ equals
+    x2 - min x2 at the cases. x0·h is kept (its exact part orthogonal to the
+    earlier terms is above 1e-7 of its pivot, though below u of its column),
+    and x1·h = x1·x2 - min(x2)·x1 at the cases is exactly in the span. The
+    fast code left out the direction of x0·h, which its float64 projection
+    rounds to 0, and so kept x1·h; the exact residual takes its place now.
+    The scale -29 is EDGE-7's scaled X; the reference agrees."""
+    x0 = 1e9 + np.array([0, 2, 2, 0, 1, 0, 0]) / 4
+    x1 = x0.copy()
+    x1[3] = np.nextafter(x1[3], np.inf)
+    x2 = 1e3 + np.array([0, 0, 0, 1, 1, 1, 1]) / 4
+    X = np.column_stack((x0, x1, x2, np.array([4, 4, 2, 0, 2, 4, 4]) / 4))
+    X[:, :2] = np.ldexp(X[:, :2], scale)
+    t = x2.min()
+    spec = [[(1, 2, 0.0), (2, 2, 0.0)], [(2, 2, 0.0)], [(1, 2, 0.0)], [(3, 2, 0.0)]]
+    spec += [[(0, 2, 0.0), (2, 1, t)], [(1, 2, 0.0), (2, 1, t)]]
+    dirs, cuts = _term_rows([[], *spec], 4)
+    want = [True] * 6 + [False]
+    assert mars_ref.la4_kept(X, dirs, cuts, np.ones(7)).tolist() == want
+    assert la.independent_terms(X, dirs, cuts).tolist() == want
+
+
 @pytest.mark.parametrize("seed", range(8))
 def test_independent_terms_without_a_shift_is_independent_columns(seed):
     """Without a linear factor of a shifted covariate the test is the plain one

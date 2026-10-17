@@ -45,7 +45,10 @@ a hinge with the gain 0. Without a linear factor of a shifted covariate
 test, on a distance that the search has already. Otherwise
 ``_linalg.Conditioner.dependent`` applies it in the exact shift, from the float64
 distance of a column free of the mean, with its error bound, and exactly
-(rational arithmetic) where the bound does not decide. FWD-11 is the same test
+(rational arithmetic) where the bound does not decide. A column b·x within
+``_linalg.NEAR_SPAN`` of the span of B, whose float64 projection keeps only
+rounding, is replaced by its exact residual on B (LA-5); ``_linalg.Conditioner``
+keeps the exact span of the columns of Q for this. FWD-11 is the same test
 on the terms, in their order, so it does not depend on the order of the terms.
 FWD-12: the occurrences of one single hinge or linear candidate in several
 searches of a step (``_Pass.occurrences``) are one candidate, decided by the
@@ -278,6 +281,8 @@ class _Pass:
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.cond = _linalg.Conditioner(X, w)  # LA-4, LA-5
         self.cond.append(self.dirs[0], self.cuts[0])
+        self.cond.span_append(self.dirs[0], self.cuts[0])
+        self.exact: dict = {}  # (k, j) -> the exact residual of b·x_j in this step
         self.kappa = 1.0  # the loss of digits in Q (LA-4's error bound)
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
         self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
@@ -522,12 +527,23 @@ class _Pass:
         and x; a pair search adds b·x to G, and its residuals are
         orthogonalized twice against G, as ``_scan.knot_scan`` requires.
         Every reduction goes through ``_capped``, here, in ``search`` and in
-        ``refine``.
+        ``refine``. Where b·x is within ``_linalg.NEAR_SPAN`` of the span of B
+        and enters G, or where the rounding of its distance to B could change
+        the kind, its exact residual on B takes its place (``_exact_setup``,
+        LA-5), so that A_w and the RSS of the linear candidate do not rest on
+        the rounding of a projection (a copy up to rounding, such as x/8 + c
+        next to a covariate of few levels that B spans at the cases).
         Complexity: O(n·r·K); with a large mean also the cost of
         ``linear_column`` (worst case O(M²·3^d) rational operations over a
-        pass, O(n·d·3^d) for each column)."""
+        pass, O(n·d·3^d) for each column); with an exact residual, once per
+        step, O(g·r) rational operations for g distinct rows of X, and
+        O(g·r) for each term added since the last one."""
         x, b = self.X[:, j], self.cols[k]
-        if self.cond.expands(self.dirs[k]):
+        exact = self.exact.get((k, j))
+        if exact is not None:
+            v = self.sw * exact
+            size = float(np.linalg.norm(v))
+        elif self.cond.expands(self.dirs[k]):
             v = self.sw * self.linear_column(k, j)
             size = self.cond.size
         else:  # the product order of the plain path: (√w·b)·(x - c)
@@ -535,16 +551,47 @@ class _Pass:
             size = float(np.linalg.norm(v))
         gs = _linalg.gram_schmidt(self.Q, v)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
+        # The kind comes first: where rounding could change it, the exact
+        # column decides it, and the LA-2 test below then runs on that column
+        # too (an exactly spanned b·x gives A_w = 0, a single-hinge search).
+        if exact is None and self._kind_uncertain(gs.norm, size, self.variances[V]):
+            return self._exact_setup(k, j)
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
         if not pair:
             return _Search(x, b, False, 0.0, self.Q, self.E, False, self.kappa)
         if self._linear_dependent(k, j, gs.norm, size):  # LA-2: it counts as 0
             return _Search(x, b, True, 0.0, self.Q, self.E, True, self.kappa)
+        if exact is None and gs.norm < _linalg.NEAR_SPAN * size:  # LA-5
+            return self._exact_setup(k, j)
         Q = np.column_stack((self.Q, gs.q))
         lin = float(self._capped(float(np.sum((gs.q @ self.E) ** 2))))
         kappa = max(self.kappa, size / gs.norm)
         E = _linalg.orthogonalize(Q, self.E)[0]
         return _Search(x, b, True, lin, Q, E, False, kappa)
+
+    def _kind_uncertain(self, dist: float, size: float, variances) -> bool:
+        """Whether the rounding of ``dist``, the norm of the part of b·x
+        orthogonal to B from a column of magnitude ``size``, can change the
+        kind of the search (LA-7: A_w = dist² against 0.01·Π sigma_v²). The bound
+        is that of ``_linalg.Conditioner.dependent`` on a float64 distance.
+        Complexity: O(len(variances))."""
+        v = np.asarray(variances, dtype=np.float64)
+        if np.any(v == 0.0):  # a single-hinge search whatever A_w is
+            return False
+        r = self.Q.shape[1]
+        err = 16.0 * 2.0**-53 * size * (1.0 + self.kappa) * math.sqrt(r + 2)
+        limit = math.sqrt(_linalg.PAIR_SEARCH_FACTOR * math.prod(v.tolist()))
+        return abs(dist - limit) <= err
+
+    def _exact_setup(self, k: int, j: int) -> _Search:
+        """``setup`` with the exact residual of b·x_j on B in place of its
+        column (LA-5): where b·x_j is within ``_linalg.NEAR_SPAN`` of the span of B, or
+        where the rounding of its distance to B could change the kind of the
+        search. Kept for the step, so that every search of (k, j) in it, and
+        the chosen candidate's columns, use the same column.
+        Complexity: that of ``_linalg.Conditioner.exact_residual``."""
+        self.exact[k, j] = self.cond.exact_residual(*self._linear_row(k, j))
+        return self.setup(k, j)
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
         """Pass 1 for parent k and covariate j: every candidate that can be one
@@ -620,19 +667,30 @@ class _Pass:
         bound of LA-4). Complexity: O(n)."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
         h, sizes, cols = None, [], []
-        if c.kind != KIND_HINGE and not (
-            c.kind == KIND_PAIR and self.setup(c.parent, c.variable).dep
-        ):  # a b·x that LA-4 finds dependent is not in the span
-            cols.append(self.linear_column(c.parent, c.variable))  # as in setup
-            plain = not self.cond.expands(self.dirs[c.parent])
-            sizes.append(
-                float(np.linalg.norm(self.sw * cols[-1])) if plain else self.cond.size
-            )
+        if self._spans_bx(c):  # a b·x that LA-4 finds dependent is not in the span
+            exact = self.exact.get((c.parent, c.variable))  # as in setup
+            if exact is not None:
+                cols.append(exact)
+                sizes.append(float(np.linalg.norm(self.sw * exact)))
+            else:
+                cols.append(self.linear_column(c.parent, c.variable))
+                plain = not self.cond.expands(self.dirs[c.parent])
+                sizes.append(
+                    float(np.linalg.norm(self.sw * cols[-1]))
+                    if plain
+                    else self.cond.size
+                )
         if c.kind != KIND_LINEAR:
             h, size = self.hinge_column(c, b * _terms.factor(_terms.PLUS, x, c.knot))
             cols.append(h)
             sizes.append(size)
         return self.sw[:, None] * np.column_stack(cols), h, sizes
+
+    def _spans_bx(self, c: _Candidate) -> bool:
+        """Whether b·x is among the candidate's new columns (FWD-6, LA-2)."""
+        return c.kind != KIND_HINGE and not (
+            c.kind == KIND_PAIR and self.setup(c.parent, c.variable).dep
+        )
 
     def check(self, c: _Candidate) -> _scan.Rebuild | None:
         """Build the candidate again (``_scan.rebuild``) and apply FWD-4 to its
@@ -767,6 +825,13 @@ class _Pass:
         s = len(self.rss)
         kappa = 2 * s
         dirs, cuts, b = self.dirs[c.parent], self.cuts[c.parent], self.cols[c.parent]
+        if self._spans_bx(c):  # the span of Q, as ``columns`` builds it
+            self.cond.span_append(*self._linear_row(c.parent, c.variable))
+        if c.kind != KIND_LINEAR:
+            self.cond.span_append(
+                *_terms.child_term(dirs, cuts, c.variable, _terms.PLUS, c.knot)
+            )
+        self.exact = {}
         for i, (code, cut) in enumerate(new):
             d, k = _terms.child_term(dirs, cuts, c.variable, code, cut)
             self.dirs = np.vstack((self.dirs, d))

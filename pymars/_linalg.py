@@ -80,6 +80,11 @@ COLLINEARITY_TOL_LATE = 1e-5
 COLLINEARITY_LAST_EARLY_STEP = 7
 #: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
 PAIR_SEARCH_FACTOR = 0.01
+#: LA-5: a column whose part orthogonal to the span of the earlier ones is below
+#: NEAR_SPAN times its size keeps only about u/NEAR_SPAN of that part's digits
+#: in a float64 projection, so the exact residual takes its place
+#: (``Conditioner.exact_residual``). The reference uses the same angle.
+NEAR_SPAN = 1e-4
 
 
 class GramSchmidt(NamedTuple):
@@ -514,6 +519,13 @@ class Conditioner:
     form that hold the new pivot change, since their evaluation carries the
     mean.
 
+    Exact residuals (``span_append``, ``exact_residual``). The caller registers
+    the terms whose columns its float64 basis holds, and ``exact_residual``
+    gives a term's column minus its exact projection on their span, on the
+    distinct rows of X, rounded once. A column within NEAR_SPAN of that span
+    takes this form, so that its direction is right to working precision
+    (LA-5): a float64 projection keeps only rounding there.
+
     Complexity: a term with d factors has at most 2^d monomials in the test and
     3^d elements in a column; reducing it costs O(M·2^d) rational operations for
     M registered terms, forming a column O(n·d·3^d), and the exact test
@@ -523,7 +535,8 @@ class Conditioner:
     for the fit. The reduced
     coefficients of b·x_j are kept and reduced only by the terms that came
     after the last call. Memory O(M·p·3^d) coefficients, no columns, and O(g·K)
-    rationals for K monomials in the Gram matrix of the exact test (O(K²)).
+    rationals for K monomials in the Gram matrix of the exact test (O(K²));
+    the exact span of ``exact_residual``, once it is needed, O(g·M) rationals.
     """
 
     def __init__(self, X: npt.ArrayLike, w: npt.ArrayLike | None = None):
@@ -544,7 +557,9 @@ class Conditioner:
             unit = np.ldexp(u, -e)  # a power of 2 times u does not change the key
             if not np.array_equal(np.ldexp(unit, e), u):  # underflow: no scaling
                 e, unit = 0, u
-            key = hashlib.blake2b(unit.tobytes(), digest_size=16).digest()
+            # LA-4's copy rule compares values, so -0 is +0: map it before the
+            # bytes are hashed (x + 0.0 is +0 for x = -0 and x otherwise).
+            key = hashlib.blake2b((unit + 0.0).tobytes(), digest_size=16).digest()
             r, er = first.setdefault(key, (j, e))
             if r != j and np.array_equal(unit, np.ldexp(self._ucol(r), -er)):
                 self._rep[j], self._pw[j] = r, e - er
@@ -566,6 +581,12 @@ class Conditioner:
         self._icols: dict = {}
         self._wint: tuple | None = None
         self._shifted = False  # a registered term has a linear factor of a large one
+        self._span_rows: list = []  # the terms of ``exact_residual``'s span
+        self._span: list = []  # their columns on the distinct rows, (ints, den)
+        self._sgram: list = []  # their exact Gram matrix, by rows
+        self._xints: dict = {}
+        self._span_done = 0
+        self._inverse: npt.NDArray[np.intp] | None = None
         self.size = 0.0  # a bound on the magnitude of the last column formed
 
     def _ucol(self, j: int) -> FloatArray:
@@ -579,8 +600,9 @@ class Conditioner:
     def _near_copies(self) -> dict:
         """{j: (r, d)} for a shifted covariate j whose column u_j is a near-copy
         of that of an earlier symbol r: u_j = u_r + d exactly, d ≠ 0 (every
-        difference is exact, by Sterbenz, and |d| is within 2^-10 of |u_j| in
-        norm). The columns for the projections (``linear``, ``hinge``) then
+        difference is exact: by Sterbenz, or since one of the two values is 0,
+        as at a case one ulp above the smallest value; and |d| is within 2^-10
+        of |u_j| in norm). The columns for the projections (``linear``, ``hinge``) then
         write u_j as u_r + d, so that the part of a product that the terms
         span cancels as a formula and the small d is not lost under the large
         mean (the one-ulp copy of PR #95's review, LA-5). The test of LA-4
@@ -598,8 +620,9 @@ class Conditioner:
                     continue
                 ur = self._ucol(r)
                 d = uj - ur
+                # d = uj - ur is exact where one of them is 0, or by Sterbenz
                 ok = np.all(
-                    (d == 0) | ((ur != 0) & (uj != 0) & (uj <= 2 * ur) & (ur <= 2 * uj))
+                    (d == 0) | (ur == 0) | (uj == 0) | ((uj <= 2 * ur) & (ur <= 2 * uj))
                 )
                 if ok and 0 < np.linalg.norm(d) <= 2.0**-10 * np.linalg.norm(uj):
                     out[j] = (r, d)
@@ -889,7 +912,99 @@ class Conditioner:
                 for g, wi in zip(inv.tolist(), self._w.tolist(), strict=True):
                     W[g] += Fraction(wi)
             self._groups = (Xu, Xu - self._m, W)
+            self._inverse = inv
         return self._groups
+
+    # -- exact residuals for the projections (LA-5)
+
+    def span_append(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> None:
+        """Register a term whose column the caller's basis of the projections
+        holds, in order, for ``exact_residual``. Complexity: O(p)."""
+        self._span_rows.append((np.array(row), np.array(cut, dtype=np.float64)))
+
+    def _covariate_ints(self, j: int) -> tuple:
+        """Covariate j on the distinct rows of X as (integers, denominator),
+        exactly: every float64 is an integer over a power of 2."""
+        if j not in self._xints:
+            Xu = self._group_data()[0]
+            self._xints[j] = self._dyadic([Fraction(float(v)) for v in Xu[:, j]])
+        return self._xints[j]
+
+    def _term_ints(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> tuple:
+        """The term on the distinct rows of X as (integers, denominator), the
+        denominator a power of 2, exactly. Complexity: O(g·d) integer
+        operations for g distinct rows and d factors."""
+        g = len(self._group_data()[0])
+        out, den = np.array([1] * g, dtype=object), 1
+        for j in np.flatnonzero(row):
+            vals, d = self._covariate_ints(int(j))
+            code = int(row[j])
+            if code != 2:
+                t = Fraction(float(cut[j]))
+                e = max(d, t.denominator)
+                a = vals * (e // d)
+                ti = t.numerator * (e // t.denominator)
+                a = a - ti if code == 1 else ti - a
+                vals, d = np.array([v if v > 0 else 0 for v in a], dtype=object), e
+            out, den = out * vals, den * d
+        return out, den
+
+    def exact_residual(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> FloatArray:
+        """The column of the term minus its exact w-projection on the span of
+        the terms registered by ``span_append``, rounded once to float64
+        (unscaled). It spans with them what the term spans, and it is accurate
+        relative to its own size, also when the term lies within rounding of
+        that span in float64, where a float64 projection keeps only the
+        rounding (a covariate that is a copy up to rounding of another, such
+        as x/8 + c at a large mean, LA-5's scope paragraph).
+
+        Method: on the g distinct rows of X every column is integers over a
+        power of 2, so the Gram matrix of the registered columns and their
+        inner products with the term are exact integer dot products; the
+        normal equations are solved in rational arithmetic (a zero pivot of
+        the positive semidefinite system is a dependent column, coefficient
+        0), and the residual is formed in integers over one denominator and
+        divided once, which rounds correctly. Complexity: O(g·r) integer
+        operations and O(r³) rational ones for r registered terms, and O(g·r)
+        integer operations for each term registered since the last call."""
+        if self._wint is None:
+            self._wint = self._dyadic(self._group_data()[2])
+        wi, wd = self._wint
+        while self._span_done < len(self._span_rows):
+            c, d = self._term_ints(*self._span_rows[self._span_done])
+            self._span_done += 1
+            wc = wi * c
+            for i, (c2, d2) in enumerate(self._span):
+                self._sgram[i].append(Fraction(int(np.dot(wc, c2)), wd * d * d2))
+            self._span.append((c, d))
+            own = Fraction(int(np.dot(wc, c)), wd * d * d)
+            self._sgram.append([*(r[-1] for r in self._sgram), own])
+        v, dv = self._term_ints(row, cut)
+        wv = wi * v
+        r = len(self._span)
+        A = [list(self._sgram[i]) for i in range(r)]
+        b = [Fraction(int(np.dot(wv, c)), wd * dv * d) for c, d in self._span]
+        for k in range(r):  # Gaussian elimination, a zero pivot skipped
+            if A[k][k] == 0:
+                continue
+            for i in range(k + 1, r):
+                f = A[i][k] / A[k][k]
+                if f:
+                    for j in range(k + 1, r):
+                        A[i][j] -= f * A[k][j]
+                    b[i] -= f * b[k]
+        beta = [Fraction(0)] * r
+        for k in reversed(range(r)):
+            if A[k][k] != 0:
+                rest = sum((A[k][j] * beta[j] for j in range(k + 1, r)), Fraction(0))
+                beta[k] = (b[k] - rest) / A[k][k]
+        den = math.lcm(dv, *(d for _, d in self._span))
+        den *= math.lcm(1, *(f.denominator for f in beta))
+        z = v * (den // dv)
+        for f, (c, d) in zip(beta, self._span, strict=True):
+            if f:
+                z = z - (f.numerator * (den // (f.denominator * d))) * c
+        return np.array([int(x) / den for x in z])[self._inverse]
 
     def _exact_column(self, e: _Element) -> list:
         """The monomial on the distinct rows of X, as exact rationals."""
@@ -993,7 +1108,11 @@ def independent_terms(
     (FWD-11): the rule of ``independent_columns`` on the columns of the terms,
     and, when a term has a linear factor of a shifted covariate (``Conditioner``,
     ``large_covariates``), after the exact shift of such covariates, so that the
-    result does not depend on the order of the terms. ``B`` is the basis matrix
+    result does not depend on the order of the terms. A kept term within
+    NEAR_SPAN of the span of the kept earlier ones enters the float64 basis as
+    its exact residual (``Conditioner.exact_residual``), so that the basis holds
+    its direction and a later term that the kept ones span exactly is found
+    dependent. ``B`` is the basis matrix
     of the terms if the caller has it. Without a shifted covariate in a linear
     factor this is ``independent_columns`` of B, bit for bit. Complexity: that of
     ``independent_columns`` and, with a shifted covariate, of ``Conditioner``
@@ -1011,12 +1130,18 @@ def independent_terms(
     kept, kappa = np.zeros(len(dirs), dtype=bool), 1.0
     for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
         v = sw * cond.hinge(row, cut)
+        size = cond.size
         gs = gram_schmidt(Q, v)
-        if cond.dependent(row, cut, gs.norm, cond.size, kappa=kappa):
+        if cond.dependent(row, cut, gs.norm, size, kappa=kappa):
             continue
+        if gs.norm < NEAR_SPAN * size:  # Q must hold its direction (LA-5)
+            v = sw * cond.exact_residual(row, cut)
+            size = float(np.linalg.norm(v))
+            gs = gram_schmidt(Q, v)
         if gs.q is not None:  # a term that adds no direction is kept, as LA-4 says
-            kappa = max(kappa, cond.size / gs.norm)
+            kappa = max(kappa, size / gs.norm)
             Q = np.column_stack((Q, gs.q))
         cond.append(row, cut)
+        cond.span_append(row, cut)
         kept[k] = True
     return kept
