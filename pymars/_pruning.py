@@ -342,8 +342,7 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             return {(s, 0, _ZERO): scale} | ({None: mj} if mj else {})
         ts = (Fraction(t) - Fraction(float(m[j]))) / scale
         where.setdefault((s, kind, ts), (j, t, k))
-        if kind == 2:
-            where.setdefault((s, 1, ts), (j, t, k))
+        where.setdefault((s, 3 - kind, ts), (j, t, k))  # the mirror hinge
         return {(s, kind, ts): scale}
 
     index: dict = {}
@@ -370,7 +369,7 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
                 atoms[atom] = U[:, s]
             elif kind == 3:
                 atoms[atom] = near[s][1]
-            elif kind == 4:
+            elif kind in (4, 5):
                 atoms[atom] = diffs[atom]
             else:
                 j, t, k = where[atom]
@@ -389,30 +388,48 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             return out | ({None: const} if const else {})
         return {(s, 0, _ZERO): Fraction(1)}
 
-    diffs: dict = {}  # (s, 4, t_s) -> h_s of a hinge on a near copy
+    diffs: dict = {}  # (s, 3 + kind, t_s) -> the difference of a near copy's hinge
 
     def hinge_canon(atom: tuple) -> dict:
-        # (u_s - t_s)₊, neither 0 nor a line on the cases. On a near copy s of
-        # r it is the same hinge on x_r plus h = the difference, when h is
-        # exact; h is 0 wherever x_s = x_r, as e_s is (the adversarial review
-        # of PR #123). The hinge itself may be small, as at a knot one ulp
-        # below a level, so h need not be small next to it.
-        s, _, ts = atom
+        # A hinge (u_s - t_s)₊ or (t_s - u_s)₊ that is the canonical one of its
+        # pair. On a near copy s of r it is the same hinge on x_r plus h = the
+        # difference, when h is exact; h is 0 wherever x_s = x_r, as e_s is
+        # (the adversarial review of PR #123). The hinge itself may be small,
+        # as at a knot one ulp from a level, so h need not be small next to it.
+        s, kind, ts = atom
         j, t, k = where[atom]
         if s in near and j == s and k == 0:
             r = near[s][0]
-            hs, hr = column(atom), _terms.factor(_terms.PLUS, X[:, r], t)
+            code = _terms.PLUS if kind == 1 else _terms.MINUS
+            hs, hr = column(atom), _terms.factor(code, X[:, r], t)
             h = hs - hr
             exact = np.all((hr == 0) | (hs == 0) | ((hs <= 2 * hr) & (hr <= 2 * hs)))
             if exact:
-                ratom = (r, 1, Fraction(t) - Fraction(float(m[r])))
-                where.setdefault(ratom, (r, t, 0))
-                out = dict(canonical(ratom))
+                tr = Fraction(t) - Fraction(float(m[r]))
+                for q in (1, 2):
+                    where.setdefault((r, q, tr), (r, t, 0))
+                out = dict(canonical((r, kind, tr)))
                 if np.any(h != 0):
-                    diffs[(s, 4, ts)] = h
-                    out[(s, 4, ts)] = out.get((s, 4, ts), 0) + Fraction(1)
+                    key = (s, 3 + kind, ts)
+                    diffs[key] = h
+                    out[key] = out.get(key, 0) + Fraction(1)
                 return out
         return {atom: Fraction(1)}
+
+    def base_kind(s: int, ts: Fraction) -> int:
+        # The canonical hinge of the pair at t_s, 1 for (u_s - t_s)₊ and 2 for
+        # (t_s - u_s)₊; the other one is it plus or minus the line u_s - t_s.
+        # (u_s - t_s)₊ is canonical unless its mirror is tiny next to it, at a
+        # knot next to a level (one ulp off, #130): then (u_s - t_s)₊ is the
+        # line up to the mirror, and the mirror must carry that direction, or
+        # a linear factor's m_j multiplies the rounding of the line. A near
+        # copy keeps (u_s - t_s)₊, since ``hinge_canon`` writes it as the hinge
+        # of x_r, whose own choice is made here. Both are exact relations,
+        # which LA-4 allows in the sums of squares.
+        if s in near:
+            return 1
+        P, Q = column((s, 1, ts)), column((s, 2, ts))
+        return 2 if np.linalg.norm(Q) <= 2.0**-20 * np.linalg.norm(P) else 1
 
     def canonical(atom: tuple) -> dict:
         s, kind, ts = atom
@@ -427,13 +444,16 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             sign = 1 if kind == 1 else -1
             out = {q: sign * f for q, f in lin.items()}
             out[None] = out.get(None, 0) - sign * ts
-        elif kind == 1:
+            return {q: f for q, f in out.items() if f != 0}
+        base = base_kind(s, ts)
+        if kind == base:
             return hinge_canon(atom)
-        else:  # (t_s - u_s)₊ = (u_s - t_s)₊ - u_s + t_s
-            out = dict(hinge_canon((s, 1, ts)))
-            for q, f in lin.items():
-                out[q] = out.get(q, 0) - f
-            out[None] = out.get(None, 0) + ts
+        # (u_s - t_s)₊ = (t_s - u_s)₊ + u_s - t_s, and the mirror of it
+        sign = 1 if kind == 1 else -1
+        out = dict(hinge_canon((s, base, ts)))
+        for q, f in lin.items():
+            out[q] = out.get(q, 0) + sign * f
+        out[None] = out.get(None, 0) - sign * ts
         return {q: f for q, f in out.items() if f != 0}
 
     catoms: dict = {}
@@ -448,15 +468,33 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             if atom not in catoms:
                 catoms[atom] = canonical(atom)
             poly = _times(poly, catoms[atom])
+
+        def mcol(ckey):
+            if ckey and ckey[0] == "raw":
+                return np.prod([column(a) for a in ckey[1]], axis=0)
+            col = np.ones(X.shape[0])
+            for atom in ckey:
+                col = col * column(atom)
+            return col
+
+        # A monomial whose column is far smaller than the parts of its
+        # expansion, such as (x0 - t)₊·(t' - x3)₊ with a near copy x3, which is
+        # 0 at all cases but one, is its own canonical monomial ("raw", key):
+        # the parts would cancel only up to the rounding of their columns,
+        # which is then large next to the term's new part (#130).
+        if key:
+            D = mcol(("raw", key))
+            parts = sum(
+                abs(float(f)) * np.linalg.norm(mcol(q)) for q, f in poly.items()
+            )
+            if np.linalg.norm(D) < 2.0**-10 * parts:
+                poly = {("raw", key): Fraction(1)} if np.any(D != 0) else {}
         out = {}
         for ckey, f in poly.items():
             if ckey not in cindex:
                 cindex[ckey] = len(cols)
                 ckeys.append(ckey)
-                col = np.ones(X.shape[0])
-                for atom in ckey:
-                    col = col * column(atom)
-                cols.append(col)
+                cols.append(mcol(ckey))
             out[cindex[ckey]] = f
         canon.append(out)
     cterms = [_compose(t, canon) for t in terms]

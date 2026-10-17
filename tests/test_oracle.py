@@ -846,7 +846,7 @@ def _working_sets(removed, Mf: int, several: bool) -> list:
     return out
 
 
-def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
+def compare_pruning(case, fast: dict, ref: dict, B, Y, w, span=None) -> Outcome:
     """Compare two pruning passes on the basis B (PRUNE-2 to PRUNE-8, CORE-3).
 
     ``fast`` and ``ref`` hold the fields of PruningRecord, ``selected`` (in
@@ -859,10 +859,19 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     well: two subsets of one size, by the same bound. The selected size and
     the final fit are compared when no removal tied. An RSS below STOP-5's
     floor 1e-10 TSS / (N - 1) is an exact fit, whose value is rounding: two
-    such values count as equal.
+    such values count as equal. ``span``, a ``mars_ref.Conditioned`` of the
+    terms, gives the reference's RSS of a subset in the shifted atoms of LA-4
+    (LA-5); without it the RSS is that of the columns of B, which loses
+    accuracy for terms with a linear factor of a large mean (#130: at seed
+    1287 of #110's generator with copy kind 4, two drops tie to 4.5e-15 in
+    exact arithmetic, while the RSS of the columns of B differ by 4.5e-6).
     """
     Mf, several = B.shape[1], Y.shape[1] >= 2
-    rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
+
+    def columns(terms):
+        return B[:, sorted(terms)] if span is None else span.span_columns(sorted(terms))
+
+    rss_of = functools.cache(lambda terms: mars_ref.rss(columns(terms), Y, w))
     N = float(np.sum(w))  # a degenerate fit (N <= 1, EDGE-1) has no exact fits
     tss = ref["rss_per_size"][0]
     floor = 1e-10 * tss / (N - 1) if N > 1 else 0.0
@@ -1028,16 +1037,16 @@ def compare_fits(case: Case, fast_fit, ref_fit) -> Outcome:
     if out.near_tie is not None:
         return out
     kept, fwd = case.kept, _plain(r["forward"])
-    B = mars_ref.basis_matrix(
-        kept.X, fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
-    )
+    dirs, cuts = fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
+    B = mars_ref.basis_matrix(kept.X, dirs, cuts)
+    span = mars_ref.Conditioned(kept.X, dirs, cuts, B, mars_ref.Atoms(kept.X), kept.w)
 
     def pruning(d):
         final = {k: d[k] for k in ("coef", "rss", "gcv", "rsq", "grsq")}
         sel = np.searchsorted(fwd["kept"], d["selected"])
         return {**_plain(d["pruning"]), **final, "selected": sel}
 
-    pr = compare_pruning(case, pruning(f), pruning(r), B, kept.Y, kept.w)
+    pr = compare_pruning(case, pruning(f), pruning(r), B, kept.Y, kept.w, span)
     if pr.near_tie is None:
         for key in ("selected", "dirs", "cuts"):
             if not np.array_equal(f[key], r[key]):
