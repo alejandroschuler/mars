@@ -489,8 +489,12 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
             parts = sum(
                 abs(float(f)) * np.linalg.norm(mcol(q)) for q, f in poly.items()
             )
-            if np.linalg.norm(D) < 2.0**-10 * parts:
-                poly = {("raw", key): Fraction(1)} if np.any(D != 0) else {}
+            # A column that is 0 at every case keeps its expansion: dropping
+            # it would make the terms dependent as formulas, which LA-4 does
+            # not find, and the pass would refuse B (seeds 26 and 49 of the
+            # adversarial review of PR #123).
+            if np.any(D != 0) and np.linalg.norm(D) < 2.0**-10 * parts:
+                poly = {("raw", key): Fraction(1)}
         out = {}
         for ckey, f in poly.items():
             if ckey not in cindex:
