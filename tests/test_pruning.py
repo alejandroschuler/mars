@@ -754,7 +754,19 @@ def _generated(seed):
     of PR #110 (#120): covariates on a few levels, shifted, with x1 a copy of
     x0 one ulp off at one case for these seeds. Seed None is the case of the
     adversarial review of PR #123: x0 = 2^33 + (0, 1/3 or 2/3) and x1 = x0
-    with the minimum case one ulp down and case 8 two ulps up."""
+    with the minimum case one ulp down and case 8 two ulps up. Seed "c" is the
+    case of its recheck: x0 = 9999.5 + (0 or 1/2), x1 = x0 with the minimum
+    case two ulps down, so m1 ≠ m0, and case 6 three ulps up; x2 on (0, 1/2)."""
+    if seed == "c":
+        a = np.array([int(ch) for ch in "001101111101010110000000"]) / 2
+        b = np.array([int(ch) for ch in "110100110011010110011110"]) / 2
+        x0 = 9999.5 + a
+        x1 = x0.copy()
+        x1[1] = np.nextafter(np.nextafter(x1[1], -np.inf), -np.inf)
+        for _ in range(3):
+            x1[6] = np.nextafter(x1[6], np.inf)
+        y = np.random.default_rng(0).normal(size=24)
+        return np.column_stack([x0, x1, b]), y, None
     if seed is None:
         k = np.array([int(ch) for ch in "012101201212012122210100222201"])
         x0 = 2.0**33 + k / 3
@@ -814,8 +826,13 @@ def _generated(seed):
             [[0, 0], [0, -1], [0, 2], [-1, 2], [2, 1]],
             {(1, 1): 2.0**33 + 1 / 3, (3, 0): 2.0**33 + 1 / 3, (4, 1): 2.0**33},
         ),
+        (
+            "c",
+            [[0, 0, 0], [0, 2, 0], [0, 1, 0], [2, 0, 2], [0, -1, 2]],
+            {(2, 1): 1e4, (4, 1): 9999.5},
+        ),
     ],
-    ids=["seed 90", "seed 213", "review of PR #123"],
+    ids=["seed 90", "seed 213", "review of PR #123", "recheck of PR #123"],
 )
 def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     """LA-5 for the pruning pass and the final fit on near copies, which LA-5's
@@ -831,7 +848,10 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     cases but two; the final RSS missed by 0.4 % and rss_per_size[4] by 6 %
     until the hinges of a near copy were also written as the hinge of x0 plus
     an exact difference, and the terms' columns were factored without a QR of
-    the dependent monomials. Every rss_per_size and the final RSS are within
+    the dependent monomials. In the case of the recheck the two minima differ,
+    so u1 = u0 + e + (m0 - m1), and a linear factor x1 multiplies another
+    atom: with the sign of that constant flipped, the pass misses by 218
+    times ε. Every rss_per_size and the final RSS are within
     LA-5's ε of rational arithmetic on the exact basis, and the pass on the
     rows in another order keeps the same subsets (PRUNE-10: the choices must
     not follow the rounding)."""
