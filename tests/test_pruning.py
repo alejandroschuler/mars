@@ -676,7 +676,14 @@ def test_fit_mars_passes_the_terms_to_the_pruning_pass():
 
 @pytest.mark.parametrize("shift", [0.5, 1e4, 1e10])
 @pytest.mark.parametrize(
-    "terms", ["plain", "copy last", "copy before x2", "power-of-2 copy before x2"]
+    "terms",
+    [
+        "plain",
+        "copy last",
+        "copy before x2",
+        "power-of-2 copy before x2",
+        "exact copy before x2",
+    ],
 )
 @pytest.mark.parametrize("shift2", [0.0, 2.0**20])
 def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
@@ -692,14 +699,15 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
     reference does (#119 item 2: with x3 one symbol with x2, the final fit
     kept x2 at 1e10). x4 = 2·x2 is a copy of LA-4, one symbol with x2 (u4 =
     2·u2), so the order 1, x0, x0·x4, x2, x0·(t - x4)+ keeps every term at
-    every shift, as the spec says for 2·x2 and as the reference does. With
+    every shift, as the spec says for 2·x2 and as the reference does; so does
+    the exact copy x5 = x2 (k = 0) in the order 1, x0, x0·x5, x2. With
     x2 shifted by 2^20 too, x3 is an affine copy of a
     shifted covariate, and its linear factor is x3 itself, not x3 - m_3 (PR
     #96's review: an O(1) error). The RSS and the coefficients are those of
     the kept terms in rational arithmetic, to 1e-8 and to normwise 1e-6."""
     x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
     x2 = shift2 + np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
-    X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1, 2 * x2])
+    X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1, 2 * x2, x2])
     rows = {
         "plain": [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 2, 0], [0, 0, 2, 0]],
         "copy last": [
@@ -717,9 +725,15 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
             [0, 0, 2, 0, 0],
             [2, 0, 0, 0, -1],
         ],
+        "exact copy before x2": [
+            [0, 0, 0, 0, 0, 0],
+            [2, 0, 0, 0, 0, 0],
+            [2, 0, 0, 0, 0, 2],
+            [0, 0, 2, 0, 0, 0],
+        ],
     }[terms]
     dropped = {"copy last": True, "copy before x2": shift == 1e10}.get(terms, False)
-    dirs = np.array([row + [0] * (5 - len(row)) for row in rows])
+    dirs = np.array([row + [0] * (6 - len(row)) for row in rows])
     cuts = np.zeros(dirs.shape)
     cuts[dirs[:, 4] == -1, 4] = 2 * (shift2 + 1)  # a value of x4
     y = np.random.default_rng(3).normal(size=10)
@@ -738,7 +752,16 @@ def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
 def _generated(seed):
     """X, y and w of seed ``seed`` of the generator in the adversarial review
     of PR #110 (#120): covariates on a few levels, shifted, with x1 a copy of
-    x0 one ulp off at one case for these seeds."""
+    x0 one ulp off at one case for these seeds. Seed None is the case of the
+    adversarial review of PR #123: x0 = 2^33 + (0, 1/3 or 2/3) and x1 = x0
+    with the minimum case one ulp down and case 8 two ulps up."""
+    if seed is None:
+        k = np.array([int(ch) for ch in "012101201212012122210100222201"])
+        x0 = 2.0**33 + k / 3
+        x1 = x0.copy()
+        x1[0] = np.nextafter(x1[0], -np.inf)
+        x1[8] = np.nextafter(np.nextafter(x1[8], np.inf), np.inf)
+        return np.column_stack([x0, x1]), np.random.default_rng(1).normal(size=30), None
     rng = np.random.default_rng(seed)
     n, p, lv = (int(rng.integers(a, b)) for a, b in ((12, 60), (2, 5), (2, 5)))
     X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
@@ -786,18 +809,32 @@ def _generated(seed):
             {(k, 2): 67108864.36437914 for k in (2, 3, 5, 6, 8)}
             | {(4, 2): 67108864.78667153, (7, 2): 67108864.78667153},
         ),
+        (
+            None,
+            [[0, 0], [0, -1], [0, 2], [-1, 2], [2, 1]],
+            {(1, 1): 2.0**33 + 1 / 3, (3, 0): 2.0**33 + 1 / 3, (4, 1): 2.0**33},
+        ),
     ],
+    ids=["seed 90", "seed 213", "review of PR #123"],
 )
 def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
-    """LA-5 for the pruning pass of seeds 90 and 213 of #120 (the forward
-    pass's kept terms): x1 is x0 with one case one ulp up, both shifted (by
-    -2^30 or 2^26), and x0 is a linear factor. LA-4 counts u0 and u1 as two
-    symbols, so a product with x0 spreads the rounding of the large m_j over
-    the direction u1 - u0, which is 0 at all cases but one. Every
-    rss_per_size is within LA-5's ε of rational arithmetic on the exact basis.
-    Before the canonical columns wrote u1 as u0 + d, d = u1 - u0 exact, the
-    pass missed by 9.3 and 7.5 times ε at sizes 4 and 5 of seed 90 and 1.03
-    times at size 7 of seed 213."""
+    """LA-5 for the pruning pass and the final fit on near copies, which LA-5's
+    scope paragraph keeps inside the bound. In seeds 90 and 213 of #120 (the
+    forward pass's kept terms) x1 is x0 with one case one ulp up, both
+    shifted (by -2^30 or 2^26), and x0 is a linear factor. LA-4 counts u0 and
+    u1 as two symbols, so a product with x0 spreads the rounding of the large
+    m_j over the direction u1 - u0, which is 0 at all cases but one. Before
+    the canonical columns wrote x1 as x0 + e, e exact, the pass missed by 9.3
+    and 7.5 times ε at sizes 4 and 5 of seed 90 and 1.03 times at size 7 of
+    seed 213. In the case of the review of PR #123, the hinge x0·(x1 - 2^33)+
+    sits on the near copy at the minimum of x0, so it equals x0·u0 at all
+    cases but two; the final RSS missed by 0.4 % and rss_per_size[4] by 6 %
+    until the hinges of a near copy were also written as the hinge of x0 plus
+    an exact difference, and the terms' columns were factored without a QR of
+    the dependent monomials. Every rss_per_size and the final RSS are within
+    LA-5's ε of rational arithmetic on the exact basis, and the pass on the
+    rows in another order keeps the same subsets (PRUNE-10: the choices must
+    not follow the rounding)."""
     X, y, w = _generated(seed)
     dirs = np.array(dirs)
     cut = np.zeros(dirs.shape)
@@ -808,3 +845,10 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     Bx = _exact_basis(X, dirs, cut)
     exact = [_exact(Bx, y, w, np.flatnonzero(row))[1] for row in res.subsets]
     assert_la5(res.rss_per_size, exact, exact[0])
+    fit = pr.final_fit(B, y, res.selected, w, penalty=3.0, X=X, dirs=dirs, cuts=cut)
+    assert_la5([fit.rss], [exact[res.selected_size - 1]], exact[0])
+    p = np.random.default_rng(0).permutation(len(y))
+    wp = None if w is None else w[p]
+    res2 = pr.pruning_pass(B[p], y[p], wp, penalty=3.0, X=X[p], dirs=dirs, cuts=cut)
+    assert np.array_equal(res2.subsets, res.subsets)
+    assert_la5(res2.rss_per_size, exact, exact[0])
