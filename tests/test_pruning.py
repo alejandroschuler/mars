@@ -853,8 +853,9 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     atom: with the sign of that constant flipped, the pass misses by 218
     times ε. Every rss_per_size and the final RSS are within
     LA-5's ε of rational arithmetic on the exact basis, and the pass on the
-    rows in another order keeps the same subsets (PRUNE-10: the choices must
-    not follow the rounding)."""
+    rows in another order keeps subsets whose exact RSS differ by at most a
+    near-tie of PRUNE-10 (the choices must not follow the rounding beyond
+    that)."""
     X, y, w = _generated(seed)
     dirs = np.array(dirs)
     cut = np.zeros(dirs.shape)
@@ -870,5 +871,12 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     p = np.random.default_rng(0).permutation(len(y))
     wp = None if w is None else w[p]
     res2 = pr.pruning_pass(B[p], y[p], wp, penalty=3.0, X=X[p], dirs=dirs, cuts=cut)
-    assert np.array_equal(res2.subsets, res.subsets)
-    assert_la5(res2.rss_per_size, exact, exact[0])
+    # The subsets may differ only at a near-tie of PRUNE-10. In the case of the
+    # review, dropping term 1 or term 3 from all five terms gives the same RSS
+    # in exact arithmetic, so rounding decides the first stage (numpy 1.24 on
+    # Python 3.10 removed term 1, newer numpy term 3), and the subsets of size
+    # 3 then differ by 6e-9 of their RSS.
+    exact2 = [_exact(Bx, y, w, np.flatnonzero(row))[1] for row in res2.subsets]
+    assert_la5(res2.rss_per_size, exact2, exact[0])
+    gap = np.abs(np.subtract(exact2, exact))
+    assert np.all(gap <= 1e-7 * np.minimum(exact2, exact)), gap
