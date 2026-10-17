@@ -386,6 +386,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:16 #128 rebased to dba9b88 (range-diff '=' plus comment and count sentence); update check APPROVE. Merged #128 (C07: the fast code against earth in the conformance suite; closes #126) as b0f93b0. #122 and #123 must rebase on b0f93b0 before merge.
 - 18:29 review-122-spec APPROVE at 70c0b67 (no LA-4 decision changes; 533 fits hash-equal to main). #129 round 1 at 4a85a0c, rebased to 21cbba1 (gate B PASS): FWD-11 both directions; case (b) accepted (F does not take the mirror). Rechecks both REQUEST_CHANGES, sentence-level: LA-2's old 'FWD-11 drops the same columns' and an FWD-11 clause; sent to s127 (round 2).
 - 18:37 #123 at 3f19178 (CI 3.10 failure was an exact tie at PRUNE-3's first stage and a 5.7e-9 subset near-tie; the permuted-row check now compares exact RSS per size within 1e-7): adversarial checked it (planted order errors still fail), waits for the rebased SHA. #122 adversarial REQUEST_CHANGES at 70c0b67 (hinge child's span_append unpinned; EDGE-3 ties draw); sent to f120f, which rebases after #123 merges. Opened #131 (LA-5 scope: copy off by many ulps at most cases misses in both programs, pre-existing). Merge order: #123, #122, #129. Load 3.6; 5-hour 26 %, weekly 35 %.
+- 18:41 #129 round 2 at c6ac22a (on b0f93b0): APPROVE (both). Held so that #123 merges first. #122 round 1 at c008d50 pre-checked by its adversarial reviewer (fixes confirmed; posts after the rebase).
 
 ## Core-hour ledger
 
