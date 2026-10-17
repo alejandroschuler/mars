@@ -846,7 +846,7 @@ def _working_sets(removed, Mf: int, several: bool) -> list:
     return out
 
 
-def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
+def compare_pruning(case, fast: dict, ref: dict, B, Y, w, span=None) -> Outcome:
     """Compare two pruning passes on the basis B (PRUNE-2 to PRUNE-8, CORE-3).
 
     ``fast`` and ``ref`` hold the fields of PruningRecord, ``selected`` (in
@@ -859,10 +859,19 @@ def compare_pruning(case, fast: dict, ref: dict, B, Y, w) -> Outcome:
     well: two subsets of one size, by the same bound. The selected size and
     the final fit are compared when no removal tied. An RSS below STOP-5's
     floor 1e-10 TSS / (N - 1) is an exact fit, whose value is rounding: two
-    such values count as equal.
+    such values count as equal. ``span``, a ``mars_ref.Conditioned`` of the
+    terms, gives the reference's RSS of a subset in the shifted atoms of LA-4
+    (LA-5); without it the RSS is that of the columns of B, which loses
+    accuracy for terms with a linear factor of a large mean (#130: at seed
+    1287 of #110's generator with copy kind 4, two drops tie to 4.5e-15 in
+    exact arithmetic, while the RSS of the columns of B differ by 4.5e-6).
     """
     Mf, several = B.shape[1], Y.shape[1] >= 2
-    rss_of = functools.cache(lambda terms: mars_ref.rss(B[:, sorted(terms)], Y, w))
+
+    def columns(terms):
+        return B[:, sorted(terms)] if span is None else span.span_columns(sorted(terms))
+
+    rss_of = functools.cache(lambda terms: mars_ref.rss(columns(terms), Y, w))
     N = float(np.sum(w))  # a degenerate fit (N <= 1, EDGE-1) has no exact fits
     tss = ref["rss_per_size"][0]
     floor = 1e-10 * tss / (N - 1) if N > 1 else 0.0
@@ -1028,16 +1037,16 @@ def compare_fits(case: Case, fast_fit, ref_fit) -> Outcome:
     if out.near_tie is not None:
         return out
     kept, fwd = case.kept, _plain(r["forward"])
-    B = mars_ref.basis_matrix(
-        kept.X, fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
-    )
+    dirs, cuts = fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
+    B = mars_ref.basis_matrix(kept.X, dirs, cuts)
+    span = mars_ref.Conditioned(kept.X, dirs, cuts, B, mars_ref.Atoms(kept.X), kept.w)
 
     def pruning(d):
         final = {k: d[k] for k in ("coef", "rss", "gcv", "rsq", "grsq")}
         sel = np.searchsorted(fwd["kept"], d["selected"])
         return {**_plain(d["pruning"]), **final, "selected": sel}
 
-    pr = compare_pruning(case, pruning(f), pruning(r), B, kept.Y, kept.w)
+    pr = compare_pruning(case, pruning(f), pruning(r), B, kept.Y, kept.w, span)
     if pr.near_tie is None:
         for key in ("selected", "dirs", "cuts"):
             if not np.array_equal(f[key], r[key]):
@@ -1690,6 +1699,69 @@ def test_whole_fit_of_two_cases_with_weights():
     fast = _core.fit_mars(X, Y, w, _core.MarsParams(**params), record_candidates=True)
     ref = _core.MarsFit.from_dict(case.reference_fit())
     compare_fits(case, fast, ref)
+
+
+def test_whole_fit_with_drops_that_tie_on_a_near_copy():
+    """PRUNE-10: seed 1287 of the generator of PR #110's adversarial review,
+    with x1 a copy of x0 one ulp off at one case (#130). At stage pos = 9 the
+    fast code drops term 5 and the reference term 12; the two drops tie to
+    4.5e-15 of the RSS in exact arithmetic. The near-tie check takes the
+    reference's RSS in LA-4's shifted atoms (``span``): the columns of B,
+    with x0 and x1 at 1e12, put the two RSS values 4.5e-6 apart."""
+    rng = np.random.default_rng(1287)
+    n, p, lv = (int(rng.integers(a, b)) for a, b in ((12, 60), (2, 5), (2, 5)))
+    X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
+    if rng.uniform() < 0.5:
+        X[:, p - 1] = rng.uniform(size=n)
+    rng.integers(0, 6)  # the copy kind of the generator, forced to 4 here
+    shifts = [2.0**10, 1e4, 2.0**26, 1e9, 2.0**40, 1e12, 1e15, -1e9, -(2.0**30)]
+    X = X + rng.choice(shifts, p) * (rng.uniform(size=p) < 0.8)
+    X[:, 1] = X[:, 0]
+    i = int(rng.integers(n))
+    X[i, 1] = np.nextafter(X[i, 1], np.inf)
+    y = np.maximum(X[:, 0] - np.median(X[:, 0]), 0) * 3
+    y = y + (X[:, 1] - X[:, 1].mean()) * (X[:, p - 1] - X[:, p - 1].mean())
+    y = y + rng.choice([0.0, 0.01, 0.3]) * rng.standard_normal(n)
+    y = y + rng.choice([0.0, 1e6])
+    w = None
+    if rng.uniform() < 0.4:
+        w = rng.integers(0, 3, n).astype(float)
+        w[:3] = 1.0
+    params = {
+        "max_degree": int(rng.integers(1, 4)),
+        "fast_k": int(rng.choice([0, 0, 1, 3, 20])),
+        "thresh": float(rng.choice([0.0, 0.001])),
+        "adjust_endspan": float(rng.choice([0.0, 2.0])),
+        "auto_linpreds": bool(rng.uniform() < 0.7),
+    }
+    for key in ("minspan", "endspan"):
+        v = rng.choice([None, 1])
+        params[key] = None if v is None else int(v)
+    case = Case("seed 1287, copy kind 4", X, y.reshape(-1, 1), w, params)
+    fast = _core.fit_mars(
+        X, case.Y, w, _core.MarsParams(**params), record_candidates=True
+    )
+    ref = _plain(_core.MarsFit.from_dict(case.reference_fit()))
+    # Rounding decides the drop, so the fast code may agree with the
+    # reference or stop at the near-tie; both pass.
+    assert compare_fits(case, fast, ref).near_tie in (None, "removal")
+    # Whatever the platform chose: the record with the other drop at that
+    # stage must be taken as a near-tie, which only the span RSS sees.
+    kept, fwd = case.kept, _plain(ref["forward"])
+    dirs, cuts = fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
+    B = mars_ref.basis_matrix(kept.X, dirs, cuts)
+    span = mars_ref.Conditioned(kept.X, dirs, cuts, B, mars_ref.Atoms(kept.X), kept.w)
+    rec = {
+        **_plain(ref["pruning"]),
+        **{k: ref[k] for k in ("coef", "rss", "gcv", "rsq", "grsq")},
+        "selected": np.searchsorted(fwd["kept"], ref["selected"]),
+    }
+    removed = np.array(rec["removed"])
+    assert removed[4] in (5, 12)  # stage pos = 9
+    removed[4] = 17 - removed[4]
+    other = {**rec, "removed": removed}
+    out = compare_pruning(case, other, rec, B, kept.Y, kept.w, span)
+    assert out.near_tie == "removal"
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
