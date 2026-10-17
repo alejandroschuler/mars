@@ -976,10 +976,9 @@ class Atoms:
     0 are no cases [W-3] (without ``w`` every row is a case). The columns
     u_j = x_j - m_j (float64) decide the symbols (``_copies``): u_j = r_j u_s
     with r_j = 2^k_j, so that a hinge of x_j is r_j times a hinge of u_s.
-    ``x_powers``, the exponents of EDGE-7, is accepted for the callers that
-    pass it and unused: the rule on the scaled X does not need it."""
+    The rule on the scaled X does not need the exponents of EDGE-7."""
 
-    def __init__(self, X, x_powers=None, w=None):
+    def __init__(self, X, w=None):
         self.X = np.asarray(X, dtype=np.float64)
         p = self.X.shape[1]
         cases = slice(None) if w is None else np.asarray(w) > 0

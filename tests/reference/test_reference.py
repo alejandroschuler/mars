@@ -741,6 +741,11 @@ class TestDependence:
         w = np.array([1, 1, 1, 1, 0.0])
         assert ref.Atoms(X, w=w).symbol == [0, 1] and ref.Atoms(X, w=w).m[1] == 1e10
         assert ref.Atoms(X).m[1] == 0.0  # with the row, 5 is within the range
+        # copy symbols come from the cases too (W-3): x1 differs from x0 only
+        # at the row of weight 0, so with the row they are two symbols
+        X = np.column_stack([[0.0, 1, 2, 3, 7], [0.0, 1, 2, 3, 9]])
+        assert ref.Atoms(X, w=w).symbol == [0, 0]
+        assert ref.Atoms(X).symbol == [0, 1]
         # la4_kept builds its shifts from the cases: x0 = 1e10 + (1, ..., 4)
         # counts after the intercept (u0 is its new part), whatever the row
         # of weight 0 holds; with its 5 in the shift's range there would be
