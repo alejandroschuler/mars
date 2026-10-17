@@ -384,6 +384,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:03 review-129-adversarial REQUEST_CHANGES at db4f3e2 (exact repro: FWD-11 keeps all terms while LA-2 rejected b·x; RSS(F_2) 35.24 vs kept 2.6e-14; 8 more earth fits agree with FWD-13's drop order). Its gate B FAIL on 3.13/3.14: test_oracle whole fit 'hypothesis shifted seed=20' (_compare_final coefficient RSS; fast code on main, not #129). Sent both reviews to s127; asked f120p whether #123 fixes seed 20. Started review-122-adversarial a64d94e7c08e4dad4 (opus).
 - 18:10 #123 at 0630e95: gates B, C PASS (f120p); sweep 300/300; seed=20 oracle failure is PRUNE-8's coefficient-rounding class, covered by #123's bound. Merge refused: CI fails on ubuntu 3.10 (fast and lowest-deps): the permuted-row subset check in the review-of-#123 case. Sent to f120p. Removed .worktrees/f120p-runner.
 - 18:16 #128 rebased to dba9b88 (range-diff '=' plus comment and count sentence); update check APPROVE. Merged #128 (C07: the fast code against earth in the conformance suite; closes #126) as b0f93b0. #122 and #123 must rebase on b0f93b0 before merge.
+- 18:29 review-122-spec APPROVE at 70c0b67 (no LA-4 decision changes; 533 fits hash-equal to main). #129 round 1 at 4a85a0c, rebased to 21cbba1 (gate B PASS): FWD-11 both directions; case (b) accepted (F does not take the mirror). Rechecks both REQUEST_CHANGES, sentence-level: LA-2's old 'FWD-11 drops the same columns' and an FWD-11 clause; sent to s127 (round 2).
 
 ## Core-hour ledger
 
