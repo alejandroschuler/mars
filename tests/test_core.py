@@ -548,8 +548,9 @@ def test_matched_fits_against_earth(load_fixture, name):
         return
     assert f.termination == r["termcond"] and f.kept.size == len(r["dirs"])
     last = [np.flatnonzero(f.step == s)[-1] for s in range(len(f.rss))]
-    fwd_rss = np.array(r["fwd_rss"])[last]
-    assert np.all(np.abs(f.rss - fwd_rss) <= 1e-8 * np.r_[f.rss[0], f.rss[:-1]])
+    if r["fwd_rss"] is not None:  # None after earth's rank fix (bb32, #127)
+        fwd_rss = np.array(r["fwd_rss"])[last]
+        assert np.all(np.abs(f.rss - fwd_rss) <= 1e-8 * np.r_[f.rss[0], f.rss[:-1]])
     _check_earth(fit, r, X, None)
 
 
