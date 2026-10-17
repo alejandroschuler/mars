@@ -271,6 +271,8 @@ class _Pass:
         self.spans = [self._spans(0, self.N)]
         L, E = self.spans[0]
         active = np.ones(n, dtype=bool)
+        self._knot_cache: dict = {}  # (k, j) -> the knots of term k > 0 (KNOT-7)
+        self._knot_count = 0
         self.knots = [  # the intercept's knots, found once per covariate (KNOT-7)
             self._knots(j, active, L, E) for j in range(p)
         ]
@@ -446,11 +448,21 @@ class _Pass:
     def knots_of(self, k: int, j: int) -> _knots.KnotCandidates:
         """The candidate knots of parent k and covariate j (KNOT-1 to KNOT-3):
         the active cases of k are those where its column is positive.
-        Complexity: O(n), and O(1) for the intercept, whose knots are kept."""
+        Complexity: O(n) the first time, and O(1) for the intercept and for
+        the knots kept from an earlier step."""
         if k == 0:
             return self.knots[j]
-        L, E = self.spans[k]
-        return self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
+        kc = self._knot_cache.get((k, j))
+        if kc is None:
+            L, E = self.spans[k]
+            kc = self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
+            # A term's column and spans never change, so its knots are kept,
+            # within a budget of n·(p + M) knots that keeps memory O(n·(p + M)).
+            n, p = self.X.shape
+            if self._knot_count + kc.knots.size <= n * (p + len(self.cols)):
+                self._knot_cache[k, j] = kc
+                self._knot_count += kc.knots.size
+        return kc
 
     def _capped(self, red):
         """A reduction, or RSS_s where the candidate's RSS, RSS_s - red, is at
