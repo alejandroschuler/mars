@@ -756,7 +756,24 @@ def _generated(seed):
     adversarial review of PR #123: x0 = 2^33 + (0, 1/3 or 2/3) and x1 = x0
     with the minimum case one ulp down and case 8 two ulps up. Seed "c" is the
     case of its recheck: x0 = 9999.5 + (0 or 1/2), x1 = x0 with the minimum
-    case two ulps down, so m1 ≠ m0, and case 6 three ulps up; x2 on (0, 1/2)."""
+    case two ulps down, so m1 ≠ m0, and case 6 three ulps up; x2 on (0, 1/2).
+    Seeds "level" and "product" are the two kinds of #130: x0 = 1024 + (0,
+    1/2 or 1) with x2 = -1e9 + U, or x0 = 1e4 + (0, 1/4, 1/2 or 3/4) with x2 =
+    2^40 + U, and x2's column 1 here; x3 = x0 with one case one ulp up at the
+    lowest level, or one ulp down at the highest."""
+    if seed in ("level", "product"):
+        rng = np.random.default_rng(2 if seed == "level" else 1)
+        n, levels = (20, 3) if seed == "level" else (24, 4)
+        base, top = (1024.0, 1.0) if seed == "level" else (1e4, 0.75)
+        x0 = base + rng.integers(0, levels, n) / (2 if seed == "level" else 4)
+        x2 = (-1e9 if seed == "level" else 2.0**40) + rng.uniform(size=n)
+        x3 = x0.copy()
+        i = int(np.flatnonzero(x0 == (base if seed == "level" else base + top))[0])
+        x3[i] = np.nextafter(x3[i], np.inf if seed == "level" else -np.inf)
+        y = rng.normal(size=n)
+        if seed == "product":
+            y = y + (x0 - x0.mean()) * (x2 - x2.mean())
+        return np.column_stack([x0, x2, x3]), y, None
     if seed == "c":
         a = np.array([int(ch) for ch in "001101111101010110000000"]) / 2
         b = np.array([int(ch) for ch in "110100110011010110011110"]) / 2
@@ -831,8 +848,25 @@ def _generated(seed):
             [[0, 0, 0], [0, 2, 0], [0, 1, 0], [2, 0, 2], [0, -1, 2]],
             {(2, 1): 1e4, (4, 1): 9999.5},
         ),
+        (
+            "level",
+            [[0, 0, 0], [2, 2, 0], [2, 0, 2], [0, 0, 1], [0, 2, 0]],
+            {(3, 2): 1024 + 2.0**-42},
+        ),
+        (
+            "product",
+            [[0, 0, 0], [1, 0, -1], [0, 2, 0], [0, 2, -1]],
+            {(1, 0): 1e4 + 0.5, (1, 2): 1e4 + 0.75, (3, 2): 1e4 + 0.5},
+        ),
     ],
-    ids=["seed 90", "seed 213", "review of PR #123", "recheck of PR #123"],
+    ids=[
+        "seed 90",
+        "seed 213",
+        "review of PR #123",
+        "recheck of PR #123",
+        "knot one ulp above a level (#130)",
+        "a product 0 at all cases but one (#130)",
+    ],
 )
 def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     """LA-5 for the pruning pass and the final fit on near copies, which LA-5's
@@ -851,7 +885,12 @@ def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
     the dependent monomials. In the case of the recheck the two minima differ,
     so u1 = u0 + e + (m0 - m1), and a linear factor x1 multiplies another
     atom: with the sign of that constant flipped, the pass misses by 218
-    times ε. Every rss_per_size and the final RSS are within
+    times ε. In the first case of #130 the knot of (x3 - t)+ is x3's value one
+    ulp above the lowest level, so (x3 - t)+ is the line u3 - t up to a mirror
+    of one ulp; in the second the product (x0 - 1e4 - 1/2)+·(1e4 + 3/4 - x3)+
+    is 0 at all cases but one. With the line or the expanded parts as the
+    canonical columns, the rounding of those large columns times m_j missed
+    by 21 and 224 times ε. Every rss_per_size and the final RSS are within
     LA-5's ε of rational arithmetic on the exact basis, and the pass on the
     rows in another order keeps subsets whose exact RSS differ by at most a
     near-tie of PRUNE-10 (the choices must not follow the rounding beyond
