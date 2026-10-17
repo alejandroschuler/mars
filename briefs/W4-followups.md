@@ -62,3 +62,9 @@ Files: `tests/test_conformance.py`, `validation/DIFFERENCES.md`, and the conform
 2. Regenerate `validation/DIFFERENCES.md` for both implementations on current main (its counts are from the reference at 2a00063). Every fast-code difference from earth that the reference does not share is a finding: triage it (rule, quirk, tie, numeric, bug) with exact arithmetic or the reference, and report each bug with its fixture to the executor. Do not fix `pymars/`; F120F and F120P own the fast modules now.
 3. The test must fail when a fast-code result is planted wrong (as the reference's planted test does), with the fewest lines.
 Reviewer: 1 (`single`). Run gate B and gate C on the head. The fast code changes when #122, #123 and T20 merge; the executor reruns this suite before the freeze.
+
+## S127: the forward basis after an LA-4 drop (branch `t127-spec-la1-fwd11`; issue #127)
+
+Files: `docs/algorithm.md`, and `validation/blackbox/` for a new black-box experiment if you run one. You are the spec writer: you may run black-box earth experiments (trace logs, outputs) under the clean-room rules; never read earth's C code or print R function bodies.
+
+Read #127 and the review comments it cites. Decide which basis the forward pass projects onto after a step whose new term LA-4 drops, and what RSS_s is then, so that LA-1, LA-4 and FWD-11 read the same. Prefer the rule that earth follows, if a black-box run on a case of this kind shows it (earth's tolerances differ, so build a case where the drop is clear). Prefer a rule that keeps RSS_s equal to the RSS of the basis that the next step projects onto. State the modules that must follow it (the reference and the fast forward pass) in the PR body; the executor opens the implementation tasks. Reviewers: 2 (`spec` and `adversarial`).
