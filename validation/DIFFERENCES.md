@@ -2,7 +2,7 @@
 
 This file triages every difference between the new fitting code (pymars 2.0) and earth 5.3.4 on the fixtures in `validation/fixtures/` (VALIDATION_PLAN.md, "Triage of differences"). The machine-readable list is `validation/differences.json`; `tests/test_conformance.py` compares each implementation with earth and fails on a difference that the list does not hold, or on an entry that no longer occurs. Each row below is one entry of that list, by its id.
 
-The results below are for the reference implementation (`tests/reference/mars_ref.py`) at commit 2a00063 of `main`, with R 4.4.3 and earth 5.3.4 on macOS (arm64). The fast code joins the comparison when `pymars._core.fit_mars` lands (T12). An entry holds for every implementation unless it names some.
+The results below are for both implementations, the reference (`tests/reference/mars_ref.py`) and the fast code (`pymars._core.fit_mars`), at commit 43f956f of `main`, against the stored fixtures made with R 4.4.3 and earth 5.3.4 on macOS (arm64). An entry holds for every implementation unless it names some. The fast code has no difference from earth that the reference does not share: on all 333 comparisons the two implementations show the same differences, at the same steps, with the same choices and the same candidate RSS values (to a relative 1e-8, which the test checks for each entry). C07 turned the fast code on in the suite.
 
 ## What is compared
 
@@ -23,13 +23,13 @@ Where the plan compares a fixture otherwise:
 
 A step where the two choices differ is a near-tie when their RSS values on the basis before the step differ by less than 1e-7 of the RSS before the step (plan: Ties), when they are different candidates (another parent or covariate, or hinges at another knot), and when their new columns are not bitwise equal. A difference in the kind, the codes or the order of the terms of one candidate (FWD-3, FWD-6, LA-7) is not a near-tie, and neither is a tie between bitwise-equal columns, which FWD-5 breaks by its order as earth does (bb18.1). The test also fails when an entry that is not a `tie` matches a difference that the comparison labels `tie`, which bounds the band from above. A size where the pruning subsets differ is a near-tie when their RSS values differ by at most 1e-7 of the lower one. This is the threshold that OQ-2 asks T07 to fix: each program's RSS of one subset is within 1e-8 of that RSS (the tolerance for `rss.per.subset`), so a flip needs a gap below about 2e-8, and 1e-7 covers it five times over, as in the forward pass. A near-tie is labeled `tie` and passes, and the comparison of that fit's structure stops there.
 
-A near-tie in the implementation's own candidate log at a step where both programs chose the same term does not stop the comparison, since the paths after the same choice can still be compared. S10_matched_d1 shows why this matters. There the duplicated column makes the best and the second-best candidate tie exactly at 6 of its 10 steps, and within 1e-7 at the other 4, and both programs break these ties the same way (FWD-5, bb18.1). In all, 8 of the 131 whole fits have such a step in the reference's log (S04 with 1,000 cases, S07 matched, S10), and all 8 agree with earth.
+A near-tie in the implementation's own candidate log at a step where both programs chose the same term does not stop the comparison, since the paths after the same choice can still be compared. S10_matched_d1 shows why this matters. There the duplicated column makes the best and the second-best candidate tie exactly at 6 of its 10 steps, and within 1e-7 at the other 4, and both programs break these ties the same way (FWD-5, bb18.1). In all, 8 of the 131 whole fits have such a step in the log of either implementation (S04 with 1,000 cases, S07 matched, S10), and all 8 agree with earth. The fast code's log shows the same 8 fits, and 1 of the 200 S15 draws, as the reference's does.
 
 No difference on the fixtures is a near-tie. The near-ties of LA-5 and STOP-7 (a collinearity ratio or a pair-rule value at its threshold, a reduction at MaxLegal, a stopping rule at its bound) need values that the candidate log does not hold, so a difference of that kind fails the test and gets its label here by hand. None occurred.
 
 ## Results
 
-Counts by label, over the comparisons of the reference:
+Counts by label, over the comparisons of each implementation (the two counts are equal, so the table gives one):
 
 | Label | Entries | Comparisons |
 |---|---|---|
@@ -39,7 +39,7 @@ Counts by label, over the comparisons of the reference:
 | numeric | 0 | 0 |
 | bug | 0 | 0 |
 
-By dataset: S11 1 comparison (E3), S12 4 (E1, E2), S13 4 (E4), S15 3 (E5 to E7). Every other comparison agrees with earth in full: 124 of the 133 dataset fixtures, and 197 of the 200 S15 draws.
+By dataset: S11 1 comparison (E3), S12 4 (E1, E2), S13 4 (E4), S15 3 (E5 to E7). Every other comparison agrees with earth in full: 124 of the 133 dataset fixtures, and 197 of the 200 S15 draws, for the reference and for the fast code alike.
 
 | Id | Cases | Step | pymars | earth | Candidate RSS (pymars, earth) | earth's flags | Label | Rules |
 |---|---|---|---|---|---|---|---|---|
