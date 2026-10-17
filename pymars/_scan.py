@@ -108,6 +108,9 @@ UNIT_ROUNDOFF = 2.0**-53
 #: Below this scaled ‖h‖² or D, a bound would not cover underflow: far above
 #: the subnormal range (2^-1022), so that n·2^-1022 stays below u·2^-900.
 SCALED_FLOOR = 2.0**-900
+# _suffix adds whole rows of its blocks for arrays with at least this many
+# columns (a speed choice only: both ways give the same bits).
+_WIDE = 6
 
 
 class KnotScan(NamedTuple):
@@ -156,6 +159,18 @@ def _suffix(a: FloatArray) -> FloatArray:
     nb = -(-m // B)
     rest = a.shape[1:]
     rev = np.concatenate((a[::-1], np.zeros((nb * B - m, *rest))))
+    if a.ndim == 2 and a.shape[1] >= _WIDE:
+        # The same additions in the same order, so the same bits, but one row
+        # of every block at a time: a cumsum along the strided block axis is
+        # slow, and adds of whole contiguous (nb, c) rows are not.
+        T = np.empty((B, nb, *rest))
+        np.moveaxis(T, 0, 1)[...] = rev.reshape((nb, B, *rest))
+        for i in range(1, B):
+            np.add(T[i - 1], T[i], out=T[i])
+        carry = np.zeros((nb, *rest))
+        np.cumsum(T[-1, :-1], axis=0, out=carry[1:])
+        T += carry
+        return np.moveaxis(T, 0, 1).reshape((nb * B, *rest))[:m][::-1]
     within = np.cumsum(rev.reshape((nb, B, *rest)), axis=1)
     carry = np.zeros((nb, *rest))
     np.cumsum(within[:-1, -1], axis=0, out=carry[1:])
