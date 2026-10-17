@@ -273,6 +273,8 @@ class _Pass:
         active = np.ones(n, dtype=bool)
         self._knot_cache: dict = {}  # (k, j) -> the knots of term k > 0 (KNOT-7)
         self._knot_count = 0
+        self._scan_stores: dict = {}  # (k, j) -> the store of knot_scan
+        self._scan_size = 0
         self.knots = [  # the intercept's knots, found once per covariate (KNOT-7)
             self._knots(j, active, L, E) for j in range(p)
         ]
@@ -464,6 +466,28 @@ class _Pass:
                 self._knot_count += kc.knots.size
         return kc
 
+    def _scan_store(self, k: int, j: int, knots: int) -> tuple[dict, int] | None:
+        """The store of ``_scan.knot_scan`` for parent k and covariate j, with
+        the number of leading columns of its Q that stay the same (the columns
+        of the current basis; rebuilds only append), or None when keeping
+        them would pass a budget of 4·n·(p + M) values, so that memory stays
+        O(n·(p + M)). The store changes no value (``knot_scan``).
+        Complexity: O(1)."""
+        m = self.Q.shape[1] - (k == 0)
+        store = self._scan_stores.get((k, j))
+        old = 0 if store is None else store["size"]
+        n, p = self.X.shape
+        if self._scan_size - old + knots * m > 4 * n * (p + len(self.cols)):
+            if store is not None:
+                del self._scan_stores[k, j]
+                self._scan_size -= old
+            return None
+        if store is None:
+            store = self._scan_stores[k, j] = {"size": 0}
+        self._scan_size += knots * m - old
+        store["size"] = knots * m
+        return store, m
+
     def _capped(self, red):
         """A reduction, or RSS_s where the candidate's RSS, RSS_s - red, is at
         most EXACT_FIT·RSS_s: an exact fit up to rounding, since an RSS is at
@@ -623,6 +647,7 @@ class _Pass:
             kc.split,
             intercept=k == 0,
             _checked=True,
+            _cache=self._scan_store(k, j, kc.split.shape[0]),
         )
         red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s

@@ -181,11 +181,23 @@ def _products(
     g: FloatArray, b: FloatArray, V: FloatArray, split: npt.NDArray[np.int64]
 ) -> tuple[FloatArray, FloatArray]:
     """hᵀV and ‖h‖² at every split, from the gaps g (module docstring)."""
-    HV = _suffix(g[:, None] * _suffix(b[:, None] * V)[1:])
+    return _hv(g, b, V, split), _norms(g, b, split)
+
+
+def _hv(
+    g: FloatArray, b: FloatArray, V: FloatArray, split: npt.NDArray[np.int64]
+) -> FloatArray:
+    """hᵀV at every split. Each column of V is summed on its own, so a
+    column's values do not depend on the other columns."""
+    return _suffix(g[:, None] * _suffix(b[:, None] * V)[1:])[split - 1]
+
+
+def _norms(g: FloatArray, b: FloatArray, split: npt.NDArray[np.int64]) -> FloatArray:
+    """‖h‖² at every split."""
     W = _suffix(b * b)[1:]  # W(j) for j = 1..n - 1
     H = _suffix(g * W)
     F = _suffix(g * (2.0 * np.append(H[1:], 0.0) + g * W))
-    return HV[split - 1], F[split - 1]
+    return F[split - 1]
 
 
 def _centered(g: FloatArray, w: FloatArray, split: npt.NDArray[np.int64]) -> FloatArray:
@@ -260,6 +272,7 @@ def knot_scan(
     *,
     intercept: bool = False,
     _checked: bool = False,
+    _cache: tuple[dict, int] | None = None,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -275,6 +288,13 @@ def knot_scan(
     applies the tolerance tau and the legality rules with them.
     ``_checked=True`` skips the checks of ``hinge_products``, for the forward
     pass, whose x, b and split are float64 and int64 arrays that meet them.
+    ``_cache = (store, m)``, for the forward pass, keeps in ``store`` the
+    values that depend only on x, b and split, and hᵀq for the first m columns
+    of Q (after the intercept column with ``intercept=True``), which the
+    caller promises are the same at the next call with this store; a later
+    call computes hᵀq only for the other columns. Every value is the one a
+    call without the store computes, bit for bit: each column is summed on
+    its own (``_hv``).
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -284,15 +304,28 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     part = Q[:, 1:] if intercept else Q
-    V = np.hstack((part, E))
-    x, b0, V, split = (x, b, V, split) if _checked else _check(x, b, V, split)
-    g, b = _to_unit(np.diff(x)), _to_unit(b0)
-    HV, F = _products(g, b, V, split)
     k = part.shape[1]
+    if _cache is None:
+        V = np.hstack((part, E))
+        x, b0, V, split = (x, b, V, split) if _checked else _check(x, b, V, split)
+        g, b = _to_unit(np.diff(x)), _to_unit(b0)
+        HV, F = _products(g, b, V, split)
+        D = _centered(g, b * b, split) if intercept else None
+    else:  # the forward pass's own arrays, as with _checked
+        store, m = _cache
+        b0 = b
+        if "F" not in store:
+            g, b = _to_unit(np.diff(x)), _to_unit(b0)
+            store.update(g=g, b=b, F=_norms(g, b, split), m=0)
+            store["D"] = _centered(g, b * b, split) if intercept else None
+            store["HV"] = np.empty((split.shape[0], 0))
+        g, b, F, D = store["g"], store["b"], store["F"], store["D"]
+        known = store["m"]
+        HV = np.hstack((store["HV"], _hv(g, b, np.hstack((part[:, known:], E)), split)))
+        store["HV"], store["m"] = HV[:, :m], m
     he = HV[:, k:]
     if intercept:
         c = HV[:, :k]
-        D = _centered(g, b * b, split)
     else:
         c0, c = HV[:, 0], HV[:, 1:k]
         D = F - c0**2
@@ -329,8 +362,12 @@ def knot_scan(
     ratio_err[lost], gain_err[lost] = np.inf, np.inf
     # h is 0 at every case, a constant column (LA-3), when no case q ≥ s has
     # b_q ≠ 0 and x_q > x_{s-1}: a count over the inputs.
-    nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
-    zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
+    zero = None if _cache is None else _cache[0].get("zero")
+    if zero is None:
+        nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
+        zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
+        if _cache is not None:
+            _cache[0]["zero"] = zero
     for a in (ratio, gain, ratio_err, gain_err):
         a[zero] = 0.0
     return KnotScan(ratio, gain, ratio_err, gain_err)
