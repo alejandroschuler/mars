@@ -120,11 +120,13 @@ class Fast:
     def basis_matrix(self, X, dirs, cuts) -> np.ndarray:
         from pymars import _terms
 
+        # earth stores a cut for a linear factor; TERM-2 wants 0.0 there (a
+        # cut at dirs 0 is zeroed too, which changes nothing: no factor)
+        cuts = np.where(np.isin(dirs, (0, 2)), 0.0, cuts)
         return _terms.basis_matrix(X, dirs, cuts)
 
 
-IMPLEMENTATIONS: dict[str, Any] = {"reference": Reference()}
-# T12 adds the fast code: "fast": Fast(),
+IMPLEMENTATIONS: dict[str, Any] = {"reference": Reference(), "fast": Fast()}
 
 
 # ---------------------------------------------------------------------------
@@ -741,9 +743,9 @@ def test_the_list_of_differences_is_complete_and_documented():
 
 
 @functools.cache
-def _reference_fit(name: str) -> dict:
+def _fit_of(implementation: str, name: str) -> dict:
     case = load_case(name)
-    return ref.fit_mars(case.X, case.Y, None, case.params, record_candidates=True)
+    return IMPLEMENTATIONS[implementation].fit(case.X, case.Y, None, case.params)
 
 
 def _set(path: str, index, new):
@@ -778,6 +780,7 @@ def _move_pair(columns: int) -> list:
 S01, S10 = "S01_matched_d1", "S10_matched_d1"
 
 
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize(
     ("name", "changes", "found"),
     [
@@ -814,17 +817,19 @@ S01, S10 = "S01_matched_d1", "S10_matched_d1"
         (S01, [_set("rsq", (), lambda r: r + 2e-8)], [("rsq", None, None)]),
     ],
 )  # fmt: skip
-def test_a_new_difference_fails_until_it_is_labeled(name, changes, found):
+def test_a_new_difference_fails_until_it_is_labeled(
+    implementation, name, changes, found
+):
     # The suite fails on a difference that the list does not label, and
     # passes once an entry labels it (brief T07, item 3); a near-tie passes
     # unlisted, but not under an entry of another label. Each case plants
-    # changes in the reference's fit of a fixture that matches earth, at or
+    # changes in the implementation's fit of a fixture that matches earth, at or
     # just past a tolerance of the plan's table.
-    fit = copy.deepcopy(_reference_fit(name))
+    fit = copy.deepcopy(_fit_of(implementation, name))
     for change in changes:
         change(fit)
 
-    class Planted(Reference):
+    class Planted(type(IMPLEMENTATIONS[implementation])):
         def fit(self, X, Y, w, params):
             return fit
 
@@ -835,18 +840,20 @@ def test_a_new_difference_fails_until_it_is_labeled(name, changes, found):
         for i, (f, s, _) in enumerate(found)
     ]
     if found and found[0][2] == "tie":
-        check(differences, "reference", name, [])
+        check(differences, implementation, name, [])
         with pytest.raises(AssertionError, match="near-tie"):
-            check(differences, "reference", name, entries)
+            check(differences, implementation, name, entries)
         return
     if not found:
         return
     with pytest.raises(pytest.fail.Exception, match="does not list"):
-        check(differences, "reference", name, [])
-    check(differences, "reference", name, entries)
+        check(differences, implementation, name, [])
+    check(differences, implementation, name, entries)
     with pytest.raises(pytest.fail.Exception, match="did not occur"):
-        check([], "reference", name, entries)
+        check([], implementation, name, entries)
     with pytest.raises(pytest.fail.Exception, match="bugs"):
-        check(differences, "reference", name, [{**e, "label": "bug"} for e in entries])
+        check(
+            differences, implementation, name, [{**e, "label": "bug"} for e in entries]
+        )
     with pytest.raises(AssertionError):
-        check(differences, "reference", name, [{**entries[0], "pymars": "?"}])
+        check(differences, implementation, name, [{**entries[0], "pymars": "?"}])
