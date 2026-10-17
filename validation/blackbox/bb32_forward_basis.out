@@ -1,0 +1,46 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+
+M = 3e+06
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+2      0.8456 0.8707       0.8707    1           x1      0.4977  2   3         1 
+4      0.9998 0.9998       0.1291    2           x2       3e+06< 4         3   2 
+6      0.9997 0.9998    6.949e-06    1           x1     0.20168  5             1 
+8      0.9997 0.9998    3.847e-06    2           x2       3e+06  6   7         1 
+10     0.9996 0.9998    6.807e-06    2           x2       3e+06  8   9     6   2 final (reached nk 11)
+  forward RSq after steps 1 to 5: 0.8707 0.9998 0.9998 0.9998 0.9998
+  fix message: (none)
+  returned terms: (Intercept), h(x1-0.497699), h(0.497699-x1), h(0.497699-x1)*x2, h(x1-0.201682), h(x2-3e+06), h(3e+06-x2), h(x1-0.201682)*h(x2-3e+06), h(x1-0.201682)*h(3e+06-x2)
+  returned RSq 0.999831; RSq of the returned columns without h(c-x1)*x2 0.980952, with its direction zz*H 0.999831
+  relative orthogonal part of h(c-x1)*x2 against the other columns: 3.91e-08
+
+M = 1e+07
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+2      0.8471 0.8719       0.8719    1           x1      0.4977  2   3         1 
+4      0.9997 0.9997       0.1278    2           x2       1e+07< 4         3   2 
+6      0.9996 0.9997    1.075e-05    1           x1     0.57285  5             1 
+8      0.9996 0.9998    1.187e-05    1           x1     0.78936  6             1 
+10     0.9996 0.9998    1.498e-05    2           x2       1e+07< 7         6   2 final (reached nk 11)
+  forward RSq after steps 1 to 5: 0.8719 0.9997 0.9997 0.9998 0.9998
+  fix message: (none)
+  earth stopped with the error: singular fit encountered
+
+M = 1e+08
+         GRSq    RSq     DeltaRSq Pred     PredName         Cut  Terms   Par Deg
+1      0.0000 0.0000                    (Intercept)
+2      0.8491 0.8736       0.8736    1           x1      0.4977  2   3         1 
+4      0.9997 0.9997       0.1262    2           x2       1e+08< 4         3   2 
+6      0.9997 0.9998    3.317e-05    1           x1     0.38611  5             1 
+8      0.9996 0.9998    1.169e-05    1           x1     0.65167  6             1 
+10     0.9996 0.9998    3.511e-06    2           x2       1e+08  7   8         1 final (reached nk 11)
+  forward RSq after steps 1 to 5: 0.8736 0.9997 0.9998 0.9998 0.9998
+  fix message: Fixed rank deficient bx by removing 1 term, 7 terms remain
+  returned terms: (Intercept), h(x1-0.497699), h(0.497699-x1), h(x1-0.386114), h(x1-0.651674), h(x2-1e+08), h(1e+08-x2)
+  returned RSq 0.925102; RSq of the returned columns without h(c-x1)*x2 0.925102, with its direction zz*H 0.999783
+  relative orthogonal part of h(c-x1)*x2 against the other columns: 2.34e-09
+
+CHECK bb32.1 TRUE at M = 1e8 the fix removes one term after the forward pass, and that term is h(c-x1)*x2, which step 2 added; at M = 3e6 there is no fix and the term is returned
+CHECK bb32.2 TRUE at M = 1e8 the forward RSq after step 2 and after every later step is at least 0.999, while the returned model, every term that the fix kept, has RSq 0.9251 < 0.95: the forward pass kept the removed term's direction in its basis for all later steps, and the fix changed no forward value
+CHECK bb32.3 TRUE at M = 1e8 the RSq of the returned columns plus the removed term's direction zz*H, 0.9998, equals the last forward RSq 0.9998 to the 4 digits of the trace, and without it equals the returned RSq: the forward RSS is that of the span of all forward terms
+CHECK bb32.4 TRUE the removed term's relative orthogonal part against the other returned columns is 2.3e-09 at M = 1e8 and 3.9e-08 at M = 3e6, both below LA-4's 1e-7, yet only the first is removed; at M = 1e7 the fix removes nothing and earth stops with an error from its final least-squares fit: earth's fix has a tolerance of its own, between the two

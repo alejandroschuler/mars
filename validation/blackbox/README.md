@@ -53,3 +53,4 @@ Notes for the trace parser (T02):
 | bb29 | one case far above the others in x: the collinearity test rejects every knot; the mirror x to −x keeps them (spec v2) | LA-3, Conventions |
 | bb30 | the termination code for a GRSq′ below −10: code 2 below −1000, finite values included (spec v2) | STOP-3, CORE-4, FAST-6 |
 | bb31 | when R's `glm`, which earth's refit calls, warns that fitted probabilities are numerically 0 or 1: for a linear predictor above 30 in absolute value (spec v2) | GLM-4 |
+| bb32 | the basis of the forward pass after a step whose new term the dependence fix at the end of the pass removes: the later steps and the forward RSq keep that term's direction (spec v2, #127) | FWD-11, LA-1 |
