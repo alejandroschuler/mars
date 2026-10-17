@@ -389,6 +389,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:41 #129 round 2 at c6ac22a (on b0f93b0): APPROVE (both). Held so that #123 merges first. #122 round 1 at c008d50 pre-checked by its adversarial reviewer (fixes confirmed; posts after the rebase).
 - 18:48 #123 rebased to ee8f0aa (gates B, C PASS; CI 12/12); update checks APPROVE (both). Merged #123 (F120P: fast pruning on near copies, _compare_final bound, LA-4 symbols in final_fit) as e3aa303. Asked f120f to rebase #122 on it.
 - 18:51 Gave #130 to f120p (adfbe4a766e05de0b; branch t130-pruning-near-levels; recheck on e3aa303 first) and #131 to s127 (ae1408769174e97f6; spec decision, branch t131-spec-la5-scope, rebase after #129). Load 2.1; 5-hour 34 %, weekly 36 %.
+- 19:08 #122 rebased to 0881ad2 (range-diff '='; gates B, C PASS, ties near-tie stops 1.1 %; CI 12/12); update checks APPROVE (both). Merged #122 (F120F: fast LA-4 and forward pass on copies; closes #120) as 6bce1d1. Asked s127 to rebase #129; T20 stage 2 go (P1, P3, P4; bit-equal); f120f checks the fast pass against FWD-13 (no code change yet).
 
 ## Core-hour ledger
 
