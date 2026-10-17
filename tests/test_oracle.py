@@ -1741,8 +1741,27 @@ def test_whole_fit_with_drops_that_tie_on_a_near_copy():
     fast = _core.fit_mars(
         X, case.Y, w, _core.MarsParams(**params), record_candidates=True
     )
-    ref = _core.MarsFit.from_dict(case.reference_fit())
-    assert compare_fits(case, fast, ref).near_tie == "removal"
+    ref = _plain(_core.MarsFit.from_dict(case.reference_fit()))
+    # Rounding decides the drop, so the fast code may agree with the
+    # reference or stop at the near-tie; both pass.
+    assert compare_fits(case, fast, ref).near_tie in (None, "removal")
+    # Whatever the platform chose: the record with the other drop at that
+    # stage must be taken as a near-tie, which only the span RSS sees.
+    kept, fwd = case.kept, _plain(ref["forward"])
+    dirs, cuts = fwd["dirs"][fwd["kept"]], fwd["cuts"][fwd["kept"]]
+    B = mars_ref.basis_matrix(kept.X, dirs, cuts)
+    span = mars_ref.Conditioned(kept.X, dirs, cuts, B, mars_ref.Atoms(kept.X), kept.w)
+    rec = {
+        **_plain(ref["pruning"]),
+        **{k: ref[k] for k in ("coef", "rss", "gcv", "rsq", "grsq")},
+        "selected": np.searchsorted(fwd["kept"], ref["selected"]),
+    }
+    removed = np.array(rec["removed"])
+    assert removed[4] in (5, 12)  # stage pos = 9
+    removed[4] = 17 - removed[4]
+    other = {**rec, "removed": removed}
+    out = compare_pruning(case, other, rec, B, kept.Y, kept.w, span)
+    assert out.near_tie == "removal"
 
 
 @pytest.mark.parametrize("case", _designed_cases(), ids=lambda c: c.name)
