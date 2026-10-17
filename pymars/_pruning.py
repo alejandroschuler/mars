@@ -158,21 +158,30 @@ def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArr
     return D - mean, anchor + mean
 
 
-# The kept terms in shifted atoms (LA-4, LA-5). An atom is (j, kind, knot): kind
-# 0 is u_j = x_j - m_j, 1 the hinge (x_j - t)₊ and 2 the hinge (t - x_j)₊, the
-# key order of LA-4. A monomial is a sorted tuple of atoms, () for the
-# intercept, and a term is {monomial index: Fraction}.
+# The kept terms in shifted atoms (LA-4, LA-5). An atom is (s, kind, t_s) with s
+# the symbol of LA-4 (the lowest covariate of a class of copies), kind 0 for u_s,
+# 1 for the hinge (u_s - t_s)₊ and 2 for (t_s - u_s)₊, the key order of LA-4,
+# and t_s an exact Fraction (0 for u_s); kind 3, (s, 3, 0), is the difference
+# e_s = x_s - x_r of a near copy (``_near_copies``), and kind 4, (s, 4, t_s), the
+# difference of its hinge from the same hinge on the original, canonical
+# atoms only. A monomial is a
+# sorted tuple of atoms, () for the intercept, and a term is {monomial index:
+# Fraction}.
 _KIND = {_terms.LINEAR: 0, _terms.PLUS: 1, _terms.MINUS: 2}
+_ZERO = Fraction(0)
 
 
 class _Monomials(NamedTuple):
     """The terms as exact polynomials in the atoms of LA-4. ``keys`` the
-    monomials of LA-4 (atoms u_j, (x_j - t)₊ and (t - x_j)₊), ``terms`` (M,),
-    term k as {index in keys: Fraction}; ``canon`` each of ``keys`` as an exact
-    polynomial in the canonical monomials, whose columns are ``E`` (n, P), not
-    centered, and ``cterms`` the terms in them; the cases ``X`` and the shifts
-    ``m``. The canonical atoms are u_j and (x_j - t)₊ only, so that the
-    columns of a pair at one knot and of u_j are not dependent on the data."""
+    monomials of LA-4, in the symbols of LA-4 (copies u_j = 2^k·u_s only), and
+    ``terms`` (M,), term k as {index in keys: Fraction}: these decide LA-4 in
+    ``_shifted_fit``. ``canon`` each of ``keys`` as an exact polynomial in the
+    canonical monomials, whose columns are ``E`` (n, P), not centered, and
+    ``cterms`` the terms in them; ``ckeys`` the canonical monomials; ``atoms``
+    the column of each atom of ``keys``. The canonical atoms are u_s, (u_s -
+    t_s)₊ and d_s only, so that the columns of a pair at one knot and of u_s
+    are not dependent on the data; they also use exact affine copies and near
+    copies, which LA-4 does not (#119)."""
 
     keys: list
     terms: list
@@ -180,8 +189,7 @@ class _Monomials(NamedTuple):
     E: FloatArray
     cterms: list
     ckeys: list
-    X: FloatArray
-    m: FloatArray
+    atoms: dict
 
 
 def _times(poly: dict, parts: dict) -> dict:
@@ -195,13 +203,6 @@ def _times(poly: dict, parts: dict) -> dict:
     return {e: f for e, f in new.items() if f != 0}
 
 
-def _atom_column(X: FloatArray, m: FloatArray, atom: tuple) -> FloatArray:
-    j, kind, t = atom
-    if kind == 0:
-        return X[:, j] - m[j]
-    return _terms.factor(_terms.PLUS if kind == 1 else _terms.MINUS, X[:, j], t)
-
-
 def _shifts(X: FloatArray) -> FloatArray:
     """m_j of LA-4: the smallest value of covariate j over the cases when its
     absolute value is larger than the range of x_j, else 0. Complexity: O(n·p)."""
@@ -209,14 +210,46 @@ def _shifts(X: FloatArray) -> FloatArray:
     return np.where(np.abs(lo) > hi - lo, lo, 0.0)
 
 
+def _symbols(U: FloatArray, used: list) -> dict:
+    """The copies of LA-4 among the covariates ``used``, as {j: (s, k)}: u_j =
+    2^k·u_s at every case, exactly, with s the lowest covariate of the class
+    (the values compare as real numbers, so -0 equals +0). k is the difference
+    of the binary exponents of the largest |values|, and the column with the
+    smaller one is multiplied by 2^|k|, which does not round, before the
+    comparison. A column of zeros (a constant covariate) takes k = 0.
+    Complexity: O(n·u²) for u used covariates."""
+    out: dict = {}
+    reps: list = []
+    for j in used:
+        u = U[:, j]
+        top = float(np.max(np.abs(u)))
+        for s in reps:
+            us = U[:, s]
+            ts = float(np.max(np.abs(us)))
+            if top == 0.0 or ts == 0.0:
+                if top == ts:
+                    out[j] = (s, 0)
+                    break
+                continue
+            k = math.frexp(top)[1] - math.frexp(ts)[1]
+            if np.array_equal(np.ldexp(us, max(k, 0)), np.ldexp(u, max(-k, 0))):
+                out[j] = (s, k)
+                break
+        else:
+            reps.append(j)
+            out[j] = (j, 0)
+    return out
+
+
 def _copies(X: FloatArray, used: list) -> dict:
     """The covariates among ``used`` that are exact affine copies of an earlier
     one at the cases, x_j = a·x_r + b in rational arithmetic with a ≠ 0, as
-    {j: (r, a, b)}, r the first of its class. A copy of a covariate is one
-    symbol with it (#99), so that a product with a large m_j on the copy
-    cancels exactly against the same product on the original (LA-4, LA-5).
-    Complexity: O(n·u²) for u used covariates, and O(n) rational operations
-    for each candidate pair."""
+    {j: (r, a, b)}, r the first of its class. The canonical columns write a
+    copy in the atoms of x_r, so that a product with a large m_j on the copy
+    cancels exactly against the same product on the original (LA-5; LA-4
+    allows such an exact relation in the sums of squares). Complexity: O(n·u²)
+    for u used covariates, and O(n) rational operations for each candidate
+    pair."""
     out: dict = {}
     reps: list = []
     for j in used:
@@ -246,63 +279,73 @@ def _copies(X: FloatArray, used: list) -> dict:
     return out
 
 
-def _linear(j: int, m: FloatArray, copies: dict) -> dict:
-    """u_j = x_j - m_j in the atoms of the symbol of x_j: for a copy x_j = a·x_r
-    + b, a·u_r + (a·m_r + b - m_j). Complexity: O(1)."""
-    if j not in copies:
-        return {(j, 0, 0.0): Fraction(1)}
-    r, a, b = copies[j]
-    const = a * Fraction(float(m[r])) + b - Fraction(float(m[j]))
-    return {(r, 0, 0.0): a} | ({None: const} if const else {})
-
-
-def _factor_parts(j: int, kind: int, t: float, m: FloatArray, copies: dict) -> dict:
-    """A factor as {atom: Fraction}, None standing for the constant 1: x_j =
-    u_j + m_j for a linear factor (in u_r for a copy of x_r, ``_linear``), the
-    hinge for a hinge. Complexity: O(1)."""
-    if kind == 0:
-        parts = _linear(j, m, copies)
-        const = parts.pop(None, Fraction(0)) + Fraction(float(m[j]))
-        return parts | ({None: const} if const else {})
-    return {(j, kind, t): Fraction(1)}
-
-
-def _canonical(atom: tuple, X: FloatArray, m: FloatArray, copies: dict) -> dict:
-    """An atom in the canonical atoms, exactly on the cases: (t - x)₊ =
-    (x - t)₊ - u_j + (t - m_j); a hinge that is linear on every case is that
-    line, and one that is 0 on every case is 0. Complexity: O(n)."""
-    j, kind, t = atom
-    if kind == 0:
-        return {atom: Fraction(1)}
-    x = X[:, j]
-    lin = _linear(j, m, copies)
-    const = Fraction(t) - Fraction(float(m[j]))  # t - m_j
-    if (np.all(x <= t) and kind == 1) or (np.all(x >= t) and kind == 2):
-        return {}
-    if np.all(x >= t) or np.all(x <= t):  # the line ±(x_j - t) on every case
-        sign = 1 if kind == 1 else -1
-        out = {q: sign * f for q, f in lin.items()}
-        out[None] = out.get(None, 0) - sign * const
-        return {q: f for q, f in out.items() if f != 0}
-    if kind == 1:
-        return {atom: Fraction(1)}
-    out = {(j, 1, t): Fraction(1)} | {q: -f for q, f in lin.items()}
-    out[None] = out.get(None, 0) + const
-    return {q: f for q, f in out.items() if f != 0}
+def _near_copies(X: FloatArray, U: FloatArray, m: FloatArray, own: list) -> dict:
+    """{s: (r, e, c)} for a shifted symbol s that is a near copy of an earlier
+    shifted symbol r among ``own``: x_s = x_r + e exactly, with e ≠ 0 at a few
+    cases (each difference is exact by Sterbenz, the two values having one
+    sign and being within a factor of 2, or a value is 0) and ‖e‖ ≤
+    2^-10·‖u_s‖, such as a copy one ulp off at one case; c = m_r - m_s. The
+    canonical columns write u_s as u_r + e + c, so that the part of a product
+    that the terms span cancels as a formula and the small e is not lost under
+    a large m_j (LA-4 allows this exact relation in the sums of squares; the
+    fast forward pass does the same since PR #112; seeds 90 and 213 of #120).
+    e is 0 wherever the two covariates are equal, so it adds no direction that
+    the data nearly span. An unshifted near copy needs none of this, since no
+    factor m_j multiplies it. Complexity: O(n·u²) for u such symbols."""
+    out: dict = {}
+    cands = [s for s in own if m[s] != 0.0]
+    for a, s in enumerate(cands):
+        xs = X[:, s]
+        for r in cands[:a]:
+            if r in out:
+                continue
+            xr = X[:, r]
+            e = xs - xr
+            same = (np.sign(xs) == np.sign(xr)) & (np.abs(xs) <= 2 * np.abs(xr))
+            exact = np.all(
+                (xr == 0) | (xs == 0) | (same & (np.abs(xr) <= 2 * np.abs(xs)))
+            )
+            if exact and 0 < np.linalg.norm(e) <= 2.0**-10 * np.linalg.norm(U[:, s]):
+                out[s] = (r, e, Fraction(float(m[r])) - Fraction(float(m[s])))
+                break
+    return out
 
 
 def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
     """Write each term exactly in the atoms of LA-4: a linear factor x_j is
-    u_j + m_j, a hinge is its own atom (``_factor_parts``; exact copies of a
-    covariate are one symbol, ``_copies``), and each monomial in the canonical
-    atoms (``_canonical``). A term with L linear factors of shifted covariates
-    has at most 3^L·2^h canonical monomials for h hinges. u_j = x_j - m_j is
-    exact in float64 (Sterbenz) when |m_j| ≥ 2·range, and its rounding is of
-    the size of the range otherwise, so no column of E carries the factor m_j.
-    Complexity: O(M·3^d) rational operations, O(n·d·P) for E, and O(n·p·d) and
-    that of ``_copies`` for the atoms."""
+    2^k·u_s + m_j for the symbol s of x_j (``_symbols``), a hinge is the atom
+    2^k·(u_s - t_s)₊ or 2^k·(t_s - u_s)₊ with t_s = 2^-k·(t - m_j); then each
+    monomial in the canonical atoms, where (t_s - u_s)₊ = (u_s - t_s)₊ - u_s +
+    t_s, a hinge that is linear on every case is that line and one that is 0
+    on every case is 0, and u_s is written in the atoms of an earlier symbol
+    when it is an exact affine copy (``_copies``) or a near copy (``_near_copies``)
+    of it. A term with L linear factors of shifted covariates has at most
+    3^L·2^h canonical monomials for h hinges. u_j = x_j - m_j is exact in
+    float64 (Sterbenz) when |m_j| ≥ 2·range, and its rounding is of the size
+    of the range otherwise, so no column of E carries the factor m_j.
+    Complexity: O(M·3^d) rational operations, O(n·d·P) for E, and O(n·p²·d)
+    rational operations at most for the copies."""
     m = _shifts(X)
-    copies = _copies(X, np.flatnonzero(np.any(dirs != 0, axis=0)).tolist())
+    U = X - m[None, :]
+    used = np.flatnonzero(np.any(dirs != 0, axis=0)).tolist()
+    sym = _symbols(U, used)
+    own = [j for j in used if sym[j][0] == j]
+    affine = _copies(X, own)
+    near = _near_copies(X, U, m, [s for s in own if s not in affine])
+    where: dict = {}  # a hinge atom -> (covariate, knot, k) that evaluates it
+
+    def la4_parts(j: int, kind: int, t: float) -> dict:
+        s, k = sym[j]
+        scale = Fraction(2) ** k
+        if kind == 0:
+            mj = Fraction(float(m[j]))
+            return {(s, 0, _ZERO): scale} | ({None: mj} if mj else {})
+        ts = (Fraction(t) - Fraction(float(m[j]))) / scale
+        where.setdefault((s, kind, ts), (j, t, k))
+        if kind == 2:
+            where.setdefault((s, 1, ts), (j, t, k))
+        return {(s, kind, ts): scale}
+
     index: dict = {}
     keys: list = []
     terms: list = []
@@ -310,15 +353,90 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
         poly: dict = {(): Fraction(1)}
         for j in np.flatnonzero(row):
             kind = _KIND[int(row[j])]
-            t = float(cut[j]) if kind else 0.0
-            poly = _times(poly, _factor_parts(int(j), kind, t, m, copies))
+            poly = _times(poly, la4_parts(int(j), kind, float(cut[j])))
         term = {}
         for key, f in poly.items():
             term[index.setdefault(key, len(index))] = f
             if len(keys) < len(index):
                 keys.append(key)
         terms.append(term)
+
     atoms: dict = {}
+
+    def column(atom: tuple) -> FloatArray:
+        if atom not in atoms:
+            s, kind, _ = atom
+            if kind == 0:
+                atoms[atom] = U[:, s]
+            elif kind == 3:
+                atoms[atom] = near[s][1]
+            elif kind == 4:
+                atoms[atom] = diffs[atom]
+            else:
+                j, t, k = where[atom]
+                code = _terms.PLUS if kind == 1 else _terms.MINUS
+                atoms[atom] = np.ldexp(_terms.factor(code, X[:, j], t), -k)
+        return atoms[atom]
+
+    def u_canon(s: int) -> dict:
+        if s in affine:
+            r, a, b = affine[s]
+            const = a * Fraction(float(m[r])) + b - Fraction(float(m[s]))
+            return {(r, 0, _ZERO): a} | ({None: const} if const else {})
+        if s in near:
+            r, _, const = near[s]
+            out = {(r, 0, _ZERO): Fraction(1), (s, 3, _ZERO): Fraction(1)}
+            return out | ({None: const} if const else {})
+        return {(s, 0, _ZERO): Fraction(1)}
+
+    diffs: dict = {}  # (s, 4, t_s) -> h_s of a hinge on a near copy
+
+    def hinge_canon(atom: tuple) -> dict:
+        # (u_s - t_s)₊, neither 0 nor a line on the cases. On a near copy s of
+        # r it is the same hinge on x_r plus h = the difference, when h is
+        # exact; h is 0 wherever x_s = x_r, as e_s is (the adversarial review
+        # of PR #123). The hinge itself may be small, as at a knot one ulp
+        # below a level, so h need not be small next to it.
+        s, _, ts = atom
+        j, t, k = where[atom]
+        if s in near and j == s and k == 0:
+            r = near[s][0]
+            hs, hr = column(atom), _terms.factor(_terms.PLUS, X[:, r], t)
+            h = hs - hr
+            exact = np.all((hr == 0) | (hs == 0) | ((hs <= 2 * hr) & (hr <= 2 * hs)))
+            if exact:
+                ratom = (r, 1, Fraction(t) - Fraction(float(m[r])))
+                where.setdefault(ratom, (r, t, 0))
+                out = dict(canonical(ratom))
+                if np.any(h != 0):
+                    diffs[(s, 4, ts)] = h
+                    out[(s, 4, ts)] = out.get((s, 4, ts), 0) + Fraction(1)
+                return out
+        return {atom: Fraction(1)}
+
+    def canonical(atom: tuple) -> dict:
+        s, kind, ts = atom
+        if kind == 0:
+            return u_canon(s)
+        j, t, _ = where[atom]
+        x = X[:, j]
+        if (kind == 1 and np.all(x <= t)) or (kind == 2 and np.all(x >= t)):
+            return {}
+        lin = u_canon(s)
+        if np.all(x >= t) or np.all(x <= t):  # the line ±(u_s - t_s) on every case
+            sign = 1 if kind == 1 else -1
+            out = {q: sign * f for q, f in lin.items()}
+            out[None] = out.get(None, 0) - sign * ts
+        elif kind == 1:
+            return hinge_canon(atom)
+        else:  # (t_s - u_s)₊ = (u_s - t_s)₊ - u_s + t_s
+            out = dict(hinge_canon((s, 1, ts)))
+            for q, f in lin.items():
+                out[q] = out.get(q, 0) - f
+            out[None] = out.get(None, 0) + ts
+        return {q: f for q, f in out.items() if f != 0}
+
+    catoms: dict = {}
     cindex: dict = {}
     cols: list = []
     canon: list = []
@@ -326,9 +444,10 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
     for key in keys:
         poly = {(): Fraction(1)}
         for atom in key:
-            if atom not in atoms:
-                atoms[atom] = _canonical(atom, X, m, copies)
-            poly = _times(poly, atoms[atom])
+            column(atom)
+            if atom not in catoms:
+                catoms[atom] = canonical(atom)
+            poly = _times(poly, catoms[atom])
         out = {}
         for ckey, f in poly.items():
             if ckey not in cindex:
@@ -336,12 +455,12 @@ def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
                 ckeys.append(ckey)
                 col = np.ones(X.shape[0])
                 for atom in ckey:
-                    col = col * _atom_column(X, m, atom)
+                    col = col * column(atom)
                 cols.append(col)
             out[cindex[ckey]] = f
         canon.append(out)
     cterms = [_compose(t, canon) for t in terms]
-    return _Monomials(keys, terms, canon, np.column_stack(cols), cterms, ckeys, X, m)
+    return _Monomials(keys, terms, canon, np.column_stack(cols), cterms, ckeys, atoms)
 
 
 def _compose(poly: dict, canon: list) -> dict:
@@ -457,16 +576,16 @@ class _Shifted:
     covariate (LA-4, LA-5): the terms are exact polynomials in the monomials
     of shifted atoms (``_monomials``), whose columns carry no large mean.
 
-    One QR of the √w-scaled centered monomial columns gives R_E and z_E; a QR
-    of R_E times the reduced terms of the forward order (``_reduce``) gives an
-    orthonormal basis Q_0 of the span of all terms, the RSS of all terms, and
-    H = Q_0ᵀR_E. For a working order, the terms are reduced in that order and
-    A = H·G is factored, A = Q_A·R_A, with Z = Q_Aᵀ·Q_0ᵀz_E: the prefixes of
+    A QR of the √w-scaled centered monomial columns E_w times the reduced
+    terms of the forward order (``_reduce``) gives an orthonormal basis Q_0 of
+    the span of all terms, the RSS of all terms, z = Q_0ᵀ(√w·Y) and H =
+    Q_0ᵀE_w. For a working order, the terms are reduced in that order and
+    A = H·G is factored, A = Q_A·R_A, with Z = Q_Aᵀz: the prefixes of
     A span what the prefixes of the order span, and no column of A carries a
     factor m_j that the earlier terms hold, so each prefix RSS keeps LA-5. The
     RSS increase of a drop comes from the rows of (R_A·U)⁻¹ = T·R_A⁻¹, with T
     = U⁻¹ exact (``_reduce``), so a term's coefficient m_j never multiplies a
-    rounded column. Complexity: O(n·P·(P + K)) once, P ≤ M·3^d monomials, and
+    rounded column. Complexity: O(n·M·(P + K)) once, P ≤ M·3^d monomials, and
     per working order O(M³ + M²·(P + K)) floats and the rational work of
     ``_reduce``."""
 
@@ -480,14 +599,17 @@ class _Shifted:
             Ec[:, rest] = _centered(Ec[:, rest], w)[0]
         As = sw[:, None] * Ec
         self.share = np.sqrt(np.sum(np.square(As), axis=0))
-        Q, R = np.linalg.qr(As)
-        resid, z = _linalg.orthogonalize(Q, sw[:, None] * Yc)
         red = _reduce(self.terms, self.share)
         G, _ = _scaled_columns(red, self.share, P)
-        Q0, _ = np.linalg.qr(R @ G)
-        resid0, self.z = _linalg.orthogonalize(Q0, z)
-        self.rss = float(np.sum(np.square(resid)) + np.sum(np.square(resid0)))
-        self.H = Q0.T @ R
+        # The terms' columns are factored directly, not through a QR of the
+        # monomials: the canonical monomials can be dependent on the cases
+        # (the differences of a near copy are 0 at all but a few cases), and
+        # the rounding of such a factor in a direction the terms do not span
+        # would enter the RSS times m_j (the adversarial review of PR #123).
+        Q0, _ = np.linalg.qr(As @ G)
+        resid, self.z = _linalg.orthogonalize(Q0, sw[:, None] * Yc)
+        self.rss = float(np.sum(np.square(resid)))
+        self.H = Q0.T @ As
         self.order = np.arange(len(self.terms))
         self._factor(red)
 
@@ -782,7 +904,7 @@ def _shifted_fit(
     def pivot_norm(q: int) -> float:  # the w-norm of a monomial of LA-4
         col = sw.copy()
         for atom in mono.keys[q]:
-            col = col * _atom_column(mono.X, mono.m, atom)
+            col = col * mono.atoms[atom]
         return float(scipy.linalg.norm(col))
 
     rank = [(-len(key), key) for key in mono.keys]
