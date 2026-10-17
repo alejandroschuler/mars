@@ -400,6 +400,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 21:17 #132 round 1 at aa7a508 (rebased on 4e7b704): APPROVE (both). Merge refused: CI fails on ubuntu 3.11 and lowest-deps 3.10 in the new seed-1287 oracle test (expects a removal near-tie stop that other platforms do not hit); sent to f120p. #136 rebased to 5996224 (gates B, C PASS); its reviews start after the 5-hour reset (78 % now).
 - 21:38 #132 at 354518f (seed-1287 test platform-independent; still fails without span): APPROVE (both); CI 12/12. Merged #132 (fast pruning near levels; part of #130) as 205aa2e. #130 stays open (seed 44, knots one ulp apart). Next after the 5-hour reset (22:20): reviews of #136 (R127) and #124 (T20), each rebased on 205aa2e; f120p takes #137.
 - 22:22 5-hour reset (0 %); weekly 45 %. #136 at b59d54f and #124 at 93f1182 (both rebased on 205aa2e; gates B, C PASS; #124 still 533 fits hash-equal). Started review-136-spec a7a465c22e4424e8e (sonnet), review-136-adversarial a33061394e3da8611 (opus), review-124-spec a13728a9dd294a9b8 (sonnet); review-124-adversarial waits for a slot. f120p takes #137.
+- 22:52 review-136-spec APPROVE at b59d54f. #138 (#137) draft at 412c878: final_fit takes LA-4's kept terms from independent_terms (FWD-11's test); a reduced column exactly 0 gets coefficient 0 (seed 295); reviewer's 1500 seeds: 0 differences (main 17 + 1 exception); checks and gates running. Started review-124-adversarial adab3b075879857e2 (opus). Brief section T21 written. 5-hour 8 %, weekly 46 %.
 
 ## Core-hour ledger
 
