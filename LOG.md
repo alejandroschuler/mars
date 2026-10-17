@@ -379,6 +379,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:46 #125 rebased to 6147abf (range-diff '='); update check APPROVE. Merged #125 (T22a user docs) as 7970a8a. #123 round 2 at ef23407 (sign-of-c case; tests only); asked f120p to rebase on 7970a8a, then gates B, C. Stopped the executor's gate run on e2cce2c (stale).
 - 17:48 #123 rebased to 0630e95 (pymars/ equal to e2cce2c); spec update check APPROVE; adversarial narrow recheck running; executor running gates B, C (.worktrees/gates-123). #129 (S127) ready at db4f3e2: new FWD-13, forward basis F_s = F_(s-1) plus the chosen candidate's LA-2 columns, RSS_s = RSS(F_s); FWD-11 only after the pass (earth does the same: bb32). Followers: reference forward_pass, fast _forward.py check, oracle tests. Started review-129-spec af7e95867c227b3ea (opus); adversarial waits for a reviewer slot.
 - 17:50 #123 adversarial recheck APPROVE at 0630e95. Started review-129-adversarial add2ce0d80dfea768 (opus). Load average 11.0/13.3/12.9 (15-min above 11): no new spawns until it falls. f120p sweep at 287/300, all ok. 5-hour 13 %, weekly 32 %.
+- 17:55 #122 (F120F) ready at 70c0b67 (rebased on 43f956f; gates B, C PASS; ties draws 2.1 % near-tie stops; 0 candidates outside LA-5 on seeds 0-299 and forced kinds; integer exact_residual). Its reviews wait: load 18 and 3 reviewers running. Seed 1287 pruning difference added to #130. Stopped the executor's duplicate gate run on #123 (f120p runs the same gates); its partial log is not kept.
 
 ## Core-hour ledger
 
