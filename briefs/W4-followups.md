@@ -51,3 +51,14 @@ Read the plan's T22 row, the definition of done (items 1, 3, 5 and 7), `dev/DECI
 4. `docs/differences.md`: the user-facing differences from earth, from `validation/DIFFERENCES.md` and DECISIONS.md, in plain words with the label of each (rule, quirk, tie, numeric).
 5. CHANGELOG: the 2.0.0.dev0 entry gains "Added" for the estimators and the validation.
 Leave simulation results out: T22b adds them after T21. Plain prose (COMMON.md). Reviewer: 1 (`single`) now; the plan asks for two agent reviews of the docs, and the second comes in T23.
+
+## C07: the fast code against earth (branch `t07-fast-conformance`; definition of done item 4)
+
+Files: `tests/test_conformance.py`, `validation/DIFFERENCES.md`, and the conformance helpers it imports under `validation/` if needed. Do not change `pymars/` or `tests/reference/`.
+
+`tests/test_conformance.py` still has `# T12 adds the fast code: "fast": Fast(),`, so the fast code is never compared with earth. The definition of done asks that the fast code conform to earth as well as the reference does.
+
+1. Turn on the `Fast` implementation and run the conformance suite on current main (gate C runs the `external` tests; read the test file for how to run it with R).
+2. Regenerate `validation/DIFFERENCES.md` for both implementations on current main (its counts are from the reference at 2a00063). Every fast-code difference from earth that the reference does not share is a finding: triage it (rule, quirk, tie, numeric, bug) with exact arithmetic or the reference, and report each bug with its fixture to the executor. Do not fix `pymars/`; F120F and F120P own the fast modules now.
+3. The test must fail when a fast-code result is planted wrong (as the reference's planted test does), with the fewest lines.
+Reviewer: 1 (`single`). Run gate B and gate C on the head. The fast code changes when #122, #123 and T20 merge; the executor reruns this suite before the freeze.
