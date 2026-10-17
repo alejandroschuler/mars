@@ -122,9 +122,11 @@ def test_earth_fixture(load_fixture, name):
             break
         assert s < len(earth) and ours[s] == earth[s], f"step {s + 1}"
         last = int(np.flatnonzero(fp.step == s + 1)[-1])
-        assert abs(fp.rss[s + 1] - fwd_rss[last]) <= 1e-8 * fp.rss[s]
+        if fwd_rss is not None:
+            assert abs(fp.rss[s + 1] - fwd_rss[last]) <= 1e-8 * fp.rss[s]
         matched += 1
-    assert abs(fp.rss[0] - fwd_rss[0]) <= 1e-8 * fp.rss[0]
+    if fwd_rss is not None:  # None after earth's rank fix (bb32, #127)
+        assert abs(fp.rss[0] - fwd_rss[0]) <= 1e-8 * fp.rss[0]
     if matched == len(ours):
         assert len(earth) == len(ours)
         assert fp.termination == result["termcond"]
