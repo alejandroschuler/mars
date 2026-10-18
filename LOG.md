@@ -415,6 +415,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 22:05 User decision relayed from local_a59469db and checked in its transcript: option C (numba kernel) after a measurement run; opened the T20b issue. review-141-adversarial REQUEST_CHANGES at 44c36e2 (the zero set differs between term columns and reduced rows: 4-case counterexample; define it on term columns in term order; non-blocking: modular rank test with a fixed prime). Waiting for review-141-spec. Sent #124 narrow adversarial recheck to ad4a82742af063995.
 - 22:10 #138 at 74b7d17 (f138-fix): weighted case 618 kills the w=None mutant; docstring; gates B, C PASS; CI 12/12. Rechecks (adversarial a7dfac97e812a8145, spec update adc24b76f6e0489e1) wait for a reviewer slot (3 running).
 - 22:25 review-141-spec REQUEST_CHANGES at 44c36e2: 'no tolerance, however large' fails in float64 (seed 406: coefficients -3.8e21, float RSS 6.4e11 vs 12.96; seed 173); state the accuracy for returned coefficients and pick a tolerance on term columns (lm.fit-like); the reference is wrong on seed 173 too. Sent both #141 reviews to s139-spec (round 2). Sent #138 narrow recheck to a7dfac97e812a8145.
+- 22:35 #138 rechecks APPROVE (both) at 74b7d17; merged #138 (final fit decides LA-4 with FWD-11's test; closes #137) as 8dc9c6d. Told f140 to rebase. #124, #136 must rebase on 8dc9c6d.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
