@@ -447,6 +447,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 04:40 #144 update approvals (both, own posts) at 8a54447; merged #144 (final fit exact residual near the span; closes #140) as 9b226ed. Asked f140-final-rss to rebase #147. Rebased #149 to f58ef29; spec reviewer runs range-diff, hash on both paths, gates B, C, then its verdict; adversarial after. F139 waits for the 5-hour reset (61 %).
 - 04:50 #147 rebased to c1489b0 on 9b226ed (gates B, C PASS; CI 12/12; hash equal; smoke 0.45). Its two reviews, #153's two reviews and F139 start after the 5-hour reset (01:10 PDT).
 - 05:10 #149 update approvals (both, own posts) at f58ef29 (hash equal both paths; gates B, C PASS). Merged #149 (fast LA-7 and LA-2 on F_s; closes #142) as d45f4d0. Open PRs: #147 (#146; needs rebase on d45f4d0 then two reviews), #153 (R139; needs rebase then two reviews). After the 5-hour reset: those reviews, F139.
+- 05:20 User decisions relayed from local_a59469db and checked in its transcript (answers 'Where wheels exist', 'Record as open questions', and the speed quote): recorded on #145 and in STATE. Plan after the 5-hour reset: numba dependency with marker (sonnet); one review round each for #147 and #153 (park if more is needed); an OQ-recording task for the edge issues; a design task for the next compile step without the bit-equality rule. F139 not started (near-span only; recorded as OQ-12 unless ordinary data reach it).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
