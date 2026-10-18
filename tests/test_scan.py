@@ -115,27 +115,35 @@ def _bits(a):
 @needs_numba
 @given(
     seeds,
-    st.integers(2, 60),
-    st.integers(1, 4),
-    st.integers(1, 2),
+    st.integers(2, 300),
+    st.integers(1, 12),
+    st.integers(1, 12),
     st.booleans(),
     st.booleans(),
     st.sampled_from([0.0, 1e6]),
     st.booleans(),
+    st.sampled_from(["any", "up", "down"]),
 )
-def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
-    seed, n, r, K, intercept, ties, shift, weighted
+def test_the_compiled_scan_agrees_with_the_numpy_scan(
+    seed, n, r, K, intercept, ties, shift, weighted, order
 ):
-    """``_kernels`` changes no value (T20b): ``knot_scan`` with the kernels,
-    on rows in the caller's order (``_order``) and through the forward
-    pass's store, gives the bits of the numpy scan on the gathered rows, for
-    any order of the splits, repeated splits, block sizes from n = 2 up,
-    and weights that are not integers."""
+    """``_kernels`` (T20b, K145a): ``knot_scan`` with the kernels, on rows in
+    the caller's order (``_order``) and through the forward pass's store,
+    agrees with the numpy scan on the gathered rows, for any order of the
+    splits (and the monotone orders, which ``hv`` reads with no sort),
+    repeated splits, block sizes from n = 2 up, more than one tile of rows
+    (``_kernels.TILE``), and weights that are not integers. The sums over
+    the columns may round differently (no bit-identity, #145): r and K up
+    to 12 reach numpy's pairwise sums, where the bits differ. Each value is
+    within the numpy value's error bound, the bounds agree to rounding, and
+    the zero hinges (value and bound 0) are the same."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
     if weighted:  # b = √w with weights that are not integers: W_pre's sums round
         b = b * np.sqrt(rng.uniform(0.1, 5.0, n))
     split = rng.permutation(np.concatenate((splits, splits[: len(splits) // 2])))
+    if order != "any":
+        split = np.sort(split)[:: 1 if order == "up" else -1]
     perm = rng.permutation(n)  # row q in the order of x is row perm[q]
     Qc, Ec = np.empty_like(Q), np.empty_like(E)
     Qc[perm], Ec[perm] = Q, E
@@ -163,9 +171,20 @@ def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
                 )
         finally:
             _kernels.ENABLED = _kernels.AVAILABLE
+    want = runs[0]
     for run in runs[1:]:
-        for got, want in zip(run, runs[0], strict=True):
-            assert np.array_equal(_bits(got), _bits(want))
+        for got, ref, err in (
+            (run.ratio, want.ratio, want.ratio_err),
+            (run.gain, want.gain, want.gain_err),
+        ):
+            assert np.all(np.abs(got - ref) <= err)
+        zero = (want.ratio == 0.0) & (want.ratio_err == 0.0)
+        assert np.array_equal((run.ratio == 0.0) & (run.ratio_err == 0.0), zero)
+        for got, ref in (
+            (run.ratio_err, want.ratio_err),
+            (run.gain_err, want.gain_err),
+        ):
+            np.testing.assert_allclose(got, ref, rtol=1e-12, atol=0.0)
 
 
 @needs_numba
@@ -199,6 +218,19 @@ def test_the_kernels_round_every_product():
         want = _scan._centered(g, w, split)
     assert np.isnan(want).any()
     assert np.array_equal(_bits(_kernels.centered(g, w, split)), _bits(want))
+
+
+@needs_numba
+def test_prep_scales_subnormal_values_as_ldexp():
+    """``_kernels.prep`` gives the bits of ``_scan._to_unit`` where 2^e is not
+    a normal number (the ``math.ldexp`` branch of ``_kernels._scale``): a
+    parent whose largest value is subnormal, so e > 1023."""
+    x = np.array([0.0, 1.0, 3.0, 3.5])
+    b = np.array([3e-310, -1e-312, 0.0, 5e-320])
+    g, bs = _kernels.prep(x, b)
+    assert np.array_equal(_bits(g), _bits(_scan._to_unit(np.diff(x))))
+    assert np.array_equal(_bits(bs), _bits(_scan._to_unit(b)))
+    assert 0.5 <= np.max(np.abs(bs)) < 1.0
 
 
 def _pair_basis(x, extra):
