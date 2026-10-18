@@ -470,6 +470,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:05 #163 (N157) draft at c61a395: six items done (item 6 in validation/harness/tests/test_compare.py); gate C PASS; gate B FAIL only in tests/test_scan.py::test_the_compiled_scan_agrees_with_the_numpy_scan (seed 1048576, n=10, r=9: ratio_err differs 2e-9 vs rtol 1e-12), a flaky test on main from #159's widened test. Sent the fix to k145a-scan (branch t145a-scan-test-tol).
 - 12:15 #162 round 1 at c12af9a (tie rule fixed in _centered and _gcv.tss, pinned; invariance shift from sd; CI 13/13). Gates fail only on two flaky tests on main: test_scan compiled-vs-numpy tolerance (k145a fixing) and test_oracle cross-kind tie check at lines 885-889 (sent to c157o-oracle, branch t157o-cross-kind-tie). #162 reruns gates after both fixes merge.
 - 12:35 #165 single APPROVE (no flakes at 10 ci seeds and thorough; 343 of 400 draws catch a 1e-6 bound error). Merged #165 (scan test tolerance) as e079e76. Waiting for the oracle cross-kind fix; then #162 and #163 rerun gates.
+- 13:05 #166 single APPROVE (exception as narrow as FWD-12 allows; pin fails with the old check). Merged #166 (oracle cross-kind second) as b44b6a1. Asked c157f-fast to rebase #162 and rerun gates, n157-nits to rebase #163. 5-hour reset (0 %); weekly 67 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
