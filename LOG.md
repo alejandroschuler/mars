@@ -460,6 +460,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:25 #159 APPROVE (both; adversarial: 7,560 knot_scan comparisons within bounds, 150 fits hash-equal on both paths). Merge refused: not on 89d4ae3. Sent k145a-scan a short round: rebase plus the test's zero-pattern fix; then update checks.
 - 08:40 #161 (C157r) draft at 610afee: reference 2230 -> 1540 lines; float64 LA-4 (1e-7), pivoted Householder QR, LA-6 centering; earth conformance 148 passed, no new difference. Its API change breaks tests in test_linalg.py and test_oracle.py, so the order is #160 (C157o, against current main), then #161 rebased with the forced edits in those two files, then C157f. Told all three authors.
 - 09:05 #159 update approvals (both, own posts) at 3a765ef. Merged #159 (K145a, compiled scan bounds and masks) as d718aab.
+- 09:15 #162 (C157f) draft at f1babc0 (on d718aab): source 3,950 -> 2,379 lines (_linalg 1170 -> 454, _pruning 1016 -> 304); same fits on the benchmark; second fit 0.075/0.644/8.2-8.7 s vs main 0.085/0.672/7.9-8.3 (100k within noise); conformance 297 passed. Gave it test_invariance.py's S12 shift (LIM-1) and validation/bench/profile_t20.py. Waits for #160 and #161.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
