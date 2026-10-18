@@ -452,6 +452,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:40 User decision (checked in local_a59469db): spec v3, drop exact arithmetic. Opened #157; brief briefs/W4-v3.md. Parked #147 and #153 as drafts with a note. O150 superseded. S157 (opus) starts after the 5-hour reset (01:10 PDT); K145's design waits for C157f.
 - 06:05 #156 single APPROVE (marker correct on 5 platforms; nonumba job runs the fallback, 3100 passed; lowest job tests numba 0.63 with numpy 1.24.4); CI 13/13. Merged #156 (numba dependency where wheels exist) as bd62758. Non-blocking ci.yml nits for later.
 - 06:15 5-hour reset (0 %); weekly 58 %. Started s157-spec-v3 a847661e080998fe4 (opus; spec v3, #157) and k145-design ad255129df4285e67 (opus; stage 1 profile and design of the next compile step, no code).
+- 06:35 K145 design done (comment on #143): main bd62758 with numba, second fit 0.12/0.74/8.85 s vs earth 0.019/0.47/6.80 (fresh process +0.27 s numba dispatch; import 2.4 s, sklearn.base 1.9 s). Exact paths cost only 4 to 8 % on ordinary data. Big costs: setup 36 % at 100k (no cache, Q copies), knot_scan 37 %, refine 12 %. Plan: K145a (scan, now), K145c after C157f (CGS2, Q buffer, setup cache, refine; reaches earth at 10k/100k), K145d (step kernel for small n). K145b (lazy sklearn import) skipped: only fit_mars users gain. Started k145a-scan a065e5d81061c7519 (opus).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
