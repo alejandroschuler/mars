@@ -472,6 +472,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:35 #165 single APPROVE (no flakes at 10 ci seeds and thorough; 343 of 400 draws catch a 1e-6 bound error). Merged #165 (scan test tolerance) as e079e76. Waiting for the oracle cross-kind fix; then #162 and #163 rerun gates.
 - 13:05 #166 single APPROVE (exception as narrow as FWD-12 allows; pin fails with the old check). Merged #166 (oracle cross-kind second) as b44b6a1. Asked c157f-fast to rebase #162 and rerun gates, n157-nits to rebase #163. 5-hour reset (0 %); weekly 67 %.
 - 13:35 #162 update approvals (both, own posts; adversarial 100 draws: 97 agree, 3 near-ties, 0 LA-5 misses). Merged #162 (C157f: fast code without exact paths) as be05891. #163 single APPROVE at 5831737; rebased to 2402358; reviewer reruns gates B, C and posts. Brief K145c written; starting k145c (opus). Then gate D on main after #163 and the tag sim-freeze-1.
+- 13:55 #163 single update APPROVE at 2402358 (gates B, C PASS on two float64 programs: near-tie stops at most 0.7 %, pruning 0). Merged #163 (N157) as 0274c5a. GATE D PASS: main 0274c5a has the same tree as 2402358 (gate B with parametrize_with_checks and integration tests; gate C oracle at thorough and fixtures). FREEZE: local annotated tag sim-freeze-1 at 0274c5a and pushed branch sim-freeze-1 (the session may push branches; pushing the tag waits for the user's OK). Starting T21.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
