@@ -962,8 +962,18 @@ def _random_terms(seed):
     return X, dirs, cuts, rng.normal(size=n)
 
 
-@pytest.mark.parametrize(("seed", "nonzero"), [(42, [1, 1, 0, 0, 1, 1]), (295, None)])
-def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero):
+_W618 = [1, 0, 1, 0.5, 0, 3, 1, 1, 0.5, 0, 1, 0.5, 0, 3, 1]
+
+
+@pytest.mark.parametrize(
+    ("seed", "nonzero", "w", "m"),
+    [
+        (42, [0, 1, 4, 5], None, None),
+        (295, None, None, None),
+        (618, [0, 3, 5], _W618, 8),
+    ],
+)
+def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m):
     """PRUNE-8 uses the test of LA-4 that FWD-11 uses (#137). At seed 42 the
     term (t - x0)+·(x1 - t1)+·(x2 - t2)+ is 0 at every case, since x1 is an
     affine copy of x0 and the two hinges never overlap; LA-4 drops it (the
@@ -972,14 +982,16 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero):
     expanded columns. At seed 295 LA-4 keeps x0 after x0·x2 because its new
     part counts as a formula, while u0·u2 is 0 at every case, so the data span
     x0 exactly: the final fit raised LinAlgError, and now gives that column
-    the coefficient 0, as the reference does, with the RSS of the span."""
+    the coefficient 0, as the reference does, with the RSS of the span. At seed
+    618 the first 8 terms are fitted with weights that include zeros: LA-4 is
+    decided on the weighted columns, so term 6 is dropped."""
     X, dirs, cuts, y = _random_terms(seed)
     B = _terms.basis_matrix(X, dirs, cuts)
-    M = len(dirs)
-    fit = pr.final_fit(B, y, np.arange(M), None, penalty=2.0, X=X, dirs=dirs, cuts=cuts)
-    kept = np.any(fit.coef != 0.0, axis=1)
+    sel = np.arange(len(dirs) if m is None else m)
+    fit = pr.final_fit(B, y, sel, w, penalty=2.0, X=X, dirs=dirs, cuts=cuts)
+    kept = np.flatnonzero(np.any(fit.coef != 0.0, axis=1))
     if nonzero is not None:
-        assert kept.astype(int).tolist() == nonzero
+        assert kept.tolist() == nonzero
     Bx = _exact_basis(X, dirs, cuts)
-    rss = _exact(Bx, y, None, np.flatnonzero(kept))[1]
-    assert_la5([fit.rss], [rss], _exact(Bx, y, None, [0])[1])
+    rss = _exact(Bx, y, w, sel[kept])[1]
+    assert_la5([fit.rss], [rss], _exact(Bx, y, w, [0])[1])

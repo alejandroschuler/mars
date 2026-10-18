@@ -854,7 +854,8 @@ def final_fit(
 
     ``coef`` holds the weighted least-squares coefficients of Y on the columns
     ``selected`` of B, in increasing term order, one column per response, with
-    LA-4 for dependent columns (``_linalg.lm_fit``). The fit is of the
+    LA-4 for dependent columns (``_linalg.lm_fit``; on the shifted path the
+    kept terms come from ``_linalg.independent_terms``, as in FWD-11). The fit is of the
     centered responses, and the intercept's coefficient takes back their
     constants, so a constant response gets its value there and 0 for the other
     terms, exactly. ``rss`` is the weighted RSS of the centered fit: that of
