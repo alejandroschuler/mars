@@ -28,15 +28,35 @@ Runner worktree `.worktrees/runner-t21` at the freeze commit
 ## Parity, P-fix / E-def (`parity.csv`)
 
 Equivalence holds when the 3-SE interval for the mean log ratio lies inside
-+-log 1.05. It holds in 44 of 51 cells (8 of them trivially, with identical
-fits). It does not hold in 7: D1 n=1000 hi and lo, D1 n=5000 hi, D5 n=200 lo,
-and D6 at n=200, 1000 and 5000. Their ratios are 1.023 to 1.068, and their 3-SE intervals reach above 1.05.
++-log 1.05. After the extension below it holds in 48 of 51 cells (8 trivially,
+with identical fits). The other 3:
+
+- D6 n=200 (7,500 repetitions): ratio 1.076, interval [1.051, 1.101]. The
+  whole interval is above 1.05, so this is a failure of the claim.
+- D1 n=5000 hi (600 repetitions): ratio 1.038, interval [1.019, 1.056]. Not
+  decidable at this n: the repetitions needed at the current s_g are about
+  1,300, and s_g grew with every extension.
+- D6 n=1000 (3,800 repetitions): ratio 1.030, interval [1.007, 1.053]. Not
+  decidable at this n: about 5,000 repetitions at the current s_g.
+
+## Extension (Part of #24)
+
+The reviewer of PR #168 found that most of the 7 first-run failures were
+under-sized. The 7 cells were extended on the same frozen runner (nested
+seeds, `--resume`; `driver_extend.sh`, `driver_extend2.sh`, logs in
+`driver_extend_log_summary.txt`) to: D1 n=1000 hi 900, lo 750, D1 n=5000 hi
+400 then 600, D5 n=200 lo 900, D6 n=200 7,500, D6 n=1000 3,300 then 3,800, D6
+n=5000 12,400 (the larger of the plan's rule (2k s/Delta)^2 and the count at the
+observed gap, from the full-run s_g). Result: D1 n=1000 hi and lo, D5 n=200 lo
+and D6 n=5000 now pass. Total 94,500 units, 0 failed, 3.74 fit core-hours
+(2.27 before the extension). The disk filled during D6 n=5000 (the shared
+prediction cache under `validation/runs/.cache` of the runner reached 16 GB);
+the block was resumed with `--no-cache`, and the later blocks ran with it.
 
 ## Other tables (`summaries/`)
 
 Built with `validation.sims.summarize` on the full run pooled with T04's
 legacy results (P-cur, P-ear, E-pym, OLS, HGB, EarthClassifier, GLMEarth).
 The E-def values are from this run (same seeds as T04's). Known gaps from
-`summarize.py`, not changed here: the D6 and binary-DGP rows of the ratio
-table and the legacy rows of the binary table show `missing` (a None noise
-level is not matched against the legacy rows). No figures.
+`analyze.py` now maps T04's noise string `na` to NaN, so the D6 ratio row, the
+binary legacy rows and the D6 P-cur selection row are filled. No figures.

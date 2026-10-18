@@ -5,9 +5,9 @@ D4 Friedman #1,lo,P-cur,15.0,3.0,0.9966666666666667,2.8333333333333335
 D4 Friedman #1,hi,P-cur,11.0,4.0,0.9966666666666667,3.2666666666666666
 D4 Friedman #1,lo,P-fix,14.0,2.0,0.76,1.0533333333333332
 D4 Friedman #1,hi,P-fix,10.0,3.0,0.88,1.54
-D6 pure noise,na,E-def,4.0,4.0,0.916,3.389666666666667
-D6 pure noise,na,P-cur,missing,missing,missing,missing
-D6 pure noise,na,P-fix,5.0,4.0,0.9203333333333333,3.5056666666666665
+D6 pure noise,na,E-def,4.0,4.0,0.9166666666666666,3.4062666666666668
+D6 pure noise,na,P-cur,9.0,4.25,1.0,6.556666666666667
+D6 pure noise,na,P-fix,5.0,4.0,0.9245333333333333,3.5197333333333334
 D7 many covariates,lo,E-def,22.0,5.0,1.0,10.173333333333334
 D7 many covariates,hi,E-def,19.0,7.0,1.0,10.406666666666666
 D7 many covariates,lo,P-cur,n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50)

@@ -73,6 +73,8 @@ parity.to_csv(HERE / "parity.csv", index=False)
 
 # Pooled with the legacy results for the arms not rerun here.
 legacy = pd.read_csv(legacy_csv)
+# T04 wrote the one-level noise as the string "na"; run.py's cell names give NaN.
+legacy["noise"] = legacy.noise.where(legacy.noise != "na", float("nan"))
 legacy = legacy[~legacy.arm.isin(["E-def"]) | (legacy.dgp == "__none__")]
 legacy = legacy[legacy.arm != "P-fix"]
 pool = pd.concat(
