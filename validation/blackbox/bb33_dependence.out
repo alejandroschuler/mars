@@ -1,0 +1,24 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+
+Part A: c = 0, S = 10^k
+S=1e4   r_unc=1.6e-05 r_cen=3.5e-05 forward RSq=1.0000 fix=FALSE final lm.fit error=FALSE
+S=1e5   r_unc=1.6e-06 r_cen=3.5e-06 forward RSq=1.0000 fix=FALSE final lm.fit error=FALSE
+S=1e6   r_unc=1.6e-07 r_cen=3.5e-07 forward RSq=1.0000 fix=FALSE final lm.fit error=FALSE
+S=1e7   r_unc=1.6e-08 r_cen=3.5e-08 forward RSq=1.0000 fix=FALSE final lm.fit error=TRUE
+S=1e8   r_unc=1.6e-09 r_cen=3.5e-09 forward RSq=1.0000 fix=TRUE final lm.fit error=FALSE
+S=1e9   r_unc=1.6e-10 r_cen=3.5e-10 forward RSq=1.0000 fix=TRUE final lm.fit error=FALSE
+S=1e10  r_unc=1.6e-11 r_cen=3.5e-11 forward RSq=1.0000 fix=TRUE final lm.fit error=FALSE
+S=1e11  r_unc=1.6e-12 r_cen=3.5e-12 forward RSq=1.0000 fix=TRUE final lm.fit error=FALSE
+S=1e12  r_unc=1.6e-13 r_cen=3.5e-13 forward RSq=1.0000 fix=TRUE final lm.fit error=FALSE
+S=1e13  r_unc=1.6e-14 r_cen=3.49e-14 forward RSq=1.0050 fix=TRUE final lm.fit error=FALSE
+S=1e14  r_unc=1.63e-15 r_cen=3.56e-15 forward RSq=1.0170 fix=TRUE final lm.fit error=FALSE
+
+Part B: bisection on log10 S for the fix, at offsets c = 0, 1, 10
+c=0   last kept: r_unc=1.0021e-08 r_cen=2.192e-08 (lm.fit error=TRUE); first fixed: r_unc=1.0021e-08 r_cen=2.192e-08
+c=1   last kept: r_unc=1.0021e-08 r_cen=5.8e-08 (lm.fit error=TRUE); first fixed: r_unc=1.0021e-08 r_cen=5.8e-08
+c=10  last kept: r_unc=1.0021e-08 r_cen=3.96e-07 (lm.fit error=TRUE); first fixed: r_unc=1.0021e-08 r_cen=3.96e-07
+
+CHECK bb33.1 TRUE the forward RSq reaches at least 0.99 at every S from 1e4 to 1e14 (r_unc down to 1.6e-15): the forward pass counts the near-dependent linear candidate however small its relative orthogonal part, and its RSq can exceed 1
+CHECK bb33.2 TRUE the end-of-pass fix removes a term exactly when r_unc falls below 1e-8 (within 1 %) at the offsets 0, 1 and 10
+CHECK bb33.3 TRUE at the switch the centered ratio varies with the offset (from 2.2e-08 to 4e-07), so the fix uses the uncentered norm, as lm.fit does (bb09.8)
+CHECK bb33.4 TRUE for 1e-8 <= r_unc < 1e-7 the fix keeps the term and earth's final lm.fit (tol 1e-7) stops with a singular-fit error
