@@ -124,3 +124,12 @@ Files: `pymars/_pruning.py` (the final fit and what it calls in `_pruning.py`), 
 2. Find why the fast final RSS is below the exact value (an RSS below the exact least-squares RSS of those columns means the RSS does not belong to the returned columns, or the columns differ). Fix it within PRUNE-8 and LA-5.
 3. A sweep of the 1500 weighted seeds and the reverse-order seeds: counts of LA-5 misses before and after. Pin with the fewest cases (one parametrized test).
 Reviewers: 2 (`spec` and `adversarial`). Gate B and gate C on the head.
+
+### M143: the T20b measurement run (issue #143; no pull request unless the harness is worth keeping)
+
+Read issue #143 first. Work on PR #124's head (`origin/t20-perf`; it is main plus T20's passes and will merge soon) in a detached worktree `<main>/.worktrees/m143-measure`. Do not change `pymars/`. Measure, on one thread (dev/env.sh), under `nice -n 15`:
+1. 10,000 x 10 x degree 2 (the benchmark's case; `validation/bench/` has the generator, read it first), 250 x 10 x degree 2, and 100,000 x 10 x degree 2. Wall time of `fit` (median of 3) and the earth time for the same data if `validation/bench/` can run earth (R counts as one core).
+2. A profile of each (cProfile, and py-spy if it installs into the uv venv from PyPI): the share of the knot scan (`_scan.py`), other loops in `_forward.py` and `_pruning.py`, `_linalg.py`, scikit-learn validation, and numpy call overhead (many small calls: count calls and time per call).
+3. The fixed cost of a fit in a fresh process: import time (`python -X importtime`), the first fit against the second fit on the same data.
+4. For the knot scan, the inner loop structure: which loops a compiled kernel could replace, and the arrays it would need. Say which operations must keep their order of sums for bit-equality.
+Report to the executor in 30 lines or fewer: a table of times, the top costs with shares, the fixed cost, and a short plan for the numba kernel with the expected gain. Save the scripts and raw output in `<scratchpad>/m143-measure/`, and post the report as a comment on #143.
