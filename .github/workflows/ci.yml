@@ -1,6 +1,6 @@
 # Lean CI for pymars 2.0 (VALIDATION_PLAN.md, "Inherited workflows and CI"):
-# ruff, the fast tests on three operating systems, the slow tests, the lowest
-# direct dependency versions and a wheel build. No secrets and no publishing.
+# ruff, the fast tests on three operating systems, the fast tests without numba,
+# the slow tests, the lowest direct dependency versions and a wheel build. No secrets and no publishing.
 name: CI
 
 on:
@@ -69,6 +69,27 @@ jobs:
           python-version: ${{ matrix.python }}
           cache-suffix: ${{ github.job }}
       - run: uv run --frozen --group validation pytest -m "not slow and not external"
+
+  nonumba:
+    name: numpy fallback without numba (ubuntu-latest, Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          cache-suffix: ${{ github.job }}
+      # Intel Macs install without numba and run this code path (issue #145).
+      - name: Sync the locked environment without numba and llvmlite
+        run: uv sync --frozen --group validation --no-install-package numba --no-install-package llvmlite
+      - name: Check that numba is absent
+        run: |
+          .venv/bin/python -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("numba") is not None)'
+      - run: uv run --frozen --no-sync pytest -m "not slow and not external"
 
   slow:
     name: slow tests (ubuntu-latest, Python 3.12)

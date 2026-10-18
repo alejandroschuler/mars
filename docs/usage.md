@@ -139,4 +139,4 @@ print(grid.best_params_)
 
 ## What the fit costs
 
-The core runs in pure Python with numpy. In the benchmark the fit time grew roughly linearly in the number of cases and of covariates (log-log slopes 0.9 and 1.1 over 7 and 5 points); the term limit has 4 points and a slope of 0.9. The benchmark in [validation/bench/REPORT.md](../validation/bench/REPORT.md) has the measured factors. The memory of the fit is O(n·(p + nk)).
+The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). In the benchmark the fit time grew roughly linearly in the number of cases and of covariates (log-log slopes 0.9 and 1.1 over 7 and 5 points); the term limit has 4 points and a slope of 0.9. The benchmark in [validation/bench/REPORT.md](../validation/bench/REPORT.md) has the measured factors. The memory of the fit is O(n·(p + nk)).
