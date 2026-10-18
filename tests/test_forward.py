@@ -1062,8 +1062,8 @@ def test_la3_g_holds_a_b_x_that_la2_does_not_count():
     """LA-3 (#164): x0 = 1e8 + z is dependent on the intercept by LA-4 (its
     part orthogonal to 1 is about 3e-9 of its norm), so LA-2 does not count
     b·x0, but LA-3's G holds it, and the knots near the low end of z, whose
-    hinges are nearly linear, have ρ < τ. y bends at the low end. With G = B
-    every ρ would be 1 and the first pair would take the knot near z = 0.03;
+    hinges are nearly linear, have rho < τ. y bends at the low end. With G = B
+    every rho would be 1 and the first pair would take the knot near z = 0.03;
     the reference applies the spec, and the fast pass agrees with it."""
     from test_oracle import Case, check_forward
 
