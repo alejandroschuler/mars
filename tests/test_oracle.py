@@ -1965,10 +1965,12 @@ def test_a_parent_gives_a_row_by_removing_one_covariate():
     ]
 
 
-@pytest.mark.parametrize("shift", [0.0, 5e6])
+@pytest.mark.parametrize("shift", [0.0, 3e6])
 def test_a_value_off_at_a_near_dependence_stops_the_comparison(shift):
     """STOP-7's near-dependence (spec v3): x0 = shift + a 0/1 pattern has the
-    LA-4 ratio 0.5 / shift against the intercept, 1e-7 at shift 5e6. A fast
+    LA-4 ratio 0.5 / shift against the intercept, 1.7e-7 at shift 3e6: x0
+    counts, within a factor 2 of 1e-7 (at 5e6 the ratio is 1e-7 itself, and
+    the reference's float test drops x0, as LA-4 allows there). A fast
     RSS 1e-6 off the reference's, far outside LA-5, then stops the forward
     comparison after step 1 (the linear x0) and the pruning comparison at
     size 3, all columns with x0, as a near-dependence, while at shift 0 the

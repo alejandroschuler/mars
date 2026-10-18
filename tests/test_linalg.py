@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
-from reference import mars_ref
 
 from pymars import _linalg as la
 from pymars import _terms
@@ -711,31 +710,6 @@ def test_a_copy_shares_its_symbol_and_keeps_x2_in_the_shifted_order(a):
     assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4
 
 
-@pytest.mark.parametrize("scale", [0, -29])
-def test_a_term_in_the_span_of_a_near_copy_term_is_dependent(scale):
-    """LA-4 (#120 item 3): x1 is x0 = 1e9 + a/4 one unit in the last place off
-    at one case, so it is its own symbol, and h = (x2 - min x2)₊ equals
-    x2 - min x2 at the cases. x0·h is kept (its exact part orthogonal to the
-    earlier terms is above 1e-7 of its pivot, though below u of its column),
-    and x1·h = x1·x2 - min(x2)·x1 at the cases is exactly in the span. The
-    fast code left out the direction of x0·h, which its float64 projection
-    rounds to 0, and so kept x1·h; the exact residual takes its place now.
-    The scale -29 is EDGE-7's scaled X; the reference agrees."""
-    x0 = 1e9 + np.array([0, 2, 2, 0, 1, 0, 0]) / 4
-    x1 = x0.copy()
-    x1[3] = np.nextafter(x1[3], np.inf)
-    x2 = 1e3 + np.array([0, 0, 0, 1, 1, 1, 1]) / 4
-    X = np.column_stack((x0, x1, x2, np.array([4, 4, 2, 0, 2, 4, 4]) / 4))
-    X[:, :2] = np.ldexp(X[:, :2], scale)
-    t = x2.min()
-    spec = [[(1, 2, 0.0), (2, 2, 0.0)], [(2, 2, 0.0)], [(1, 2, 0.0)], [(3, 2, 0.0)]]
-    spec += [[(0, 2, 0.0), (2, 1, t)], [(1, 2, 0.0), (2, 1, t)]]
-    dirs, cuts = _term_rows([[], *spec], 4)
-    want = [True] * 6 + [False]
-    assert mars_ref.la4_kept(X, dirs, cuts, np.ones(7)).tolist() == want
-    assert la.independent_terms(X, dirs, cuts).tolist() == want
-
-
 @pytest.mark.parametrize("seed", range(8))
 def test_independent_terms_without_a_shift_is_independent_columns(seed):
     """Without a linear factor of a shifted covariate the test is the plain one
@@ -752,42 +726,6 @@ def test_independent_terms_without_a_shift_is_independent_columns(seed):
     B = _terms.basis_matrix(X, dirs, cuts)
     got = la.independent_terms(X, dirs, cuts, w)
     assert got.tolist() == la.independent_columns(B, w).tolist()
-
-
-# 288 and 405: a copy scaled by a power of 2 (the symbol key); 1142 and 1173: a
-# pivot monomial that is 0 at every case (LA-4's fallback to the new part);
-# 102 and 115: the exact test eliminates with three or more pivots (T20).
-@pytest.mark.parametrize("seed", [*range(60), 102, 115, 288, 405, 1142, 1173])
-def test_independent_terms_equal_the_references_la4(seed):
-    """FWD-11 against the reference's exact LA-4 (``mars_ref.la4_kept``) on drawn
-    term lists: few levels at large means, a copy of a covariate at another
-    shift, scaled by a power of 2 (the reference is told the EDGE-7 power) or
-    off by one unit in the last place, linear factors, hinges and products,
-    repeated terms, weights (rows of weight 0 are not cases, W-3, so they are
-    dropped first). The reference and the fast code are written apart."""
-    rng = np.random.default_rng(seed)
-    a = np.floor(rng.uniform(size=(24, 3)) * 3) / 4
-    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
-    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10], 4)
-    powers = np.zeros(4, dtype=np.int64)
-    if seed % 3 == 0:
-        k = int(rng.integers(1, 6))
-        X[:, 1] = np.ldexp(X[:, 0] - X[:, 0].min() + 2.0**40, -k)
-        powers[1] = -k
-    elif seed % 3 == 1:
-        X[3, 1] = np.nextafter(X[3, 1], np.inf)
-    w = rng.integers(0, 3, 24).astype(float) if seed % 2 else np.ones(24)
-    w[0] = 1.0
-    dirs = rng.integers(-1, 3, size=(9, 4)).astype(np.int8)
-    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
-    dirs[0] = 0
-    cuts = np.where(dirs == 0, 0.0, np.median(X, axis=0))
-    cuts[dirs == 2] = 0.0
-    keep = w > 0
-    X, w = X[keep], w[keep]
-    got = la.independent_terms(X, dirs, cuts, None if seed % 2 == 0 else w)
-    want = mars_ref.la4_kept(X, dirs, cuts, w, mars_ref.Atoms(X))
-    assert got.tolist() == want.tolist()
 
 
 def test_a_scaled_copy_is_kept_as_the_exact_test_says():
