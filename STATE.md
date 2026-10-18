@@ -2,7 +2,7 @@
 
 Work done: no
 
-Updated: 2026-10-16 16:08 PDT, by executor session `local_f8e3ee8e-db3a-47de-b16c-dfc9c109b194` (watchdog run; lock taken 16:07).
+Updated: 2026-10-17 20:25 PDT, by executor session `local_a3dbbbaa-86cb-4746-9ad7-7dae14ff92f9` (watchdog run; lock taken 20:17).
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+RESTART 2026-10-17 20:17 PDT (session local_a3dbbbaa, watchdog). The executor local_f8e3ee8e stopped at about 23:00 Friday: the app's sign-in token expired, and its agents failed with 401. Week-4 rule still holds (use all that is left until the reset 2026-10-18 17:00 PDT). Weekly 47 %, 5-hour 1 %. Open: #138 (needs both reviews), #136 (spec APPROVE; CI red on Ubuntu, FWD-13 oracle near tie; adversarial review to run), #124 (spec REQUEST_CHANGES: memory of scan stores; adversarial to run), #139 (fast coefficient of a kept term in the span), #130 (seed 44, knots one ulp apart). Restart briefs: briefs/W4-followups.md, section Restart round. Then gate D, freeze sim-freeze-1, T21, T22 to T24.
 
 RESUMED EARLY BY THE USER at 16:07 PDT Friday 2026-10-16 (session local_a59469db): "go ahead and start up again, use whatever remaining tokens i got". The week-4 budget rule below applies from now, not from 17:00; ignore the line that says a session taking the lock before 17:00 starts nothing. Weekly 26 % at 16:07 (reset 2026-10-19T00:00Z, Sunday 17:00 PDT), 5-hour 20 % (reset 17:20 PDT). Session local_a59469db made the heartbeat stale so that the hourly watchdog starts a fresh executor session (cheaper than its own long context). First steps: gate C on main d477f6d; then #120 (fast-code misses on copy cases and pruning seeds; then the copy kinds in the oracle's ties draws), #119 (small follow-ups), T20 (performance; 7.0 times earth, target 10), T21 (gate D, the freeze tag sim-freeze-1, the full run), T22 to T24.
 

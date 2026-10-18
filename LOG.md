@@ -403,6 +403,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 22:52 review-136-spec APPROVE at b59d54f. #138 (#137) draft at 412c878: final_fit takes LA-4's kept terms from independent_terms (FWD-11's test); a reduced column exactly 0 gets coefficient 0 (seed 295); reviewer's 1500 seeds: 0 differences (main 17 + 1 exception); checks and gates running. Started review-124-adversarial adab3b075879857e2 (opus). Brief section T21 written. 5-hour 8 %, weekly 46 %.
 - 22:57 review-124-spec REQUEST_CHANGES at 93f1182: scan stores keep g and b (n values each) outside the budget; peak RSS 944 MB main vs 1452 MB head at n=20000, p=30 (35 times n(p+M)); bit-equality confirmed independently; held for the adversarial review. #138 ready at 412c878 (gates B, C PASS; hash-equal; sweeps clean). Its triage found #139: a kept term the data span exactly gets fast coefficients up to 1e13 (reference 0); new-data predictions differ by up to 1e17 sd(y); opened #139. Started review-138-spec ae19d3e56aa85cafb (sonnet).
 
+
+## 2026-10-17
+- 20:17 Watchdog session local_a3dbbbaa took the stale lock (heartbeat 22:51 Friday). Cause of the stop: the app's sign-in token expired at about 23:00 Friday (401 in local_f8e3ee8e; the user restarted the watchdog from local_a59469db). Weekly 47 % (reset 2026-10-18 17:00 PDT), 5-hour 1 %. Restart briefs F124, F136, F139 (briefs/W4-followups.md).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
