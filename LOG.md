@@ -499,6 +499,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:55 #177 (R23 release fixes) ready at a7480b2 (gates B 90.6 %, C PASS): exports and to_dict format 1; one numba/numpy contract; class-named parameter errors; asserts to ValueError; metadata, single version; sdist without tests; CI exit 5; W-7 band [0.5, 2] (spec change, v3 marks); plan DoD 1 and DECISIONS name numba. Later items in #178. Started review-177-spec and review-177-adversarial (sonnet). #176 update check running.
 - 21:05 #177 APPROVE (both; adversarial built and installed wheel and sdist, no numeric change). Merge refused: CI fails on ubuntu Python 3.10 (the degree= TypeError test expects the class name, which 3.10 does not print). Sent r23-release: fix that test, plus classifier Beta, CITATION version, W-7 upper-edge test, from_dict format must be the int 1.
 - 21:15 #176 update APPROVE at 65a39b2 (gate B PASS). Merged #176 (ctml-skills note) as 2b6d198. T23 now: upstream drafts (#174) and the note (#176) merged; architecture reviews done; #177 release fixes in their last round. Then #25 closes and T24 (final audit).
+- 21:25 Board cleanup: closed #157 (spec v3 done), #119 (superseded by v3), #143 (T20b done), #145 (all questions answered; numba dependency moved to #175); opened #179 (later: K145d small-n kernel); #173 relabeled later. Remaining open: #177 (last round), #25 (T23, closes with #177), #26 (T24), needs-user #175, #68 (with the user's PR #64 and TOOLS-2/3 #62, #65), #60, #59; later issues.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
