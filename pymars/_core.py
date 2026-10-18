@@ -411,14 +411,15 @@ class MarsFit:
         """Build a fit from the dict of CORE-5, such as the reference returns.
 
         The keys must be the field names (a missing ``forward.candidates`` is
-        None), and an optional ``"format"``, which must be ``DICT_FORMAT``
+        None), and an optional ``"format"``, which must be the integer
+        ``DICT_FORMAT`` (a Python int or ``np.int64``, not a float or a bool)
         (the reference's dict has none). Arrays may be numpy arrays or nested
         lists whose values convert exactly to the dtypes of CORE-3. Raises
         ValueError otherwise. Complexity: O(size of the fit).
         """
         if isinstance(d, Mapping) and "format" in d:
             fmt = d["format"]
-            if isinstance(fmt, bool) or fmt != DICT_FORMAT:
+            if type(fmt) not in (int, np.int64) or fmt != DICT_FORMAT:
                 raise ValueError(
                     f"the fit's dict has format {fmt!r}; this pymars reads "
                     f"format {DICT_FORMAT}"

@@ -15,7 +15,6 @@ These tests pin the rules that the checks leave open.
 
 import dataclasses
 import re
-import sys
 
 import numpy as np
 import pandas as pd
@@ -123,10 +122,8 @@ def test_fit_checks_the_parameters(params, error, match):
 )
 def test_an_unknown_keyword_names_the_estimator(cls, name):
     """ERR-4: a keyword that the estimator does not take, such as earth's
-    degree or nk, raises TypeError that names the public class (Python 3.11
-    and later put the class in the message; 3.10 gives the function name)."""
-    where = f"{cls.__name__}." if sys.version_info >= (3, 11) else ""
-    match = f"^{re.escape(where)}__init__\\(\\) got an unexpected keyword.*'{name}'"
+    degree or nk, raises TypeError that names the public class."""
+    match = f"^{cls.__name__}\\.__init__\\(\\) got an unexpected keyword.*'{name}'"
     with pytest.raises(TypeError, match=match):
         cls(**{name: 2})
 

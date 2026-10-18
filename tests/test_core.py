@@ -402,6 +402,7 @@ def test_to_dict_and_from_dict(case):
     fit = FITS[case]
     d = fit.to_dict()
     assert d.pop("format") == DICT_FORMAT == 1
+    _same(MarsFit.from_dict({**d, "format": np.int64(1)}), fit)
     assert set(d) == {f.name for f in dataclasses.fields(MarsFit)}
     fwd, prn = d["forward"], d["pruning"]
     M, p = d["dirs"].shape
@@ -462,6 +463,7 @@ def _set(path, value):
         _set("forward.candidates.best_rss", lambda a: a[1:]),
         _set("format", 2),
         _set("format", True),
+        _set("format", 1.0),
     ],
 )
 def test_from_dict_rejects_a_bad_dict(change):
