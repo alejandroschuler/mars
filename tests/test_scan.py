@@ -135,8 +135,12 @@ def test_the_compiled_scan_agrees_with_the_numpy_scan(
     (``_kernels.TILE``), and weights that are not integers. The sums over
     the columns may round differently (no bit-identity, #145): r and K up
     to 12 reach numpy's pairwise sums, where the bits differ. Each value is
-    within the numpy value's error bound, the bounds agree to rounding, and
-    the zero hinges (value and bound 0) are the same."""
+    within the numpy value's error bound, and the zero hinges (value and
+    bound 0) are the same. The bounds are functions of ‖h⊥‖² = D - s2, which
+    cancels when rho is small, so their relative difference follows that of
+    rho, at most about ratio_err/rho; they must agree to
+    1e-12 + 4·ratio_err/rho (so a bound 1e-6 off fails wherever rho is
+    known to better than 2.5e-7 of itself)."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
     if weighted:  # b = √w with weights that are not integers: W_pre's sums round
@@ -180,11 +184,17 @@ def test_the_compiled_scan_agrees_with_the_numpy_scan(
             assert np.all(np.abs(got - ref) <= err)
         zero = (want.ratio == 0.0) & (want.ratio_err == 0.0)
         assert np.array_equal((run.ratio == 0.0) & (run.ratio_err == 0.0), zero)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rel = np.where(want.ratio > 0.0, want.ratio_err / want.ratio, np.inf)
+        rtol = 1e-12 + 4.0 * rel
         for got, ref in (
             (run.ratio_err, want.ratio_err),
             (run.gain_err, want.gain_err),
         ):
-            np.testing.assert_allclose(got, ref, rtol=1e-12, atol=0.0)
+            assert np.array_equal(np.isinf(got), np.isinf(ref))
+            fin = np.isfinite(ref) & (ref != 0.0)
+            assert np.array_equal(got[~fin], ref[~fin])
+            assert np.all(np.abs(got[fin] - ref[fin]) <= rtol[fin] * np.abs(ref[fin]))
 
 
 @needs_numba
