@@ -430,6 +430,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:05 #141 round 3 at c0718cd (on 5bb2525; gate B PASS): C chosen by RSS gain against the squared rounding scale eta (u times sum |beta*_j| ||B_j||_w), accuracy 16 eta for any n, rss = RSS(C) (= pruning value when C is all kept columns; max gap 39 %). Sent to both #141 reviewers.
 - 01:20 check-main-gateb: main 5bb2525 fails gate B at random (test_whole_fit_on_hypothesis_data not derandomized; shrunk seeds 968 and 13843 are real differences: the reference's 1e-7 zero (#141 follow-up) and a pruning rss_per_size gap (likely #146)). Opened an issue. Policy until fixed: a gate B failure on one of these alone is known; rerun and record. review-141-spec round 3 APPROVE at c0718cd (non-blocking: wording 'not certain to improve'; eta includes the intercept, y mean 3e15 drops x). #136 rechecks running (adversarial a7c81528f23fe2b2a, spec a8e5fa147b2cef0c7).
 - 01:30 #141 round 3: spec APPROVE, adversarial REQUEST_CHANGES (eta counts the intercept, so a constant in Y changes C; y1 = 2^50 drops x for y2). Re-scoped after 3 rounds to one narrow fix (centered eta and gain, gain near-tie, wording); the same reviewers do narrow rechecks. #136: spec update APPROVE at f983272; adversarial recheck running.
+- 01:45 #136 adversarial recheck APPROVE at f983272 (non-blocking: the retry can accept an order without case (b)). Merged #136 (reference follows FWD-13) as b64ee8d; closed #127. Opened #151 for the retry; given to f136-ref (sonnet).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
