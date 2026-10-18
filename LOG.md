@@ -427,6 +427,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 00:30 #124 update checks APPROVE (both) at ab1c4c5; merged #124 (T20 speed passes, bit-equal) as 5bb2525. Asked f136-ref to rebase #136. Started f142-la7 ad3234ed9cde2a553 (opus; #142) and k143-numba a12a8a6f9288be555 (opus; T20b kernel A, numba floor first). Weekly 51 %, 5-hour 24 %.
 - 00:40 k143-numba stopped at the floor check: numba 0.63+ (Python 3.14) has no macOS x86_64 wheels, older ones lack 3.14. Added the choice to needs-user #145. Restarting K143 with numba in the dev group only and the numpy code as the fallback (fits all three choices).
 - 00:55 #144 round 1: spec APPROVE (non-blocking: #141's C rule must cover the near-span branch; rounded huge coefficients miss rss, #141 territory); adversarial REQUEST_CHANGES (NEAR_SPAN unpinned; gate B FAIL on test_whole_fit_on_hypothesis_data 'ties seed=968', also on base 8dc9c6d: the reference zeroes a kept term; subnormal knot seed 1230 issue). Sent item 1 to f140-final-rss (pauses #146). Started check-main-gateb a26a7a07cb3a3943d (sonnet) to see whether main fails gate B and why. numba floor added to #145; K143 continues with numba in the dev group.
+- 01:05 #141 round 3 at c0718cd (on 5bb2525; gate B PASS): C chosen by RSS gain against the squared rounding scale eta (u times sum |beta*_j| ||B_j||_w), accuracy 16 eta for any n, rss = RSS(C) (= pruning value when C is all kept columns; max gap 39 %). Sent to both #141 reviewers.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
