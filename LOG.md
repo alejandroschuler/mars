@@ -489,6 +489,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 18:10 T22b done (#170): executor read and committed validation/REPORT.md from the draft as 32070e0 (gate A PASS). Bench on faac561: EarthRegressor/earth at 10k x 10 x deg 2 = 1.7 fresh, 0.95 warm; 100k 0.79 fresh, 0.70 warm; 250 20 fresh, 3.5 warm. Started review-170-spec and review-170-adversarial (opus). Opened an issue for the D6 n200 extra terms.
 - 18:35 #172 APPROVE (both; adversarial: no stale G, oracle passes, limit draws fail less than main, 8 mutants). Merged #172 (#164: LA-3's G, dependent hinge out of F_s) as 95212fa. #170 at 611c05d (adversarial's 10 points fixed); spec review running on 32070e0, then both recheck.
 - 18:50 #174 (U23 upstream drafts) draft at e2d4e7f: 15 drafts plus index in validation/upstream/, reproductions run (legacy wheel, tag code, sklearn 1.5.2, earth black box); gate B PASS. Draft 01 uses the old 7x speed figure and links REPORT.md: update after #170 merges, then a single review. For the user before posting: 01 says AI agents did the work; fork link placeholder. #170 spec REQUEST_CHANGES (numpy speed factor per the plan's target); sent to t22b-report.
+- 18:55 Started T23 architecture reviews arch-review-a (internals, maintainer view) and arch-review-b (user and integrator view, definition of done items 1 to 3) on main 95212fa (opus; findings as comments on #25). K145d (small-n step kernel) deferred: optional, would be a later issue.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
