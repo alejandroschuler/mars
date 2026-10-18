@@ -1915,6 +1915,27 @@ def test_whole_fit_with_drops_that_tie_on_a_near_copy():
     assert out.near_tie == "removal"
 
 
+def _fwd13_matters(case: Case, fwd: dict, s: int) -> bool:
+    """Whether the forward basis F_s of the reference's fit (FWD-13) differs
+    from the terms after step s: the RSS of all term rows, or of the terms
+    that FWD-11 keeps, is not RSS_s to 1e-6 of it. Rounding makes a tie break
+    one way or the other in some row orders; where it also makes LA-2 count
+    another column, the fit no longer reaches the case the draw is for, and a
+    reference that builds F_s from the terms agrees there."""
+    k = case.kept
+    rows = np.flatnonzero(fwd["step"] <= s)
+    dirs, cuts = fwd["dirs"][rows], fwd["cuts"][rows]
+    atoms = mars_ref.Atoms(k.X)
+    B = mars_ref.basis_matrix(k.X, dirs, cuts)
+    span = mars_ref.Conditioned(k.X, dirs, cuts, B, atoms, k.w)
+    kept = np.flatnonzero(mars_ref.la4_kept(k.X, dirs, cuts, k.w, atoms))
+    for cols in (np.arange(len(rows)), kept):
+        rss = mars_ref.rss(span.span_columns(cols.tolist()), k.Y, k.w)
+        if abs(rss - fwd["rss"][s]) > 1e-6 * fwd["rss"][s]:
+            return True
+    return False
+
+
 @pytest.mark.parametrize("case", _forward_basis_cases(), ids=lambda c: c.name)
 def test_the_forward_basis_keeps_a_direction_that_fwd_11_drops(case):
     """FWD-13 and FWD-11: both programs project each step on the forward
@@ -1926,24 +1947,30 @@ def test_the_forward_basis_keeps_a_direction_that_fwd_11_drops(case):
     They must agree through the step that pins FWD-13 (``_PINNED``: a
     reference that builds F_s from the terms' rows fails there), so when a tie
     stops it earlier, the same problem with the rows in another order (other
-    rounding) is compared; the comparisons that depend on later steps run
-    only when no tie stopped the comparison, and not for case (b)."""
+    rounding) is compared, and only an order in which the fit still reaches
+    FWD-13 counts (``_fwd13_matters``); the comparisons that depend on later
+    steps run only when no tie stopped the comparison, and not for case (b)."""
     pinned = _PINNED.get(case.name)
     for k in range(10):
         perm = np.random.default_rng(k).permutation(len(case.X)) if k else slice(None)
         w = None if case.w is None else case.w[perm]
         arranged = dataclasses.replace(case, X=case.X[perm], Y=case.Y[perm], w=w)
         out = check_forward(arranged)
-        if out.near_tie is None or (pinned is not None and out.steps >= pinned):
+        ref = arranged.reference_fit()
+        if pinned is None:
+            if out.near_tie is None:
+                break
+        elif (out.near_tie is None or out.steps >= pinned) and _fwd13_matters(
+            arranged, _plain(ref["forward"]), pinned - 1
+        ):
             break
     else:
-        pytest.fail(f"a tie stops the comparison before step {pinned} in every order")
+        pytest.fail(f"no row order agrees through step {pinned} and reaches FWD-13")
     if out.near_tie is not None or case.name.startswith("case (b)"):
-        # The pruning RSS of the fast code differs from the reference's at
-        # size 17 of case (b), seed 25, noise seed 1, in half of the row
-        # orders (about 4e-15 against 1e-7, X at 1e12): not compared here.
+        # The fast pruning RSS differs from the reference's at size 17 of
+        # case (b), seed 25, noise seed 1, in half of the row orders (about
+        # 4e-15 against 1e-7, X at 1e12; #146): not compared here.
         return
-    ref = arranged.reference_fit()
     params = _core.MarsParams(**case.params)
     fast = _core.fit_mars(
         arranged.X, arranged.Y, arranged.w, params, record_candidates=True
