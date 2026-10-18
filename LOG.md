@@ -465,6 +465,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 10:15 #160 APPROVE (both; adversarial: 13 of 16 plants fail the oracle, survivors: 1 equivalent, #142 register rule now uncovered, spans_bx old gap; assume rejects at most 9.5 %). Merged #160 (C157o; closes #150) as 1ce5b11. C157r rebasing; notes to C157f on register and spans_bx.
 - 10:35 #161 (C157r) ready at c582404 (on 1ce5b11; gates A, B, C PASS; CI green): near-tie stops at most 0.8 % per group, pruning 0; tests/reference 5626 -> 4422 lines. Started review-161-spec (sonnet) and review-161-adversarial (opus). #162 waits.
 - 10:55 #161 APPROVE (both; adversarial: 4 of 513 ordinary draws differ from v2's exact reference, all near-ties; coefficients within 1.4e-11; 600 Limits combos without error). Merged #161 (C157r) as 68a15ec. #162 rebasing. Non-blocking notes for a cleanup PR: draw means up to r_d (not r_d/2); a comment on _orthonormal_basis's rank rule; a centering test; the 1e8 shift test in test_reference.
+- 11:25 #162 (C157f) ready at 6c62b57 (on 68a15ec; gates A, B, C PASS, coverage exactly 90 %; CI 13/13): near-tie stops at most 0.8 %, no near-dependence stops; second fit 0.072/0.63/7.85 s vs main 0.081/0.64/7.96. Started review-162-spec and review-162-adversarial (opus).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
