@@ -446,6 +446,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 04:15 #148 update approvals (each reviewer its own; the classifier had denied one agent posting both roles' verdicts, 'Merge Without Review'; not worked around). Merged #148 (T20b kernel A, numba in dev group, numpy fallback) as 8b6b417. Rebased #144 to 8a54447; spec reviewer runs gates B, C and posts its verdict, then the adversarial reviewer posts its own.
 - 04:40 #144 update approvals (both, own posts) at 8a54447; merged #144 (final fit exact residual near the span; closes #140) as 9b226ed. Asked f140-final-rss to rebase #147. Rebased #149 to f58ef29; spec reviewer runs range-diff, hash on both paths, gates B, C, then its verdict; adversarial after. F139 waits for the 5-hour reset (61 %).
 - 04:50 #147 rebased to c1489b0 on 9b226ed (gates B, C PASS; CI 12/12; hash equal; smoke 0.45). Its two reviews, #153's two reviews and F139 start after the 5-hour reset (01:10 PDT).
+- 05:10 #149 update approvals (both, own posts) at f58ef29 (hash equal both paths; gates B, C PASS). Merged #149 (fast LA-7 and LA-2 on F_s; closes #142) as d45f4d0. Open PRs: #147 (#146; needs rebase on d45f4d0 then two reviews), #153 (R139; needs rebase then two reviews). After the 5-hour reset: those reviews, F139.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
