@@ -484,6 +484,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:00 #169 single APPROVE (nested seeds verified, decisions recomputed). Merged #169 as e5cb1ea. Decision: no further extension of D1 n5000 hi and D6 n1000 (two interim looks already; more would add optional-stopping bias); T22b reports them as not decidable and states the interim looks. #167 adversarial update APPROVE at 62fe839; spec recheck running.
 - 17:15 #167 spec recheck APPROVE at 62fe839 (_coefs at most 1.000 n(p+M); no stale entry; corrected timing with numba 0.465 vs 0.676 s at 10k). Merge refused (main moved to e5cb1ea, data only); rebased via update-branch to afe1630; k145c-compile runs gates B, C on it; then each reviewer posts its update verdict.
 - 17:25 T22b (PR #170 draft): the Write tool refused a subagent creating validation/REPORT.md ('Subagents should return findings as text'). Not worked around by the author or the executor; needs-user issue opened; the draft goes into #170's body as text. Bench on main 3e1aefc (before #167): EarthRegressor 10k x 10 x deg 2 2.2x earth fresh, 1.3x warm; 100k 1.3x fresh, 0.9x warm; 250 19x fresh, 3.8x warm.
+- 17:45 #167 update approvals (both, own posts; range-diff '=', main changed only validation/sims). Merged #167 (K145c: compiled setup, refine, search; _coefs budget) as faac561. T22b reruns the benchmark on faac561. Remaining: T22b (#170; REPORT.md needs the user, #171), K145d (step kernel for small n; optional), #164 (LA-3 G), T23, T24. Weekly about 73 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
