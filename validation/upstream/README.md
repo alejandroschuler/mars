@@ -30,6 +30,7 @@ earth is used only as a black box in every block: the blocks call it and read th
 
 ## Before posting
 
-- The numbers in `01-offer-pymars-2.md` about the 2.0 code are copied from `docs/differences.md` and `validation/DIFFERENCES.md` as of the commit that added these drafts. Refresh them from `validation/REPORT.md` and from `docs/differences.md` on the day of posting, and add the speed and the simulation results from the report.
+- The numbers in `01-offer-pymars-2.md` about the 2.0 code come from `validation/REPORT.md` and `validation/bench/REPORT.md` as of the commit that last changed these drafts. Refresh them on the day of posting.
+- The paragraph "How the work was done" in `01` says that AI agents did the work. The user decides whether it stays.
 - Replace the placeholder for the link to the fork (`<link to the fork>`) by the address of the repository, and say which commit or tag holds the 2.0 code.
 - Post the issues one at a time. The note in `01` is written to stand alone and links to nothing that is unpublished.

@@ -17,10 +17,11 @@ I replaced the fitting code. The result is a package with the same distribution 
 3. **The validation report.** `validation/REPORT.md` is organized by claim (conformance, the gap to `earth`, parity in prediction error, sparsity, speed), with the design of each study and what the evidence shows. `validation/DIFFERENCES.md` triages every difference from `earth` as a rule, a quirk, a tie or a numerical difference, and `validation/DIFFERENCES_legacy.md` does the same for 1.0.4.
 4. **The tests.** The suite runs scikit-learn's `check_estimator` on the estimators, checks weights (an integer weight equals repeated rows), invariances (row and column order, units), and edge cases.
 
-Numbers, as of the commit that added this draft (refresh them before posting):
+Numbers, from `validation/REPORT.md` and `validation/bench/REPORT.md` (refresh them if the code has moved on by the time you read this):
 
-- The reference implementation agrees with `earth` in full on 124 of 133 dataset fixtures and 197 of 200 random draws; the other differences each have a label and a reason in `validation/DIFFERENCES.md`. The fast code shows the same differences as the reference on all 333 comparisons.
-- Speed, in the benchmark at an earlier commit: 10,000 cases, 10 covariates, degree 2, 21 terms: 3.9 s, about 7 times `earth` at its defaults. The 1.0.4 code takes 144 s for 1,000 cases with the same settings, where the new code takes 0.5 s.
+- Conformance: the reference implementation agrees with `earth` in full on 124 of 133 dataset fixtures and 197 of 200 random draws; the other differences each have a label and a reason in `validation/DIFFERENCES.md`. The fast code shows the same differences as the reference on all 333 comparisons.
+- Parity in prediction error: equivalence to within a factor of 1.05 of `earth`'s excess risk is shown in 48 of 51 cells. The claim holds with a condition: on pure noise (D6) at 200 cases, `pymars` is worse than `earth` by 7.6 percent, and that cell fails the rule. The report says which cells are weaker evidence.
+- Speed, at 10,000 cases, 10 covariates, degree 2: `EarthRegressor` takes 1.7 times `earth`'s time in a fresh process and about 0.9 times in a warm one with numba, and 2.6 and 2.7 times with the numpy fallback. The 1.0.4 code takes 144 s for 1,000 cases with the same settings, where the new code takes under a second.
 
 ## What would change for users
 
