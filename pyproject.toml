@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mars-earth"
 version = "2.0.0.dev0"
-description = "Multivariate adaptive regression splines (MARS) in pure Python, with a scikit-learn API"
+description = "Multivariate adaptive regression splines (MARS) in Python, with a scikit-learn API"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -33,6 +33,9 @@ dependencies = [
     "numpy>=1.24.4",
     "scipy>=1.9.3",
     "scikit-learn>=1.6",
+    # Compiled knot scan. numba 0.63 dropped the macOS Intel wheels, so that
+    # platform keeps the numpy code (decision of 2026-10-18, issue #145).
+    "numba>=0.63; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [project.urls]
@@ -49,7 +52,6 @@ dev = [
     "hypothesis>=6.100",
     "ruff>=0.9",
     "pandas>=2",
-    "numba>=0.63 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
 ]
 # For the harness, the simulations and the benchmarks; never shipped.
 validation = [

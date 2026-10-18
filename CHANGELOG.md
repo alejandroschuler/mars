@@ -17,7 +17,7 @@ The rewrite of pymars has started, in the fork alejandroschuler/mars. The new fi
 - Documentation: `docs/algorithm.md` (the specification), `docs/usage.md`, `docs/weights.md` and `docs/differences.md`.
 
 ### Changed
-- The build backend is hatchling. The package is pure Python and depends only on numpy 1.24.4 or later, scipy 1.9.3 or later and scikit-learn 1.6 or later. It supports Python 3.10 to 3.14. The numpy floor is 1.24.4 because the OpenBLAS in numpy 1.23.5 gives wrong matrix products on some CPUs (#88).
+- The build backend is hatchling. The wheel is pure Python and depends on numpy 1.24.4 or later, scipy 1.9.3 or later, scikit-learn 1.6 or later and, except on macOS x86_64 (Intel Macs, where numba has no wheels, so the slower numpy code runs), numba 0.63 or later. It supports Python 3.10 to 3.14. The numpy floor is 1.24.4 because the OpenBLAS in numpy 1.23.5 gives wrong matrix products on some CPUs (#88).
 - A lean CI workflow replaces the 21 inherited workflows.
 
 ### Removed

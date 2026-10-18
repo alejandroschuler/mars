@@ -1,6 +1,6 @@
 # pymars
 
-pymars fits multivariate adaptive regression splines (MARS, Friedman 1991) in pure Python, with a scikit-learn API. The distribution name is `mars-earth` and the import name is `pymars`.
+pymars fits multivariate adaptive regression splines (MARS, Friedman 1991) in Python, with a scikit-learn API. The distribution name is `mars-earth` and the import name is `pymars`.
 
 Version 2 is a rewrite. The fitting code follows a written specification, [docs/algorithm.md](docs/algorithm.md), and is validated against the R package [earth](https://CRAN.R-project.org/package=earth) as described under Status and validation below. It has no release on PyPI yet.
 
@@ -10,7 +10,7 @@ Version 2 is a rewrite. The fitting code follows a written specification, [docs/
 pip install git+https://github.com/alejandroschuler/mars
 ```
 
-The package is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends only on numpy, scipy and scikit-learn 1.6 or later.
+The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), so pymars does not install numba there and runs the slower numpy code, which gives the same models.
 
 ## Regression
 
