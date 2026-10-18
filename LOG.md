@@ -513,9 +513,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 8. CI green on main across the matrix incl. lowest-deps and the no-numba job: the CI run on main 7cf85d0 completed with success (2026-10-18 about 11:20 PDT).
 9. No PR open, every task issue closed or later, needs-user listed, upstream drafts in validation/upstream/: open PR #64 is the user's own (TOOLS-2; waits for the user's push, #68); its issues #62, #65 wait with it. needs-user: #175 (glm_alpha default; numba dependency), #68, #60 (cleanup), #59; the push of the tag sim-freeze-1 (LOG 13:55). Upstream drafts: #174.
 10. Two fresh architecture reviews, every finding fixed or later: #25 comments (A and B); fixed in #177; later in #178; two items wait for the user (#175).
-11. This map; the watchdog task deleted; caffeinate stopped; final summary in the session (below).
+11. This map; caffeinate stopped; the watchdog task's deletion needs the user's approval (refused in the unattended run; later runs stop at step 1); final summary in the session.
 
 - 11:25 PDT (2026-10-18) #177 merged as 7cf85d0; #25 closed; CI on main 7cf85d0 green. Definition of done mapped above; all items met, with the needs-user items listed (#175, #68 with PR #64, #60, #59, the tag push). Work done: watchdog deleted, caffeinate stopped, final summary in the session.
+- 11:30 caffeinate (PID 92247) stopped. Deleting or disabling the watchdog task needs a person's approval in this unattended run (both delete_scheduled_task and update_scheduled_task were refused); left for the user. Each later watchdog run stops at step 1, since STATE says Work done: yes.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
