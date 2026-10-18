@@ -909,7 +909,9 @@ def final_fit(
             w,
             B[:, sel],
         )
-        coef, rss = _shifted_fit(mono, Yc, w, keep_terms)
+        cuts_sel = np.asarray(cuts, dtype=np.float64)[sel]
+        terms = (X_cases, np.asarray(dirs)[sel], cuts_sel)
+        coef, rss = _shifted_fit(mono, Yc, w, keep_terms, terms)
     else:
         fit = _linalg.lm_fit(B[:, sel], Yc, w)
         coef, rss = fit.coef, fit.rss
@@ -924,15 +926,33 @@ def final_fit(
 
 
 def _shifted_fit(
-    mono: _Monomials, Yc: FloatArray, w: FloatArray | None, keep: BoolArray
+    mono: _Monomials,
+    Yc: FloatArray,
+    w: FloatArray | None,
+    keep: BoolArray,
+    terms: tuple,
 ) -> tuple[FloatArray, float]:
     """Least squares of Yc on the terms of ``mono`` that ``keep`` marks, the
     terms that LA-4 keeps after the exact shift (PRUNE-8): the coefficients
     (M, K), 0 for a dependent term, and the RSS of the projection. The
     coefficients solve the least squares on the reduced kept terms, g, and
     b = T·g with T = U⁻¹ exact; the intercept's takes the constants of the
-    centered monomials. Complexity: O(n·m·(m + P)) and the rational work of
-    ``_reduce`` for m terms and P monomials.
+    centered monomials. ``terms`` is (X, dirs, cuts) of the same M terms on
+    the cases.
+
+    A reduced column within ``_linalg.NEAR_SPAN`` of the span of the earlier
+    ones is replaced by the exact residual of its term on the earlier kept
+    terms, rounded once (``Conditioner.exact_residual``, as FWD-11 does in
+    ``independent_terms``): LA-4 keeps a term whose new part can be far below
+    the rounding of its reduced column, when a factor m_j multiplies a
+    monomial that the data span (a hinge one ulp from a level, u_j² of a
+    covariate with two levels), and the float column then holds only that
+    rounding, which lowered the RSS by up to 25 % (#140). The term then gets
+    the coefficient of the residual, and each earlier kept term that times
+    the exact coefficient of the projection. Complexity: O(n·m·(m + P)) and
+    the rational work of ``_reduce`` for m terms and P monomials; for each
+    replaced column, O(g·m) integer and O(m³) rational operations on g
+    distinct rows.
     """
     n, P = mono.E.shape
     sw = np.ones(n) if w is None else np.sqrt(w)
@@ -949,6 +969,25 @@ def _shifted_fit(
     G, e = _scaled_columns(red, share, P)
     A = As @ G
     Qa, Ra = np.linalg.qr(A)
+    # #140: the part of a column that the earlier ones do not span, |R_jj|,
+    # is accurate only to the rounding of the sum of its monomials' parts; it
+    # holds mostly rounding when it is far below that sum (never for the
+    # intercept, whose R_00 is its norm)
+    parts = np.abs(G).T @ share
+    near = np.abs(np.diag(Ra)) < _linalg.NEAR_SPAN * parts
+    beta: dict = {}
+    if near.any():
+        X, dirs, cuts = terms
+        cond = _linalg.Conditioner(X, w)
+        for j, k in enumerate(kept):
+            if near[j]:
+                r, beta[j] = cond.exact_residual(dirs[k], cuts[k], coef=True)
+                r = sw * r
+                top = np.max(np.abs(r))
+                e[j] = np.frexp(top)[1] if top > 0 else 0
+                A[:, j] = np.ldexp(r, -e[j])
+            cond.span_append(dirs[k], cuts[k])
+        Qa, Ra = np.linalg.qr(A)
     # LA-4 can keep a term that the data span exactly (its new part counts as
     # a formula), so a reduced column can be 0 after the earlier ones in
     # float64 too; it adds nothing to the span and gets the coefficient 0
@@ -963,7 +1002,15 @@ def _shifted_fit(
     for j, col in enumerate(red.inverse):
         for i, f in col.items():
             T[i, j] = float(f)
+    exact = gamma[list(beta)]  # the coefficients of the exact residuals
+    gamma[list(beta)] = 0.0
     coef = np.zeros((len(mono.terms), Yc.shape[1]))
     coef[kept] = T @ gamma
     coef[0] -= shift @ (np.ldexp(G, e[None, :]) @ gamma)  # Ec = E - 1·shiftᵀ
+    for (j, b), g in zip(beta.items(), exact, strict=True):
+        # the residual is term kept[j] - Σ_i b_i·(term kept[i]), uncentered
+        coef[kept[j]] += g
+        for i, f in enumerate(b):
+            if f:
+                coef[kept[i]] -= float(f) * g
     return coef, float(np.sum(np.square(resid)))
