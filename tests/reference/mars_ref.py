@@ -816,6 +816,10 @@ class Candidate:
     kind: int  # PAIR, SINGLE or LINEAR
     knot: float  # NaN for a linear candidate
     rss: float  # the RSS of LA-2
+    # which of its new columns LA-2 counted, in LA-2's order: (b x, hinge)
+    # for a pair, (hinge,) for a single hinge, (b x,) for a linear candidate;
+    # the counted ones join the forward basis [FWD-13]
+    counted: tuple = dataclasses.field(default=(), compare=False)
 
 
 def collinearity_tol(steps_taken: int) -> float:
@@ -1412,8 +1416,10 @@ class Basis:
 
 
 class Conditioned:
-    """The kept terms (rows ``dirs``, ``cuts``, columns ``B``) after LA-4's
-    exact shift. ``echelon`` is their reduced echelon form, for LA-4's test
+    """A list of columns, given as rows ``dirs``, ``cuts`` (columns ``B``),
+    after LA-4's exact shift: the forward basis F_s in the forward pass
+    [FWD-13], the kept terms in the final fit. ``echelon`` is their reduced
+    echelon form, for LA-4's test
     of a new term (``la4_dependent``); ``columns`` span what the terms span
     (``Basis``) [LA-1]; ``linear_column`` is the new part of a linear
     candidate b x; ``span_columns`` and ``coef`` serve the pruning pass and
@@ -1586,22 +1592,25 @@ def _parent_candidates(
     of the search by the pymars rule of LA-7; in a pair search the linear
     candidate, with RSS(B + {b x}); then the knots of KNOT-6 from the
     largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
-    [LA-2], where G is B, and B with b x in a pair search. Each hinge column
+    [LA-2], where G is B, and B with b x in a pair search when LA-2 counts
+    b x; LA-3's G holds b x in every pair search. Each hinge column
     is built and projected on G explicitly; its RSS is that of the residual.
     The column b x is formed as b (x - min x), which spans the same with B.
-    When ``conditioned`` is the Conditioned of the terms of B, P_B must be
-    the projector of its columns, which G uses in place of B, and b x is its
+    When ``conditioned`` is the Conditioned of the forward basis F_s [FWD-13]
+    (B still holds the terms, for the parent's column), P_B must be the
+    projector of its columns, which G uses in place of B, and b x is its
     linear_column (``parent_cut`` is the cut row of the parent). The hinge
     column h is used as it is: when a large mean would cost digits of its
     part that is new to G, that part is a small fraction of h, and LA-3
-    rejects it. With ``conditioned``, LA-4 tests b x against the kept terms
-    and each hinge that LA-3 accepts against G; a dependent new column
-    counts as 0 in the RSS [LA-2], so a linear candidate whose b x is
-    dependent has the RSS of B and is not legal. A hinge's test reuses its
-    orthogonal part from LA-3 when that is clearly above 1e-7 of the w-norm
-    of its pivot monomial (la4_dependent decides the others). Cost: up to n
-    knots per covariate, each projected on up to M + 1 columns, so O(p n^2
-    M) time, and O(n^2) memory for the hinge matrix.
+    rejects it. With ``conditioned``, LA-4 tests b x against F_s and each
+    hinge that LA-3 accepts against F_s, with b x when LA-2 counted it; a
+    dependent new column counts as 0 in the RSS [LA-2], so a linear
+    candidate whose b x is dependent has the RSS of B and is not legal. A
+    hinge's test reuses its orthogonal part from the RSS projection when
+    that is clearly above 1e-7 of the w-norm of its pivot monomial
+    (la4_dependent decides the others). Cost: up to n knots per covariate,
+    each projected on up to M + 1 columns, so O(p n^2 M) time, and O(n^2)
+    memory for the hinge matrix.
     """
     p = X.shape[1]
     b = B[:, k]
@@ -1665,7 +1674,8 @@ def _parent_candidates(
             P_G, e_G = P_B, e_B
         if pair:
             value = rss_s if bx_dependent else float(np.sum(e_G**2))
-            first(Candidate(k, j, LINEAR, math.nan, value), j, LINEAR, math.nan)
+            c = Candidate(k, j, LINEAR, math.nan, value, (not bx_dependent,))
+            first(c, j, LINEAR, math.nan)
         if spans is None:
             continue
         knots = knot_scan(x, active, w, *spans, N, tau_N, distinct=True)
@@ -1675,17 +1685,22 @@ def _parent_candidates(
         H = b[:, None] * np.maximum(x[:, None] - t[None, :], 0.0)
         H_perp = P_G.residual(H)
         size = np.sum(H_perp**2, axis=0)
+        # LA-3's G holds b x in a pair search, also when LA-2 does not count it
+        size_g = size
+        if pair and bx_dependent:
+            P_3 = Projector(np.column_stack([B_proj, bx]), w)
+            size_g = np.sum(P_3.residual(H) ** 2, axis=0)
         spread = np.sum(P_G.scaled(H) ** 2, axis=0)
         constant = np.all(H[0] == H, axis=0)
         with np.errstate(divide="ignore", invalid="ignore"):
-            accept = ~constant & (size / spread >= tau)  # [LA-3]
+            accept = ~constant & (size_g / spread >= tau)  # [LA-3]
         kind = PAIR if pair else SINGLE
         for i in range(len(t)):
             c = None  # a knot that LA-3 rejects is no candidate
             if accept[i]:
                 # a dependent hinge counts 0: the RSS of G
                 value = rss_s if P_G is P_B else float(np.sum(e_G**2))
-                if S is None or not _hinge_dependent(
+                counted = S is None or not _hinge_dependent(
                     conditioned,
                     S,
                     parent_row,
@@ -1695,18 +1710,20 @@ def _parent_candidates(
                     H[:, i],
                     size[i],
                     w,
-                ):
+                )
+                if counted:
                     h = H_perp[:, i]
                     residual = e_G - np.outer(h, (h @ e_G) / size[i])
                     value = float(np.sum(residual**2))
-                c = Candidate(k, j, kind, float(t[i]), value)
+                flags = (not bx_dependent, counted) if pair else (counted,)
+                c = Candidate(k, j, kind, float(t[i]), value, flags)
             first(c, j, kind, float(t[i]))
     return out, True
 
 
 def _hinge_dependent(conditioned, S, parent_row, parent_cut, j, t, h, size, w):
     """LA-4's test of the hinge b (x_j - t)+ against S [LA-2]. ``size`` is the
-    squared w-norm of its part orthogonal to G, from LA-3; when it is above
+    squared w-norm of its part orthogonal to the columns of S; when it is above
     1e-7 of the w-norm of the pivot monomial by more than a bound on its
     rounding, the hinge counts, else la4_dependent decides."""
     atoms = conditioned.atoms
@@ -1780,6 +1797,24 @@ def _new_terms(c, X, columns, dirs, cuts, auto_linpreds):
     return [term(1, float(x.min()))]
 
 
+def _basis_rows(c, dirs, cuts) -> list:
+    """The rows of dirs and cuts of the new columns of candidate c that LA-2
+    counted, in LA-2's order: b x (code 2, whatever ``auto_linpreds`` is),
+    then the hinge b (x - t)+ (code +1). They join the forward basis
+    [FWD-13]; the mirror of a pair never does."""
+    out = []
+    flags = list(c.counted)
+    columns = [] if c.kind == SINGLE else [(2, 0.0)]
+    if c.kind != LINEAR:
+        columns.append((1, c.knot))
+    for (code, knot), counted in zip(columns, flags, strict=True):
+        if counted:
+            row, cut = dirs[c.parent].copy(), cuts[c.parent].copy()
+            row[c.variable], cut[c.variable] = code, knot
+            out.append((row, cut))
+    return out
+
+
 def _candidate_log(log) -> dict:
     """The CandidateLog of CORE-3 from (chosen, second, RSS_s) triples, one per
     step: second_rss is RSS_s minus the second's reduction after the band of
@@ -1818,8 +1853,14 @@ def forward_pass(
     record_candidates=False,
     trace=None,
 ):
-    """The forward pass of a fit that is not degenerate [FWD-1 to FWD-11], with
+    """The forward pass of a fit that is not degenerate [FWD-1 to FWD-13], with
     its stopping rules [STOP-1 to STOP-6] and the queue [FAST-1 to FAST-6].
+
+    Each step evaluates its candidates on the forward basis F_s, which holds
+    the intercept and, for each step, the new columns of its chosen candidate
+    that LA-2 counted (b x, then the hinge); RSS_s is RSS(F_s), the chosen
+    candidate's RSS [FWD-13]. FWD-11's test of the terms runs once after the
+    pass; it sets ``kept`` and ``dropped`` and changes no forward value.
 
     X is n x p, Y n x K and w the positive weights; N and tau_N are those of
     W-4, and tss is the RSS of the intercept alone, in the units of Y.
@@ -1845,7 +1886,9 @@ def forward_pass(
     slots = {1: 0}  # slot -> forward index of its term [FWD-9]
     entries = [[math.inf, 0]]  # entry e at index e - 1: [lambda_e, kappa_e]
     log = []
-    atoms, kept = Atoms(X), [0]  # the terms that LA-4 keeps [FWD-11]
+    atoms = Atoms(X)
+    # the forward basis F_s as rows of dirs and cuts, from the intercept [FWD-13]
+    basis_dirs, basis_cuts = [dirs[0].copy()], [cuts[0].copy()]
     s = 0
     while True:
         kappa = 2 * (s + 1)
@@ -1853,9 +1896,8 @@ def forward_pass(
             termination = NO_ROOM if s == 0 else TERM_LIMIT
             break
         B = np.column_stack(columns)
-        conditioned = Conditioned(
-            X, [dirs[i] for i in kept], [cuts[i] for i in kept], B[:, kept], atoms, w
-        )
+        # every candidate of the step is evaluated on F_s [FWD-13, LA-2]
+        conditioned = Conditioned(X, basis_dirs, basis_cuts, None, atoms, w)
         P_B = Projector(conditioned.columns, w)
         e_B = P_B.residual(Y)
         rss_s = rss_path[-1]
@@ -1922,13 +1964,11 @@ def forward_pass(
         if chosen is None:  # [STOP-2]
             termination = NO_GAIN
             break
+        for row, cut in _basis_rows(chosen, dirs, cuts):  # F_{s+1} [FWD-13]
+            basis_dirs.append(row)
+            basis_cuts.append(cut)
         new = _new_terms(chosen, X, columns, dirs, cuts, params.auto_linpreds)
-        S = conditioned.echelon.copy()
         for i, (row, cut, column) in enumerate(new):  # [FWD-9, FAST-1, TERM-6]
-            e = atoms.expansion(row, cut)
-            if not la4_dependent(atoms, S, e, w):  # [FWD-11]
-                kept.append(len(columns))
-                S.add(e)
             slots[kappa + i] = len(columns)
             columns.append(column)
             dirs.append(row)
@@ -1946,8 +1986,8 @@ def forward_pass(
             termination = RSQ_HIGH  # [STOP-5]
             break
     B = np.column_stack(columns)
-    dropped = np.ones(len(columns), dtype=bool)  # [FWD-11], as tested in the steps
-    dropped[kept] = False
+    # FWD-11 after the pass, on the terms; it changes no forward value
+    dropped = ~la4_kept(X, dirs, cuts, w, atoms)
     record = {
         "dirs": np.array(dirs, dtype=np.int8).reshape(-1, p),
         "cuts": np.array(cuts, dtype=np.float64).reshape(-1, p),
