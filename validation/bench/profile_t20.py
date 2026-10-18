@@ -7,8 +7,9 @@ of each phase of ``fit_mars`` and, with ``--prof``, writes cProfile stats of a
 second fit and prints the top functions by own time.
 
 Cases: the plan's baseline at 10,000 cases (``base10k``), the small-n cells
-of REPORT.md (``n250``, ``n1000``), and pruning at a large covariate mean
-(``shift3``: degree 3, every covariate shifted by 1e6, 2,000 cases).
+of REPORT.md (``n250``, ``n1000``), and a large covariate mean (``shift3``:
+degree 3, every covariate shifted by 1e6, 2,000 cases), which is beyond
+ordinary data under spec v3 (LIM-1).
 """
 
 from __future__ import annotations
@@ -96,18 +97,17 @@ def prune_case(c, prof, top):
     Xs = np.ldexp(X, _core._column_exponents(X)[None, :])  # EDGE-7
     dirs, cuts = random_terms(Xs, c["max_terms"], c["degree"])
     t0 = time.perf_counter()
-    keep = _linalg.independent_terms(Xs, dirs, cuts)  # FWD-11
-    print(f"  independent_terms {time.perf_counter() - t0:.3f} s, kept {keep.sum()}")
-    dirs, cuts = dirs[keep], cuts[keep]
     B = _terms.basis_matrix(Xs, dirs, cuts)
+    keep = _linalg.independent_columns(B)  # FWD-11
+    print(f"  independent_columns {time.perf_counter() - t0:.3f} s, kept {keep.sum()}")
+    B = B[:, keep]
     pen = _gcv.default_penalty(c["degree"])
-    kw = {"X": Xs, "dirs": dirs, "cuts": cuts}
 
     def run():
         t0 = time.perf_counter()
-        pr = _pruning.pruning_pass(B, y, None, penalty=pen, **kw)
+        pr = _pruning.pruning_pass(B, y, None, penalty=pen)
         t1 = time.perf_counter()
-        _pruning.final_fit(B, y, pr.selected, None, penalty=pen, **kw)
+        _pruning.final_fit(B, y, pr.selected, None, penalty=pen)
         return t1 - t0, time.perf_counter() - t1, len(pr.selected)
 
     for i in range(2):

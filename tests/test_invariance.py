@@ -206,8 +206,12 @@ def test_row_and_column_order(seed, n, p, degree):
 
 # Scale and shift of a covariate (Conventions, LA-7)
 
-#: The S12 fixture's transforms of x: (shift, scale).
-X_MAPS = {"x·1e-8": (0.0, 1e-8), "x·1e8": (0.0, 1e8), "x + 1e6": (1e6, 1.0)}
+#: The S12 fixture's scales of x, (shift, scale), and a shift within ordinary
+#: data (Limits): the mean of x stays below 1e4 times its standard deviation
+#: (about 0.58 for x uniform on (-1, 1)) at degree 1 and 300 times at degree 2.
+#: S12's own shift, x + 1e6, is beyond that at degree 2 (LIM-1).
+X_MAPS = {"x·1e-8": (0.0, 1e-8), "x·1e8": (0.0, 1e8), "x + c": (None, 1.0)}
+SHIFT_BY_DEGREE = {1: 5e3, 2: 150.0}
 
 
 @given(
@@ -227,8 +231,12 @@ def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data
     (Conventions; LA-7 makes the choice between a pair and a single-hinge
     search free of the units). A shift changes the fit when x_j is a linear
     factor in a product, and in earth too (Conventions), so the shift runs
-    with ``auto_linpreds=False`` or at degree 1."""
+    with ``auto_linpreds=False`` or at degree 1, and stays within ordinary
+    data (``SHIFT_BY_DEGREE``): a larger shift can make b·x count as
+    dependent on the lower terms in float64 (LA-4, LIM-1)."""
     shift, scale = X_MAPS[name]
+    if shift is None:
+        shift = SHIFT_BY_DEGREE[degree]
     if shift != 0.0 and degree > 1:
         linpreds = False
     X, Y = _draw(seed, n, p)
@@ -248,6 +256,20 @@ def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data
         x_factor=factor,
         x_shift=(j, shift),
     )
+
+
+def test_a_shift_far_beyond_the_spread_drops_the_linear_term():
+    """LIM-1 (Limits): x = 1e8 + u with u uniform on (0, 1) has a part
+    orthogonal to the intercept of about 3e-9 of its norm, below LA-4's 1e-7,
+    so the linear column x counts as dependent and is never added, although y
+    is linear in u. The fit does not crash, and hinges, which a shift does not
+    touch, carry the fit."""
+    rng = np.random.default_rng(5)
+    u = rng.uniform(size=60)
+    y = 3.0 * u + np.maximum(u - 0.5, 0.0) + 0.01 * rng.normal(size=60)
+    fit = _fit((1e8 + u)[:, None], y[:, None], max_degree=1)
+    assert not (fit.forward.dirs == 2).any()
+    assert (fit.dirs[:, 0] != 0).any() and fit.rsq > 0.99
 
 
 def _rows(dirs, cuts):

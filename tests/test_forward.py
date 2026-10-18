@@ -475,8 +475,9 @@ def test_exact_shifts(design, x_shift, y_shift, weighted):
     centered (FWD-10): the TSS comes from the centered y, which the case with
     y + 2^44 pins. At these x shifts the centering of x before Gram-Schmidt
     (the plan's "Fast path") changes no decision; it pinned the far larger
-    shifts of spec v2, which v3 leaves to the Limits (LIM-1). In "linear", FWD-4 bars every knot of x0 at
-    step 2, and the linear candidate of x0 wins. "interaction" runs at degree
+    shifts of spec v2, which v3 leaves to the Limits (LIM-1). In "linear",
+    FWD-4 bars every knot of x0 at step 2, and the linear candidate of x0
+    wins. "interaction" runs at degree
     2 with auto_linpreds=False, where x0 enters products as b·(x0 - m)₊, which
     a shift does not change (FWD-6). With ``weighted`` the weights are
     multiples of 1/8 (W-8), and the shifted data get one more case: a copy of
