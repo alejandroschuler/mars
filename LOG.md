@@ -422,6 +422,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:20 #141 round 2 at 3ed6737 (rebased on 8dc9c6d; gate B PASS): new rule, coefficient set C chosen on normalized term columns in term order by smallest singular value >= 1e-12; others 0; rss = RSS(C) (up to 3.7x the pruning value, seed 1148); no column-alone test works (seed 439). Full re-reviews sent to review-141-spec and review-141-adversarial.
 - 23:35 #141 round 2 reviews REQUEST_CHANGES (both): the fixed sigma >= 1e-12 test drops coefficients float64 carries (x0 = 1e12 + U gives R^2 0; products of 1e6-shifted factors); PRUNE-8 contradiction; rss above the pruning value breaks PRUNE-5's choice. Sent round 3 to s139-spec (benefit or a posteriori test); after round 3, re-scope if not approved.
 - 23:55 #144 (F140) ready at 5924445 (on 8dc9c6d; gates B, C PASS; smoke 1.11): cause was float reduced columns holding only rounding in _shifted_fit; flagged columns use Conditioner.exact_residual (new coef=True); LA-5 misses 55 to 0 across the sweeps, seed 57 fixed. Started review-144-spec ac0000c0d952f1439 (sonnet), review-144-adversarial acfd33c163fa2f121 (opus). Opened #146 (same defect in the pruning pass); given to f140-final-rss. Sent #144's evidence to s139-spec for #141 round 3.
+- 00:05 (2026-10-18) #124 at ab1c4c5 (rebased on 8dc9c6d; three small items; hash equal; gates B, C PASS; CI green). Spec update check sent to a98396fc7f4af488c; adversarial update check (ad4a82742af063995) when a reviewer slot frees.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
