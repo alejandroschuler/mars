@@ -116,8 +116,8 @@ def _bits(a):
 @given(
     seeds,
     st.integers(2, 300),
-    st.integers(1, 4),
-    st.integers(1, 2),
+    st.integers(1, 12),
+    st.integers(1, 12),
     st.booleans(),
     st.booleans(),
     st.sampled_from([0.0, 1e6]),
@@ -133,9 +133,10 @@ def test_the_compiled_scan_agrees_with_the_numpy_scan(
     splits (and the monotone orders, which ``hv`` reads with no sort),
     repeated splits, block sizes from n = 2 up, more than one tile of rows
     (``_kernels.TILE``), and weights that are not integers. The sums over
-    the columns may round differently (no bit-identity, #145), so each value
-    is within the numpy value's error bound, the bounds agree to rounding,
-    and the zero hinges are the same."""
+    the columns may round differently (no bit-identity, #145): r and K up
+    to 12 reach numpy's pairwise sums, where the bits differ. Each value is
+    within the numpy value's error bound, the bounds agree to rounding, and
+    the zero hinges (value and bound 0) are the same."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
     if weighted:  # b = √w with weights that are not integers: W_pre's sums round
@@ -177,7 +178,8 @@ def test_the_compiled_scan_agrees_with_the_numpy_scan(
             (run.gain, want.gain, want.gain_err),
         ):
             assert np.all(np.abs(got - ref) <= err)
-            assert np.array_equal(got == 0.0, ref == 0.0)
+        zero = (want.ratio == 0.0) & (want.ratio_err == 0.0)
+        assert np.array_equal((run.ratio == 0.0) & (run.ratio_err == 0.0), zero)
         for got, ref in (
             (run.ratio_err, want.ratio_err),
             (run.gain_err, want.gain_err),
@@ -216,6 +218,19 @@ def test_the_kernels_round_every_product():
         want = _scan._centered(g, w, split)
     assert np.isnan(want).any()
     assert np.array_equal(_bits(_kernels.centered(g, w, split)), _bits(want))
+
+
+@needs_numba
+def test_prep_scales_subnormal_values_as_ldexp():
+    """``_kernels.prep`` gives the bits of ``_scan._to_unit`` where 2^e is not
+    a normal number (the ``math.ldexp`` branch of ``_kernels._scale``): a
+    parent whose largest value is subnormal, so e > 1023."""
+    x = np.array([0.0, 1.0, 3.0, 3.5])
+    b = np.array([3e-310, -1e-312, 0.0, 5e-320])
+    g, bs = _kernels.prep(x, b)
+    assert np.array_equal(_bits(g), _bits(_scan._to_unit(np.diff(x))))
+    assert np.array_equal(_bits(bs), _bits(_scan._to_unit(b)))
+    assert 0.5 <= np.max(np.abs(bs)) < 1.0
 
 
 def _pair_basis(x, extra):
