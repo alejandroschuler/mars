@@ -462,6 +462,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 09:05 #159 update approvals (both, own posts) at 3a765ef. Merged #159 (K145a, compiled scan bounds and masks) as d718aab.
 - 09:15 #162 (C157f) draft at f1babc0 (on d718aab): source 3,950 -> 2,379 lines (_linalg 1170 -> 454, _pruning 1016 -> 304); same fits on the benchmark; second fit 0.075/0.644/8.2-8.7 s vs main 0.085/0.672/7.9-8.3 (100k within noise); conformance 297 passed. Gave it test_invariance.py's S12 shift (LIM-1) and validation/bench/profile_t20.py. Waits for #160 and #161.
 - 09:40 #160 (C157o) ready at 6af6310 (on d718aab; gates B, C PASS; CI 13/13; closes #150): ordinary draws only (means up to r_d/2 sd), LIM-1 to LIM-4 cases end with a valid model, near-tie stops 0.4 % forward and 0.5 % whole fit, near-dependence stops 0; conformance 297 passed. FWD-13 case (b) lost its oracle regressions (extreme means): follow-up. Finding: numpy fallback _centered divides 0/0 at underflowing weights (LIM-4; RuntimeWarning). Started review-160-spec (sonnet) and review-160-adversarial (opus, plants).
+- 10:15 #160 APPROVE (both; adversarial: 13 of 16 plants fail the oracle, survivors: 1 equivalent, #142 register rule now uncovered, spans_bx old gap; assume rejects at most 9.5 %). Merged #160 (C157o; closes #150) as 1ce5b11. C157r rebasing; notes to C157f on register and spans_bx.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
