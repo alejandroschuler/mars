@@ -29,7 +29,7 @@ print(weighted.gcv_, repeated.gcv_)                            # the same to rou
 
 Weights times a constant c act like c copies of each row (W-8). The sample size in the formulas below is the sum of the weights, so doubling every weight changes the GCV, the spans and the fit. earth differs here: it counts cases, and it ignores weights that are all equal.
 
-Do not pass importance weights or survey weights as they are. Rescale them to `w * n / w.sum()` first, so that they sum to n. When some weight is not an integer and the mean of the weights differs from 1 by more than 1e-6 (relative), `fit` issues a UserWarning that says this (W-7). Integer weights never warn. The test uses all n rows as given, zero weights included.
+Do not pass importance weights or survey weights as they are. Rescale them to `w * n / w.sum()` first, so that they sum to n. When some weight is not an integer and the mean of the weights is below 0.5 or above 2, `fit` issues a UserWarning that says this (W-7). Integer weights never warn. The test uses all n rows as given, zero weights included. The band is wide on purpose: a cross-validation fold, a bootstrap sample or another subset of rescaled weights has a mean near 1 but not exactly 1, and it does not warn. Such a subset is fine to fit as it is.
 
 ## Zero weights
 

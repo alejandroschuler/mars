@@ -44,7 +44,7 @@ Names that end in an underscore exist only after `fit` (API-3).
 | `term_coef_` | The least-squares coefficients of the terms: shape (M,) for a 1-D y, and (M, K) for K responses. |
 | `rss_`, `gcv_`, `rsq_`, `grsq_` | The residual sum of squares, the GCV, RSq and GRSq of the returned model (PRUNE-8). |
 | `max_terms_`, `penalty_` | The term limit and the penalty that the fit used, after `None` is resolved. |
-| `mars_` | The whole `MarsFit`: the forward record (terms added, RSS after each step, termination code), the pruning record (RSS and GCV of every subset size), and the selected terms (CORE-3). |
+| `mars_` | The whole `MarsFit`: the forward record (terms added, RSS after each step, termination code), the pruning record (RSS and GCV of every subset size), and the selected terms (CORE-3). Its types are exported: `pymars.MarsFit`, `ForwardRecord`, `PruningRecord`, `CandidateLog`, `Termination` and `MarsParams`. For example `est.mars_.pruning.gcv_per_size` gives the GCV of each subset size, and `est.mars_.forward.termination` says why the forward pass stopped. |
 | `classes_`, `glm_` (classifier only) | The sorted class labels, and the coefficients of the logistic refit. |
 
 The functions of the model are `predict`, `score` (from the scikit-learn mixins), `basis_matrix(X)` and `summary()`. `basis_matrix(X)` returns the (n, M) matrix of the selected terms at X. Nothing is clipped outside the range of the training data (TERM-3). The regressor's `predict(X)` is `basis_matrix(X) @ term_coef_`.
@@ -115,7 +115,7 @@ The pipeline passes a numpy array to the estimator, so the terms are named `x0`,
 
 ## Pipelines and grid search
 
-The estimators clone, pickle, and take `sample_weight` through metadata routing. In a `Pipeline` the parameters have the prefix of the step name, for example `earth__max_degree`.
+The estimators clone, pickle, and take `sample_weight` through metadata routing. A pickle is meant to be loaded by the same version of pymars: it holds the private module paths of the classes, which can change in any release. To keep a fit across versions, save `est.mars_.to_dict()` (arrays and plain numbers), and rebuild it with `pymars.MarsFit.from_dict`. The dict has the key `"format"`, which changes when a key or a dtype changes; `from_dict` raises ValueError for a format that it does not read. In a `Pipeline` the parameters have the prefix of the step name, for example `earth__max_degree`.
 
 ```python
 import numpy as np
@@ -139,6 +139,6 @@ print(grid.best_params_)
 
 ## What the fit costs
 
-The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
+The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). The two give the same models except at near-ties (STOP-7 of [algorithm.md](algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms. numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
 
 In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 0.81 s in a fresh process and 0.43 s in a process that has already fitted, against 0.46 s for earth; with 100,000 cases it takes about 5.1 to 5.8 s, against 7.6 s for earth. The numpy code (Intel Macs) takes 1.2 s at 10,000 cases and 15 s at 100,000, 2.6 and 2.0 times earth's time. Below about 10,000 cases a fixed cost of about 0.06 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows a little less than linearly in the number of cases. Weights cost little extra (0.45 s against 0.39 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).
