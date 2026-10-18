@@ -132,22 +132,27 @@ def test_cgs2_with_kept_coefficients_leaves_v_orthogonal(seed, n, r, a, eps):
     the leading a columns from an earlier call, gives v⊥ orthogonal to Q to
     working precision, with Q·total + v⊥ = v and the norms of v and v⊥, also
     for a v whose part orthogonal to Q is eps of its norm, where the DGKS
-    second pass runs. The compiled kernel and the numpy form (the nonumba
-    job) agree, and the kept coefficients change nothing."""
+    second pass runs. The compiled kernel, its Python source and the numpy
+    form (the nonumba job) agree, and the kept coefficients change nothing."""
     rng = np.random.default_rng(seed)
     r, a = min(r, n - 1), min(a, r, n - 1)
     Q = np.linalg.qr(rng.standard_normal((n, r)))[0]
     v = Q @ rng.uniform(1.0, 2.0, r) + eps * _unit_orthogonal(rng, Q)
     Qf, vf = _frozen(Q, v)
-    forms = [False, True] if la._kernels.AVAILABLE else [False]
+    K = la._kernels
+    forms = ["numpy", "compiled", "source"] if K.AVAILABLE else ["numpy"]
     out = []
-    for compiled in forms:
-        enabled, la._kernels.ENABLED = la._kernels.ENABLED, compiled
+    for form in forms:
+        saved = K.ENABLED, K._first, K._project, K._cgs2
+        K.ENABLED = form != "numpy"
+        if form == "source":  # the kernels' Python source, under the interpreter
+            K._first, K._project = K._first.py_func, K._project.py_func
+            K._cgs2 = K._cgs2.py_func
         try:
             full = la.cgs2(Qf, vf, twice=False)
             kept = la.cgs2(Qf, vf, full.coef[:a])
         finally:
-            la._kernels.ENABLED = enabled
+            K.ENABLED, K._first, K._project, K._cgs2 = saved
         for o in (full, kept):
             assert np.abs(Q.T @ o.perp).max(initial=0.0) <= 1e-13 * o.norm
             np.testing.assert_allclose(Q @ o.total + o.perp, v, rtol=0, atol=1e-14 * 4)
