@@ -590,19 +590,6 @@ def _scaled_columns(red: _Reduced, share: FloatArray, P: int) -> tuple:
     return G, e
 
 
-def _inverse_rows(red: _Reduced, e: npt.NDArray[np.int64]) -> FloatArray:
-    """T·2^-e as a dense float matrix, each row times a power of 2 so that its
-    largest entry is in [0.5, 1); a row's scale changes no drop cost.
-    Complexity: O(M²)."""
-    M = len(red.cols)
-    T = np.zeros((M, M))
-    for k, col in enumerate(red.inverse):
-        for i, g in col.items():
-            T[i, k] = float(g)
-    T = np.ldexp(T, -e[None, :])
-    return np.ldexp(T, -np.frexp(np.max(np.abs(T), axis=1))[1][:, None])
-
-
 class _Plain:
     """The factor of PRUNE-9 for the columns of B: one QR, then downdates
     (``_linalg.prefix_rss``, ``drop_costs`` and ``move_column``)."""
@@ -638,51 +625,148 @@ class _Shifted:
     per working order O(M³ + M²·(P + K)) floats and the rational work of
     ``_reduce``."""
 
-    def __init__(self, mono: _Monomials, Yc: FloatArray, w: FloatArray | None):
+    def __init__(
+        self, mono: _Monomials, Yc: FloatArray, w: FloatArray | None, terms: tuple
+    ):
         n, P = mono.E.shape
         self.terms, self.P = mono.cterms, P
-        sw = np.ones(n) if w is None else np.sqrt(w)
+        self.sw = sw = np.ones(n) if w is None else np.sqrt(w)
         Ec = mono.E.copy()
         rest = [q for q, key in enumerate(mono.ckeys) if key]
         if rest:  # the intercept's monomial stays 1 (every subset holds it)
             Ec[:, rest] = _centered(Ec[:, rest], w)[0]
         As = sw[:, None] * Ec
         self.share = np.sqrt(np.sum(np.square(As), axis=0))
+        self._X, self._dirs, self._cuts = terms
+        self._w = w
+        self._cond: _linalg.Conditioner | None = None
+        self.order = np.arange(len(self.terms))
         red = _reduce(self.terms, self.share)
-        G, _ = _scaled_columns(red, self.share, P)
+        G, e = _scaled_columns(red, self.share, P)
         # The terms' columns are factored directly, not through a QR of the
         # monomials: the canonical monomials can be dependent on the cases
         # (the differences of a near copy are 0 at all but a few cases), and
         # the rounding of such a factor in a direction the terms do not span
         # would enter the RSS times m_j (the adversarial review of PR #123).
-        Q0, _ = np.linalg.qr(As @ G)
-        resid, self.z = _linalg.orthogonalize(Q0, sw[:, None] * Yc)
+        # A column that holds mostly rounding is the exact residual (#146).
+        A = As @ G
+        _, R0 = np.linalg.qr(A)
+        A, _, zero = self._exact_columns(A, R0, G, e, red, lambda v: v)
+        Q0, _ = np.linalg.qr(A[:, ~zero])
+        resid, z = _linalg.orthogonalize(Q0, sw[:, None] * Yc)
         self.rss = float(np.sum(np.square(resid)))
-        self.H = Q0.T @ As
-        self.order = np.arange(len(self.terms))
+        # Q_0 has fewer columns than there are terms when a term adds nothing
+        # to the span; zero rows keep A square, so that R_A has M diagonal
+        # entries
+        self._pad = np.zeros((len(self.terms) - Q0.shape[1], 1))
+        self.z = self._padded(z)
+        self.H = self._padded(Q0.T @ As)
+        self._Q0 = Q0
         self._factor(red)
+
+    def _padded(self, V: FloatArray) -> FloatArray:
+        return np.vstack((V, np.broadcast_to(self._pad, (len(self._pad), V.shape[1]))))
+
+    def _exact_columns(self, A, R, G, e, red, into) -> tuple:
+        """Replace each column of A (the reduced terms of ``self.order``, G
+        scaled by 2^-e) whose part outside the earlier columns, |R_jj|, is
+        below NEAR_SPAN times the sum of the parts of its monomials by the
+        exact w-residual of its term on the earlier terms of the order
+        (``Conditioner.exact_residual``), mapped by ``into`` and scaled by a
+        power of 2 (e changes in place), as ``_shifted_fit`` does (#140,
+        #146): such a column holds mostly the rounding of its monomials'
+        parts, which a factor m_j makes large next to its new part. Returns
+        A and T·2^-e, T the term coordinates of the columns (the rows of
+        positions in the order), upper triangular: that of ``_reduce`` for
+        a reduced column, and e_j - β for a residual with the exact
+        projection coefficients β. Complexity: O(n·m) for the test; for each
+        replaced column O(g·m) integer and O(m³) rational operations on g
+        distinct rows, and O(g·M²) integer operations once for the Gram
+        matrix of the M terms."""
+        m = len(red.cols)
+        T = np.zeros((m, m))
+        zero = np.zeros(m, dtype=bool)
+        for k, col in enumerate(red.inverse):
+            for i, f in col.items():
+                T[i, k] = float(f)
+        parts = np.abs(G).T @ self.share
+        # <=: a column whose monomials are 0 at every case is 0 (seed 295)
+        near = np.abs(np.diag(R)) <= _linalg.NEAR_SPAN * parts
+        if near.any():
+            A = A.copy()
+            if self._cond is None:
+                self._cond = _linalg.Conditioner(self._X, self._w)
+                for row, cut in zip(self._dirs, self._cuts, strict=True):
+                    self._cond.span_append(row, cut)
+            for j in np.flatnonzero(near):
+                o = int(self.order[j])
+                r, beta = self._cond.exact_residual(
+                    self._dirs[o],
+                    self._cuts[o],
+                    coef=True,
+                    among=[int(k) for k in self.order[:j]],
+                )
+                v = into(self.sw * r)
+                top = np.max(np.abs(v))
+                e[j] = np.frexp(top)[1] if top > 0 else 0
+                A[:, j] = np.ldexp(v, -e[j])
+                zero[j] = not np.any(r)
+                T[:, j] = 0.0
+                T[j, j] = 1.0
+                T[:j, j] = [-float(f) for f in beta]
+        return A, np.ldexp(T, -e[None, :]), zero
 
     def _factor(self, red: _Reduced | None = None) -> None:
         if red is None:
             red = _reduce([self.terms[o] for o in self.order], self.share)
-        G, self.e = _scaled_columns(red, self.share, self.P)
-        Q, self.R = np.linalg.qr(self.H @ G)
+        G, e = _scaled_columns(red, self.share, self.P)
+        A = self.H @ G
+        _, R = np.linalg.qr(A)
+        A, T, self.zero = self._exact_columns(
+            A, R, G, e, red, lambda v: self._padded((self._Q0.T @ v)[:, None])[:, 0]
+        )
+        # A term that the earlier ones span exactly at the cases (LA-4 can
+        # keep one, #139) adds nothing to the span: its column is left out of
+        # the QR, and the prefixes from it on have the RSS of the one before.
+        Q, self.R = np.linalg.qr(A[:, ~self.zero])
         if np.any(np.diag(self.R) == 0.0):
             raise ValueError("the columns of B must be linearly independent (FWD-11)")
         self.Z = Q.T @ self.z
-        self.red = red
+        # each row times a power of 2 so that its largest entry is in [0.5, 1);
+        # a row's scale changes no drop cost
+        self.T = np.ldexp(T, -np.frexp(np.max(np.abs(T), axis=1))[1][:, None])
 
     def prefix(self) -> FloatArray:
-        return _linalg.prefix_rss(self.Z, self.rss)
+        rss = _linalg.prefix_rss(self.Z, self.rss)
+        return rss[np.cumsum(~self.zero) - 1]
 
     def drops(self, pos: int) -> FloatArray:
+        if self.zero[:pos].any():
+            return self._refit_drops(pos)
         # The columns of A are scaled already, so R needs no scaling here.
         W = scipy.linalg.solve_triangular(self.R[:pos, :pos], np.eye(pos))
-        rows = _inverse_rows(self.red, self.e)[:pos, :pos]
+        rows = self.T[:pos, :pos]
         rows = np.ldexp(rows, -np.frexp(np.max(np.abs(rows), axis=1))[1][:, None]) @ W
         beta = rows @ self.Z[:pos]
         num = np.square(beta) if beta.ndim == 1 else np.sum(np.square(beta), axis=1)
         return num / np.sum(np.square(rows), axis=1)
+
+    def _refit_drops(self, pos: int) -> FloatArray:
+        """The drop costs of positions 0 to pos - 1 (0 for the intercept,
+        which is never dropped) when a term among them adds nothing to the
+        span: R is then singular, so each drop is refitted, the RSS of the
+        first pos - 1 terms of the order with that term moved to position
+        pos - 1, minus the RSS of the first pos. Complexity: O(pos) factors
+        of a working order."""
+        saved = (self.order, self.zero, self.R, self.Z, self.T)
+        full = self.prefix()[pos - 1]
+        out = np.zeros(pos)
+        for i in range(1, pos):
+            self.order = np.insert(np.delete(saved[0], i), pos - 1, saved[0][i])
+            self._factor()
+            out[i] = self.prefix()[pos - 2] - full
+        self.order, self.zero, self.R, self.Z, self.T = saved
+        return out
 
     def move(self, i: int, j: int) -> None:
         self.order = np.insert(np.delete(self.order, i), j, self.order[i])
@@ -814,7 +898,10 @@ def pruning_pass(
     mono = _terms_of(B, keep, X, dirs, cuts)
     Yc = _centered(Y, w)[0]
     if mono is not None:
-        factor: _Plain | _Shifted = _Shifted(mono, Yc, w)
+        X_cases = np.asarray(X, dtype=np.float64)
+        X_cases = X_cases if keep is None else X_cases[keep]
+        terms = (X_cases, np.asarray(dirs), np.asarray(cuts, dtype=np.float64))
+        factor: _Plain | _Shifted = _Shifted(mono, Yc, w, terms)
     else:
         Bc = B.copy()
         if M > 1:

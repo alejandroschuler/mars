@@ -950,17 +950,23 @@ class Conditioner:
         return out, den
 
     def exact_residual(
-        self, row: npt.ArrayLike, cut: npt.ArrayLike, coef: bool = False
+        self,
+        row: npt.ArrayLike,
+        cut: npt.ArrayLike,
+        coef: bool = False,
+        among: list | None = None,
     ) -> FloatArray | tuple[FloatArray, list]:
         """The column of the term minus its exact w-projection on the span of
         the terms registered by ``span_append``, rounded once to float64
         (unscaled); with ``coef``, also the exact coefficients of that
         projection on the registered terms, in their order, as Fractions (0
-        for a dependent one). It spans with them what the term spans, and it is accurate
-        relative to its own size, also when the term lies within rounding of
-        that span in float64, where a float64 projection keeps only the
-        rounding (a covariate that is a copy up to rounding of another, such
-        as x/8 + c at a large mean, LA-5's scope paragraph).
+        for a dependent one). With ``among``, a list of indices of registered
+        terms, the span is that of those terms alone, and the coefficients are
+        on them, in that order. It spans with them what the term spans, and
+        it is accurate relative to its own size, also when the term lies
+        within rounding of that span in float64, where a float64 projection
+        keeps only the rounding (a covariate that is a copy up to rounding of
+        another, such as x/8 + c at a large mean, LA-5's scope paragraph).
 
         Method: on the g distinct rows of X every column is integers over a
         power of 2, so the Gram matrix of the registered columns and their
@@ -983,11 +989,13 @@ class Conditioner:
             self._span.append((c, d))
             own = Fraction(int(np.dot(wc, c)), wd * d * d)
             self._sgram.append([*(r[-1] for r in self._sgram), own])
+        idx = list(range(len(self._span))) if among is None else list(among)
+        span = [self._span[i] for i in idx]
         v, dv = self._term_ints(row, cut)
         wv = wi * v
-        r = len(self._span)
-        A = [list(self._sgram[i]) for i in range(r)]
-        b = [Fraction(int(np.dot(wv, c)), wd * dv * d) for c, d in self._span]
+        r = len(span)
+        A = [[self._sgram[i][j] for j in idx] for i in idx]
+        b = [Fraction(int(np.dot(wv, c)), wd * dv * d) for c, d in span]
         for k in range(r):  # Gaussian elimination, a zero pivot skipped
             if A[k][k] == 0:
                 continue
@@ -1002,10 +1010,10 @@ class Conditioner:
             if A[k][k] != 0:
                 rest = sum((A[k][j] * beta[j] for j in range(k + 1, r)), Fraction(0))
                 beta[k] = (b[k] - rest) / A[k][k]
-        den = math.lcm(dv, *(d for _, d in self._span))
+        den = math.lcm(dv, *(d for _, d in span))
         den *= math.lcm(1, *(f.denominator for f in beta))
         z = v * (den // dv)
-        for f, (c, d) in zip(beta, self._span, strict=True):
+        for f, (c, d) in zip(beta, span, strict=True):
             if f:
                 z = z - (f.numerator * (den // (f.denominator * d))) * c
         column = np.array([int(x) / den for x in z])[self._inverse]
