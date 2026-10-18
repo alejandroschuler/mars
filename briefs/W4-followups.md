@@ -133,3 +133,17 @@ Read issue #143 first. Work on PR #124's head (`origin/t20-perf`; it is main plu
 3. The fixed cost of a fit in a fresh process: import time (`python -X importtime`), the first fit against the second fit on the same data.
 4. For the knot scan, the inner loop structure: which loops a compiled kernel could replace, and the arrays it would need. Say which operations must keep their order of sums for bit-equality.
 Report to the executor in 30 lines or fewer: a table of times, the top costs with shares, the fixed cost, and a short plan for the numba kernel with the expected gain. Save the scripts and raw output in `<scratchpad>/m143-measure/`, and post the report as a comment on #143.
+
+### F142: fast LA-7 on F_s (branch `t142-fast-la7-fs`; issue #142)
+
+Files: `pymars/_forward.py` (and `pymars/_scan.py` only if the LA-7 test lives there; T20b's kernel author works in `_scan.py`, so keep any change there minimal and tell the executor), their tests, and `tests/test_oracle.py` only to add the case. Read #142, the #136 adversarial review it cites, and docs/algorithm.md (LA-7, FWD-13, LA-1). Branch from origin/main (5bb2525 or later; #136 adds `_case_b` to tests/test_oracle.py and may merge first: rebase then and reuse it). Make the fast forward pass decide LA-7 against F_s as FWD-13 states, check the case against exact arithmetic or the reference, decide whether the oracle needs a near-tie band for LA-7 (the values are at rounding level) and state the reason. Keep every fit outside FWD-13's case (b) bit-equal to main: `validation/bench/hash_fits.py` over 533 fits must match, or the PR body explains each change. Reviewers: 2. Gates B and C.
+
+### K143: T20b kernel A, a numba knot scan (branch `t143-numba-scan`; issue #143)
+
+Read #143, its measurement comment, and the needs-user issue #145 (the user decides later how far to go; kernel A is needed in every choice). Files: `pymars/_scan.py`, a new `pymars/_kernels.py` if useful, `pyproject.toml` and `uv.lock` (numba from PyPI), their tests, and `validation/bench/` for timings. Do not change `_forward.py` beyond the call site (F142 works there; tell the executor if you need more).
+1. First check numba's floor: the lowest numba version with wheels for Python 3.10 to 3.14 on Linux, macOS (arm64 and x86_64) and Windows, and its numpy and llvmlite constraints against pymars's floors (numpy 1.24.4, the lowest-deps CI job). If no single floor covers Python 3.10 to 3.14 with pymars's numpy floor, stop and report: the user decides.
+2. Kernel A: fuse `_suffix`, `_hv`, `_norms`, `_centered` and the `[o]` gathers into one compiled loop per column, as the measurement comment plans. Keep every order of sums (blocked suffix, Welford, product order); no fastmath; check that LLVM does not contract a*b+c into an fma (numba's `fastmath=False` and inspect the IR or test with values that would differ). `cache=True`; measure the first-call compile time in a fresh process with and without the cache.
+3. Bit-equality: `validation/bench/hash_fits.py` over 533 fits on main and the head must match. Also the oracle tests (gate C).
+4. Timings at 250, 10,000 and 100,000 x 10 x degree 2 against main and earth, one thread.
+5. A pure-Python fallback when numba is missing is not needed (numba becomes a dependency) unless the floor check forces it.
+Reviewers: 2 (`spec` and `adversarial`, opus for the first full review). Gates B and C. Draft PR early.
