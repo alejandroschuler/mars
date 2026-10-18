@@ -57,6 +57,6 @@ the block was resumed with `--no-cache`, and the later blocks ran with it.
 
 Built with `validation.sims.summarize` on the full run pooled with T04's
 legacy results (P-cur, P-ear, E-pym, OLS, HGB, EarthClassifier, GLMEarth).
-The E-def values are from this run (same seeds as T04's). Known gaps from
+The E-def values are from this run (same seeds as T04's).
 `analyze.py` now maps T04's noise string `na` to NaN, so the D6 ratio row, the
 binary legacy rows and the D6 P-cur selection row are filled. No figures.

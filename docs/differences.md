@@ -9,7 +9,7 @@ Each item has one of the labels of the plan's triage:
 - **tie**: a near-tie, where two choices are equal up to rounding and either program may take either.
 - **numeric**: a numerical difference, such as a rank-deficient solve.
 
-None of the differences below is a bug. The counts in this page are those of the reference implementation at commit 2a00063 of `main`, compared with earth on the fixtures; the fast code is compared with the reference by the oracle tests and not yet directly with earth (C07 is pending, and T22b updates this page after it). On the fixtures, the reference implementation agrees with earth in full on 124 of 133 dataset fixtures and 197 of 200 random draws. The other 9 dataset fixtures and 3 draws fall under the entries E1 to E7 of the triage. They are covered below, and each has the label rule or quirk (no tie and no numeric difference occurred).
+None of the differences below is a bug. On the fixtures, both the fast code and the reference implementation agree with earth in full on 124 of 133 dataset fixtures and 197 of 200 random draws, and the fast code shows exactly the same differences as the reference. The other 9 dataset fixtures and 3 draws fall under the entries E1 to E7 of the triage. They are covered below, and each has the label rule or quirk (no tie and no numeric difference occurred).
 
 ## Weights
 
@@ -46,6 +46,17 @@ None of the differences below is a bug. The counts in this page are those of the
 - **rule** With three or more classes, earth fits one binomial GLM for each class, and its probabilities need not sum to 1. pymars fits one multinomial model, so each row of `predict_proba` sums to 1. With two classes both fit the same binomial GLM (the refit agrees with R's `glm` to a relative 1e-7 or better). (GLM-2)
 - **rule** The logistic refit has no penalty in earth. `glm_alpha=0`, the default, gives the same unpenalized fit; a positive value is an addition. (API-7)
 - **rule** Probabilities near 0 or 1 are the computed ones, where R reports 2.2e-16 for every linear predictor above 30 in absolute value. The ConvergenceWarning keeps earth's threshold. (GLM-4)
+
+## Limits of float64 arithmetic
+
+pymars computes in float64, as earth does. On ordinary data rounding changes the model only at a near-tie, where two choices are equal up to rounding. On the four kinds of input below, rounding can decide which term enters, so pymars and earth, and pymars on two platforms or with and without numba, can give different models. The fit still ends with a valid model and raises no new error. The ids point to the "Limits" section of [algorithm.md](algorithm.md).
+
+- **LIM-1** A covariate whose mean is far larger than its spread, such as a year or a timestamp. A linear term in such a covariate looks like a copy of the intercept once the mean is about 1e7 times the spread, and a product of two or three such terms at about 3,000 and 200 times. pymars then leaves the term out, as earth's final fit does. Subtract the mean (or a typical value) before the fit if such terms matter; at degree 2 or more this changes which models are possible, so pymars does not do it for you.
+- **LIM-2** Two covariates that are equal, or a linear function of each other, except for the last few digits at some rows. Which of them enters then follows rounding. Exact copies are not a problem: a fixed order decides between them.
+- **LIM-3** Covariate values that differ only in the last few digits. A knot at one of them can give a term with a very large coefficient, so predictions away from the data can be far off even though the fitted values are accurate.
+- **LIM-4** Weights so small next to the others, such as 1e-300 next to 1, that their products with squared values underflow to 0. Those rows then have no effect on the fit.
+
+The validation of pymars (the oracle tests, the comparison with earth and [validation/REPORT.md](../validation/REPORT.md)) uses ordinary data, as the "Limits" section defines it.
 
 ## Differences that are not changes of rule
 
