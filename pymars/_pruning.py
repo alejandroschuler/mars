@@ -134,15 +134,16 @@ def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArr
     """Return Y minus one constant per response, and the constants.
 
     Each response is shifted by its data value nearest its weighted mean μ (the
-    first such case in a tie), then by the weighted mean of the differences.
+    smallest such value on a tie, LA-6), then by the weighted mean of the differences.
     The shift a is a data value, so the differences are exact for values
     within a factor of 2 of it, and N·(a - μ)² ≤ TSS, so the rounding of the
     others is of the size of the spread, whatever the weights and the order
     of the cases. A constant response becomes 0 exactly, and its constant is
     its value. Complexity: O(n·K).
     """
-    near = np.abs(Y - np.average(Y, axis=0, weights=w)).argmin(axis=0)
-    anchor = Y[near, np.arange(Y.shape[1])]
+    dist = np.abs(Y - np.average(Y, axis=0, weights=w))
+    nearest = dist == dist.min(axis=0)
+    anchor = np.where(nearest, Y, np.inf).min(axis=0)  # LA-6: the smallest on a tie
     D = Y - anchor
     mean = np.average(D, axis=0, weights=w)
     return D - mean, anchor + mean

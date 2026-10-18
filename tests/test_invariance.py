@@ -207,10 +207,13 @@ def test_row_and_column_order(seed, n, p, degree):
 # Scale and shift of a covariate (Conventions, LA-7)
 
 #: The S12 fixture's scales of x, (shift, scale), and a shift within ordinary
-#: data (Limits): the mean of x stays below 1e4 times its standard deviation
-#: (about 0.58 for x uniform on (-1, 1)) at degree 1 and 300 times at degree 2.
-#: S12's own shift, x + 1e6, is beyond that at degree 2 (LIM-1).
+#: data (Limits), which keeps the mean of x below r_d times its standard
+#: deviation, r_d = 1e4 at degree 1 and 300 at degree 2. S12's own shift,
+#: x + 1e6, is beyond that at degree 2 (LIM-1).
 X_MAPS = {"x·1e-8": (0.0, 1e-8), "x·1e8": (0.0, 1e8), "x + c": (None, 1.0)}
+#: The shift of "x + c" in units of the drawn column's standard deviation sd:
+#: half of r_d, so that |mean| ≤ c + max|x| ≤ c + 1 stays below r_d·sd for
+#: x drawn from (-1, 1) with sd above 0.01.
 SHIFT_BY_DEGREE = {1: 5e3, 2: 150.0}
 
 
@@ -232,15 +235,16 @@ def test_scale_and_shift_of_a_covariate(seed, n, p, degree, linpreds, name, data
     search free of the units). A shift changes the fit when x_j is a linear
     factor in a product, and in earth too (Conventions), so the shift runs
     with ``auto_linpreds=False`` or at degree 1, and stays within ordinary
-    data (``SHIFT_BY_DEGREE``): a larger shift can make b·x count as
-    dependent on the lower terms in float64 (LA-4, LIM-1)."""
+    data for the drawn column (``SHIFT_BY_DEGREE``): a larger shift can
+    make b·x count as dependent on the lower terms in float64 (LA-4,
+    LIM-1)."""
     shift, scale = X_MAPS[name]
-    if shift is None:
-        shift = SHIFT_BY_DEGREE[degree]
-    if shift != 0.0 and degree > 1:
-        linpreds = False
     X, Y = _draw(seed, n, p)
     j = data.draw(st.integers(0, p - 1), label="j")
+    if shift is None:
+        shift = SHIFT_BY_DEGREE[degree] * float(np.std(X[:, j]))
+    if shift != 0.0 and degree > 1:
+        linpreds = False
     Xs = X.copy()
     Xs[:, j] = shift + scale * X[:, j]
     kw = {"max_degree": degree, "auto_linpreds": linpreds}

@@ -288,6 +288,31 @@ def test_exact_ties_and_constant_responses(k):
     assert np.isposinf(fit.gcv) and fit.rsq == 0.0 and fit.grsq == 0.0
 
 
+@pytest.mark.parametrize("weighted", [False, True])
+def test_the_centering_takes_the_smallest_of_two_values_nearest_the_mean(weighted):
+    """LA-6: each response is shifted first by its data value nearest its
+    weighted mean, the smallest such value on a tie, and then by the
+    weighted mean of the differences; the TSS does the same (GCV-5). Here
+    the first two cases are equally near the mean, and the second is the
+    smaller. With the first case as the anchor the centered values and the
+    TSS differ in their last bits, so the row order would decide."""
+    y = np.array([1.7373672197631647, 0.26263278023683534])
+    y = np.r_[y, 2.6115132581597926, -0.6115132581597924]
+    w = np.array([1.0, 1.0, 2.0, 2.0]) if weighted else None
+    dist = np.abs(y - np.average(y, weights=w))
+    assert dist[0] == dist[1] == dist.min()
+    d = y - y[1]
+    want = d - np.average(d, weights=w)
+    got, const = pr._centered(y[:, None], w)
+    np.testing.assert_array_equal(got[:, 0], want)
+    assert const[0] == y[1] + np.average(d, weights=w)
+    assert _gcv.tss(y, w) == float((np.ones(4) if w is None else w) @ (want * want))
+    if not weighted:  # the first case as the anchor gives other bits
+        r0 = (y - y[0]) - np.average(y - y[0])
+        assert not np.array_equal(r0, want)
+        assert _gcv.tss(y) != float(r0 @ r0)
+
+
 def test_a_constant_response_adds_nothing():
     """A constant response becomes 0 exactly, so it changes no removal and no
     subset, and every RSS only by the order of the additions; its
