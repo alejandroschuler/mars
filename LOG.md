@@ -471,6 +471,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 12:15 #162 round 1 at c12af9a (tie rule fixed in _centered and _gcv.tss, pinned; invariance shift from sd; CI 13/13). Gates fail only on two flaky tests on main: test_scan compiled-vs-numpy tolerance (k145a fixing) and test_oracle cross-kind tie check at lines 885-889 (sent to c157o-oracle, branch t157o-cross-kind-tie). #162 reruns gates after both fixes merge.
 - 12:35 #165 single APPROVE (no flakes at 10 ci seeds and thorough; 343 of 400 draws catch a 1e-6 bound error). Merged #165 (scan test tolerance) as e079e76. Waiting for the oracle cross-kind fix; then #162 and #163 rerun gates.
 - 13:05 #166 single APPROVE (exception as narrow as FWD-12 allows; pin fails with the old check). Merged #166 (oracle cross-kind second) as b44b6a1. Asked c157f-fast to rebase #162 and rerun gates, n157-nits to rebase #163. 5-hour reset (0 %); weekly 67 %.
+- 13:35 #162 update approvals (both, own posts; adversarial 100 draws: 97 agree, 3 near-ties, 0 LA-5 misses). Merged #162 (C157f: fast code without exact paths) as be05891. #163 single APPROVE at 5831737; rebased to 2402358; reviewer reruns gates B, C and posts. Brief K145c written; starting k145c (opus). Then gate D on main after #163 and the tag sim-freeze-1.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
