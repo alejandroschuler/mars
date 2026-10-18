@@ -409,6 +409,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:40 Started f124-perf, f136-ref, review-138-spec, review-138-adversarial, review-124-adversarial. f139-final-fit stopped before coding: LA-4 and PRUNE-8 do not say which least-squares solution a kept term in the span gets (the reference gives 0 through an unstated second test). Brief S139; started s139-spec a22b91a12dc815cc1 (opus).
 - 20:50 review-124-adversarial APPROVE at 93f1182 (500 drawn fits, budget fallbacks, LA-4 draws: all bit-equal to main; 18 mutants, 5 equivalent survivors). Non-blocking: assert Q append-only in the scan cache. f124-perf pushed bc66093 (memory fix) meanwhile; both reviewers recheck its final head. Started review-136-adversarial a7c81528f23fe2b2a (opus).
 - 21:05 #138 at 412c878: spec APPROVE; adversarial REQUEST_CHANGES (w=None mutant in final_fit survives; weighted case _random_terms(618)). Opened #140 (fast final RSS 15 to 25 % below the exact RSS of the kept terms on some designs; on main). Seed 327 noted on #139. Started f138-fix ac57205fa6523a24d (sonnet).
+- 21:20 review-136-adversarial REQUEST_CHANGES at b59d54f: FWD-13 case (b) occurs in real fits (case_b(25, 0.001, 1)); the F_s-from-all-terms mutant survives. Sent to f136-ref (which pushed 9200897 for the CI near tie). Opened #142 (fast LA-7 tested on the terms, not F_s, after case (b); non-blocking item 2).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
