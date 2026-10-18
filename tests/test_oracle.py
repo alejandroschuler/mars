@@ -882,11 +882,19 @@ def _check_second(case: Case, fast: dict, ref: dict, s: int) -> str | None:
         # one candidate from two parents (FWD-12): rows, not parent
         fast_value(kf)
         return None
-    if kf is not None and step.rows_of(kf) in [
-        step.rows_of(k) for k in _choice(case, fast, s)
-    ]:
-        # the fast second adds the chosen rows from another parent (FWD-12)
-        _fail(case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)")
+    chosen = [step.rows_of(k) for k in _choice(case, fast, s)]
+    if kf is not None and step.rows_of(kf) in chosen:
+        # The fast second adds the chosen rows from another parent. FWD-12
+        # merges only candidates of one kind, so this fails unless a reading
+        # of the choice of another kind adds the same rows: with
+        # auto_linpreds=False a linear candidate's hinge at the smallest x is
+        # also a single hinge's row (``_choice``), and a single hinge on
+        # another parent is then a second that does not merge (FWD-8).
+        kind, rows = step.rows_of(kf)
+        if not any(r == rows and k != kind for k, r in chosen):
+            _fail(
+                case, f"step {s}: the fast second {kf} is the chosen candidate (FWD-8)"
+            )
     if kf is not None and kr is not None and _identical(step, kf, kr):
         _fail(case, f"step {s}: the seconds {kf} and {kr} have equal columns (FWD-5)")
     if kf is not None:
@@ -1852,6 +1860,58 @@ def test_merged_candidates_record_the_reference_parents(case):
     for key in ("second_parent", "second_variable", "second_kind"):
         got, want = _plain(fast["candidates"])[key], ref["candidates"][key]
         assert got.tolist() == want.tolist()
+
+
+def test_a_second_of_another_kind_may_add_the_chosen_rows():
+    """FWD-12 and FWD-8: candidates of different kinds never merge. The
+    hypothesis draw "smooth seed=3421084" (n 57, p 4, no noise, integer
+    weights, auto_linpreds=False) chooses at step 9 a linear candidate on
+    parent 10, whose row is the hinge at the smallest x3, and the fast log's
+    second is the single hinge on parent 9 that adds the same row. That
+    second is legal, not the chosen candidate, and the comparison goes on."""
+    seed, n = 3421084, 57
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(size=(n, 4))
+    Y = _truth(rng, X, True)[:, None]
+    rng.standard_normal((n, 1))  # the generator's noise, here times 0
+    rng.uniform(0.2, 3.0, n)  # the generator's other weights
+    w = rng.integers(0, 4, n).astype(float)
+    w[0] = max(w[0], 1.0)
+    params = {
+        "max_degree": 3,
+        "thresh": 0.0,
+        "adjust_endspan": 2.0,
+        "auto_linpreds": False,
+        "fast_k": 1,
+        "fast_beta": 2.5,
+    }
+    case = Case(f"hypothesis smooth seed={seed}", X, Y, w, params)
+    assert check_forward(case).steps >= 9
+    # The record of C157f's fast code (#157): step 9 adds the row of the
+    # single hinge h(x2 - 0.6235) on parent 9 as the linear candidate x3 on
+    # parent 10, whose hinge at the smallest x3 it is, and the log's second
+    # is that single hinge on parent 9. The reference chooses the single
+    # hinge; the two are a cross-kind tie (FWD-12).
+    ref = case.reference_fit()["forward"]
+    row = np.flatnonzero(ref["step"] == 9)
+    assert _rows(ref, 9) == [
+        (
+            (1, 0, 1, 1),
+            (0.479049184595436, 0.0, 0.6235282280156149, 0.020212451904345508),
+        )
+    ]
+    hinge = (9, 2, SINGLE, 0.6235282280156149)
+    log = {k: np.copy(v) for k, v in _plain(ref["candidates"]).items()}
+    fields = ("second_parent", "second_variable", "second_kind", "second_knot")
+    for field, value in zip(fields, hinge, strict=True):
+        log[field][8] = value
+    log["second_rss"][8] = ref["rss"][9]
+    parent = np.copy(ref["parent"])
+    parent[row] = 10
+    fast = {**ref, "parent": parent, "candidates": log}
+    readings = [key[:3] for key in _choice(case, fast, 9)]
+    assert readings == [(10, 3, SINGLE), (10, 3, LINEAR)]
+    assert compare_forward(case, fast, ref).steps >= 9
 
 
 def test_whole_fit_of_two_cases_with_weights():
