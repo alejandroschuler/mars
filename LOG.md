@@ -482,6 +482,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:10 #167 spec REQUEST_CHANGES at 0532e7c (gate B PASS on rerun; head 0.83 of main's time at 10k under load, same terms and RSS; blocking: _coefs O(p M^2) memory). Sent to k145c-compile. Adversarial review still running.
 - 16:45 #169 (T21 extension) ready at e163e78: parity 48 of 51 equivalent; D6 n200 fails (1.076, [1.051, 1.101]); D1 n5000 hi and D6 n1000 not decidable at 600 and 3,800 reps (need about 1,300 and 5,000); 0 failures in 94,500 units; extension 1.47 core-hours (3.74 in all). The runner's prediction cache (16 GB) filled the disk again; reran --no-cache, no result lost; cache cleanup command added to #60. Started review-169-single. #167 rechecks running.
 - 17:00 #169 single APPROVE (nested seeds verified, decisions recomputed). Merged #169 as e5cb1ea. Decision: no further extension of D1 n5000 hi and D6 n1000 (two interim looks already; more would add optional-stopping bias); T22b reports them as not decidable and states the interim looks. #167 adversarial update APPROVE at 62fe839; spec recheck running.
+- 17:15 #167 spec recheck APPROVE at 62fe839 (_coefs at most 1.000 n(p+M); no stale entry; corrected timing with numba 0.465 vs 0.676 s at 10k). Merge refused (main moved to e5cb1ea, data only); rebased via update-branch to afe1630; k145c-compile runs gates B, C on it; then each reviewer posts its update verdict.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
