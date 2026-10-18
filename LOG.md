@@ -441,6 +441,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:15 Merged #152 (FWD-13 test retry; closes #151) as cce5c1a. #148 round 1 at 89a03b5 (error_model numpy; hash equal; gates B, C PASS): adversarial APPROVE; rebased via update-branch to 89f574e; spec update check plus adversarial update approval sent to a1ea9986d3ce50e18. #144 spec APPROVE at 1ac315d; adversarial recheck running. #149 spec review running. Load 11.5 (hold new spawns).
 - 03:20 #144 adversarial recheck APPROVE at 1ac315d (NEAR_SPAN mutants fail; gate B PASS; CI 12/12). Merge order: #148 (checks running on current main), then #144 (rebase plus update checks with gate C), then #147 rebase and reviews, then F139.
 - 03:30 review-149-spec APPROVE at 8e8bbf8 (registers exactly LA-2's counted columns; hash equal; new test fails on main; non-blocking: PR body on LA-7 band, a comment at register). Started review-149-adversarial (sonnet, lean; 5-hour 58 %). Leftover worktree .worktrees/review-149-main holds a tracked change (needs --force; for the user's cleanup list #60).
+- 03:45 review-149-adversarial APPROVE at 8e8bbf8 (450 case (b) draws agree; 6 mutants, survivors only touch hinge registration). Opened an issue for 4 of 150 _family_134 draws where fast and reference forward passes disagree (also before #149). #149 merges after #148 and #144 (rebase plus update checks).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
