@@ -364,6 +364,10 @@ def _orthonormal_basis(A: np.ndarray) -> np.ndarray:
     The columns are scaled to unit norm (zero columns are left out), then
     factored by a column-pivoted Householder QR; the rank counts the
     diagonal entries of R above max(n, m) * eps times the largest.
+
+    This rank rule is not LA-4's (the ratio test at 1e-7): it only separates
+    the span from rounding noise. Callers must pass the columns that LA-4
+    keeps, and never rely on this function to drop a near-dependent column.
     """
     n = A.shape[0]
     norms = np.sqrt(np.sum(A * A, axis=0))

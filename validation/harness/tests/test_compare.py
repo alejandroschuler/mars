@@ -256,6 +256,11 @@ class TestCompareFitGcvRsqGrsq:
             assert ratios[1] == pytest.approx(0.583095189 / m, rel=1e-6)
             assert (ratios[1] >= 1e-7) == kept
             assert is_near_dependence(ratios) == near
+        # cond is that of the kept columns: far above 1e6 at m = 4e6 (kept,
+        # nearly parallel to the intercept), 1 at m = 6e6 (dropped)
+        two = lambda m: np.column_stack([np.ones_like(z), m + z])  # noqa: E731
+        assert basis_cond(two(4e6), w) > 1e7
+        assert basis_cond(two(6e6), w) == 1.0
         # a bitwise copy is dependent (rounding), a column of zeros has ratio 0
         B = np.column_stack([np.ones_like(z), z, z, np.zeros_like(z)])
         ratios = la4_ratios(B, w)
