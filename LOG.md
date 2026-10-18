@@ -450,6 +450,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 05:20 User decisions relayed from local_a59469db and checked in its transcript (answers 'Where wheels exist', 'Record as open questions', and the speed quote): recorded on #145 and in STATE. Plan after the 5-hour reset: numba dependency with marker (sonnet); one review round each for #147 and #153 (park if more is needed); an OQ-recording task for the edge issues; a design task for the next compile step without the bit-equality rule. F139 not started (near-span only; recorded as OQ-12 unless ordinary data reach it).
 - 05:30 #156 (D145) draft at 44ed2b8: numba>=0.63 in [project] dependencies with the marker sys_platform != 'darwin' or platform_machine != 'x86_64'; new CI job nonumba runs the fast tests without numba; README notes Intel Macs use numpy code. Gate B running detached (normal pace; the author misread the clock as hours); CI queued. Single review after gate B and CI.
 - 05:40 User decision (checked in local_a59469db): spec v3, drop exact arithmetic. Opened #157; brief briefs/W4-v3.md. Parked #147 and #153 as drafts with a note. O150 superseded. S157 (opus) starts after the 5-hour reset (01:10 PDT); K145's design waits for C157f.
+- 06:05 #156 single APPROVE (marker correct on 5 platforms; nonumba job runs the fallback, 3100 passed; lowest job tests numba 0.63 with numpy 1.24.4); CI 13/13. Merged #156 (numba dependency where wheels exist) as bd62758. Non-blocking ci.yml nits for later.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
