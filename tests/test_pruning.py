@@ -973,7 +973,7 @@ _W618 = [1, 0, 1, 0.5, 0, 3, 1, 1, 0.5, 0, 1, 0.5, 0, 3, 1]
         (618, [0, 3, 5], _W618, 8, False),
         (201, [0, 1, 2, 4, 5, 6, 7], None, None, True),
         (529, [0, 1, 2, 4, 7], "draw", None, False),
-        (743, [0, 1, 2, 6], "draw", None, False),
+        (1379, [0, 2, 3, 4, 6, 7], "draw", None, False),
     ],
 )
 def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reverse):
@@ -991,15 +991,21 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reve
 
     #140: the last three cases (the non-intercept terms in reverse order, and
     weights drawn as in the adversarial review of PR #138) each keep a term
-    whose new part is 1e-16 to 1e-22 of its column (a hinge one ulp from a
-    level under a factor 1e9, u0² of a covariate with two levels), while it
-    lowers the exact RSS by 1 % to 47 %. The float column held only rounding,
-    and ``rss`` was up to 25 % below V*. The RSS meets LA-5 and the
+    whose new part is far below the rounding of its reduced column, where a
+    factor m_j multiplies a monomial that the data span. At seeds 201 and 529
+    (a hinge one ulp from a level under x1 at 1e9, u0² of a covariate with two
+    levels) the new part is 3e-17 and 3e-16 of the column and lowers the
+    exact RSS by 1 % and 47 %; the float column held only rounding, and
+    ``rss`` was 15 % and 25 % below V*. At seed 1379 the reduced column of
+    x1·(t - x3)+ is 1e9 times the difference of two hinges one ulp on either
+    side of a level, a cancellation that its own norm does not show, and
+    ``rss`` missed LA-5 by 9e-8 of V*. The RSS meets LA-5 and the
     coefficients are the exact least-squares ones (PRUNE-8), to 1e-12."""
     X, dirs, cuts, y = _random_terms(seed)
     if reverse:
         perm = np.r_[0, np.arange(len(dirs) - 1, 0, -1)]
         dirs, cuts = dirs[perm], cuts[perm]
+    exact_coef = reverse or w == "draw"
     if w == "draw":
         rng = np.random.default_rng(10_000 + seed)
         w = rng.choice([0.0, 0.5, 1.0, 3.0], len(y), p=[0.2, 0.3, 0.3, 0.2])
@@ -1012,5 +1018,5 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reve
     Bx = _exact_basis(X, dirs, cuts)
     beta, rss = _exact(Bx, y, w, sel[kept])
     assert_la5([fit.rss], [rss], _exact(Bx, y, w, [0])[1])
-    if reverse or seed in (529, 743):
+    if exact_coef:
         np.testing.assert_allclose(fit.coef[kept, 0], beta[0], rtol=1e-12)

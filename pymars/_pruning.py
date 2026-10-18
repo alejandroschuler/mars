@@ -969,9 +969,12 @@ def _shifted_fit(
     G, e = _scaled_columns(red, share, P)
     A = As @ G
     Qa, Ra = np.linalg.qr(A)
-    # #140: a column that the earlier ones nearly span holds mostly rounding
-    near = np.abs(np.diag(Ra)) < _linalg.NEAR_SPAN * np.linalg.norm(A, axis=0)
-    near[0] = False
+    # #140: the part of a column that the earlier ones do not span, |R_jj|,
+    # is accurate only to the rounding of the sum of its monomials' parts; it
+    # holds mostly rounding when it is far below that sum (never for the
+    # intercept, whose R_00 is its norm)
+    parts = np.abs(G).T @ share
+    near = np.abs(np.diag(Ra)) < _linalg.NEAR_SPAN * parts
     beta: dict = {}
     if near.any():
         X, dirs, cuts = terms
