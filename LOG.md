@@ -424,6 +424,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:55 #144 (F140) ready at 5924445 (on 8dc9c6d; gates B, C PASS; smoke 1.11): cause was float reduced columns holding only rounding in _shifted_fit; flagged columns use Conditioner.exact_residual (new coef=True); LA-5 misses 55 to 0 across the sweeps, seed 57 fixed. Started review-144-spec ac0000c0d952f1439 (sonnet), review-144-adversarial acfd33c163fa2f121 (opus). Opened #146 (same defect in the pruning pass); given to f140-final-rss. Sent #144's evidence to s139-spec for #141 round 3.
 - 00:05 (2026-10-18) #124 at ab1c4c5 (rebased on 8dc9c6d; three small items; hash equal; gates B, C PASS; CI green). Spec update check sent to a98396fc7f4af488c; adversarial update check (ad4a82742af063995) when a reviewer slot frees.
 - 00:15 #136 at 6e19cf8 (rebased on 8dc9c6d; gates B, C PASS; CI 12/12): ties at seeds 1258 and 150 broke the other way on Linux; seed 150 replaced by tie-free seed 41; case (b) draws added; pinned step per case with row-permutation retry; both plants fail. Whole-fit comparison skipped for case (b): fast rss_per_size[16] off (added to #146). Rechecks of #136 (adversarial, spec update) wait for reviewer slots.
+- 00:30 #124 update checks APPROVE (both) at ab1c4c5; merged #124 (T20 speed passes, bit-equal) as 5bb2525. Asked f136-ref to rebase #136. Started f142-la7 ad3234ed9cde2a553 (opus; #142) and k143-numba a12a8a6f9288be555 (opus; T20b kernel A, numba floor first). Weekly 51 %, 5-hour 24 %.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
