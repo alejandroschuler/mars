@@ -477,6 +477,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 14:35 T21 full run finished 07:26 PDT (ALL BLOCKS DONE). t21-run collects results into a PR (Closes #23). Weekly 69 %, 5-hour 13 %.
 - 14:55 #168 (T21 results; closes #23) ready at b2a9f83: 0 failures of 58,400 units; 2.27 core-hours (wall 20.7 min). Parity (3-SE inside ±log 1.05) holds in 44 of 51 cells, fails in 7 (D1 n1000 hi/lo, D1 n5000 hi, D5 n200 lo, D6 n200/1000/5000; ratios 1.023 to 1.068); binary all equivalent. Gap at n=200 lo: P-cur/E-def 1.21 to 1.58 on D2, D3, D4, D5, D8 (D1 0.79). Sparsity: P-fix matches E-def. Harness gap: 'missing' rows for D6 and binary legacy in two tables. Started review-168-single (sonnet).
 - 15:05 #168 single APPROVE (n_sim recomputed for all 51 cells; parity recomputed in 4 cells; 58,400 rows, 0 errors). Merged #168 (T21 results) as 3e1aefc; #23 closed. Follow-up sent to t21-run: extend the 7 parity cells to the n_sim of the full-run s_p (pilot s_p was too small in D1), fix analyze.py's 'na' vs NaN matching for the D6 and binary legacy rows. T22b starts after it.
+- 15:15 #167 (K145c) ready at 0532e7c (on 0274c5a; gates B (coverage 90 %), C PASS; CI 13/13): second fit 0.065/0.437/5.14 s vs main 0.077/0.657/8.11 vs earth 0.017/0.45/6.39 (at or below earth at 10k and 100k); same terms and RSS as main; near-tie stops at most 0.8 %. Started review-167-spec and review-167-adversarial (opus). Leftover worktree .worktrees/k145c-main (removable).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
