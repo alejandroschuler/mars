@@ -455,11 +455,25 @@ class TestLinearAlgebra:
         assert ref.rss(cols, y, w) == pytest.approx(lstsq_rss(cols, y, w), rel=rel)
         assert ref.rss(cols, y, w) < 0.01 * ref.rss(cols[:, :2], y, w)
 
-    def test_a_large_shift_of_a_linear_column_keeps_the_rss(self, design):
+    def test_a_shift_of_a_linear_column_keeps_the_rss(self, design):
+        # a mean of 300 spreads (R_D for degree 2), inside ordinary data
         B, Y, w = design
         shifted = B.copy()
-        shifted[:, 1] += 1e8
+        shifted[:, 1] += 300 * float(np.std(B[:, 1]))
         assert ref.rss(shifted, Y, w) == pytest.approx(ref.rss(B, Y, w), rel=1e-9)
+
+    def test_centering_takes_the_nearest_data_value_then_the_mean(self):
+        # [LA-6] weights 1, 1, 2: the mean of (10, 12, 13) is 12; the nearest
+        # data value is 12, so the second shift is 0. For (1, 2, 6, 7) with
+        # weights 1 the mean 4 is 2 away from both 2 and 6: the smaller, 2,
+        # is taken first, and the remaining mean is 2.
+        first, second = ref.centering(
+            np.array([10.0, 12.0, 13.0]), np.array([1.0, 1.0, 2.0])
+        )
+        assert (first, second) == (12.0, 0.0)
+        V = np.array([1.0, 2.0, 6.0, 7.0])
+        assert ref.centering(V, np.ones(4)) == (2.0, 2.0)
+        assert ref.center(V, np.ones(4)).tolist() == [-3.0, -2.0, 2.0, 3.0]
 
     def test_collinearity_ratio_is_one_minus_r_squared(self, design):
         B, _, w = design

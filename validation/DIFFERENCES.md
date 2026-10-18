@@ -29,7 +29,7 @@ A near-tie in the implementation's own candidate log at a step where both progra
 
 No difference on the fixtures is a near-tie. The near-ties of LA-5 and STOP-7 (a collinearity ratio or a pair-rule value at its threshold, a reduction at MaxLegal, a stopping rule at its bound) need values that the candidate log does not hold, so a difference of that kind fails the test and gets its label here by hand. None occurred.
 
-Two fixture datasets are outside ordinary data as spec v3 defines it (Limits): S10 has a covariate that is a near copy of another after the harness's scaling (LA-4 ratio 1.6e-9; LIM-2), and S12's x + 1e6 is 3.2e6 times its spread (LIM-1). Both still agree with earth here, but a difference on them would not be a defect: the spec allows the two programs, and earth, to differ there. The oracle tests (`tests/test_oracle.py`) leave their forward passes out.
+Two fixture datasets are outside ordinary data as spec v3 defines it (Limits): S10 has a covariate that is a near copy of another after the harness's scaling (measured LA-4 ratio 1.6e-9 for the near copy against the intercept and the original, 200 cases; the bitwise copy gives 5.5e-17, and it is exempt as bitwise equal; LIM-2), and S12's x + 1e6 is 3.2e6 times its spread (LIM-1). Both still agree with earth here, but a difference on them would not be a defect: the spec allows the two programs, and earth, to differ there. The oracle tests (`tests/test_oracle.py`) leave their forward passes out.
 
 ## Results
 

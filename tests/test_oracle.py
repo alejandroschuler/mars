@@ -1475,7 +1475,7 @@ FIXTURE_CASES = [
 ]
 # Only ordinary data are compared (spec v3, Limits). Five fixture fits are
 # not: S10 (x2 a near copy of x0 after the harness's scaling, LA-4 ratio
-# 1.6e-9; LIM-2) in two modes, and S12 x + 1e6 (3.2e6 times the spread;
+# 1.6e-9, measured; LIM-2) in two modes, and S12 x + 1e6 (3.2e6 times the spread;
 # LIM-1) in three. The pruning pass on earth's bases of them is still
 # compared, where a near-dependence stops it (STOP-7).
 FIXTURE_CASES = [
@@ -1525,17 +1525,20 @@ def _truth(rng, X, smooth: bool) -> np.ndarray:
 
 def _ordinary_shift(rng, X, max_degree: int, top: bool = False) -> np.ndarray:
     """X with each covariate moved so that its mean is r times its standard
-    deviation, r up to half of R_D (log-uniform, or the top of that range),
-    with a random sign; bitwise-equal columns move alike, so copies stay
-    copies (FWD-5, EDGE-4), and constant columns stay."""
+    deviation, r up to R_D (log-uniform), or R_D / 2 when ``top`` (weights
+    change the standard deviation that ``ordinary`` sees, so R_D itself would
+    be rejected most of the time), with a random sign; bitwise-equal columns
+    move alike, so copies stay copies (FWD-5, EDGE-4), and constant columns
+    stay."""
     X, done = X.copy(), {}
-    half = R_D[min(max_degree, 3)] / 2
+    top_r = R_D[min(max_degree, 3)]
+    ceiling = top_r / 2 if top else top_r
     for j in range(X.shape[1]):
         x = X[:, j]
         key = x.tobytes()
         if key not in done:
             sd = float(np.std(x))
-            r = half if top else 10.0 ** rng.uniform(0, math.log10(half))
+            r = ceiling if top else 10.0 ** rng.uniform(0, math.log10(top_r))
             done[key] = 0.0 if sd == 0 else rng.choice([-1, 1]) * r * sd - x.mean()
         X[:, j] = x + done[key]
     return X
