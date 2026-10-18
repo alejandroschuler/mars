@@ -1668,6 +1668,64 @@ _Y134 = """996 20 1 10 -5 1018 1008 -7 10 7 8 -8 995 1006 1006 3 -21 997 -20 -9 
     -2 1025 16 1020 1012 -28 1009 987 14 1024 -18 1008 -24 989 -12 -2 -20 -11"""
 
 
+def _case_b(seed: int, noise_seed: int) -> Case:
+    """Case (b) of FWD-13 in a real fit (the adversarial review of #136; seed
+    25, noise 0.001). x0 = m0 + u0 enters linearly at step 1. At step 4 the
+    pair on parent x0 has b x = x0 x2, which LA-2 rejects (x2 is 0 where u0 =
+    1, and elsewhere a combination of hinges plus 1e-11 to 1e-8 of noise)
+    while it counts the hinge; FWD-11 keeps the mirror and drops a term, and
+    the forward RSS is 3.1449e-6 after step 6 against 3.1419e-6 for the terms
+    (noise_seed 1; noise_seed 0 has case (b) at step 7)."""
+    rng = np.random.default_rng(seed)
+    n1, n2 = int(rng.integers(5, 12)), int(rng.integers(12, 30))
+    n = n1 + n2
+    u0 = np.r_[np.ones(n1), np.zeros(n2)]
+    x0 = float(rng.choice([1e8, 1e10, 2.0**36, 1e12])) + u0
+    t3, t5 = rng.uniform(0.2, 0.6, 2)
+    x3 = np.r_[rng.uniform(0, t3, n1), rng.uniform(0, 1, n2)]
+    x5 = np.r_[rng.uniform(0, t5, n1), rng.uniform(0, 1, n2)]
+    x3[n1], x5[n1 + 1] = t3, t5
+    h3, h5 = np.maximum(x3 - t3, 0), np.maximum(x5 - t5, 0)
+    eps = 10.0 ** rng.uniform(-11, -8)
+    delta = rng.standard_normal(n) * (u0 == 0)
+    cc = h3 + rng.choice([0.0, 0.5, 1.0]) * h5
+    delta = delta * (cc > 0)
+    x2 = (cc + eps * delta) * (u0 == 0)
+    tstar = float(np.quantile(x2[n1:], rng.uniform(0.3, 0.7)))
+    co = rng.uniform(5, 20, 6) * rng.choice([-1, 1], 6)
+    y = co[0] * u0 + co[1] * h3 + co[2] * h5 + co[3] * x3
+    y = y + co[4] * np.maximum(x2 - tstar, 0) * rng.choice([0.01, 0.1, 1])
+    y = y + co[5] * delta * rng.choice([0, 1, 10])
+    y = y + rng.choice([0, 1e-3, 0.1]) * rng.standard_normal(n)
+    X = np.column_stack([x0, x2, x3, x5])
+    if rng.uniform() < 0.5:
+        X = X[:, rng.permutation(4)]
+    kw = {
+        "max_degree": int(rng.integers(2, 4)),
+        "fast_k": int(rng.choice([1, 2, 3, 0, 20])),
+        "thresh": 0.0,
+        "adjust_endspan": 0.0,
+        "minspan": 1,
+        "endspan": 1,
+        "auto_linpreds": bool(rng.uniform() < 0.5),
+        "max_terms": int(rng.choice([9, 13, 21])),
+    }
+    y = y + 0.001 * np.random.default_rng(noise_seed).standard_normal(n)
+    return Case(
+        f"case (b), seed {seed}, noise seed {noise_seed}", X, y[:, None], None, kw
+    )
+
+
+#: The steps that must agree whatever the platform breaks the ties of later
+#: steps to: the step after which a reference with F_s from the terms' rows
+#: (or from the kept terms) differs from the fast code.
+_PINNED = {
+    "#110's generator, seed 1258, copy kind 2": 6,
+    "case (b), seed 25, noise seed 1": 5,
+    "case (b), seed 25, noise seed 0": 7,
+}
+
+
 def _forward_basis_cases() -> list[Case]:
     """FWD-13: fits where the forward basis F_s holds a direction that the
     kept terms of FWD-11 lack (case (a)), and a draw with large means.
@@ -1683,11 +1741,10 @@ def _forward_basis_cases() -> list[Case]:
       the RSS, so no last bit of a BLAS or libm decides a step. Seed 150,
       the first draw here, ties x1 and x0 to 1e-16 at step 1: on Linux the
       two programs broke that tie differently and nothing was compared.
-
-    Case (b) of FWD-13 is not here: there, x0 must enter as a linear term
-    while x2 nearly equals a combination of 1 and x0, and then the
-    intercept's pair on x2 (x2 and a hinge) reduces the RSS more than x0
-    does; ``test_reference`` checks the step itself."""
+    - Case (b) of FWD-13: ``_case_b``, two draws of a generator where x0
+      enters as a linear term and a later pair on x0 has a b x that LA-2
+      rejects; ``test_reference`` checks the step on a small case.
+    """
     x0 = 2.0**40 + 0.5 * np.array([1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1])
     x2 = 2.0**26 + 0.5 * np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0])
     x3 = [
@@ -1727,7 +1784,7 @@ def _forward_basis_cases() -> list[Case]:
         None,
         kw | {"auto_linpreds": True, "minspan": None, "endspan": 1},
     )
-    return [seed1258, _family_134(41)]
+    return [seed1258, _family_134(41), _case_b(25, 1), _case_b(25, 0)]
 
 
 # ---------------------------------------------------------------------------
@@ -1863,24 +1920,32 @@ def test_the_forward_basis_keeps_a_direction_that_fwd_11_drops(case):
     """FWD-13 and FWD-11: both programs project each step on the forward
     basis, so the forward records and the whole fits agree at every step,
     with no near-tie stop; in seed 1258, FWD-11 drops a term after the pass,
-    and the kept terms' RSS is above the forward RSS. Seed 1258 has exact
-    ties at steps 2, 3 and 7 (to 1e-14, 1e-14 and 1e-16 of the RSS), so
-    another platform may break step 7 the other way. Steps 1 to 6 hold
-    FWD-13 (the reference that rebuilds B from the kept terms already
-    chooses another candidate at step 6): they must agree on every platform,
-    and the comparisons that depend on the later steps run only when no
-    tie stopped the comparison."""
-    ref = case.reference_fit()
-    out = check_forward(case)
-    if "1258" in case.name:
-        assert out.near_tie in (None, "gap") and out.steps >= 6
+    and the kept terms' RSS is above the forward RSS. Seed 1258 and the case
+    (b) draws have exact ties (best and second within 1e-14 of the RSS),
+    which a platform may break the other way, and then the comparison stops.
+    They must agree through the step that pins FWD-13 (``_PINNED``: a
+    reference that builds F_s from the terms' rows fails there), so when a tie
+    stops it earlier, the same problem with the rows in another order (other
+    rounding) is compared; the comparisons that depend on later steps run
+    only when no tie stopped the comparison."""
+    pinned = _PINNED.get(case.name)
+    for k in range(10):
+        perm = np.random.default_rng(k).permutation(len(case.X)) if k else slice(None)
+        w = None if case.w is None else case.w[perm]
+        arranged = dataclasses.replace(case, X=case.X[perm], Y=case.Y[perm], w=w)
+        out = check_forward(arranged)
+        if out.near_tie is None or (pinned is not None and out.steps >= pinned):
+            break
     else:
-        assert out.near_tie is None
+        pytest.fail(f"a tie stops the comparison before step {pinned} in every order")
     if out.near_tie is not None:
         return
+    ref = arranged.reference_fit()
     params = _core.MarsParams(**case.params)
-    fast = _core.fit_mars(case.X, case.Y, case.w, params, record_candidates=True)
-    assert compare_fits(case, fast, _core.MarsFit.from_dict(ref)).near_tie is None
+    fast = _core.fit_mars(
+        arranged.X, arranged.Y, arranged.w, params, record_candidates=True
+    )
+    assert compare_fits(arranged, fast, _core.MarsFit.from_dict(ref)).near_tie is None
     if "1258" in case.name:
         assert ref["forward"]["dropped"].tolist() == [7]
         assert ref["pruning"]["rss_per_size"][-1] > 0.1 > ref["forward"]["rss"][-1]
