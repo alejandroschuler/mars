@@ -217,13 +217,13 @@ def _centered(g: FloatArray, w: FloatArray, split: npt.NDArray[np.int64]) -> Flo
     return SSW[split] + Wp * S**2 / (Ws * (Wp + Ws))
 
 
-def _scan_hv(g, b, Q, q0, E, o, split) -> FloatArray:
-    """hᵀV for V = [Q[o, q0:], E] at every split: the compiled kernel when
-    ``_kernels.ENABLED``, else ``_hv`` on the gathered V (Q in the order of
-    x, o unused). The same bits either way."""
+def _scan_hv(g, b, Q, q0, E, o, split) -> tuple[FloatArray, FloatArray]:
+    """hᵀV for V = [Q[o, q0:], E[o]] at every split, and the squared norms
+    of the columns of E: the compiled kernel when ``_kernels.ENABLED``, else
+    ``_hv`` on V (Q and E then in the order of x, o unused)."""
     if _kernels.ENABLED:
         return _kernels.hv(g, b, Q, q0, E, o, split)
-    return _hv(g, b, np.hstack((Q[:, q0:], E)), split)
+    return _hv(g, b, np.hstack((Q[:, q0:], E)), split), np.sum(E * E, axis=0)
 
 
 def _scan_norms(g: FloatArray, b: FloatArray, split) -> FloatArray:
@@ -309,18 +309,17 @@ def knot_scan(
     ``_checked=True`` skips the checks of ``hinge_products``, for the forward
     pass, whose x, b and split are float64 and int64 arrays that meet them.
     ``_cache = (store, m)``, for the forward pass, keeps in ``store`` the
-    K-vectors ‖h‖², D and the zero-hinge mask (not g and b, which cost O(n)
-    to recompute), which depend only on x, b and split, and hᵀq for the first m columns
-    of Q (after the intercept column with ``intercept=True``), which the
-    caller promises are the same at the next call with this store; a later
-    call computes hᵀq only for the other columns. Every value is the one a
-    call without the store computes, bit for bit: each column is summed on
-    its own (``_hv``).
+    K-vectors ‖h‖² and D (not g and b, which cost O(n) to recompute), which
+    depend only on x, b and split, and hᵀq for the first m columns of Q
+    (after the intercept column with ``intercept=True``), which the caller
+    promises are the same at the next call with this store; a later call
+    computes hᵀq only for the other columns. Each column is summed on its own
+    (``_hv``), so the store changes no value.
     ``_order`` (n,), for the forward pass, says that the rows of Q and E are
     in the caller's order and that row q in the order of x is row
-    ``_order[q]``; the compiled scan (``_kernels``) then reads Q at those
-    rows without a gathered copy. With or without numba, every value is the
-    same, bit for bit.
+    ``_order[q]``; the compiled scan (``_kernels``) then reads Q and E at
+    those rows without a gathered copy. The compiled and the numpy scan
+    agree within the error bounds (``_kernels``).
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -330,25 +329,21 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     fast = _kernels.ENABLED
-    if _order is not None:
-        E = E[_order]  # O(n·K); the norms of E below sum in the order of x
-        if not fast:
-            Q = Q[_order]
-    o = np.arange(n) if _order is None else _order  # read only by the kernel
+    if _order is not None and not fast:  # the kernels read the rows at o
+        Q, E = Q[_order], E[_order]
+    o = np.arange(n) if _order is None else _order  # read only by the kernels
     q0 = 1 if intercept else 0  # the columns of Q that enter hᵀV
-    part = Q[:, q0:]
-    k = part.shape[1]
+    k = r - q0
+    if _cache is None and not _checked:
+        x, b, _, split = _check(x, b, np.hstack((Q[:, q0:], E)), split)
+    b0 = b
+    g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
     if _cache is None:
-        if not _checked:
-            x, b, _, split = _check(x, b, np.hstack((part, E)), split)
-        b0 = b
-        g, b = _to_unit(np.diff(x)), _to_unit(b0)
-        HV, F = _scan_hv(g, b, Q, q0, E, o, split), _scan_norms(g, b, split)
+        HV, e2 = _scan_hv(g, b, Q, q0, E, o, split)
+        F = _scan_norms(g, b, split)
         D = _scan_centered(g, b * b, split) if intercept else None
     else:  # the forward pass's own arrays, as with _checked
         store, m = _cache
-        b0 = b
-        g, b = _to_unit(np.diff(x)), _to_unit(b0)  # O(n), not stored
         if "F" not in store:
             store.update(F=_scan_norms(g, b, split), m=0)
             store["D"] = _scan_centered(g, b * b, split) if intercept else None
@@ -356,8 +351,36 @@ def knot_scan(
         F, D = store["F"], store["D"]
         known = store["m"]
         assert known <= m <= k, "the kept columns are a prefix of Q"
-        HV = np.hstack((store["HV"], _scan_hv(g, b, Q, q0 + known, E, o, split)))
+        new, e2 = _scan_hv(g, b, Q, q0 + known, E, o, split)
+        HV = np.hstack((store["HV"], new))
         store["HV"], store["m"] = HV[:, :m], m
+    lam = 2 * (math.isqrt(n - 1) + 1)  # the roundings of one blocked suffix sum
+    g_n = _gamma(n + 2)
+    cst = np.array(
+        [
+            UNIT_ROUNDOFF,
+            _gamma(2 * lam + 4),  # of the sums hᵀV and ‖h‖²
+            (r + 1) * g_n,  # dQ, the precondition on ‖QᵀQ - I‖₂
+            _gamma(7 * lam + 20) if intercept else _gamma(3 * lam + 8),  # of D
+            _gamma(2 * lam + 4) + math.sqrt(r) * g_n,  # the factor of e_k
+            SCALED_FLOOR,
+        ]
+    )
+    if fast:
+        return KnotScan(
+            *_kernels.finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst)
+        )
+    return _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst)
+
+
+def _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst) -> KnotScan:
+    """rho, the reduction and their error bounds (module docstring) from HV,
+    which holds hᵀq for the k columns of Q that enter (column 0 is q₀ unless
+    ``intercept``) and then hᵀE, ‖h‖² (F), the intercept parent's D, and the
+    squared norms e2 of the columns of E; ``cst`` holds u, the gamma of the
+    sums, dQ, the gamma of D, the factor of e_k and the floor. The numpy form
+    of ``_kernels.finish``. Complexity: O(k·c + n)."""
+    u, g_hv, dQ, gD, ce, _ = cst  # the floor is SCALED_FLOOR
     he = HV[:, k:]
     if intercept:
         c = HV[:, :k]
@@ -370,22 +393,17 @@ def knot_scan(
     num = np.sum(he**2, axis=1)
     gain = np.divide(num, perp, out=np.zeros_like(perp), where=perp > 0.0)
 
-    # The error bounds (module docstring), per knot.
-    lam = 2 * (math.isqrt(n - 1) + 1)  # the roundings of one blocked suffix sum
-    u, g_hv, g_n = UNIT_ROUNDOFF, _gamma(2 * lam + 4), _gamma(n + 2)
-    dQ = (r + 1) * g_n  # the precondition on ‖QᵀQ - I‖₂
     sqF = np.sqrt(F)
     e_c = (g_hv + dQ) * sqF  # the error of each q_cᵀh
     if intercept:  # and the departure of Q[:, 0] from b/‖b‖, one rounding per row
-        errD = _gamma(7 * lam + 20) * D + 2.0 * u * np.sqrt(F * np.abs(D))
+        errD = gD * D + 2.0 * u * np.sqrt(F * np.abs(D))
     else:
-        errD = _gamma(3 * lam + 8) * F + 2.0 * np.abs(c0) * e_c + e_c**2
+        errD = gD * F + 2.0 * np.abs(c0) * e_c + e_c**2
         errD += (dQ + 2.0 * u) * F
     errP = errD + 2.0 * np.sum(np.abs(c), axis=1) * e_c + (r - 1) * e_c**2
     errP += dQ * s2 + 4.0 * u * (np.abs(D) + s2)
-    normE = np.sqrt(np.sum(E**2, axis=0))
-    e_k = np.outer(sqF, normE) * (g_hv + math.sqrt(r) * g_n)
-    errN = np.sum(2.0 * np.abs(he) * e_k + e_k**2, axis=1) + 2.0 * E.shape[1] * u * num
+    e_k = np.outer(sqF, np.sqrt(e2)) * ce
+    errN = np.sum(2.0 * np.abs(he) * e_k + e_k**2, axis=1) + 2.0 * he.shape[1] * u * num
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio_err = np.where(
             errD < D, (errP + np.abs(ratio) * errD) / (D - errD), np.inf
@@ -397,12 +415,8 @@ def knot_scan(
     ratio_err[lost], gain_err[lost] = np.inf, np.inf
     # h is 0 at every case, a constant column (LA-3), when no case q ≥ s has
     # b_q ≠ 0 and x_q > x_{s-1}: a count over the inputs.
-    zero = None if _cache is None else _cache[0].get("zero")
-    if zero is None:
-        nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
-        zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
-        if _cache is not None:
-            _cache[0]["zero"] = zero
+    nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
+    zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
     for a in (ratio, gain, ratio_err, gain_err):
         a[zero] = 0.0
     return KnotScan(ratio, gain, ratio_err, gain_err)

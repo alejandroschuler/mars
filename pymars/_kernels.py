@@ -1,19 +1,24 @@
-"""Compiled loops of the knot scan (numba), bit-equal to the numpy code of
-``_scan``.
+"""Compiled loops of the knot scan (numba).
 
 Spec: ``docs/algorithm.md``, "Linear algebra contract" (LA-2, LA-3, LA-5),
-through ``_scan``, whose module docstring derives the sums. These kernels
-change no value: each one does the additions and products of its numpy
-counterpart in ``_scan`` in the same order, so every fit is bit-equal with
-or without numba (``validation/bench/hash_fits.py`` checks this over 533
-fits on both paths).
+through ``_scan``, whose module docstring derives the sums and the error
+bounds. Each kernel has a numpy counterpart in ``_scan``, which runs when
+numba is missing (the ``nonumba`` CI job). Bit-identity of the two is not a
+rule (#145): the suffix sums keep the blocked order of ``_scan._suffix``, so
+the error bounds keep their form, and the two forms agree within those
+bounds.
 
-- ``hv`` replaces ``_scan._hv`` and the gather ``Q[o]`` of the caller: one
-  pass from the last row to the first, which forms b·v, its blocked suffix
-  sum P, g·P and the blocked suffix sum of that, and reads the second sum at
-  the splits. It needs no n x c temporary.
+- ``hv`` replaces ``_scan._hv`` and the gathers ``Q[o]`` and ``E[o]`` of the
+  caller: one pass from the last row to the first, which forms b·v, its
+  blocked suffix sum P, g·P and the blocked suffix sum of that, and reads the
+  second sum at the splits. It also returns the squared norms of the columns
+  of E. It needs no n x c temporary.
 - ``norms`` and ``centered`` replace ``_scan._norms`` and ``_scan._centered``
   with the same steps and O(n) temporaries.
+- ``prep`` gives the scaled gaps and parent (``_scan._to_unit``), and
+  ``finish`` (kernel B) gives rho, the reduction, both error bounds, the
+  floor and the zero mask per knot in one pass, in place of about 30 numpy
+  calls (``_scan._finish``).
 
 The order of the sums is that of ``_scan._suffix``: from the end, rows are
 added in blocks of B = isqrt(m - 1) + 1, block totals are carried from block
@@ -72,54 +77,181 @@ def _suffix1(a, B):
 
 
 def _hv(g, b, Q, q0, E, o, split, B1, B2):
-    """hᵀV at every split, V = [Q[o, q0:], E] (``_scan._hv``). g (n - 1,),
-    b (n,), E (n, K) and o (n,) are in the order of x; Q is in the caller's
-    order and is read at the rows o. Complexity: O(n·c + k·log k)."""
+    """hᵀV at every split, V = [Q[o, q0:], E[o]] (``_scan._hv``), and the
+    squared norms of the columns of E. g (n - 1,), b (n,) and o (n,) are in
+    the order of x; Q and E are in the caller's order and are read at the
+    rows o. The blocks of the two suffix sums are counted down, with no
+    modulo per row, and the loops over the columns have no branch.
+    Complexity: O(n·c + k·log k)."""
     n = b.shape[0]
     nq = Q.shape[1] - q0
-    c = nq + E.shape[1]
+    nE = E.shape[1]
+    c = nq + nE
     k = split.shape[0]
     out = np.empty((k, c))
+    e2 = np.zeros(nE)
     if k == 0:
-        return out
+        return out, e2
     rank = np.argsort(split)
     nxt = k - 1  # the largest split not yet read
     w1 = np.zeros(c)
     c1 = np.zeros(c)
     w2 = np.zeros(c)
     c2 = np.zeros(c)
+    left1 = 0  # rows left in the current block of P (n rows)
+    blocks1 = 0  # blocks of P started so far
+    left2 = 0  # the same for the second sum (n - 1 rows)
+    blocks2 = 0
     for q in range(n - 1, -1, -1):
-        p1 = n - 1 - q  # the position from the end, of P (n rows)
-        new1 = p1 % B1 == 0
-        if new1 and p1 == B1:
-            for j in range(c):
-                c1[j] = w1[j]
-        elif new1 and p1 > B1:
-            for j in range(c):
-                c1[j] = c1[j] + w1[j]
-        if q >= 1:  # row i = q - 1 of the second sum (n - 1 rows), g_i·P(q)
-            p2 = p1
-            new2 = p2 % B2 == 0
-            if new2 and p2 == B2:
+        new1 = left1 == 0
+        if new1:  # carry: the total of block 0, then carry + total
+            if blocks1 == 1:
                 for j in range(c):
-                    c2[j] = w2[j]
-            elif new2 and p2 > B2:
+                    c1[j] = w1[j]
+            elif blocks1 > 1:
                 for j in range(c):
-                    c2[j] = c2[j] + w2[j]
+                    c1[j] = c1[j] + w1[j]
+            blocks1 += 1
+            left1 = B1
+        left1 -= 1
         bq = b[q]
         row = o[q]
-        gq = g[q - 1] if q >= 1 else 0.0
-        for j in range(c):
-            v = bq * (Q[row, q0 + j] if j < nq else E[q, j - nq])
-            w1[j] = v if new1 else w1[j] + v
-            if q >= 1:
-                y = gq * (w1[j] + c1[j])
-                w2[j] = y if new2 else w2[j] + y
+        if new1:
+            for j in range(nq):
+                w1[j] = bq * Q[row, q0 + j]
+            for j in range(nE):
+                e = E[row, j]
+                w1[nq + j] = bq * e
+                e2[j] += e * e
+        else:
+            for j in range(nq):
+                w1[j] = w1[j] + bq * Q[row, q0 + j]
+            for j in range(nE):
+                e = E[row, j]
+                w1[nq + j] = w1[nq + j] + bq * e
+                e2[j] += e * e
+        if q >= 1:  # row i = q - 1 of the second sum, g_i·P(q)
+            new2 = left2 == 0
+            if new2:
+                if blocks2 == 1:
+                    for j in range(c):
+                        c2[j] = w2[j]
+                elif blocks2 > 1:
+                    for j in range(c):
+                        c2[j] = c2[j] + w2[j]
+                blocks2 += 1
+                left2 = B2
+            left2 -= 1
+            gq = g[q - 1]
+            if new2:
+                for j in range(c):
+                    w2[j] = gq * (w1[j] + c1[j])
+            else:
+                for j in range(c):
+                    w2[j] = w2[j] + gq * (w1[j] + c1[j])
         while nxt >= 0 and split[rank[nxt]] == q:
             for j in range(c):
                 out[rank[nxt], j] = w2[j] + c2[j]
             nxt -= 1
-    return out
+    return out, e2
+
+
+def _prep(x, b0):
+    """g = diff(x) and b = b0, each times the power of 2 that puts its
+    largest |value| in [0.5, 1) (``_scan._to_unit``). Complexity: O(n)."""
+    n = x.shape[0]
+    g = np.empty(n - 1)
+    top = 0.0
+    for i in range(n - 1):
+        g[i] = x[i + 1] - x[i]
+        top = max(top, abs(g[i]))
+    if top > 0.0:
+        e = -math.frexp(top)[1]
+        for i in range(n - 1):
+            g[i] = math.ldexp(g[i], e)
+    b = np.empty(n)
+    top = 0.0
+    for i in range(n):
+        top = max(top, abs(b0[i]))
+    if top > 0.0:
+        e = -math.frexp(top)[1]
+        for i in range(n):
+            b[i] = math.ldexp(b0[i], e)
+    else:
+        b[:] = b0
+    return g, b
+
+
+def _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst):
+    """``_scan._finish`` per knot, in one pass: rho, the reduction, their
+    error bounds, the underflow floor and the zero mask. HV holds hᵀq for the
+    k columns of Q that enter (column 0 is q₀ unless ``intercept``), then hᵀE;
+    D is the intercept parent's D (else unused); e2 the squared norms of E;
+    ``cst`` the constants (u, gamma_hv, dQ, the gamma of D, the factor of
+    e_k, the floor). Complexity: O(k·c + n)."""
+    u, g_hv, dQ, gD, ce, floor = cst[0], cst[1], cst[2], cst[3], cst[4], cst[5]
+    m = HV.shape[0]
+    nE = HV.shape[1] - k
+    n = x.shape[0]
+    ratio = np.zeros(m)
+    gain = np.zeros(m)
+    ratio_err = np.zeros(m)
+    gain_err = np.zeros(m)
+    normE = np.sqrt(e2)
+    last = -1  # the last case with b0 ≠ 0
+    for q in range(n - 1, -1, -1):
+        if b0[q] != 0.0:
+            last = q
+            break
+    first = 0 if intercept else 1
+    for i in range(m):
+        # h is 0 at every case (LA-3: constant) when no case q ≥ s has
+        # b0_q ≠ 0 and x_q > x_{s-1}; x is sorted, so the last such case decides
+        if last < 0 or x[last] <= x[split[i] - 1]:
+            continue
+        Fi = F[i]
+        if intercept:
+            c0 = 0.0
+            Di = D[i]
+        else:
+            c0 = HV[i, 0]
+            Di = Fi - c0 * c0
+        s2 = 0.0
+        sa = 0.0
+        for j in range(first, k):
+            v = HV[i, j]
+            s2 += v * v
+            sa += abs(v)
+        perp = Di - s2
+        rho = perp / Di if Di > 0.0 else 0.0
+        num = 0.0
+        for j in range(k, k + nE):
+            num += HV[i, j] * HV[i, j]
+        gi = num / perp if perp > 0.0 else 0.0
+        sqF = math.sqrt(Fi)
+        e_c = (g_hv + dQ) * sqF
+        if intercept:
+            errD = gD * Di + 2.0 * u * math.sqrt(Fi * abs(Di))
+        else:
+            errD = gD * Fi + 2.0 * abs(c0) * e_c + e_c * e_c
+            errD += (dQ + 2.0 * u) * Fi
+        errP = errD + 2.0 * sa * e_c + (r - 1) * e_c * e_c
+        errP += dQ * s2 + 4.0 * u * (abs(Di) + s2)
+        errN = 0.0
+        for j in range(nE):
+            e_k = sqF * normE[j] * ce
+            errN += 2.0 * abs(HV[i, k + j]) * e_k + e_k * e_k
+        errN += 2.0 * nE * u * num
+        re = (errP + abs(rho) * errD) / (Di - errD) if errD < Di else math.inf
+        ge = (errN + gi * errP) / (perp - errP) if errP < perp else math.inf
+        if Fi < floor or abs(Di) < floor:  # underflow can reach
+            re = math.inf
+            ge = math.inf
+        ratio[i] = rho
+        gain[i] = gi
+        ratio_err[i] = 2.0 * (re + 4.0 * u * abs(rho))
+        gain_err[i] = 2.0 * (ge + 4.0 * u * gi)
+    return ratio, gain, ratio_err, gain_err
 
 
 def _norms(g, b, split, Bn, Bm):
@@ -159,14 +291,16 @@ if AVAILABLE:
     _jit = numba.njit(cache=True, fastmath=False, nogil=True, error_model="numpy")
     _suffix1 = _jit(_suffix1)
     _hv = _jit(_hv)
+    _prep = _jit(_prep)
+    _finish = _jit(_finish)
     _norms = _jit(_norms)
     _centered = _jit(_centered)
 
 
 def hv(g, b, Q, q0, E, o, split):
-    """hᵀV (k, c) for V = [Q[o, q0:], E] at every split, as ``_scan._hv``
-    gives for the gathered V. Complexity: O(n·c + k·log k) time, O(c + k·c)
-    memory."""
+    """hᵀV (k, c) for V = [Q[o, q0:], E[o]] at every split, as ``_scan._hv``
+    gives for the gathered V, and the squared norms (K,) of the columns of E.
+    Complexity: O(n·c + k·log k) time, O(c + k·c) memory."""
     n = b.shape[0]
     # A split outside 1..n - 1 would leave its row of the output unset; the
     # forward pass never passes one, and hinge_products checks it.
@@ -189,3 +323,20 @@ def centered(g, w, split):
     if split.shape[0] == 0:  # also n = 1, where g is empty
         return np.empty(0)
     return _centered(g, w, split, _blocks(n), _blocks(n - 1))
+
+
+def prep(x, b0):
+    """``_scan._to_unit`` of diff(x) and of b0, in one compiled pass. The
+    scaling is by a power of 2, so the values are those of the numpy code.
+    Complexity: O(n)."""
+    return _prep(x, b0)
+
+
+def finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst):
+    """``_scan._finish`` in one compiled pass (kernel B). Its sums over the
+    columns run in order, where numpy may sum in pairs, so a value can differ
+    from the numpy one by rounding inside its error bound.
+    Complexity: O(k·c + n)."""
+    if D is None:
+        D = F  # unused without the intercept parent
+    return _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst)

@@ -123,14 +123,16 @@ def _bits(a):
     st.sampled_from([0.0, 1e6]),
     st.booleans(),
 )
-def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
+def test_the_compiled_scan_agrees_with_the_numpy_scan(
     seed, n, r, K, intercept, ties, shift, weighted
 ):
-    """``_kernels`` changes no value (T20b): ``knot_scan`` with the kernels,
-    on rows in the caller's order (``_order``) and through the forward
-    pass's store, gives the bits of the numpy scan on the gathered rows, for
-    any order of the splits, repeated splits, block sizes from n = 2 up,
-    and weights that are not integers."""
+    """``_kernels`` (T20b, K145a): ``knot_scan`` with the kernels, on rows in
+    the caller's order (``_order``) and through the forward pass's store,
+    agrees with the numpy scan on the gathered rows, for any order of the
+    splits, repeated splits, block sizes from n = 2 up, and weights that are
+    not integers. The sums over the columns may round differently (no
+    bit-identity, #145), so each value is within the numpy value's error
+    bound, the bounds agree to rounding, and the zero hinges are the same."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
     if weighted:  # b = √w with weights that are not integers: W_pre's sums round
@@ -163,9 +165,19 @@ def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
                 )
         finally:
             _kernels.ENABLED = _kernels.AVAILABLE
+    want = runs[0]
     for run in runs[1:]:
-        for got, want in zip(run, runs[0], strict=True):
-            assert np.array_equal(_bits(got), _bits(want))
+        for got, ref, err in (
+            (run.ratio, want.ratio, want.ratio_err),
+            (run.gain, want.gain, want.gain_err),
+        ):
+            assert np.all(np.abs(got - ref) <= err)
+            assert np.array_equal(got == 0.0, ref == 0.0)
+        for got, ref in (
+            (run.ratio_err, want.ratio_err),
+            (run.gain_err, want.gain_err),
+        ):
+            np.testing.assert_allclose(got, ref, rtol=1e-12, atol=0.0)
 
 
 @needs_numba
@@ -183,7 +195,7 @@ def test_the_kernels_round_every_product():
     g, split = np.diff(x), np.array([1, 2, 3])
     want = _scan._hv(g, b, V, split)
     assert want[1, 0] == 2.0**-29
-    hv = _kernels.hv(g, b, V, 0, np.empty((4, 0)), np.arange(4), split)
+    hv, _ = _kernels.hv(g, b, V, 0, np.empty((4, 0)), np.arange(4), split)
     assert np.array_equal(_bits(hv), _bits(want))
     assert np.array_equal(
         _bits(_kernels.norms(g, b, split)), _bits(_scan._norms(g, b, split))
