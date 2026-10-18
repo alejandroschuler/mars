@@ -711,7 +711,6 @@ class _Shifted:
                 e[j] = np.frexp(top)[1] if top > 0 else 0
                 A[:, j] = np.ldexp(v, -e[j])
                 zero[j] = not np.any(r)
-                T[:, j] = 0.0
                 T[j, j] = 1.0
                 T[:j, j] = [-float(f) for f in beta]
         return A, np.ldexp(T, -e[None, :]), zero

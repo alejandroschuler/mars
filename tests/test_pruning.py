@@ -444,8 +444,8 @@ def test_errors():
 
 def _exact(B, Y, w, cols):
     """Weighted least squares of Y on the columns ``cols`` of B in rational
-    arithmetic: the coefficients, one row per response, and the RSS summed
-    over the responses (LA-1)."""
+    arithmetic: the coefficients, one row per response (0 for a column that
+    the earlier ones span), and the RSS summed over the responses (LA-1)."""
     A = [[Fraction(v) for v in row] for row in B[:, cols]]
     W = [Fraction(v) for v in (np.ones(B.shape[0]) if w is None else w)]
     n, m = len(A), len(cols)
@@ -458,6 +458,8 @@ def _exact(B, Y, w, cols):
             for r in range(m)
         ]
         for c in range(m):
+            if E[c][c] == 0:  # a column that the earlier ones span: coefficient 0
+                continue
             E[c] = [v / E[c][c] for v in E[c]]
             for r in range(m):
                 if r != c:
@@ -1033,7 +1035,13 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, kind
     and its seed 8 with the review's weights pin the threshold of the test:
     ``rss`` misses LA-5 with NEAR_SPAN 1000 times smaller at seed 271
     (19.757352 against 19.757348), and 10 to 1000 times smaller at seed 8
-    (8.068214030e-12 against 8.068213947e-12)."""
+    (8.068214030e-12 against 8.068213947e-12).
+
+    #146: the pruning pass on the terms that LA-4 keeps had the same defect
+    in ``rss_per_size`` (seed 201: 5.484 against 6.458 at the full size), and
+    at seed 295, where the data span a kept term exactly, it raised. Every
+    ``rss_per_size`` meets LA-5 against R[m] of PRUNE-3 in exact
+    arithmetic, so the drops follow the exact projection too."""
     X, dirs, cuts, y = (_hard_terms if kind == "hard" else _random_terms)(seed)
     if kind == "reverse":
         perm = np.r_[0, np.arange(len(dirs) - 1, 0, -1)]
@@ -1056,3 +1064,34 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, kind
     assert_la5([fit.rss], [rss], _exact(Bx, y, w, [0])[1])
     if exact_coef:
         np.testing.assert_allclose(fit.coef[kept, 0], beta[0], rtol=1e-12)
+    pos = np.ones(len(y), bool) if w is None else np.asarray(w) > 0
+    wp = None if w is None else np.asarray(w)[pos]
+    la4 = sel[_linalg.independent_terms(X[pos], dirs[sel], cuts[sel], wp)]
+    pp = pr.pruning_pass(
+        B[:, la4], y, w, penalty=2.0, X=X, dirs=dirs[la4], cuts=cuts[la4]
+    )
+    assert_la5(pp.rss_per_size, _exact_path(Bx, y, w, la4), _exact(Bx, y, w, [0])[1])
+
+
+def _exact_path(Bx, y, w, terms):
+    """R[m] of PRUNE-3 for one response, in exact arithmetic on the columns
+    ``terms`` of Bx: the working order, its drops (the lowest RSS, ties to the
+    largest index) and the offers of its prefixes."""
+    memo = {}
+
+    def rss(sub):
+        key = tuple(sorted(sub))
+        if key not in memo:
+            memo[key] = _exact(Bx, y, w, [terms[k] for k in key])[1]
+        return memo[key]
+
+    M = len(terms)
+    order, best = list(range(M)), [np.inf] * M
+    for pos in range(M, 0, -1):
+        best = [min(b, rss(order[: m + 1])) for m, b in enumerate(best)]
+        if pos > 1:
+            costs = {t: rss(set(order[:pos]) - {t}) for t in order[1:pos]}
+            drop = max(t for t in costs if costs[t] == min(costs.values()))
+            order.remove(drop)
+            order.insert(pos - 1, drop)
+    return best
