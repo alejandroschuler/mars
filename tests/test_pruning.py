@@ -962,21 +962,49 @@ def _random_terms(seed):
     return X, dirs, cuts, rng.normal(size=n)
 
 
+def _hard_terms(seed):
+    """The harder generator of the adversarial review of PR #144: as
+    ``_random_terms``, with shifts up to 3e14 and 0, x1 = x0, 2·x0 or -x0
+    (one or two cases one ulp off for some seeds), knots up to 2 ulps off a
+    data value, and y scaled by 1e-6 or 1e6."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(12, 30))
+    a = np.floor(rng.uniform(size=(n, 3)) * rng.integers(2, 6)) / rng.choice([4, 3, 8])
+    X = np.column_stack((a[:, 0], a[:, 0] * rng.choice([1, 2, -1]), a[:, 1], a[:, 2]))
+    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10, 1e12, 3e14, -7e11, 0.0], 4)
+    if seed % 3 == 1:
+        for i in rng.choice(n, int(rng.integers(1, 3)), replace=False):
+            X[i, 1] = np.nextafter(X[i, 1], rng.choice([-np.inf, np.inf]))
+    M = int(rng.integers(5, 11))
+    dirs = rng.integers(-1, 3, size=(M, 4)).astype(np.int8)
+    dirs[rng.uniform(size=dirs.shape) < 0.35] = 0
+    dirs[0] = 0
+    cuts = np.zeros((M, 4))
+    for r in range(M):
+        for j in range(4):
+            if dirs[r, j] in (1, -1):
+                v = X[rng.integers(n), j]
+                cuts[r, j] = v + int(rng.choice([0, 0, 1, -1, 2, -2])) * np.spacing(v)
+    return X, dirs, cuts, rng.normal(size=n) * rng.choice([1, 1e-6, 1e6])
+
+
 _W618 = [1, 0, 1, 0.5, 0, 3, 1, 1, 0.5, 0, 1, 0.5, 0, 3, 1]
 
 
 @pytest.mark.parametrize(
-    ("seed", "nonzero", "w", "m", "reverse"),
+    ("seed", "nonzero", "w", "m", "kind"),
     [
-        (42, [0, 1, 4, 5], None, None, False),
-        (295, None, None, None, False),
-        (618, [0, 3, 5], _W618, 8, False),
-        (201, [0, 1, 2, 4, 5, 6, 7], None, None, True),
-        (529, [0, 1, 2, 4, 7], "draw", None, False),
-        (1379, [0, 2, 3, 4, 6, 7], "draw", None, False),
+        (42, [0, 1, 4, 5], None, None, None),
+        (295, None, None, None, None),
+        (618, [0, 3, 5], _W618, 8, None),
+        (201, [0, 1, 2, 4, 5, 6, 7], None, None, "reverse"),
+        (529, [0, 1, 2, 4, 7], "draw", None, None),
+        (1379, [0, 2, 3, 4, 6, 7], "draw", None, None),
+        (271, None, None, None, "hard"),
+        (8, None, "draw", None, "hard"),
     ],
 )
-def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reverse):
+def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, kind):
     """PRUNE-8 uses the test of LA-4 that FWD-11 uses (#137). At seed 42 the
     term (t - x0)+·(x1 - t1)+·(x2 - t2)+ is 0 at every case, since x1 is an
     affine copy of x0 and the two hinges never overlap; LA-4 drops it (the
@@ -1000,13 +1028,21 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reve
     x1·(t - x3)+ is 1e9 times the difference of two hinges one ulp on either
     side of a level, a cancellation that its own norm does not show, and
     ``rss`` missed LA-5 by 9e-8 of V*. The RSS meets LA-5 and the
-    coefficients are the exact least-squares ones (PRUNE-8), to 1e-12."""
-    X, dirs, cuts, y = _random_terms(seed)
-    if reverse:
+    coefficients are the exact least-squares ones (PRUNE-8), to 1e-12. Seed
+    271 of the harder generator of the review of PR #144 (``_hard_terms``)
+    and its seed 8 with the review's weights pin the threshold of the test:
+    ``rss`` misses LA-5 with NEAR_SPAN 1000 times smaller at seed 271
+    (19.757352 against 19.757348), and 10 to 1000 times smaller at seed 8
+    (8.068214030e-12 against 8.068213947e-12)."""
+    X, dirs, cuts, y = (_hard_terms if kind == "hard" else _random_terms)(seed)
+    if kind == "reverse":
         perm = np.r_[0, np.arange(len(dirs) - 1, 0, -1)]
         dirs, cuts = dirs[perm], cuts[perm]
-    exact_coef = reverse or w == "draw"
-    if w == "draw":
+    exact_coef = kind == "reverse" or w == "draw"
+    if w == "draw" and kind == "hard":
+        rng = np.random.default_rng(20_000 + seed)
+        w = rng.choice([0, 0.5, 1, 3, 1e-3], len(y), p=[0.2, 0.3, 0.2, 0.2, 0.1])
+    elif w == "draw":
         rng = np.random.default_rng(10_000 + seed)
         w = rng.choice([0.0, 0.5, 1.0, 3.0], len(y), p=[0.2, 0.3, 0.3, 0.2])
     B = _terms.basis_matrix(X, dirs, cuts)
