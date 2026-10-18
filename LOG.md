@@ -408,6 +408,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 20:17 Watchdog session local_a3dbbbaa took the stale lock (heartbeat 22:51 Friday). Cause of the stop: the app's sign-in token expired at about 23:00 Friday (401 in local_f8e3ee8e; the user restarted the watchdog from local_a59469db). Weekly 47 % (reset 2026-10-18 17:00 PDT), 5-hour 1 %. Restart briefs F124, F136, F139 (briefs/W4-followups.md).
 - 20:40 Started f124-perf, f136-ref, review-138-spec, review-138-adversarial, review-124-adversarial. f139-final-fit stopped before coding: LA-4 and PRUNE-8 do not say which least-squares solution a kept term in the span gets (the reference gives 0 through an unstated second test). Brief S139; started s139-spec a22b91a12dc815cc1 (opus).
 - 20:50 review-124-adversarial APPROVE at 93f1182 (500 drawn fits, budget fallbacks, LA-4 draws: all bit-equal to main; 18 mutants, 5 equivalent survivors). Non-blocking: assert Q append-only in the scan cache. f124-perf pushed bc66093 (memory fix) meanwhile; both reviewers recheck its final head. Started review-136-adversarial a7c81528f23fe2b2a (opus).
+- 21:05 #138 at 412c878: spec APPROVE; adversarial REQUEST_CHANGES (w=None mutant in final_fit survives; weighted case _random_terms(618)). Opened #140 (fast final RSS 15 to 25 % below the exact RSS of the kept terms on some designs; on main). Seed 327 noted on #139. Started f138-fix ac57205fa6523a24d (sonnet).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
