@@ -419,6 +419,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 22:55 M143 measurement done (comment on #143): 0.204/1.84/21.8 s vs earth 0.020/0.51/8.56 s at n = 250/10k/100k; knot_scan about half, setup 22 %, search gathers 12 to 26 %; import 2.2 s (sklearn.base 1.8 s). Kernel A (fused scan) expected 1.1 s at 10k (2x earth). py-spy needs root on macOS (not used). Opened a needs-user issue on how far to go after kernel A. Kernel A starts after #124 merges.
 - 23:00 review-124-adversarial recheck APPROVE at bc66093 (bit-equal on 500 draws, budgets 0 to 0.3, multi-response; gate B PASS). Waiting for recheck-124-spec; then rebase on 8dc9c6d and update checks.
 - 23:10 recheck-124-spec APPROVE at bc66093 (memory: main 937 vs head 1108 MB; stores 49.6 MB under the 4n(p+M) cap; hash equal). Sent f124-perf: rebase on 8dc9c6d plus three small items (budget 0.2 case, knot-cache comment, assert in the scan cache); then update checks by both.
+- 23:20 #141 round 2 at 3ed6737 (rebased on 8dc9c6d; gate B PASS): new rule, coefficient set C chosen on normalized term columns in term order by smallest singular value >= 1e-12; others 0; rss = RSS(C) (up to 3.7x the pruning value, seed 1148); no column-alone test works (seed 439). Full re-reviews sent to review-141-spec and review-141-adversarial.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
