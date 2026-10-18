@@ -1852,6 +1852,52 @@ def test_whole_fit_of_two_cases_with_weights():
     compare_fits(case, fast, ref)
 
 
+def test_whole_fit_of_a_near_span_ties_draw():
+    """PRUNE-3, LA-5: the "hypothesis ties" draw with seed 13843 (#150, #146).
+    X has three levels per covariate at means of 2.5e6 to 5.6e8, and x1 is
+    x0/8 up to the rounding of its shift. In a working order of the pruning
+    pass a reduced column holds only rounding next to its new part, so the
+    fast ``rss_per_size[4]`` was 0.099333514659 against the reference's
+    0.099333519351 (5e-8 relative); the pass now uses the exact residual of
+    that term."""
+    levels = [
+        [2500406.7111273115, 2500407.044460645, 2500407.377793978],
+        [77752600.7082284, 77752600.74989507, 77752600.79156172],
+        [129704051.0800684, 129704051.41340172, 129704051.74673507],
+        [555290625.1609371, 555290625.4942704, 555290625.8276037],
+    ]
+    index = [
+        [1, 0, 1, 2, 2, 1, 1, 2, 0, 0, 1, 0, 2, 2, 0, 1, 0, 1, 1, 0],
+        [1, 0, 1, 2, 2, 1, 1, 2, 0, 0, 1, 0, 2, 2, 0, 1, 0, 1, 1, 0],
+        [1, 0, 1, 2, 2, 1, 2, 0, 0, 1, 2, 2, 1, 2, 0, 2, 2, 0, 2, 0],
+        [2, 0, 2, 1, 0, 2, 1, 0, 0, 2, 1, 2, 0, 2, 2, 0, 1, 1, 2, 0],
+    ]
+    X = np.column_stack([np.array(v)[i] for v, i in zip(levels, index, strict=True)])
+    y = [
+        0.34244796449275533, 0.8408168033050938, 0.26282663073232415,
+        0.1273515629791634, -0.14114231652939502, 0.2867707717510776,
+        0.03419677223797028, 0.7804050780169697, 0.6198793462195148,
+        0.335309273152833, -0.011050354766592302, 0.05921543177826346,
+        0.29327860197263744, -0.06492735765340685, 0.6647506158051402,
+        0.08639308586742267, 0.11665681602727004, 0.7462564457050064,
+        -0.05539401007915956, 0.7071633055560634,
+    ]  # fmt: skip
+    params = {
+        "max_degree": 2,
+        "thresh": 0.0,
+        "endspan": 5,
+        "adjust_endspan": 0.5,
+        "fast_k": 0,
+        "fast_beta": 0.0,
+    }
+    case = Case("ties seed 13843", X, np.reshape(y, (-1, 1)), None, params)
+    fast = _core.fit_mars(
+        X, case.Y, None, _core.MarsParams(**params), record_candidates=True
+    )
+    ref = _core.MarsFit.from_dict(case.reference_fit())
+    compare_fits(case, fast, ref)
+
+
 def test_whole_fit_with_drops_that_tie_on_a_near_copy():
     """PRUNE-10: seed 1287 of the generator of PR #110's adversarial review,
     with x1 a copy of x0 one ulp off at one case (#130). At stage pos = 9 the
