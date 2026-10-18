@@ -72,8 +72,9 @@ ONE_HOT_RECIPE = (
 )
 #: W-6: the total weight is below 2^52, the bound of W-4.
 _MAX_WEIGHT_TOTAL = 2.0**52
-#: W-7: the weights warn when their mean differs from 1 by more than this.
-_MEAN_WEIGHT_TOL = 1e-6
+#: W-7: the weights warn when their mean is outside this band. It is wide, so
+#: that weights rescaled to mean 1 do not warn in a fold or a resample of them.
+_MEAN_WEIGHT_BAND = (0.5, 2.0)
 
 
 def _holds_text(values: np.ndarray) -> bool:
@@ -132,7 +133,7 @@ def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | 
     A total weight that overflows or is 2^52 or more raises ValueError that
     says the total is out of range; this check precedes EDGE-6. Issues a
     UserWarning when some weight is not an integer and the mean of the weights
-    differs from 1 by more than 1e-6. The zero weights stay, since the core
+    is below 0.5 or above 2. The zero weights stay, since the core
     drops their rows (W-3). Complexity: O(n).
     """
     if sample_weight is None:
@@ -171,7 +172,8 @@ def _check_weights(sample_weight: npt.ArrayLike | None, n: int) -> np.ndarray | 
         )
     if (w != np.floor(w)).any():
         mean = math.fsum(w) / n
-        if abs(mean - 1.0) > _MEAN_WEIGHT_TOL:
+        low, high = _MEAN_WEIGHT_BAND
+        if not low <= mean <= high:
             warnings.warn(
                 "sample_weight holds weights that are not integers, and their "
                 f"mean is {mean:.6g}, not 1. pymars reads weights as case "
@@ -228,12 +230,14 @@ class _EarthBase(BaseEstimator):
             delattr(self, name)
 
     def _mars_params(self) -> _core.MarsParams:
-        """Return the parameters as a ``MarsParams``, which checks them (ERR-4);
+        """Return the parameters as a ``MarsParams``, checked with errors that
+        name the estimator and the parameter (ERR-4);
         ``allow_missing`` must be a bool, and True raises NotImplementedError
         (ERR-3)."""
         if not isinstance(self.allow_missing, (bool, np.bool_)):
             raise ValueError(
-                f"allow_missing must be a bool, not {self.allow_missing!r}"
+                f"{type(self).__name__}: allow_missing must be a bool, "
+                f"not {self.allow_missing!r}"
             )
         if self.allow_missing:
             raise NotImplementedError(
@@ -241,7 +245,8 @@ class _EarthBase(BaseEstimator):
                 f"{MISSING_VALUES_ISSUE}. Impute the missing values first, for "
                 "example with sklearn.impute.SimpleImputer in a Pipeline."
             )
-        return _core.MarsParams(**{name: getattr(self, name) for name in _MARS_PARAMS})
+        values = {name: getattr(self, name) for name in _MARS_PARAMS}
+        return _core.params_for(type(self).__name__, values)
 
     def _check_input(self, X: npt.ArrayLike) -> np.ndarray:
         """Return X of a fitted estimator as a float64 array: ERR-2, then
@@ -394,6 +399,40 @@ class EarthRegressor(RegressorMixin, _EarthBase):
     ``max_iter`` (API-6); ``term_coef_`` and ``basis_matrix`` give the model.
     """
 
+    def __init__(
+        self,
+        max_degree=1,
+        max_terms=None,
+        penalty=None,
+        thresh=0.001,
+        minspan=None,
+        endspan=None,
+        adjust_endspan=2.0,
+        auto_linpreds=True,
+        fast_k=20,
+        fast_beta=1.0,
+        pmethod="backward",
+        nprune=None,
+        allow_missing=False,
+    ):
+        # Its own __init__, so that Python's TypeError for an unknown keyword,
+        # such as earth's degree, names EarthRegressor (ERR-4).
+        super().__init__(
+            max_degree=max_degree,
+            max_terms=max_terms,
+            penalty=penalty,
+            thresh=thresh,
+            minspan=minspan,
+            endspan=endspan,
+            adjust_endspan=adjust_endspan,
+            auto_linpreds=auto_linpreds,
+            fast_k=fast_k,
+            fast_beta=fast_beta,
+            pmethod=pmethod,
+            nprune=nprune,
+            allow_missing=allow_missing,
+        )
+
     def fit(self, X, y, sample_weight=None):
         """Fit the model.
 
@@ -527,7 +566,10 @@ grsq_, max_terms_, penalty_, mars_
         a = self.glm_alpha
         ok = isinstance(a, numbers.Real) and not isinstance(a, (bool, np.bool_))
         if not (ok and math.isfinite(a) and a >= 0.0):
-            raise ValueError(f"glm_alpha must be a finite float >= 0, not {a!r}")
+            raise ValueError(
+                f"{type(self).__name__}: glm_alpha must be a finite float >= 0, "
+                f"not {a!r}"
+            )
         return float(a)
 
     def fit(self, X, y, sample_weight=None):

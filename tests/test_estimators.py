@@ -15,6 +15,7 @@ These tests pin the rules that the checks leave open.
 
 import dataclasses
 import re
+import sys
 
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.utils import get_tags
 
 import pymars
-from pymars import EarthRegressor, _core, _terms
+from pymars import EarthClassifier, EarthRegressor, _core, _terms
 from pymars._core import MarsFit, MarsParams
 
 RECIPE = (
@@ -99,20 +100,35 @@ def test_the_parameters_reach_the_core_as_mars_params(monkeypatch):
 @pytest.mark.parametrize(
     ("params", "error", "match"),
     [
-        ({"max_degree": 0}, ValueError, "max_degree"),
-        ({"penalty": -0.5}, ValueError, "penalty"),
+        ({"max_degree": 0}, ValueError, "^EarthRegressor: max_degree must be at"),
+        ({"penalty": -0.5}, ValueError, "^EarthRegressor: penalty must be -1"),
         ({"allow_missing": True}, NotImplementedError, re.escape(ISSUE)),
-        ({"allow_missing": "no"}, ValueError, "allow_missing"),
+        ({"allow_missing": "no"}, ValueError, "allow_missing must be a bool"),
     ],
 )
 def test_fit_checks_the_parameters(params, error, match):
-    """ERR-4: ``__init__`` only stores the parameters, and ``fit`` raises the
-    ValueError of MarsParams, which names the parameter. ERR-3:
-    ``allow_missing=True`` raises NotImplementedError with the link to #27."""
+    """ERR-4: ``__init__`` only stores the parameters, and ``fit`` raises a
+    ValueError that names the estimator and the parameter, never MarsParams.
+    ERR-3: ``allow_missing=True`` raises NotImplementedError with the link to
+    #27."""
     estimator = EarthRegressor(**params)
     assert estimator.get_params() == {**EarthRegressor().get_params(), **params}
-    with pytest.raises(error, match=match):
+    with pytest.raises(error, match=match) as raised:
         estimator.fit(X, y)
+    assert "MarsParams" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("cls", "name"), [(EarthRegressor, "degree"), (EarthClassifier, "nk")]
+)
+def test_an_unknown_keyword_names_the_estimator(cls, name):
+    """ERR-4: a keyword that the estimator does not take, such as earth's
+    degree or nk, raises TypeError that names the public class (Python 3.11
+    and later put the class in the message; 3.10 gives the function name)."""
+    where = f"{cls.__name__}." if sys.version_info >= (3, 11) else ""
+    match = f"^{re.escape(where)}__init__\\(\\) got an unexpected keyword.*'{name}'"
+    with pytest.raises(TypeError, match=match):
+        cls(**{name: 2})
 
 
 def _with_text(kind):
@@ -209,18 +225,21 @@ HALVES = np.tile([0.5, 1.5], n // 2)  # not integers, mean 1
     [
         (np.tile([0, 2, 3], n // 3), False),  # integers with zeros, mean 5/3
         (HALVES, False),
-        (np.r_[np.ones(n - 1), 3.5], True),  # mixed integers and a half
+        (np.r_[np.full(n - 1, 2.0), 2.5], True),  # mixed integers and a half
         (np.tile([0.0, 0.5, 1.5, 2.0], n // 4), False),  # the mean counts the zeros
-        (HALVES * (1 + 5e-7), False),
-        (HALVES * (1 + 2e-6), True),
+        (HALVES * 1.012, False),  # a fold of weights rescaled to mean 1
+        (HALVES * 0.5, False),  # the ends of the band
+        (HALVES * 2.0, False),
+        (HALVES * np.nextafter(0.5, 0.0), True),
+        (np.full(n, 2.0 + 2**-20), True),
         (np.full(n, 0.25), True),
     ],
 )
-def test_weights_that_are_not_integers_warn_unless_their_mean_is_1(weights, warns):
+def test_weights_that_are_not_integers_warn_unless_their_mean_is_near_1(weights, warns):
     """W-7: a UserWarning, which says that the weights act as case counts and
     how to rescale importance weights, when some weight is not an integer and
-    the mean of the weights differs from 1 by more than 1e-6. pytest turns
-    any other warning into an error."""
+    the mean of the weights is below 0.5 or above 2. pytest turns any other
+    warning into an error."""
     if not warns:
         EarthRegressor().fit(X, y, sample_weight=weights)
         return

@@ -67,6 +67,7 @@ __all__ = [
     "PruningRecord",
     "Termination",
     "fit_mars",
+    "params_for",
 ]
 
 FloatArray = npt.NDArray[np.float64]
@@ -111,13 +112,14 @@ DICT_FORMAT = 1
 _TINY = float(np.finfo(np.float64).tiny)
 
 
-def _param(name: str, value: Any) -> Any:
+def _param(name: str, value: Any, owner: str = "MarsParams") -> Any:
     """Return a field of ``MarsParams`` as a plain Python value, or raise
-    ValueError that names the field (CORE-2)."""
+    ValueError that names the field (CORE-2): ``MarsParams.name``, or
+    ``owner: name`` for an estimator (ERR-4)."""
     kind, low, optional = _PARAMS[name]
     if value is None and optional:
         return None
-    where = f"MarsParams.{name}"
+    where = f"MarsParams.{name}" if owner == "MarsParams" else f"{owner}: {name}"
     if kind == "int":
         if isinstance(value, bool) or not isinstance(value, numbers.Integral):
             raise ValueError(f"{where} must be an integer, not {value!r}")
@@ -175,6 +177,15 @@ class MarsParams:
     def __post_init__(self) -> None:
         for name in _PARAMS:
             object.__setattr__(self, name, _param(name, getattr(self, name)))
+
+
+def params_for(owner: str, values: Mapping[str, Any]) -> MarsParams:
+    """Return ``MarsParams(**values)``, with the errors of an estimator: a
+    ValueError names ``owner`` and the parameter, as in "EarthRegressor:
+    penalty must be ..." (ERR-4). Complexity: O(1)."""
+    for name in _PARAMS:
+        _param(name, values[name], owner)
+    return MarsParams(**values)
 
 
 def _array(value: Any, dtype: type, shape: tuple, name: str) -> np.ndarray:
