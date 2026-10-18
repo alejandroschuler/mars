@@ -18,6 +18,13 @@ bounds.
   ``finish`` (kernel B) gives rho, the reduction, both error bounds, the
   floor and the zero mask per knot in one pass, in place of about 30 numpy
   calls (``_scan._finish``).
+- ``cgs2`` is ``_linalg.cgs2``'s Gram-Schmidt of one column against Q: a pass
+  for the new columns' coefficients, then one fused pass that forms v - Q·C,
+  its norm and Qᵀ(v - Q·C), and a second such pass only when DGKS asks for it.
+  Each row's dot product runs in column order, 4 rows at a time so that the
+  chains overlap. It reads Q 1 or 2 times where two BLAS matrix-vector
+  products read it twice per pass (measured, n = 100,000 and 12 columns:
+  0.53 ms against 1.1 ms; at 10,000 the two are equal).
 
 The order of the sums is that of ``_scan._suffix``: from the end, rows are
 added in blocks of B = isqrt(m - 1) + 1, block totals are carried from block
@@ -290,6 +297,98 @@ def _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst):
     return ratio, gain, ratio_err, gain_err
 
 
+def _first(Q, v, coef, known):
+    """coef[j] = Σ_i Q[i, j]·v[i] for the columns j ≥ known. The rows go 4 at a
+    time, and the loop over the columns vectorizes. Complexity: O(n·(r - known))."""
+    n = v.shape[0]
+    r = Q.shape[1]
+    for j in range(known, r):
+        coef[j] = 0.0
+    i = 0
+    while i + 4 <= n:
+        v0, v1, v2, v3 = v[i], v[i + 1], v[i + 2], v[i + 3]
+        for j in range(known, r):
+            a = coef[j] + Q[i, j] * v0 + Q[i + 1, j] * v1
+            coef[j] = a + Q[i + 2, j] * v2 + Q[i + 3, j] * v3
+        i += 4
+    while i < n:
+        for j in range(known, r):
+            coef[j] = coef[j] + Q[i, j] * v[i]
+        i += 1
+
+
+def _project(Q, c, v, out, acc, accumulate):
+    """out = v - Q·c, and acc += Qᵀ·out when ``accumulate``; returns Σv² and
+    Σout². One pass over the rows of Q, 4 rows at a time: each row's dot
+    product runs in column order, and the 4 rows' chains overlap. out may be
+    v. Complexity: O(n·r)."""
+    n = v.shape[0]
+    r = Q.shape[1]
+    a0 = a1 = a2 = a3 = 0.0
+    b0 = b1 = b2 = b3 = 0.0
+    i = 0
+    while i + 4 <= n:
+        s0 = s1 = s2 = s3 = 0.0
+        for j in range(r):
+            cj = c[j]
+            s0 += Q[i, j] * cj
+            s1 += Q[i + 1, j] * cj
+            s2 += Q[i + 2, j] * cj
+            s3 += Q[i + 3, j] * cj
+        v0, v1, v2, v3 = v[i], v[i + 1], v[i + 2], v[i + 3]
+        p0, p1, p2, p3 = v0 - s0, v1 - s1, v2 - s2, v3 - s3
+        out[i], out[i + 1], out[i + 2], out[i + 3] = p0, p1, p2, p3
+        a0 += v0 * v0
+        a1 += v1 * v1
+        a2 += v2 * v2
+        a3 += v3 * v3
+        b0 += p0 * p0
+        b1 += p1 * p1
+        b2 += p2 * p2
+        b3 += p3 * p3
+        if accumulate:
+            for j in range(r):
+                t = acc[j] + Q[i, j] * p0 + Q[i + 1, j] * p1
+                acc[j] = t + Q[i + 2, j] * p2 + Q[i + 3, j] * p3
+        i += 4
+    while i < n:
+        s0 = 0.0
+        for j in range(r):
+            s0 += Q[i, j] * c[j]
+        v0 = v[i]
+        p0 = v0 - s0
+        out[i] = p0
+        a0 += v0 * v0
+        b0 += p0 * p0
+        if accumulate:
+            for j in range(r):
+                acc[j] = acc[j] + Q[i, j] * p0
+        i += 1
+    return (a0 + a1) + (a2 + a3), (b0 + b1) + (b2 + b3)
+
+
+def _cgs2(Q, v, coef, known, perp, total, twice):
+    """Classical Gram-Schmidt of v against the columns of Q (n, r), with a
+    second pass when the first leaves less than half of ‖v‖² (DGKS).
+    coef[:known] holds Qᵀv for the leading columns already; ``_first`` fills
+    the others. perp gets v⊥ and total the coefficients of both passes.
+    Returns ‖v‖ and ‖v⊥‖. 2 or 3 passes over Q, plus one over its new
+    columns. Complexity: O(n·r)."""
+    r = Q.shape[1]
+    if known < r:
+        _first(Q, v, coef, known)
+    c2 = np.zeros(r)
+    nv, n1 = _project(Q, coef, v, perp, c2, True)
+    if twice or n1 + n1 < nv:
+        _, n1 = _project(Q, c2, perp, perp, c2, False)
+        for j in range(r):
+            total[j] = coef[j] + c2[j]
+    else:
+        for j in range(r):
+            total[j] = coef[j]
+    return math.sqrt(nv), math.sqrt(n1)
+
+
 def _norms(g, b, split, Bn, Bm):
     """‖h‖² at every split (``_scan._norms``). Complexity: O(n)."""
     m = g.shape[0]
@@ -333,6 +432,9 @@ if AVAILABLE:
     _finish = _jit(_finish)
     _norms = _jit(_norms)
     _centered = _jit(_centered)
+    _first = _jit(_first)
+    _project = _jit(_project)
+    _cgs2 = _jit(_cgs2)
 
 
 def hv(g, b, Q, q0, E, o, split):
@@ -377,3 +479,13 @@ def finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst):
     if D is None:
         D = F  # unused without the intercept parent
     return _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst)
+
+
+def cgs2(Q, v, coef, known, twice):
+    """``_linalg.cgs2`` compiled: returns (v⊥, coef, total, ‖v‖, ‖v⊥‖), with
+    coef[:known] given. Complexity: O(n·r) time, O(n + r) memory."""
+    n, r = Q.shape
+    perp = np.empty(n)
+    total = np.empty(r)
+    nv, n1 = _cgs2(Q, v, coef, known, perp, total, twice)
+    return perp, coef, total, nv, n1

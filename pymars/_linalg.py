@@ -58,6 +58,8 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
+from pymars import _kernels
+
 FloatArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]
 
@@ -81,6 +83,19 @@ class GramSchmidt(NamedTuple):
 
     q: FloatArray | None
     coef: FloatArray
+    norm: float
+
+
+class Orthogonal(NamedTuple):
+    """``cgs2(Q, v)``: ``perp`` = v⊥, the part of v orthogonal to Q;
+    ``coef`` = Qᵀv, the first pass's coefficients, shape (r,), which a later
+    call may pass as ``known``; ``total``, the coefficients of both passes, so
+    that v⊥ = v - Q·total up to rounding; ``vnorm`` = ‖v‖; ``norm`` = ‖v⊥‖."""
+
+    perp: FloatArray
+    coef: FloatArray
+    total: FloatArray
+    vnorm: float
     norm: float
 
 
@@ -176,6 +191,59 @@ def gram_schmidt(Q: npt.ArrayLike, v: npt.ArrayLike) -> GramSchmidt:
     perp, coef = orthogonalize(Q, v)
     norm = float(scipy.linalg.norm(perp))
     return GramSchmidt(perp / norm if norm > 0.0 else None, coef, norm)
+
+
+def cgs2(
+    Q: npt.ArrayLike,
+    v: npt.ArrayLike,
+    known: npt.ArrayLike | None = None,
+    *,
+    twice: bool = False,
+) -> Orthogonal:
+    """Classical Gram-Schmidt of v (n,) against the orthonormal columns of Q
+    (n, r), with the second pass of DGKS: it runs when the first pass leaves
+    ‖v⊥‖² < ‖v‖²/2, or always with ``twice=True`` (LA-1; "twice is enough").
+    Either way ‖Qᵀv⊥‖ stays a small multiple of r·u·‖v‖, the precondition of
+    ``_scan.knot_scan``.
+
+    ``known`` holds Qᵀv for the leading columns of Q from an earlier call on
+    the same v (the forward pass appends columns and never changes old ones),
+    so only the new columns' coefficients are computed. The compiled form
+    (``_kernels``) reads each row of Q once per pass: 2 or 3 passes, against 4
+    for ``orthogonalize``; the numpy form takes the same steps with matrix
+    products. Neither writes into its inputs. Complexity: O(n·r) time, O(n)
+    memory.
+    """
+    Q = _matrix(Q, "Q")
+    v = np.asarray(v, dtype=np.float64)
+    r = Q.shape[1]
+    a = 0 if known is None else len(known)
+    coef = np.empty(r)
+    if a:
+        coef[:a] = known
+    if _kernels.ENABLED:
+        return Orthogonal(*_kernels.cgs2(Q, v, coef, a, twice))
+    coef[a:] = Q[:, a:].T @ v
+    perp = v - Q @ coef
+    c2 = Q.T @ perp
+    vnorm, norm = float(scipy.linalg.norm(v)), float(scipy.linalg.norm(perp))
+    total = coef
+    if twice or 2.0 * norm * norm < vnorm * vnorm:
+        perp = perp - Q @ c2
+        total = coef + c2
+        norm = float(scipy.linalg.norm(perp))
+    return Orthogonal(perp, coef, total, vnorm, norm)
+
+
+def remove_direction(q: FloatArray, E: FloatArray) -> tuple[FloatArray, FloatArray]:
+    """Remove from the columns of E (n, K) their part along the unit vector q
+    (n,), twice; return the result and t = qᵀE of the first pass. A pair search
+    appends q to Q this way (E is orthogonal to Q already): O(n·K), in place of
+    ``orthogonalize`` against all of Q. Complexity: O(n·K)."""
+    t = q @ E
+    E1 = E - np.outer(q, t)
+    E1 -= np.outer(q, q @ E1)
+    return E1, t
 
 
 def collinearity_tolerance(step: int) -> float:

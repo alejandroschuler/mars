@@ -16,12 +16,14 @@ import json
 import math
 import types
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from reference import mars_ref
+from test_oracle import forward_cases
 
 from pymars import _forward, _gcv, _linalg, _scan, _terms
 from pymars._forward import Termination
@@ -661,6 +663,7 @@ def test_two_searches_that_add_the_same_hinge_product_are_one_candidate(monkeypa
     first = st_.keyed(first)
     assert len(st_.occurrences(first)) == 1  # the real rule: a pair search on k1
     monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: False)
+    st_._setups.clear()  # the step's kept setups used the real rule
     occ = st_.occurrences(first)
     assert {(c.parent, c.variable, c.knot) for c in occ} == {
         (k0, 1, t[1]),
@@ -804,9 +807,9 @@ def test_a_candidate_that_fails_the_check_is_left_out(monkeypatch):
     real = _forward._scan.rebuild
     calls = []
 
-    def failing(Q, Y, columns, sizes=None):
+    def failing(Q, Y, columns, **kw):
         calls.append(1)
-        return None if len(calls) == 1 else real(Q, Y, columns, sizes)
+        return None if len(calls) == 1 else real(Q, Y, columns, **kw)
 
     monkeypatch.setattr(_forward._scan, "rebuild", failing)
     chosen, _, new_second = st_.best()
@@ -868,7 +871,7 @@ def _fixed_passes(monkeypatch, scan, exact, top=None, steps=0):
     monkeypatch.setattr(_forward._scan, "knot_scan", lambda *a, **k: fake)
     valued = []
 
-    def exact_knot(Q, E, h, w=None):
+    def exact_knot(Q, E, h, w=None, N=None):
         place = 11 - int(x[np.flatnonzero(h)[0] - 1])
         valued.append(place)
         return exact.get(place, (0.5, 0.5))
@@ -963,10 +966,11 @@ def _explicit_best(st_, top=2):
     s, limit, found, row = len(st_.rss), st_.max_legal(), [], st_.rows[0]
     for j in range(st_.X.shape[1]):
         sr = st_.setup(0, j)
+        Q, E = st_.basis(0, j)
         if sr.pair and sr.lin > 0.0:
             found.append((sr.lin, (row, j, 0)))
         for i, t in enumerate(st_.knots[j].knots):
-            rho, gain = _scan.exact_knot(sr.Q, sr.E, np.maximum(sr.x - t, 0.0))
+            rho, gain = _scan.exact_knot(Q, E, np.maximum(st_.X[:, j] - t, 0.0))
             red = gain + sr.lin
             if not _linalg.knot_rejected(rho, s) and 0.0 < red <= limit:
                 found.append((red, (row, j, i + 1)))
@@ -1038,16 +1042,18 @@ def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(
     lin = _forward._Candidate(1.0, (0, 0, 0), 0, 0, _forward.KIND_LINEAR, math.nan)
     st_.add(lin, _scan.rebuild(st_.Q, st_.Yw, st_.columns(lin)))
     monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: True)
+    st_._setups.clear()  # the step's kept setups used the real rule
     sr = st_.setup(0, 2)
+    Q, _ = st_.basis(0, 2)
     assert (sr.pair, sr.dep) == (True, dep)
     found = st_.search(0, 2, set())
     kinds = {c.kind for c in found}
     if dep:
-        assert sr.lin == 0.0 and sr.Q is st_.Q
+        assert sr.lin == 0.0 and Q.shape == st_.Q.shape
         assert kinds == {_forward.KIND_PAIR}  # no linear candidate
         assert st_.columns(found[0]).shape == (24, 1)
     else:
-        assert sr.lin > 0.0 and sr.Q.shape[1] == st_.Q.shape[1] + 1
+        assert sr.lin > 0.0 and Q.shape[1] == st_.Q.shape[1] + 1
         assert _forward.KIND_LINEAR in kinds
     assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate
 
@@ -1070,3 +1076,34 @@ def test_a_forward_pass_past_its_cache_budgets_is_the_same(budget, monkeypatch):
     low = _core.fit_mars(X, y[:, None], None, prm, record_candidates=True)
     assert default.selected.size > 5
     _same(default, low)
+
+
+ORACLE_KINDS = ["smooth", "hinge", "ties", "scaled", "shifted", "small"]
+
+
+@given(data=st.data(), kind=st.sampled_from(ORACLE_KINDS))
+def test_every_scan_gets_q_and_e_that_meet_its_preconditions(data, kind):
+    """The preconditions of ``_scan.knot_scan`` (its module docstring), on the
+    oracle's draws of ordinary data: ‖QᵀQ - I‖₂ ≤ (r + 1)·gamma_n and
+    ‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖ at every search, after the Gram-Schmidt with
+    kept coefficients and the DGKS second pass, and the rank-1 update of E in
+    a pair search. The scan's error bounds rest on them. The second is not
+    checked where E is rounding noise, Σ‖E_k‖² ≤ EXACT_FIT·RSS_s: there b·x
+    fits y exactly, every candidate of the search is an exact fit (FWD-5's
+    band), and its gains do not count."""
+    case = data.draw(forward_cases(kind), label="case")
+    real, calls = _forward._Pass.search, []
+
+    def checked(self, k, j, excluded):
+        Q, E = self.basis(k, j)
+        n, r = Q.shape
+        g = _scan._gamma(n)
+        assert np.linalg.norm(Q.T @ Q - np.eye(r), 2) <= (r + 1) * g
+        e = np.linalg.norm(E, axis=0)
+        if np.sum(e**2) > _forward.EXACT_FIT * self.rss[-1]:
+            assert np.all(np.linalg.norm(Q.T @ E, axis=0) <= math.sqrt(r) * g * e)
+        calls.append(r)
+        return real(self, k, j, excluded)
+
+    with mock.patch.object(_forward._Pass, "search", checked):
+        case.fast_forward()

@@ -186,20 +186,17 @@ class _Candidate(NamedTuple):
     key: tuple | None = None  # FWD-12: (kind, rows added); None never merges
 
 
-class _Search(NamedTuple):
-    """The search of one covariate x on the parent b: its kind (LA-7), the
-    linear candidate's reduction (0.0 in a single-hinge search), and the
-    orthonormal basis and residuals on G (B, and b·x in a pair search).
-    ``dep``: LA-4 finds b·x dependent on B in a pair search, so it counts as 0
-    (LA-1, LA-2): no linear candidate, and G is B."""
+class _Setup(NamedTuple):
+    """The scalar results of the search of one covariate x on the parent b in
+    this step (``_Pass.setup``): its kind (LA-7), the linear candidate's
+    reduction (0.0 in a single-hinge search), whether LA-4 finds b·x dependent
+    on B in a pair search (``dep``: it counts as 0, LA-1, LA-2, so there is no
+    linear candidate and G is B), and ‖v⊥‖ of v = √w·b·(x - c) against B."""
 
-    x: FloatArray
-    b: FloatArray
     pair: bool
     lin: float
-    Q: FloatArray
-    E: FloatArray
-    dep: bool = False
+    dep: bool
+    norm: float
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -242,6 +239,21 @@ class _Pass:
     entry e (FAST-1, FAST-5). ``rows`` maps each parent of the current step
     to its row in the queue table, the first key of FWD-5. ``sw`` is √w, and
     ``Yw`` = √w·Yc the responses of the scaled rows.
+
+    The basis Q (n, r) is the leading r columns of a C-order buffer
+    (``_Qbuf``), allocated once with room for the forward basis and 2 more
+    columns: the forward pass only appends columns, and old columns never
+    change. Column r is scratch: a pair search puts its unit vector of b·x
+    there, so the scan reads G = Q and b·x with no copy. ``check`` rebuilds
+    the winner into a second buffer (``_spare``: Q copied, then the new
+    columns), so no search can write over it, and ``add`` swaps the two.
+    ``_coefs[k, j]`` keeps Qᵀv of the first Gram-Schmidt pass of a search's
+    v = √w·b·(x - c) across steps (r values; neither v nor old columns
+    change), so the next step computes only the new columns' coefficients.
+    ``_setups`` keeps the scalar results of each search of the step
+    (``_Setup``), not its vectors, so memory stays O(n·(p + M)); ``basis``
+    builds a pair search's q and residuals again when another search has used
+    the scratch column since.
     """
 
     def __init__(
@@ -274,8 +286,16 @@ class _Pass:
             self._knots(j, active, L, E) for j in range(p)
         ]
         raw = float(n) if w is None else math.fsum(w)  # ‖√w‖², not snapped
-        self.Q = (self.sw / math.sqrt(raw))[:, None]
-        self.E, _ = _linalg.orthogonalize(self.Q, self.Yw)
+        self.wsum = raw
+        width = min(params.get("max_terms", 21), n) + 2
+        self._Qbuf = np.empty((n, width))  # C order: a row is contiguous
+        self._spare = np.empty((n, width))
+        self._Qbuf[:, 0] = self.sw / math.sqrt(raw)
+        self._r = 1
+        self._coefs: dict = {}  # (k, j) -> Qᵀv of the first pass, kept
+        self._setups: dict = {}  # (k, j) -> _Setup of this step
+        self._scratch: tuple | None = None  # (k, j, E) of the q in column r
+        self._E, _ = _linalg.orthogonalize(self.Q, self.Yw)
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
@@ -284,6 +304,48 @@ class _Pass:
         self.slot, self.term_at = [1], {1: 0}  # slot 1 holds the intercept
         self.lam, self.kap = [math.inf], [0]
         self.rows = {0: 0}  # before the first step the table is the intercept
+
+    @property
+    def Q(self) -> FloatArray:  # noqa: N802 (the spec's name)
+        """The orthonormal basis of the √w-scaled forward basis F_s (FWD-13),
+        column 0 the intercept direction: a view of the buffer."""
+        return self._Qbuf[:, : self._r]
+
+    @Q.setter
+    def Q(self, Q: FloatArray) -> None:  # noqa: N802
+        """Take a new basis: a rebuild into the spare buffer (``add``), which
+        holds Q and appends, so the two buffers swap; or any other array
+        (tests), which is copied in and forgets the kept coefficients.
+        Complexity: O(n·r) for a copy, else O(1)."""
+        r = Q.shape[1]
+        if Q.base is self._spare:
+            self._Qbuf, self._spare = self._spare, self._Qbuf
+        elif Q.base is not self._Qbuf:
+            self._reserve(r + 2)
+            self._Qbuf[:, :r] = Q
+            self._coefs = {}
+        self._r = r
+        self._reserve(r + 2)
+        self._setups, self._scratch = {}, None
+
+    @property
+    def E(self) -> FloatArray:  # noqa: N802
+        """The √w-scaled residuals of the responses on Q (n, K)."""
+        return self._E
+
+    @E.setter
+    def E(self, E: FloatArray) -> None:  # noqa: N802
+        self._E = E
+        self._setups, self._scratch = {}, None
+
+    def _reserve(self, width: int) -> None:
+        """Make both buffers at least ``width`` columns wide, keeping Q.
+        Complexity: O(n·r) when they grow (at most a few times a pass)."""
+        n, have = self._Qbuf.shape
+        if have < width:
+            buf = np.empty((n, max(width, 2 * have)))
+            buf[:, : self._r] = self._Qbuf[:, : self._r]
+            self._Qbuf, self._spare = buf, np.empty(buf.shape)
 
     def _knots(self, j: int, active: npt.NDArray[np.bool_], L: int, E: int):
         """The knots of covariate j for the active cases, in the order of x
@@ -466,24 +528,24 @@ class _Pass:
         """The store of ``_scan.knot_scan`` for parent k and covariate j, with
         the number of leading columns of its Q that stay the same (the columns
         of the current basis; rebuilds only append), or None when keeping
-        them (K·(m + 3) values: hᵀq, ‖h‖², D and the zero mask) would pass a
+        them (K·(m + 2) values for K knots: hᵀq, ‖h‖² and D) would pass a
         budget of 4·n·(p + M) values, so that memory stays
         O(n·(p + M)). The store changes no value (``knot_scan``).
         Complexity: O(1)."""
-        m = self.Q.shape[1] - (k == 0)
+        m = self._r - (k == 0)
         store = self._scan_stores.get((k, j))
         old = 0 if store is None else store["size"]
         n, p = self.X.shape
         cap = self._SCAN_BUDGET * n * (p + len(self.cols))
-        if self._scan_size - old + knots * (m + 3) > cap:
+        if self._scan_size - old + knots * (m + 2) > cap:
             if store is not None:
                 del self._scan_stores[k, j]
                 self._scan_size -= old
             return None
         if store is None:
             store = self._scan_stores[k, j] = {"size": 0}
-        self._scan_size += knots * (m + 3) - old
-        store["size"] = knots * (m + 3)
+        self._scan_size += knots * (m + 2) - old
+        store["size"] = knots * (m + 2)
         return store, m
 
     def _capped(self, red):
@@ -502,29 +564,69 @@ class _Pass:
         Complexity: O(n)."""
         return self.cols[k] * (self.X[:, j] - self.center[j])
 
-    def setup(self, k: int, j: int) -> _Search:
-        """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
-        gives A of LA-7, and so the kind, where V holds the covariates of b
-        and x; a pair search adds b·x to G, and its residuals are
-        orthogonalized twice against G, as ``_scan.knot_scan`` requires. In a
-        pair search LA-2 tests b·x with LA-4 (``_linalg.dependent``): its
-        distance to B is that of b·(x - c), and its norm that of b·x itself,
-        not centered. Every reduction goes through ``_capped``, here, in
-        ``search`` and in ``refine``. Complexity: O(n·r·K)."""
-        x, b = self.X[:, j], self.cols[k]
-        v = self.sw * b * (x - self.center[j])  # the product order: (√w·b)·(x - c)
-        gs = _linalg.gram_schmidt(self.Q, v)
+    def _v(self, k: int, j: int) -> FloatArray:
+        """v = √w·b·(x_j - c_j), the √w-scaled ``linear_column``, in the
+        product order (√w·b)·(x - c). Complexity: O(n)."""
+        return self.sw * self.cols[k] * (self.X[:, j] - self.center[j])
+
+    def setup(self, k: int, j: int) -> _Setup:
+        """The search of covariate j on parent k: Gram-Schmidt of
+        v = √w·b·(x - c) gives A of LA-7, and so the kind, where V holds the
+        covariates of b and x. In a pair search LA-2 tests b·x with LA-4
+        (``_linalg.dependent``): its distance to B is that of b·(x - c), and its
+        norm that of b·x itself, not centered; when it counts, its unit vector q
+        goes to the scratch column and the residuals lose their part along q
+        (``_linalg.remove_direction``), for ``basis``. Every reduction goes
+        through ``_capped``, here, in ``search`` and in ``refine``. The result
+        is kept for the step. Complexity: O(n·(a + r)) the first time in a step,
+        a the columns added since the search last ran (``_linalg.cgs2``), plus
+        O(n·K) in a pair search; O(1) after."""
+        sr = self._setups.get((k, j))
+        if sr is not None:
+            return sr
+        o = _linalg.cgs2(self.Q, self._v(k, j), self._coefs.get((k, j)))
+        self._coefs[k, j] = o.coef
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
-        pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
-        if not pair:
-            return _Search(x, b, False, 0.0, self.Q, self.E)
-        norm = float(np.linalg.norm(self.sw * b * x))
-        if _linalg.dependent(gs.norm, norm):  # LA-2: b·x counts as 0
-            return _Search(x, b, True, 0.0, self.Q, self.E, True)
-        Q = np.column_stack((self.Q, gs.q))
-        lin = float(self._capped(float(np.sum((gs.q @ self.E) ** 2))))
-        E = _linalg.orthogonalize(Q, self.E)[0]
-        return _Search(x, b, True, lin, Q, E)
+        pair = o.norm > 0.0 and _linalg.pair_search(o.norm**2, self.variances[V])
+        dep, lin = False, 0.0
+        if pair:
+            norm = float(np.linalg.norm(self.sw * self.cols[k] * self.X[:, j]))
+            dep = _linalg.dependent(o.norm, norm)  # LA-2: b·x counts as 0
+            if not dep:
+                lin = float(self._capped(float(np.sum(self._extend(k, j, o) ** 2))))
+        sr = self._setups[k, j] = _Setup(pair, lin, dep, o.norm)
+        return sr
+
+    def _extend(self, k: int, j: int, o: _linalg.Orthogonal) -> FloatArray:
+        """Put q = v⊥/‖v⊥‖ of a pair search in the scratch column and keep the
+        residuals on G = (Q, q); return qᵀE. The rank-1 update keeps E's own
+        departure from QᵀE = 0, of order u·‖E_k‖, which the scan's precondition
+        allows while ‖E_k‖ keeps most of its size; when it loses more than half
+        of its square for some k (q fits much of y), E is orthogonalized against
+        G again, so that the departure stays small next to the new ‖E_k‖.
+        Complexity: O(n·K), or O(n·r·K) in that case."""
+        q = o.perp / o.norm
+        E, t = _linalg.remove_direction(q, self._E)
+        self._Qbuf[:, self._r] = q
+        if np.any(2.0 * np.sum(E * E, axis=0) < np.sum(self._E * self._E, axis=0)):
+            E = _linalg.orthogonalize(self._Qbuf[:, : self._r + 1], self._E)[0]
+        self._scratch = (k, j, E)
+        return t
+
+    def basis(self, k: int, j: int) -> tuple[FloatArray, FloatArray]:
+        """The orthonormal basis Q and the residuals E on G of the search of
+        covariate j on parent k: B, and b·x in a pair search where it counts
+        (LA-7, LA-2). The scan requires both orthogonalized to working
+        precision (``_scan.knot_scan``). When another search has used the
+        scratch column since ``setup``, q comes again from the kept
+        coefficients, with the same steps and so the same values. The arrays
+        are valid until the next search. Complexity: O(1), or O(n·(r + K))."""
+        sr = self.setup(k, j)
+        if not sr.pair or sr.dep:
+            return self.Q, self._E
+        if self._scratch is None or self._scratch[:2] != (k, j):
+            self._extend(k, j, _linalg.cgs2(self.Q, self._v(k, j), self._coefs[k, j]))
+        return self._Qbuf[:, : self._r + 1], self._scratch[2]
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
         """Pass 1 for parent k and covariate j: every candidate that can be one
@@ -534,13 +636,14 @@ class _Pass:
         when its upper bound reaches the second largest lower bound of the
         sure candidates. Complexity: O(n·r)."""
         sr = self.setup(k, j)
+        Q, E = self.basis(k, j)
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
-        bw = self.sw[o] * sr.b[o]  # √w·b in the order of x
+        bw = self.sw[o] * self.cols[k][o]  # √w·b in the order of x
         scan = _scan.knot_scan(
             self.sorted_x[:, j],
             bw,
-            sr.Q,
-            sr.E,
+            Q,
+            E,
             kc.split,
             intercept=k == 0,
             _checked=True,
@@ -574,37 +677,29 @@ class _Pass:
         return _ranked(found)
 
     def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
-        """Pass 2: the explicit values of the knots (``_scan.exact_knot``), with
-        LA-3 and FWD-4 decided on them; the illegal ones are left out, and the
-        linear candidates, whose values are explicit already, stay. LA-2 tests
-        the hinge with LA-4 against G (``_hinge_dependent``); a dependent hinge
-        has the gain 0. Complexity: O(n·r) per search and O(n·(r + K)) per
-        knot."""
+        """Pass 2: the explicit values of the knots (``_scan.exact_knot``: one
+        Gram-Schmidt of the hinge gives rho, LA-4's test of the hinge against G
+        and the reduction, 0 for a dependent hinge, LA-2), with LA-3 and FWD-4
+        decided on them; the illegal ones are left out, and the linear
+        candidates, whose values are explicit already, stay.
+        Complexity: O(n·(r + K)) per search and per knot."""
         out = [c for c in cands if c.kind == KIND_LINEAR]
         s, top = len(self.rss), self.max_legal()
         for k, j in sorted(
             {(c.parent, c.variable) for c in cands if c.kind != KIND_LINEAR}
         ):
-            sr = self.setup(k, j)
+            lin = self.setup(k, j).lin
+            Q, E = self.basis(k, j)
+            x, b = self.X[:, j], self.cols[k]
             for c in cands:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
-                h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
-                rho, gain = _scan.exact_knot(sr.Q, sr.E, h, self.w)
-                if self._hinge_dependent(sr.Q, h):  # LA-2: it counts as 0
-                    gain = 0.0
-                red = float(self._capped(gain + sr.lin))
+                h = b * _terms.factor(_terms.PLUS, x, c.knot)
+                rho, gain = _scan.exact_knot(Q, E, h, self.w, N=self.wsum)
+                red = float(self._capped(gain + lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
-
-    def _hinge_dependent(self, Q: FloatArray, h: FloatArray) -> bool:
-        """LA-2, LA-4: whether the hinge column h is dependent on G, whose
-        basis Q is that of the search (B, and b·x when LA-2 counted it in a
-        pair search). Complexity: O(n·r)."""
-        v = self.sw * h
-        dist = _linalg.gram_schmidt(Q, v).norm
-        return _linalg.dependent(dist, float(np.linalg.norm(v)))
 
     def columns(self, c: _Candidate) -> FloatArray:
         """Return the √w-scaled columns that span the candidate's terms (b·x
@@ -631,7 +726,7 @@ class _Pass:
         columns, so the ratio would be the same up to rounding. The rebuilt RSS and
         pass 2's reduction can differ in the last bits, so a knot at MaxLegal
         can fail here. Complexity: O(n·r·K)."""
-        rb = _scan.rebuild(self.Q, self.Yw, self.columns(c))
+        rb = _scan.rebuild(self.Q, self.Yw, self.columns(c), _buffer=self._spare)
         if rb is None:
             return None
         reduction = self.rss[-1] - rb.rss
@@ -919,6 +1014,7 @@ def forward_pass(
         "penalty": penalty,
         "fast_k": int(fast_k),
         "fast_beta": float(fast_beta),
+        "max_terms": max_terms,
     }
     # EDGE-6 (v2): the scale of Y and the TSS check come before the degenerate
     # test of EDGE-1, as in the core, so that a degenerate fit whose scaled TSS
