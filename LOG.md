@@ -480,10 +480,12 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 15:15 #167 (K145c) ready at 0532e7c (on 0274c5a; gates B (coverage 90 %), C PASS; CI 13/13): second fit 0.065/0.437/5.14 s vs main 0.077/0.657/8.11 vs earth 0.017/0.45/6.39 (at or below earth at 10k and 100k); same terms and RSS as main; near-tie stops at most 0.8 %. Started review-167-spec and review-167-adversarial (opus). Leftover worktree .worktrees/k145c-main (removable).
 - 15:35 DISK FULL (163 MB free): review-167-spec's gate B failed with ENOSPC. Removed 55 finished task worktrees with no tracked changes (git worktree remove --force): only about 4 GB back (venvs hard-linked into uv's cache). Free now 4.4 GB. The scratchpads (about 13 GB, agent mutant copies) need a recursive delete that dcg blocks: command recorded on #60 for the user. Kept runner-t21 (16 GB), runner-legacy (10 GB), runner-t18, runner-t21a, journal, t145c-compile-step, t21-extend. review-167-spec resumed; its unposted blocking finding: _Pass._coefs grows O(p·M²), not O(n·(p + M)).
 - 16:10 #167 spec REQUEST_CHANGES at 0532e7c (gate B PASS on rerun; head 0.83 of main's time at 10k under load, same terms and RSS; blocking: _coefs O(p M^2) memory). Sent to k145c-compile. Adversarial review still running.
+- 16:45 #169 (T21 extension) ready at e163e78: parity 48 of 51 equivalent; D6 n200 fails (1.076, [1.051, 1.101]); D1 n5000 hi and D6 n1000 not decidable at 600 and 3,800 reps (need about 1,300 and 5,000); 0 failures in 94,500 units; extension 1.47 core-hours (3.74 in all). The runner's prediction cache (16 GB) filled the disk again; reran --no-cache, no result lost; cache cleanup command added to #60. Started review-169-single. #167 rechecks running.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
 |---|---|---|---|
+| 2026-10-18 | T21 extension of 7 parity cells (runner-t21 at 0274c5a) | 1.47 | 0 failures of 94,500 units in all |
 | 2026-10-18 | T21 post-freeze pilot (all 51 cells, 100 reps) and full run (runner-t21 at 0274c5a), 6 workers | 2.27 (measured, sum of fit times; wall 20.7 min) | 0 failures of 58,400 units |
 | 2026-10-09 | T19 benchmark grid (runner-t19 at ae9d199), 4 workers, about 18:40 to 21:25 PDT plus earlier cells | about 10 | 80 ok, 1 timeout |
 | 2026-10-09 | T21a pre-freeze pilot (runner-t21a at 02f788c), 4 workers, 8.6 min | about 0.6 | no failures |
