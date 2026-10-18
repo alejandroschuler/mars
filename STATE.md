@@ -1,6 +1,6 @@
 # Executor state
 
-Work done: no
+Work done: yes
 
 Updated: 2026-10-17 20:25 PDT, by executor session `local_a3dbbbaa-86cb-4746-9ad7-7dae14ff92f9` (watchdog run; lock taken 20:17).
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+DONE 2026-10-18 11:25 PDT (executor local_a3dbbbaa): every definition of done item is met on main 7cf85d0 (map in LOG.md). Open for the user: #175 (EarthClassifier's default glm_alpha; numba as a hard dependency), #68 (push of the user's PR #64; #62, #65 wait with it), #60, #59, the push of the local tag sim-freeze-1. Later issues: #178, #179, #173, #27 to #33. If the user changes a default in #175, a new session restarts the work from this journal.
 
 CURRENT (2026-10-18 10:20 PDT, executor local_a3dbbbaa, lock held): main a0f3d5d. Done this week: spec v3 (exact arithmetic dropped, user decision), C157 code to v3, numba kernels K145a/K145c (10k second fit 0.44 s vs earth 0.45; numpy path 2.6x), freeze 0274c5a (local tag + branch sim-freeze-1; tag push waits for the user), T21 full run and extension (#168, #169: parity 48/51, D6 n200 fails, 2 not decided), T22 report (#170; validation/REPORT.md on main), #164 fixed (#172).
 Open PRs: #174 (U23 upstream drafts; author u23-upstream a095a94fc01a73923 updating draft 01, then a single review), #176 (ctml-skills note by the executor; review-176-single a6b3ff53d0dc48b4d), R23 release fixes (r23-release a6827ad459c577c61, branch t23-release-fixes; Part of #25; review A and B findings on #25).

@@ -510,11 +510,12 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 5. Speed vs earth at 10,000 x 10 x degree 2 stated: REPORT.md section 5 and validation/bench/REPORT.md (#170): 1.7x fresh, about 0.9x warm with numba; 2.6x/2.7x with the numpy fallback; target 10x met.
 6. Simulation fills every mockup, decides or narrows each claim, reports failure counts: REPORT.md (#170; T21 #168, #169): 0 failures of 94,500 + 49,440 fits; gap narrowed, parity holds with a D6 condition, sparsity holds with a D6 condition; two parity cells not decided (stated, with the optional-stopping caveat).
 7. REPORT.md, README, docs and CHANGELOG each have two agent reviews: #170 spec and adversarial reviews (two rounds); T22a docs reviewed in #125; #177 reviews for the later doc edits.
-8. CI green on main across the matrix incl. lowest-deps and the no-numba job: see the CI line below.
+8. CI green on main across the matrix incl. lowest-deps and the no-numba job: the CI run on main 7cf85d0 completed with success (2026-10-18 about 11:20 PDT).
 9. No PR open, every task issue closed or later, needs-user listed, upstream drafts in validation/upstream/: open PR #64 is the user's own (TOOLS-2; waits for the user's push, #68); its issues #62, #65 wait with it. needs-user: #175 (glm_alpha default; numba dependency), #68, #60 (cleanup), #59; the push of the tag sim-freeze-1 (LOG 13:55). Upstream drafts: #174.
 10. Two fresh architecture reviews, every finding fixed or later: #25 comments (A and B); fixed in #177; later in #178; two items wait for the user (#175).
 11. This map; the watchdog task deleted; caffeinate stopped; final summary in the session (below).
 
+- 11:25 PDT (2026-10-18) #177 merged as 7cf85d0; #25 closed; CI on main 7cf85d0 green. Definition of done mapped above; all items met, with the needs-user items listed (#175, #68 with PR #64, #60, #59, the tag push). Work done: watchdog deleted, caffeinate stopped, final summary in the session.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
