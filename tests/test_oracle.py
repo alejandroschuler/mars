@@ -1883,6 +1883,10 @@ def test_forward_pass_on_designed_data(case):
     _count("forward, designs", check_forward(case))
 
 
+# The numpy fallback of the knot scan (_scan._centered) divides 0 by 0 where
+# products of weights of 1e-300 underflow (LIM-4) and warns; the fit still
+# ends with a valid model, which is all that Limits asks (reported on #160).
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("case", _limit_cases(), ids=lambda c: c.name)
 def test_limits_end_with_a_valid_model(case):
     """Limits (LIM-1 to LIM-4): outside ordinary data both programs still end
