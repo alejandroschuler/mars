@@ -966,14 +966,17 @@ _W618 = [1, 0, 1, 0.5, 0, 3, 1, 1, 0.5, 0, 1, 0.5, 0, 3, 1]
 
 
 @pytest.mark.parametrize(
-    ("seed", "nonzero", "w", "m"),
+    ("seed", "nonzero", "w", "m", "reverse"),
     [
-        (42, [0, 1, 4, 5], None, None),
-        (295, None, None, None),
-        (618, [0, 3, 5], _W618, 8),
+        (42, [0, 1, 4, 5], None, None, False),
+        (295, None, None, None, False),
+        (618, [0, 3, 5], _W618, 8, False),
+        (201, [0, 1, 2, 4, 5, 6, 7], None, None, True),
+        (529, [0, 1, 2, 4, 7], "draw", None, False),
+        (743, [0, 1, 2, 6], "draw", None, False),
     ],
 )
-def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m):
+def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, reverse):
     """PRUNE-8 uses the test of LA-4 that FWD-11 uses (#137). At seed 42 the
     term (t - x0)+·(x1 - t1)+·(x2 - t2)+ is 0 at every case, since x1 is an
     affine copy of x0 and the two hinges never overlap; LA-4 drops it (the
@@ -984,8 +987,22 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m):
     x0 exactly: the final fit raised LinAlgError, and now gives that column
     the coefficient 0, as the reference does, with the RSS of the span. At seed
     618 the first 8 terms are fitted with weights that include zeros: LA-4 is
-    decided on the weighted columns, so term 6 is dropped."""
+    decided on the weighted columns, so term 6 is dropped.
+
+    #140: the last three cases (the non-intercept terms in reverse order, and
+    weights drawn as in the adversarial review of PR #138) each keep a term
+    whose new part is 1e-16 to 1e-22 of its column (a hinge one ulp from a
+    level under a factor 1e9, u0² of a covariate with two levels), while it
+    lowers the exact RSS by 1 % to 47 %. The float column held only rounding,
+    and ``rss`` was up to 25 % below V*. The RSS meets LA-5 and the
+    coefficients are the exact least-squares ones (PRUNE-8), to 1e-12."""
     X, dirs, cuts, y = _random_terms(seed)
+    if reverse:
+        perm = np.r_[0, np.arange(len(dirs) - 1, 0, -1)]
+        dirs, cuts = dirs[perm], cuts[perm]
+    if w == "draw":
+        rng = np.random.default_rng(10_000 + seed)
+        w = rng.choice([0.0, 0.5, 1.0, 3.0], len(y), p=[0.2, 0.3, 0.3, 0.2])
     B = _terms.basis_matrix(X, dirs, cuts)
     sel = np.arange(len(dirs) if m is None else m)
     fit = pr.final_fit(B, y, sel, w, penalty=2.0, X=X, dirs=dirs, cuts=cuts)
@@ -993,5 +1010,7 @@ def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m):
     if nonzero is not None:
         assert kept.tolist() == nonzero
     Bx = _exact_basis(X, dirs, cuts)
-    rss = _exact(Bx, y, w, sel[kept])[1]
+    beta, rss = _exact(Bx, y, w, sel[kept])
     assert_la5([fit.rss], [rss], _exact(Bx, y, w, [0])[1])
+    if reverse or seed in (529, 743):
+        np.testing.assert_allclose(fit.coef[kept, 0], beta[0], rtol=1e-12)

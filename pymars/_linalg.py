@@ -949,10 +949,14 @@ class Conditioner:
             out, den = out * vals, den * d
         return out, den
 
-    def exact_residual(self, row: npt.ArrayLike, cut: npt.ArrayLike) -> FloatArray:
+    def exact_residual(
+        self, row: npt.ArrayLike, cut: npt.ArrayLike, coef: bool = False
+    ) -> FloatArray | tuple[FloatArray, list]:
         """The column of the term minus its exact w-projection on the span of
         the terms registered by ``span_append``, rounded once to float64
-        (unscaled). It spans with them what the term spans, and it is accurate
+        (unscaled); with ``coef``, also the exact coefficients of that
+        projection on the registered terms, in their order, as Fractions (0
+        for a dependent one). It spans with them what the term spans, and it is accurate
         relative to its own size, also when the term lies within rounding of
         that span in float64, where a float64 projection keeps only the
         rounding (a covariate that is a copy up to rounding of another, such
@@ -1004,7 +1008,8 @@ class Conditioner:
         for f, (c, d) in zip(beta, self._span, strict=True):
             if f:
                 z = z - (f.numerator * (den // (f.denominator * d))) * c
-        return np.array([int(x) / den for x in z])[self._inverse]
+        column = np.array([int(x) / den for x in z])[self._inverse]
+        return (column, beta) if coef else column
 
     def _u_ints(self, j: int) -> tuple:
         """u_j = x_j - m_j (as float64, which LA-4 uses) on the distinct rows of
