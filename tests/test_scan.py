@@ -115,29 +115,34 @@ def _bits(a):
 @needs_numba
 @given(
     seeds,
-    st.integers(2, 60),
+    st.integers(2, 300),
     st.integers(1, 4),
     st.integers(1, 2),
     st.booleans(),
     st.booleans(),
     st.sampled_from([0.0, 1e6]),
     st.booleans(),
+    st.sampled_from(["any", "up", "down"]),
 )
 def test_the_compiled_scan_agrees_with_the_numpy_scan(
-    seed, n, r, K, intercept, ties, shift, weighted
+    seed, n, r, K, intercept, ties, shift, weighted, order
 ):
     """``_kernels`` (T20b, K145a): ``knot_scan`` with the kernels, on rows in
     the caller's order (``_order``) and through the forward pass's store,
     agrees with the numpy scan on the gathered rows, for any order of the
-    splits, repeated splits, block sizes from n = 2 up, and weights that are
-    not integers. The sums over the columns may round differently (no
-    bit-identity, #145), so each value is within the numpy value's error
-    bound, the bounds agree to rounding, and the zero hinges are the same."""
+    splits (and the monotone orders, which ``hv`` reads with no sort),
+    repeated splits, block sizes from n = 2 up, more than one tile of rows
+    (``_kernels.TILE``), and weights that are not integers. The sums over
+    the columns may round differently (no bit-identity, #145), so each value
+    is within the numpy value's error bound, the bounds agree to rounding,
+    and the zero hinges are the same."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
     if weighted:  # b = √w with weights that are not integers: W_pre's sums round
         b = b * np.sqrt(rng.uniform(0.1, 5.0, n))
     split = rng.permutation(np.concatenate((splits, splits[: len(splits) // 2])))
+    if order != "any":
+        split = np.sort(split)[:: 1 if order == "up" else -1]
     perm = rng.permutation(n)  # row q in the order of x is row perm[q]
     Qc, Ec = np.empty_like(Q), np.empty_like(E)
     Qc[perm], Ec[perm] = Q, E
