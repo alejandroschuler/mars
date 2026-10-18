@@ -39,8 +39,11 @@ checked against FWD-4 with the rebuilt RSS; a candidate that fails is left
 out, its search is done again without it, and the step chooses again.
 
 Dependence (LA-1, LA-2, LA-4, FWD-11). A candidate's new column (b·x, a hinge)
-that LA-4's float64 test (``_linalg.dependent``) finds dependent on G counts as
-0: no linear candidate, b·x not in G, a hinge with the gain 0. The test uses
+that LA-4's float64 test (``_linalg.dependent``) finds dependent counts as 0: a
+b·x that LA-2 does not count gives no linear candidate and stays out of the set
+that LA-2 tests the hinges against and of F_{s+1}, but LA-3's G holds it in
+every pair search (#164); a dependent hinge has the gain 0 and stays out of
+F_{s+1} (FWD-13). The test uses
 the distance to G that the search has already and the uncentered √w-norm of
 the column itself (b·x, not the centered b·(x - c) of the projections). FWD-11
 is the same test on the √w-scaled columns of the terms, in their order
@@ -191,7 +194,8 @@ class _Setup(NamedTuple):
     this step (``_Pass.setup``): its kind (LA-7), the linear candidate's
     reduction (0.0 in a single-hinge search), whether LA-4 finds b·x dependent
     on B in a pair search (``dep``: it counts as 0, LA-1, LA-2, so there is no
-    linear candidate and G is B), and ‖v⊥‖ of v = √w·b·(x - c) against B."""
+    linear candidate and LA-2 tests the hinges against B, while LA-3's G still
+    holds b·x), and ‖v⊥‖ of v = √w·b·(x - c) against B."""
 
     pair: bool
     lin: float
@@ -641,20 +645,27 @@ class _Pass:
         self._scratch = (k, j, E)
         return t
 
-    def basis(self, k: int, j: int) -> tuple[FloatArray, FloatArray]:
-        """The orthonormal basis Q and the residuals E on G of the search of
-        covariate j on parent k: B, and b·x in a pair search where it counts
-        (LA-7, LA-2). The scan requires both orthogonalized to working
-        precision (``_scan.knot_scan``). When another search has used the
-        scratch column since ``setup``, q comes again from the kept
-        coefficients, with the same steps and so the same values. The arrays
-        are valid until the next search. Complexity: O(1), or O(n·(r + K))."""
+    def basis(self, k: int, j: int, la3: bool = False) -> tuple[FloatArray, FloatArray]:
+        """The orthonormal basis Q and the residuals E on the columns that LA-2
+        tests the hinges of the search of covariate j on parent k against: B,
+        and b·x in a pair search where LA-2 counts it (LA-7, LA-2). With
+        ``la3``, on LA-3's G instead, which holds b·x in every pair search,
+        also where LA-2 does not count it (#164); there q = v⊥/‖v⊥‖ is
+        orthogonalized against B once more, since ‖v⊥‖ can be far below ‖v‖.
+        The scan requires both orthogonalized to working precision
+        (``_scan.knot_scan``). When another search has used the scratch column
+        since ``setup``, q comes again from the kept coefficients, with the
+        same steps and so the same values. The arrays are valid until the next
+        search. Complexity: O(1), or O(n·(r + K))."""
         sr = self.setup(k, j)
-        if not sr.pair or sr.dep:
+        if not sr.pair or (sr.dep and not la3):
             return self.Q, self._E
         if self._scratch is None or self._scratch[:2] != (k, j):
             v, known = self._v(k, j), self._coefs.get((k, j))
-            self._extend(k, j, _linalg.cgs2(self.Q, v, known))
+            o = _linalg.cgs2(self.Q, v, known)
+            if sr.dep:
+                o = _linalg.cgs2(self.Q, o.perp / o.norm, twice=True)
+            self._extend(k, j, o)
         return self._Qbuf[:, : self._r + 1], self._scratch[2]
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
@@ -665,27 +676,34 @@ class _Pass:
         when its upper bound reaches the second largest lower bound of the
         sure candidates. Complexity: O(n·r)."""
         sr = self.setup(k, j)
-        Q, E = self.basis(k, j)
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
         bw = self._swcols[k][o]  # √w·b in the order of x
-        scan = _scan.knot_scan(
-            self.sorted_x[:, j],
-            bw,
-            Q,
-            E,
-            kc.split,
-            intercept=k == 0,
-            _checked=True,
-            _cache=self._scan_store(k, j, kc.split.shape[0]),
-            _order=o,
-            _gaps=self._gaps[j],
-        )
-        red, err = self._capped(scan.gain + sr.lin), scan.gain_err
+
+        def scan(Q, E):
+            return _scan.knot_scan(
+                self.sorted_x[:, j],
+                bw,
+                Q,
+                E,
+                kc.split,
+                intercept=k == 0,
+                _checked=True,
+                _cache=self._scan_store(k, j, kc.split.shape[0]),
+                _order=o,
+                _gaps=self._gaps[j],
+            )
+
+        sc = scan(*self.basis(k, j))
+        ratio, ratio_err = sc.ratio, sc.ratio_err
+        if sr.pair and sr.dep:  # LA-3's G holds the b·x that LA-2 left out
+            g = scan(*self.basis(k, j, la3=True))
+            ratio, ratio_err = g.ratio, g.ratio_err
+        red, err = self._capped(sc.gain + sr.lin), sc.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
         top = self.max_legal()
-        possible = (scan.ratio + scan.ratio_err >= tau) & (red + err > 0.0)
+        possible = (ratio + ratio_err >= tau) & (red + err > 0.0)
         possible &= red - err <= top
-        sure = (scan.ratio - scan.ratio_err >= tau) & (red - err > 0.0)
+        sure = (ratio - ratio_err >= tau) & (red - err > 0.0)
         sure &= red + err <= top
         for r, var, place in excluded:
             if (r, var) == (row, j) and place > 0:
@@ -708,40 +726,53 @@ class _Pass:
 
     def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
         """Pass 2: the explicit values of the knots (``_scan.exact_knot``: one
-        Gram-Schmidt of the hinge gives rho, LA-4's test of the hinge against G
-        and the reduction, 0 for a dependent hinge, LA-2), with LA-3 and FWD-4
-        decided on them; the illegal ones are left out, and the linear
-        candidates, whose values are explicit already, stay.
+        Gram-Schmidt of the hinge gives rho, LA-4's test of the hinge against
+        the columns of LA-2 and the reduction, 0 for a dependent hinge, LA-2;
+        a second one gives rho on LA-3's G where LA-2 left b·x out), with LA-3
+        and FWD-4 decided on them; the illegal ones are left out, and the
+        linear candidates, whose values are explicit already, stay.
         Complexity: O(n·(r + K)) per search and per knot."""
         out = [c for c in cands if c.kind == KIND_LINEAR]
         s, top = len(self.rss), self.max_legal()
         for k, j in sorted(
             {(c.parent, c.variable) for c in cands if c.kind != KIND_LINEAR}
         ):
-            lin = self.setup(k, j).lin
+            sr = self.setup(k, j)
             Q, E = self.basis(k, j)
+            G = self.basis(k, j, la3=True) if sr.pair and sr.dep else None
             x, b = self.X[:, j], self.cols[k]
             for c in cands:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
                 h = b * _terms.factor(_terms.PLUS, x, c.knot)
                 rho, gain = _scan.exact_knot(Q, E, h, self.w, N=self.wsum)
-                red = float(self._capped(gain + lin))
+                if G is not None:  # LA-3's G holds the b·x that LA-2 left out
+                    rho = _scan.exact_knot(*G, h, self.w, N=self.wsum)[0]
+                red = float(self._capped(gain + sr.lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
 
     def columns(self, c: _Candidate) -> FloatArray:
         """Return the √w-scaled columns that span the candidate's terms (b·x
-        before the hinge of a pair, FWD-6), without a b·x that LA-2 did not
-        count (FWD-13). Complexity: O(n)."""
+        before the hinge of a pair, FWD-6), without a column that LA-2 did not
+        count (FWD-13): a dependent b·x, and a hinge that LA-4 finds dependent
+        on the columns that LA-2 tests it against (``basis``), by the test of
+        ``_scan.exact_knot`` on the same column up to a power of 2 (#164).
+        Such a hinge adds only rounding noise to the RSS. LA-3 rejects it
+        first unless its uncentered w-norm is more than √τ·1e7, about 3e4,
+        times its centered one, since LA-3's G holds the columns that LA-2
+        tests it against. Complexity: O(n·(r + K))."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
         cols = []
         if self._spans_bx(c):
-            cols.append(self.linear_column(c.parent, c.variable))
+            cols.append(self.sw * self.linear_column(c.parent, c.variable))
         if c.kind != KIND_LINEAR:
-            cols.append(b * _terms.factor(_terms.PLUS, x, c.knot))
-        return self.sw[:, None] * np.column_stack(cols)
+            h = self.sw * (b * _terms.factor(_terms.PLUS, x, c.knot))
+            o = _linalg.cgs2(self.basis(c.parent, c.variable)[0], h)
+            if not _linalg.dependent(o.norm, o.vnorm):
+                cols.append(h)
+        return np.column_stack(cols) if cols else np.empty((len(x), 0))
 
     def _spans_bx(self, c: _Candidate) -> bool:
         """Whether b·x is among the candidate's new columns (FWD-6, LA-2)."""
@@ -900,8 +931,9 @@ class _Pass:
             self.term_at[kappa + i] = len(self.cols) - 1
             self.lam.append(math.inf)
             self.kap.append(kappa)
-        # Q holds F_{s+1} (FWD-13): ``columns`` leaves out a b·x that LA-2 did
-        # not count, so a pair of case (b) adds only its hinge's direction.
+        # Q holds F_{s+1} (FWD-13): ``columns`` leaves out a b·x or a hinge
+        # that LA-2 did not count, so a pair of case (b) adds only its hinge's
+        # direction.
         self.Q, self.E = rb.Q, rb.resid
         self.rss.append(rb.rss)
 
