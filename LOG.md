@@ -420,6 +420,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 23:00 review-124-adversarial recheck APPROVE at bc66093 (bit-equal on 500 draws, budgets 0 to 0.3, multi-response; gate B PASS). Waiting for recheck-124-spec; then rebase on 8dc9c6d and update checks.
 - 23:10 recheck-124-spec APPROVE at bc66093 (memory: main 937 vs head 1108 MB; stores 49.6 MB under the 4n(p+M) cap; hash equal). Sent f124-perf: rebase on 8dc9c6d plus three small items (budget 0.2 case, knot-cache comment, assert in the scan cache); then update checks by both.
 - 23:20 #141 round 2 at 3ed6737 (rebased on 8dc9c6d; gate B PASS): new rule, coefficient set C chosen on normalized term columns in term order by smallest singular value >= 1e-12; others 0; rss = RSS(C) (up to 3.7x the pruning value, seed 1148); no column-alone test works (seed 439). Full re-reviews sent to review-141-spec and review-141-adversarial.
+- 23:35 #141 round 2 reviews REQUEST_CHANGES (both): the fixed sigma >= 1e-12 test drops coefficients float64 carries (x0 = 1e12 + U gives R^2 0; products of 1e6-shifted factors); PRUNE-8 contradiction; rss above the pruning value breaks PRUNE-5's choice. Sent round 3 to s139-spec (benefit or a posteriori test); after round 3, re-scope if not approved.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
