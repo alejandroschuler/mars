@@ -271,6 +271,10 @@ class _Pass:
         self.spans = [self._spans(0, self.N)]
         L, E = self.spans[0]
         active = np.ones(n, dtype=bool)
+        self._knot_cache: dict = {}  # (k, j) -> the knots of term k > 0 (KNOT-7)
+        self._knot_count = 0
+        self._scan_stores: dict = {}  # (k, j) -> the store of knot_scan
+        self._scan_size = 0
         self.knots = [  # the intercept's knots, found once per covariate (KNOT-7)
             self._knots(j, active, L, E) for j in range(p)
         ]
@@ -443,14 +447,54 @@ class _Pass:
         Complexity: O(p)."""
         return np.flatnonzero(self.dirs[k] == _terms.ABSENT).tolist()
 
+    # Budgets of the two caches, in multiples of n·(p + M) (a test lowers them).
+    _KNOT_BUDGET = 1
+    _SCAN_BUDGET = 4
+
     def knots_of(self, k: int, j: int) -> _knots.KnotCandidates:
         """The candidate knots of parent k and covariate j (KNOT-1 to KNOT-3):
         the active cases of k are those where its column is positive.
-        Complexity: O(n), and O(1) for the intercept, whose knots are kept."""
+        Complexity: O(n) the first time, and O(1) for the intercept and for
+        the knots kept from an earlier step."""
         if k == 0:
             return self.knots[j]
-        L, E = self.spans[k]
-        return self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
+        kc = self._knot_cache.get((k, j))
+        if kc is None:
+            L, E = self.spans[k]
+            kc = self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
+            # A term's column and spans never change, so its knots are kept,
+            # within a budget of n·(p + M) knots (2 arrays each, the knots and the
+            # splits, so 2 values each) that keeps memory O(n·(p + M)).
+            n, p = self.X.shape
+            cap = 2 * self._KNOT_BUDGET * n * (p + len(self.cols))
+            if self._knot_count + 2 * kc.knots.size <= cap:
+                self._knot_cache[k, j] = kc
+                self._knot_count += 2 * kc.knots.size
+        return kc
+
+    def _scan_store(self, k: int, j: int, knots: int) -> tuple[dict, int] | None:
+        """The store of ``_scan.knot_scan`` for parent k and covariate j, with
+        the number of leading columns of its Q that stay the same (the columns
+        of the current basis; rebuilds only append), or None when keeping
+        them (K·(m + 3) values: hᵀq, ‖h‖², D and the zero mask) would pass a
+        budget of 4·n·(p + M) values, so that memory stays
+        O(n·(p + M)). The store changes no value (``knot_scan``).
+        Complexity: O(1)."""
+        m = self.Q.shape[1] - (k == 0)
+        store = self._scan_stores.get((k, j))
+        old = 0 if store is None else store["size"]
+        n, p = self.X.shape
+        cap = self._SCAN_BUDGET * n * (p + len(self.cols))
+        if self._scan_size - old + knots * (m + 3) > cap:
+            if store is not None:
+                del self._scan_stores[k, j]
+                self._scan_size -= old
+            return None
+        if store is None:
+            store = self._scan_stores[k, j] = {"size": 0}
+        self._scan_size += knots * (m + 3) - old
+        store["size"] = knots * (m + 3)
+        return store, m
 
     def _capped(self, red):
         """A reduction, or RSS_s where the candidate's RSS, RSS_s - red, is at
@@ -604,7 +648,14 @@ class _Pass:
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
         bw = self.sw[o] * sr.b[o]  # √w·b in the order of x
         scan = _scan.knot_scan(
-            self.sorted_x[:, j], bw, sr.Q[o], sr.E[o], kc.split, intercept=k == 0
+            self.sorted_x[:, j],
+            bw,
+            sr.Q[o],
+            sr.E[o],
+            kc.split,
+            intercept=k == 0,
+            _checked=True,
+            _cache=self._scan_store(k, j, kc.split.shape[0]),
         )
         red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s

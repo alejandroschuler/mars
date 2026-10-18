@@ -108,6 +108,9 @@ UNIT_ROUNDOFF = 2.0**-53
 #: Below this scaled ‖h‖² or D, a bound would not cover underflow: far above
 #: the subnormal range (2^-1022), so that n·2^-1022 stays below u·2^-900.
 SCALED_FLOOR = 2.0**-900
+# _suffix adds whole rows of its blocks for arrays with at least this many
+# columns (a speed choice only: both ways give the same bits).
+_WIDE = 6
 
 
 class KnotScan(NamedTuple):
@@ -156,6 +159,18 @@ def _suffix(a: FloatArray) -> FloatArray:
     nb = -(-m // B)
     rest = a.shape[1:]
     rev = np.concatenate((a[::-1], np.zeros((nb * B - m, *rest))))
+    if a.ndim == 2 and a.shape[1] >= _WIDE:
+        # The same additions in the same order, so the same bits, but one row
+        # of every block at a time: a cumsum along the strided block axis is
+        # slow, and adds of whole contiguous (nb, c) rows are not.
+        T = np.empty((B, nb, *rest))
+        np.moveaxis(T, 0, 1)[...] = rev.reshape((nb, B, *rest))
+        for i in range(1, B):
+            np.add(T[i - 1], T[i], out=T[i])
+        carry = np.zeros((nb, *rest))
+        np.cumsum(T[-1, :-1], axis=0, out=carry[1:])
+        T += carry
+        return np.moveaxis(T, 0, 1).reshape((nb * B, *rest))[:m][::-1]
     within = np.cumsum(rev.reshape((nb, B, *rest)), axis=1)
     carry = np.zeros((nb, *rest))
     np.cumsum(within[:-1, -1], axis=0, out=carry[1:])
@@ -166,11 +181,23 @@ def _products(
     g: FloatArray, b: FloatArray, V: FloatArray, split: npt.NDArray[np.int64]
 ) -> tuple[FloatArray, FloatArray]:
     """hᵀV and ‖h‖² at every split, from the gaps g (module docstring)."""
-    HV = _suffix(g[:, None] * _suffix(b[:, None] * V)[1:])
+    return _hv(g, b, V, split), _norms(g, b, split)
+
+
+def _hv(
+    g: FloatArray, b: FloatArray, V: FloatArray, split: npt.NDArray[np.int64]
+) -> FloatArray:
+    """hᵀV at every split. Each column of V is summed on its own, so a
+    column's values do not depend on the other columns."""
+    return _suffix(g[:, None] * _suffix(b[:, None] * V)[1:])[split - 1]
+
+
+def _norms(g: FloatArray, b: FloatArray, split: npt.NDArray[np.int64]) -> FloatArray:
+    """‖h‖² at every split."""
     W = _suffix(b * b)[1:]  # W(j) for j = 1..n - 1
     H = _suffix(g * W)
     F = _suffix(g * (2.0 * np.append(H[1:], 0.0) + g * W))
-    return HV[split - 1], F[split - 1]
+    return F[split - 1]
 
 
 def _centered(g: FloatArray, w: FloatArray, split: npt.NDArray[np.int64]) -> FloatArray:
@@ -244,6 +271,8 @@ def knot_scan(
     split: npt.ArrayLike,
     *,
     intercept: bool = False,
+    _checked: bool = False,
+    _cache: tuple[dict, int] | None = None,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -257,6 +286,16 @@ def knot_scan(
     is √w for the intercept parent (1 without weights), and then D comes from
     terms ≥ 0. The bounds are those of the module docstring; the caller
     applies the tolerance tau and the legality rules with them.
+    ``_checked=True`` skips the checks of ``hinge_products``, for the forward
+    pass, whose x, b and split are float64 and int64 arrays that meet them.
+    ``_cache = (store, m)``, for the forward pass, keeps in ``store`` the
+    K-vectors ‖h‖², D and the zero-hinge mask (not g and b, which cost O(n)
+    to recompute), which depend only on x, b and split, and hᵀq for the first m columns
+    of Q (after the intercept column with ``intercept=True``), which the
+    caller promises are the same at the next call with this store; a later
+    call computes hᵀq only for the other columns. Every value is the one a
+    call without the store computes, bit for bit: each column is summed on
+    its own (``_hv``).
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -266,14 +305,29 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     part = Q[:, 1:] if intercept else Q
-    x, b0, V, split = _check(x, b, np.hstack((part, E)), split)
-    g, b = _to_unit(np.diff(x)), _to_unit(b0)
-    HV, F = _products(g, b, V, split)
     k = part.shape[1]
+    if _cache is None:
+        V = np.hstack((part, E))
+        x, b0, V, split = (x, b, V, split) if _checked else _check(x, b, V, split)
+        g, b = _to_unit(np.diff(x)), _to_unit(b0)
+        HV, F = _products(g, b, V, split)
+        D = _centered(g, b * b, split) if intercept else None
+    else:  # the forward pass's own arrays, as with _checked
+        store, m = _cache
+        b0 = b
+        g, b = _to_unit(np.diff(x)), _to_unit(b0)  # O(n), not stored
+        if "F" not in store:
+            store.update(F=_norms(g, b, split), m=0)
+            store["D"] = _centered(g, b * b, split) if intercept else None
+            store["HV"] = np.empty((split.shape[0], 0))
+        F, D = store["F"], store["D"]
+        known = store["m"]
+        assert known <= m <= k, "the kept columns are a prefix of Q"
+        HV = np.hstack((store["HV"], _hv(g, b, np.hstack((part[:, known:], E)), split)))
+        store["HV"], store["m"] = HV[:, :m], m
     he = HV[:, k:]
     if intercept:
         c = HV[:, :k]
-        D = _centered(g, b * b, split)
     else:
         c0, c = HV[:, 0], HV[:, 1:k]
         D = F - c0**2
@@ -310,8 +364,12 @@ def knot_scan(
     ratio_err[lost], gain_err[lost] = np.inf, np.inf
     # h is 0 at every case, a constant column (LA-3), when no case q ≥ s has
     # b_q ≠ 0 and x_q > x_{s-1}: a count over the inputs.
-    nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
-    zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
+    zero = None if _cache is None else _cache[0].get("zero")
+    if zero is None:
+        nonzero = np.append(np.cumsum((b0 != 0.0)[::-1])[::-1], 0)
+        zero = nonzero[np.searchsorted(x, x[split - 1], side="right")] == 0
+        if _cache is not None:
+            _cache[0]["zero"] = zero
     for a in (ratio, gain, ratio_err, gain_err):
         a[zero] = 0.0
     return KnotScan(ratio, gain, ratio_err, gain_err)

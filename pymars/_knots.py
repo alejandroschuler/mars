@@ -259,23 +259,32 @@ def candidate_knots(
     # KNOT-2: one segment per run of equal x and equal activity, inactive first.
     first = np.ones(n, dtype=bool)
     first[1:] = x[1:] != x[:-1]
-    starts = np.flatnonzero(first)
-    n_active = np.add.reduceat(active.astype(np.int64), starts)
-    counts = np.column_stack((np.diff(np.append(starts, n)) - n_active, n_active))
-    if w is None:
-        weights = counts.astype(np.float64)
+    if first.all():  # distinct values: each case is its own segment
+        seg_x, seg_active = x, active
+        seg_end = np.arange(1, n + 1)
+        # W at the end of each segment (W-4); the counts are exact in float64
+        cum = np.arange(1.0, n + 1.0) if w is None else np.cumsum(w)
     else:
-        weights = np.column_stack(
-            (
-                np.add.reduceat(np.where(active, 0.0, w), starts),
-                np.add.reduceat(np.where(active, w, 0.0), starts),
+        starts = np.flatnonzero(first)
+        n_active = np.add.reduceat(active.astype(np.int64), starts)
+        counts = np.column_stack((np.diff(np.append(starts, n)) - n_active, n_active))
+        if w is None:
+            weights = counts.astype(np.float64)
+        else:
+            weights = np.column_stack(
+                (
+                    np.add.reduceat(np.where(active, 0.0, w), starts),
+                    np.add.reduceat(np.where(active, w, 0.0), starts),
+                )
             )
-        )
-    keep = counts.ravel() > 0
-    seg_x = np.repeat(x[starts], 2)[keep]
-    seg_end = np.repeat(np.append(starts[1:], n), 2)[keep]  # end of its run of x
-    seg_active = np.tile(np.array([False, True]), starts.shape[0])[keep]
-    cum = np.cumsum(weights.ravel()[keep])  # W at the end of each segment (W-4)
+        # The nonempty (run, activity) pairs in order: run = keep // 2, and
+        # activity = keep % 2 (inactive first).
+        keep = np.flatnonzero(counts.ravel() > 0)
+        run = keep >> 1
+        seg_x = x[starts[run]]
+        seg_end = np.append(starts[1:], n)[run]  # end of its run of x
+        seg_active = (keep & 1).astype(bool)
+        cum = np.cumsum(weights.ravel()[keep])  # W at the end of each segment
     G = seg_x.shape[0]
     v = seg_x[np.flatnonzero(seg_active)[-1]]
 
@@ -297,20 +306,24 @@ def candidate_knots(
     own_len = np.maximum(np.minimum(hi - 1, k_max + 1) - k0, 0)
     edge_len = ((hi - 1 >= k0) & (hi - 1 <= k_max)).astype(np.int64)
 
-    # The runs in scan order (decreasing u): for g from the top, own then edge.
-    top_down = np.arange(G - 1, -1, -1)
-    run_seg = np.column_stack((top_down, below[top_down])).ravel()
-    run_len = np.column_stack((own_len[top_down], edge_len[top_down])).ravel()
-    run_active = np.repeat(seg_active[top_down], 2)
-    run_t = seg_x[run_seg]
-    counted = np.where(run_active & (run_t < v), run_len, 0)
-    before = np.cumsum(counted) - counted
+    # The runs in scan order (decreasing u): for g from the top, its own run
+    # (t = x of g) then its edge run (t = x of below[g]), both with the
+    # activity of g. Run 2i is the own run and run 2i + 1 the edge run of
+    # g = G - 1 - i. Only the runs with counted steps move the counter, so
+    # the integer arithmetic below runs on those alone.
+    counted = np.empty(2 * G, dtype=np.int64)
+    counted[0::2] = np.where(seg_active & (seg_x < v), own_len, 0)[::-1]
+    counted[1::2] = np.where(seg_active & (seg_x[below] < v), edge_len, 0)[::-1]
+    pos = np.flatnonzero(counted)
+    cnt = counted[pos]
+    before = np.cumsum(cnt) - cnt
     # The counter hits 0 at the counted steps c0, c0 + L, c0 + 2L, …
     c0 = start_counter(N, L, E)
     first_step = np.maximum(before + 1, c0)
     hit = c0 + L * ((first_step - c0 + L - 1) // L)
-    listed = (counted > 0) & (hit <= before + counted)
-    knot_seg = run_seg[listed]
+    pos = pos[hit <= before + cnt]
+    g = G - 1 - (pos >> 1)
+    knot_seg = np.where((pos & 1) == 0, g, below[g])
     # Non-increasing along the scan; + 0.0 makes a zero knot +0.0, since the
     # sign of a zero in x can depend on the row order among equal values.
     t = seg_x[knot_seg] + 0.0

@@ -576,7 +576,7 @@ class Conditioner:
         self._mcols: dict = {}
         self._mnorms: dict = {}
         self._groups: tuple | None = None
-        self._xcols: dict = {}
+        self._uints: dict = {}
         self._grams: dict = {}
         self._icols: dict = {}
         self._wint: tuple | None = None
@@ -1006,25 +1006,20 @@ class Conditioner:
                 z = z - (f.numerator * (den // (f.denominator * d))) * c
         return np.array([int(x) / den for x in z])[self._inverse]
 
-    def _exact_column(self, e: _Element) -> list:
-        """The monomial on the distinct rows of X, as exact rationals."""
-        if e not in self._xcols:
-            Xu, Uu, _ = self._group_data()
-            col = [Fraction(1)] * len(Xu)
-            for a in e:
-                if a[1] == 0:
-                    vals = [Fraction(float(v)) for v in Uu[:, a[0]]]
-                else:
-                    j, t = self._hat[a]
-                    sign = 1 if a[1] == 1 else -1
-                    r = self._ratio(j)
-                    vals = [
-                        max(sign * (Fraction(float(v)) - Fraction(t)), Fraction(0)) / r
-                        for v in Xu[:, j]
-                    ]
-                col = [c * v for c, v in zip(col, vals, strict=True)]
-            self._xcols[e] = col
-        return self._xcols[e]
+    def _u_ints(self, j: int) -> tuple:
+        """u_j = x_j - m_j (as float64, which LA-4 uses) on the distinct rows of
+        X as (integers, denominator), exactly."""
+        if j not in self._uints:
+            Uu = self._group_data()[1]
+            self._uints[j] = self._float_ints(Uu[:, j])
+        return self._uints[j]
+
+    @staticmethod
+    def _float_ints(v: FloatArray) -> tuple:
+        """float64 values as integers over one power of 2, exactly."""
+        pairs = [float(x).as_integer_ratio() for x in v]
+        den = max(d for _, d in pairs)
+        return np.array([a * (den // d) for a, d in pairs], dtype=object), den
 
     @staticmethod
     def _dyadic(vals: list) -> tuple[FloatArray, int]:
@@ -1035,10 +1030,29 @@ class Conditioner:
         return np.array(ints, dtype=object), den
 
     def _int_column(self, e: _Element) -> tuple:
-        """A monomial on the distinct rows of X as (integers, denominator)."""
+        """A monomial on the distinct rows of X as (integers, denominator),
+        exactly: a u atom is u_j, and a hinge atom of covariate j and knot t
+        is max(±(x_j - t), 0)/2^pw, formed in integers. Complexity: O(g·d)
+        integer operations for g distinct rows and d atoms, the first time."""
         if e not in self._icols:
-            col, den = self._dyadic(self._exact_column(e))
-            self._icols[e] = (col, den)
+            g = len(self._group_data()[0])
+            out, den = np.array([1] * g, dtype=object), 1
+            for a in e:
+                if a[1] == 0:
+                    vals, d = self._u_ints(a[0])
+                else:
+                    j, t = self._hat[a]
+                    xi, dx = self._covariate_ints(j)
+                    tf = Fraction(t)
+                    d = math.lcm(dx, tf.denominator)
+                    diff = xi * (d // dx) - tf.numerator * (d // tf.denominator)
+                    if a[1] != 1:
+                        diff = -diff
+                    vals = np.array([v if v > 0 else 0 for v in diff], dtype=object)
+                    r = self._ratio(j)  # divide by 2^pw
+                    vals, d = vals * r.denominator, d * r.numerator
+                out, den = out * vals, den * d
+            self._icols[e] = (out, den)
         return self._icols[e]
 
     def _gram(self, a: _Element, b: _Element) -> Fraction:
@@ -1060,9 +1074,9 @@ class Conditioner:
         q is 0 at every case). The Gram matrix of the polynomials is C·Gm·Cᵀ
         with the cached Gram matrix Gm of their monomials, in integers over one
         denominator, and the squared distance is the Schur complement of the
-        rows in it (Gaussian elimination that skips a zero pivot).
+        rows in it (fraction-free elimination that skips a zero pivot).
         Complexity: O(K²) lookups and O(M·K²) integer operations for K monomials
-        in M rows, then O(M³) rational operations."""
+        in M rows, then O(M³) integer operations."""
         polys = [R for _, R in rows] + [N]
         mons = sorted(set().union(*polys))
         gm = [[self._gram(a, b) for b in mons] for a in mons]
@@ -1076,25 +1090,29 @@ class Conditioner:
         C = np.array(C, dtype=object)
         Gi = C @ Gm @ C.T
         n = len(polys)
-        A = [
-            [Fraction(int(Gi[i, j]), scale[i] * scale[j] * D) for j in range(n)]
-            for i in range(n)
-        ]
+        # Fraction-free (Bareiss) elimination on the integer matrix Gi, which
+        # is positive semidefinite: a zero pivot has a zero row and column at
+        # its stage, so it is skipped, as in elimination over the rationals.
+        # After the pivots I, entry (n-1, n-1) is the minor on I and n - 1,
+        # and the last pivot is the minor on I, so their ratio is the Schur
+        # complement of Gi, exactly; scaling row and column n - 1 by
+        # 1/scale[n-1] and the matrix by 1/D gives that of A.
+        M, prev = Gi.copy(), 1
         for k in range(n - 1):
-            if A[k][k] == 0:
+            pk = M[k, k]
+            if pk == 0:
                 continue
-            for i in range(k + 1, n):
-                f = A[i][k] / A[k][k]
-                if f != 0:
-                    for j in range(k + 1, n):
-                        A[i][j] -= f * A[k][j]
+            r = slice(k + 1, n)
+            M[r, r] = (pk * M[r, r] - np.outer(M[r, k], M[k, r])) // prev
+            prev = pk
+        schur = Fraction(int(M[n - 1, n - 1]), prev * scale[n - 1] ** 2 * D)
         ref = self._gram(q, q)
         if ref == 0:
             ref = sum(
                 (c * d * self._gram(a, b) for a, c in N.items() for b, d in N.items()),
                 Fraction(0),
             )
-        return ref == 0 or A[n - 1][n - 1] < Fraction(LM_TOL) ** 2 * ref
+        return ref == 0 or schur < Fraction(LM_TOL) ** 2 * ref
 
 
 def independent_terms(
