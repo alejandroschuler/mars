@@ -1678,9 +1678,11 @@ def _forward_basis_cases() -> list[Case]:
       its direction. The step-6 pair on x0 at the knot 1000000000.4358263 has
       the RSS 0.0239 on F_5 (0.0505 on the kept terms), and after step 8 the
       forward RSS is 0 while the kept terms leave 0.127.
-    - Seed 150 of #134's family (m1 = 2^26, x2 = 1e15 + k / 8), with x1
-      moved to the first column: as drawn, x1 and x0 tie at step 1 and the
-      comparison stops there.
+    - Seed 41 of #134's family (m1 = 2^26, x2 = 1e15 + k / 8, weights): the
+      best and second candidates of every step differ by at least 6e-7 of
+      the RSS, so no last bit of a BLAS or libm decides a step. Seed 150,
+      the first draw here, ties x1 and x0 to 1e-16 at step 1: on Linux the
+      two programs broke that tie differently and nothing was compared.
 
     Case (b) of FWD-13 is not here: there, x0 must enter as a linear term
     while x2 nearly equals a combination of 1 and x0, and then the
@@ -1725,9 +1727,7 @@ def _forward_basis_cases() -> list[Case]:
         None,
         kw | {"auto_linpreds": True, "minspan": None, "endspan": 1},
     )
-    drawn = _family_134(150)
-    family = dataclasses.replace(drawn, X=drawn.X[:, [1, 0, 2]])
-    return [seed1258, family]
+    return [seed1258, _family_134(41)]
 
 
 # ---------------------------------------------------------------------------
@@ -1863,9 +1863,21 @@ def test_the_forward_basis_keeps_a_direction_that_fwd_11_drops(case):
     """FWD-13 and FWD-11: both programs project each step on the forward
     basis, so the forward records and the whole fits agree at every step,
     with no near-tie stop; in seed 1258, FWD-11 drops a term after the pass,
-    and the kept terms' RSS is above the forward RSS."""
+    and the kept terms' RSS is above the forward RSS. Seed 1258 has exact
+    ties at steps 2, 3 and 7 (to 1e-14, 1e-14 and 1e-16 of the RSS), so
+    another platform may break step 7 the other way. Steps 1 to 6 hold
+    FWD-13 (the reference that rebuilds B from the kept terms already
+    chooses another candidate at step 6): they must agree on every platform,
+    and the comparisons that depend on the later steps run only when no
+    tie stopped the comparison."""
     ref = case.reference_fit()
-    assert check_forward(case).near_tie is None
+    out = check_forward(case)
+    if "1258" in case.name:
+        assert out.near_tie in (None, "gap") and out.steps >= 6
+    else:
+        assert out.near_tie is None
+    if out.near_tie is not None:
+        return
     params = _core.MarsParams(**case.params)
     fast = _core.fit_mars(case.X, case.Y, case.w, params, record_candidates=True)
     assert compare_fits(case, fast, _core.MarsFit.from_dict(ref)).near_tie is None
