@@ -457,6 +457,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 07:15 #158 round 1: spec REQUEST_CHANGES (module list misses validation/harness/compare.py); adversarial REQUEST_CHANGES (LA-5 c misses at n = 300,000, grows like sqrt(n); ordinary-data shift bound 1e4 makes kappa > 1e6 common at degree 2, 3 so comparisons stop). Sent to s157-spec-v3 with the non-blocking items.
 - 07:45 #158 round 1 at 655d16d: adversarial APPROVE (c = u cond sqrt(n) holds to n = 300,000 with margin; per-degree shift bounds keep cond under 1e6 at degrees 1 to 3; non-blocking: bounds above degree 3). Spec recheck running. #159 (K145a) ready at d9d919c (second fit 0.086/0.695/7.79 s vs main 0.130/0.804/9.39 vs earth 0.019/0.457/6.71; hash equal on both paths; gates B, C PASS; CI 13/13). Started review-159-spec (sonnet) and review-159-adversarial (opus).
 - 08:00 #158 spec recheck APPROVE; merged #158 (spec v3) as 89d4ae3. Closed #130, #139, #146, #154, #155 and PRs #147, #153 under v3's Limits. #150 stays open until C157o. Brief C157 ownership and order (o first). Starting c157o, c157r, c157f (opus).
+- 08:25 #159 APPROVE (both; adversarial: 7,560 knot_scan comparisons within bounds, 150 fits hash-equal on both paths). Merge refused: not on 89d4ae3. Sent k145a-scan a short round: rebase plus the test's zero-pattern fix; then update checks.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
