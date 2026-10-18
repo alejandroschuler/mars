@@ -487,6 +487,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 17:45 #167 update approvals (both, own posts; range-diff '=', main changed only validation/sims). Merged #167 (K145c: compiled setup, refine, search; _coefs budget) as faac561. T22b reruns the benchmark on faac561. Remaining: T22b (#170; REPORT.md needs the user, #171), K145d (step kernel for small n; optional), #164 (LA-3 G), T23, T24. Weekly about 73 %.
 - 17:55 User decisions checked in local_a59469db: executor creates REPORT.md from the draft (#171 closed); the user ran both #60 cleanups (40 GB free; noted on #60). Started f164-la3 (opus, #164) and u23-upstream (sonnet, upstream drafts).
 - 18:10 T22b done (#170): executor read and committed validation/REPORT.md from the draft as 32070e0 (gate A PASS). Bench on faac561: EarthRegressor/earth at 10k x 10 x deg 2 = 1.7 fresh, 0.95 warm; 100k 0.79 fresh, 0.70 warm; 250 20 fresh, 3.5 warm. Started review-170-spec and review-170-adversarial (opus). Opened an issue for the D6 n200 extra terms.
+- 18:35 #172 APPROVE (both; adversarial: no stale G, oracle passes, limit draws fail less than main, 8 mutants). Merged #172 (#164: LA-3's G, dependent hinge out of F_s) as 95212fa. #170 at 611c05d (adversarial's 10 points fixed); spec review running on 32070e0, then both recheck.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
