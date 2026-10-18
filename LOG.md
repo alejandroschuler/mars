@@ -500,6 +500,21 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 21:05 #177 APPROVE (both; adversarial built and installed wheel and sdist, no numeric change). Merge refused: CI fails on ubuntu Python 3.10 (the degree= TypeError test expects the class name, which 3.10 does not print). Sent r23-release: fix that test, plus classifier Beta, CITATION version, W-7 upper-edge test, from_dict format must be the int 1.
 - 21:15 #176 update APPROVE at 65a39b2 (gate B PASS). Merged #176 (ctml-skills note) as 2b6d198. T23 now: upstream drafts (#174) and the note (#176) merged; architecture reviews done; #177 release fixes in their last round. Then #25 closes and T24 (final audit).
 - 21:25 Board cleanup: closed #157 (spec v3 done), #119 (superseded by v3), #143 (T20b done), #145 (all questions answered; numba dependency moved to #175); opened #179 (later: K145d small-n kernel); #173 relabeled later. Remaining open: #177 (last round), #25 (T23, closes with #177), #26 (T24), needs-user #175, #68 (with the user's PR #64 and TOOLS-2/3 #62, #65), #60, #59; later issues.
+
+## Definition of done: evidence (T24, 2026-10-18, main 7cf85d0)
+
+1. Target layout; pip install from git without a compiler; py3-none-any wheel; dependencies: architecture review B (#25 comment 6252701540) installed from git in a fresh venv and built the wheel (py3-none-any). Dependencies are numpy, scipy, scikit-learn and numba with the platform marker, by the user's decision on #145 (the plan's item 1 text updated in #177). `import pymars as earth; earth.Earth().fit` works (review B). Open: numba as a hard dependency is a user decision (#175).
+2. parametrize_with_checks with no expected failures on scikit-learn 1.6 and the latest: review B, check_estimator on 1.6.0 and 1.9.1 (only array-api, which scikit-learn skips); gate B runs tests/test_sklearn_checks.py on every PR.
+3. Integration tests: review B ran each listed integration (Pipeline with ColumnTransformer and OneHotEncoder, GridSearchCV n_jobs=2, cross_val_predict predict_proba, Stacking, CalibratedClassifierCV, TransformedTargetRegressor, pandas names, metadata routing, pickle, clone); tests/test_integration.py in gate B.
+4. Correctness: oracle tests at the thorough profile pass in gate C on every fitting PR (last on #177's head f70d359); the fast code conforms to earth as the reference does (C07 #128, rechecked under v3 in #160 to #162); DIFFERENCES.md: 7 entries, 3 rule and 4 quirk, no bug (REPORT.md table 1.1); S15 near-tie stops 0 % in gate C (limit 5 %); invariance and weight tests in gates B and C.
+5. Speed vs earth at 10,000 x 10 x degree 2 stated: REPORT.md section 5 and validation/bench/REPORT.md (#170): 1.7x fresh, about 0.9x warm with numba; 2.6x/2.7x with the numpy fallback; target 10x met.
+6. Simulation fills every mockup, decides or narrows each claim, reports failure counts: REPORT.md (#170; T21 #168, #169): 0 failures of 94,500 + 49,440 fits; gap narrowed, parity holds with a D6 condition, sparsity holds with a D6 condition; two parity cells not decided (stated, with the optional-stopping caveat).
+7. REPORT.md, README, docs and CHANGELOG each have two agent reviews: #170 spec and adversarial reviews (two rounds); T22a docs reviewed in #125; #177 reviews for the later doc edits.
+8. CI green on main across the matrix incl. lowest-deps and the no-numba job: see the CI line below.
+9. No PR open, every task issue closed or later, needs-user listed, upstream drafts in validation/upstream/: open PR #64 is the user's own (TOOLS-2; waits for the user's push, #68); its issues #62, #65 wait with it. needs-user: #175 (glm_alpha default; numba dependency), #68, #60 (cleanup), #59; the push of the tag sim-freeze-1 (LOG 13:55). Upstream drafts: #174.
+10. Two fresh architecture reviews, every finding fixed or later: #25 comments (A and B); fixed in #177; later in #178; two items wait for the user (#175).
+11. This map; the watchdog task deleted; caffeinate stopped; final summary in the session (below).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
