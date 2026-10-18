@@ -465,7 +465,8 @@ class _Pass:
             # A term's column and spans never change, so its knots are kept,
             # within a budget of n·(p + M) knots that keeps memory O(n·(p + M)).
             n, p = self.X.shape
-            if self._knot_count + kc.knots.size <= self._KNOT_BUDGET * n * (p + len(self.cols)):
+            cap = self._KNOT_BUDGET * n * (p + len(self.cols))
+            if self._knot_count + kc.knots.size <= cap:
                 self._knot_cache[k, j] = kc
                 self._knot_count += kc.knots.size
         return kc
@@ -482,7 +483,8 @@ class _Pass:
         store = self._scan_stores.get((k, j))
         old = 0 if store is None else store["size"]
         n, p = self.X.shape
-        if self._scan_size - old + knots * (m + 3) > self._SCAN_BUDGET * n * (p + len(self.cols)):
+        cap = self._SCAN_BUDGET * n * (p + len(self.cols))
+        if self._scan_size - old + knots * (m + 3) > cap:
             if store is not None:
                 del self._scan_stores[k, j]
                 self._scan_size -= old
