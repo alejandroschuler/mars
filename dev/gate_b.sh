@@ -65,11 +65,10 @@ import importlib.metadata
 import pymars
 assert pymars.__version__ == importlib.metadata.version("mars-earth")
 assert "site-packages" in pymars.__file__, pymars.__file__
-if hasattr(pymars, "Earth"):
-    import numpy as np
-    X = np.random.default_rng(0).uniform(size=(100, 3))
-    y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
-    assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
+import numpy as np
+X = np.random.default_rng(0).uniform(size=(100, 3))
+y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
+assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
 print("smoke check passed:", pymars.__version__, pymars.__file__)
 EOF
 )

@@ -234,7 +234,7 @@ Forbidden:
 
 ### Definition of done
 
-1. `main` has only the target layout. In a fresh venv, `pip install git+https://github.com/alejandroschuler/mars` works without a compiler. The wheel is `py3-none-any` and depends only on numpy, scipy and scikit-learn, and `import pymars as earth; earth.Earth().fit(X, y)` works.
+1. `main` has only the target layout. In a fresh venv, `pip install git+https://github.com/alejandroschuler/mars` works without a compiler. The wheel is `py3-none-any` and depends only on numpy, scipy, scikit-learn and numba (`numba>=0.63; sys_platform != 'darwin' or platform_machine != 'x86_64'`, so not on Intel Macs, which run the numpy code; the user's decision on #145), and `import pymars as earth; earth.Earth().fit(X, y)` works.
 2. `parametrize_with_checks` passes for both estimators, with no expected failures, on scikit-learn 1.6 and on the latest release.
 3. The integration tests pass:
    - a Pipeline with ColumnTransformer and OneHotEncoder;
