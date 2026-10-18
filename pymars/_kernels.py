@@ -154,7 +154,9 @@ def _centered(g, w, split, Bn, Bm):
 
 
 if AVAILABLE:
-    _jit = numba.njit(cache=True, fastmath=False, nogil=True)
+    # error_model="numpy": a division by 0.0 gives inf or nan, as in numpy
+    # (an intercept parent whose w = b·b underflows to 0), not an exception.
+    _jit = numba.njit(cache=True, fastmath=False, nogil=True, error_model="numpy")
     _suffix1 = _jit(_suffix1)
     _hv = _jit(_hv)
     _norms = _jit(_norms)
@@ -166,6 +168,9 @@ def hv(g, b, Q, q0, E, o, split):
     gives for the gathered V. Complexity: O(n·c + k·log k) time, O(c + k·c)
     memory."""
     n = b.shape[0]
+    # A split outside 1..n - 1 would leave its row of the output unset; the
+    # forward pass never passes one, and hinge_products checks it.
+    assert split.size == 0 or (split.min() >= 1 and split.max() <= n - 1)
     return _hv(g, b, Q, q0, E, o, split, _blocks(n), _blocks(n - 1))
 
 

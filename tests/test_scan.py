@@ -121,17 +121,20 @@ def _bits(a):
     st.booleans(),
     st.booleans(),
     st.sampled_from([0.0, 1e6]),
+    st.booleans(),
 )
 def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
-    seed, n, r, K, intercept, ties, shift
+    seed, n, r, K, intercept, ties, shift, weighted
 ):
     """``_kernels`` changes no value (T20b): ``knot_scan`` with the kernels,
     on rows in the caller's order (``_order``) and through the forward
     pass's store, gives the bits of the numpy scan on the gathered rows, for
-    any order of the splits, repeated splits and block sizes from n = 2
-    up."""
+    any order of the splits, repeated splits, block sizes from n = 2 up,
+    and weights that are not integers."""
     x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
     rng = np.random.default_rng(seed + 3)
+    if weighted:  # b = √w with weights that are not integers: W_pre's sums round
+        b = b * np.sqrt(rng.uniform(0.1, 5.0, n))
     split = rng.permutation(np.concatenate((splits, splits[: len(splits) // 2])))
     perm = rng.permutation(n)  # row q in the order of x is row perm[q]
     Qc, Ec = np.empty_like(Q), np.empty_like(E)
@@ -171,7 +174,8 @@ def test_the_kernels_round_every_product():
     b·V = -1, and at the row before it b = V = a = 1 + 2^-30, so the suffix
     sum there is -1 + a·a: 2^-29 when the product is rounded first, as numpy
     does, and 2^-29 + 2^-60 when it is fused. The last gap is 0, so hᵀV at
-    split 2 is that sum. ‖h‖² and D are compared on the same data."""
+    split 2 is that sum. ‖h‖² and D are compared on the same data, and D
+    also on weights with trailing zeros, where it is nan."""
     a = 1.0 + 2.0**-30
     x = np.array([0.0, 1.0, 2.0, 2.0])
     b = np.array([1.0, 1.0, a, 1.0])
@@ -188,6 +192,13 @@ def test_the_kernels_round_every_product():
     assert np.array_equal(
         _bits(_kernels.centered(g, w, split)), _bits(_scan._centered(g, w, split))
     )
+    # Weights that underflow to 0 at the last rows: a division by 0 gives
+    # nan, as in numpy, not an exception (numba's error_model="numpy").
+    w = np.array([1.0, 1.0, 0.0, 0.0])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        want = _scan._centered(g, w, split)
+    assert np.isnan(want).any()
+    assert np.array_equal(_bits(_kernels.centered(g, w, split)), _bits(want))
 
 
 def _pair_basis(x, extra):
