@@ -322,6 +322,7 @@ def knot_scan(
             store["HV"] = np.empty((split.shape[0], 0))
         F, D = store["F"], store["D"]
         known = store["m"]
+        assert known <= m <= k, "the kept columns are a prefix of Q"
         HV = np.hstack((store["HV"], _hv(g, b, np.hstack((part[:, known:], E)), split)))
         store["HV"], store["m"] = HV[:, :m], m
     he = HV[:, k:]

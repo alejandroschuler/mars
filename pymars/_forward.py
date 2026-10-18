@@ -463,12 +463,13 @@ class _Pass:
             L, E = self.spans[k]
             kc = self._knots(j, self.cols[k][self.order[:, j]] > 0.0, L, E)
             # A term's column and spans never change, so its knots are kept,
-            # within a budget of n·(p + M) knots that keeps memory O(n·(p + M)).
+            # within a budget of n·(p + M) knots (2 arrays each, the knots and the
+            # splits, so 2 values each) that keeps memory O(n·(p + M)).
             n, p = self.X.shape
-            cap = self._KNOT_BUDGET * n * (p + len(self.cols))
-            if self._knot_count + kc.knots.size <= cap:
+            cap = 2 * self._KNOT_BUDGET * n * (p + len(self.cols))
+            if self._knot_count + 2 * kc.knots.size <= cap:
                 self._knot_cache[k, j] = kc
-                self._knot_count += kc.knots.size
+                self._knot_count += 2 * kc.knots.size
         return kc
 
     def _scan_store(self, k: int, j: int, knots: int) -> tuple[dict, int] | None:

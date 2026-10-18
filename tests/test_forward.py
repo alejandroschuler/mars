@@ -1206,7 +1206,7 @@ def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, sh
     assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate
 
 
-@pytest.mark.parametrize("budget", [0, 0.05])
+@pytest.mark.parametrize("budget", [0, 0.05, 0.2])
 def test_a_forward_pass_past_its_cache_budgets_is_the_same(budget, monkeypatch):
     """T20: past its budgets (kept knots, kept scan sums) a search recomputes
     in full, so the fit is bit-equal to the fit with the default budgets."""
