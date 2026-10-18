@@ -545,6 +545,172 @@ class TestLinearAlgebra:
 
 
 # ---------------------------------------------------------------------------
+# LA-4's coefficient set C [LA-4, PRUNE-8, #139]
+
+
+def issue139(seed):
+    """#139's draws (PR #141): 12 to 29 cases of four covariates on a few
+    levels, x1 a copy of x0 (one or two ulps off at some cases when seed % 4
+    is 1 or 2), each shifted by 1e3 to 1e10; 5 to 9 random terms with knots
+    at a value or one ulp from it; y normal."""
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(12, 30))
+    a = np.floor(rng.uniform(size=(n, 3)) * rng.integers(2, 5)) / 4
+    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
+    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10, 1e4], 4)
+    if seed % 4 == 1:
+        i = int(rng.integers(n))
+        X[i, 1] = np.nextafter(X[i, 1], rng.choice([-np.inf, np.inf]))
+    elif seed % 4 == 2:
+        for i in rng.choice(n, 2, replace=False):
+            X[i, 1] = np.nextafter(X[i, 1], np.inf)
+    M = int(rng.integers(5, 10))
+    dirs = rng.integers(-1, 3, size=(M, 4)).astype(np.int8)
+    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
+    dirs[0] = 0
+    cuts = np.zeros((M, 4))
+    for r in range(M):
+        for j in range(4):
+            if dirs[r, j] in (1, -1):
+                v = X[rng.integers(n), j]
+                cuts[r, j] = v + rng.choice([0, 0, np.spacing(v), -np.spacing(v)])
+    return X, dirs, cuts, rng.normal(size=(n, 1))
+
+
+def coefficient_rule(cols, Y, w):
+    """LA-4's rule written out directly, for comparison: for each set, the
+    normal equations in fractions on the w-centered responses, the RSS from
+    the residuals and eta with float square roots. Returns C, the exact
+    coefficients on C (the mean added to the intercept's) and RSS(C)."""
+    W = [Fraction(float(v)) for v in w]
+    cols = [[Fraction(v) for v in c] for c in cols]
+
+    def dot(a, b):
+        return sum((x * y * z for x, y, z in zip(W, a, b, strict=True)), Fraction(0))
+
+    def fit(G, Yc):
+        A = [[dot(a, b) for b in G] for a in G]
+        betas, total = [], Fraction(0)
+        for y in Yc:
+            beta = ref._solve_exact(A, [dot(a, y) for a in G])
+            r = [
+                v - sum(b * g[i] for b, g in zip(beta, G, strict=True))
+                for i, v in enumerate(y)
+            ]
+            betas.append(beta)
+            total += dot(r, r)
+        return betas, total
+
+    Ys = [[Fraction(float(v)) for v in Y[:, k]] for k in range(Y.shape[1])]
+    means = [dot(cols[0], y) / dot(cols[0], cols[0]) for y in Ys]
+    Yc = [[v - m for v in y] for y, m in zip(Ys, means, strict=True)]
+    C = [0]
+    rss_c = fit([cols[0]], Yc)[1]
+    for k in range(1, len(cols)):
+        G = [cols[j] for j in C] + [cols[k]]
+        try:
+            betas, rss_k = fit(G, Yc)
+        except ValueError:  # singular: k is in the span of C
+            continue
+        eta_sq = sum(
+            (
+                2.0**-53
+                * sum(
+                    abs(float(b)) * math.sqrt(dot(g, g))
+                    for b, g in zip(beta, G, strict=True)
+                )
+            )
+            ** 2
+            for beta in betas
+        )
+        if rss_c - rss_k > eta_sq:
+            C.append(k)
+            rss_c = rss_k
+    betas, rss_c = fit([cols[j] for j in C], Yc)
+    for beta, m in zip(betas, means, strict=True):
+        beta[0] += m
+    return C, betas, rss_c
+
+
+class TestCoefficientSet:
+    @pytest.mark.parametrize(
+        ("seed", "out", "rss"),
+        [
+            (37, [], 3.932628199),  # coefficients up to -1.6e13, all in C
+            (49, [], 4.484472924),  # the old reference gave term 5 a 0
+            (57, [], 7.216841675),  # likewise term 4
+            (173, [4, 5], 26.42424332),  # LA-1 gives 23.75
+            (295, [6], 9.107607158),  # term 6 is 1e10 times the intercept
+            (406, [5], 12.95968183),
+            (439, [6], 7.890869521),
+        ],
+    )
+    def test_the_draws_of_issue_139(self, seed, out, rss):
+        # the terms that LA-4 keeps on #139's draws, with the values that PR
+        # #141 reports: the terms that C leaves out and RSS(C); the
+        # coefficients are the exact ones on C, rounded once, and rss is
+        # RSS(C) rounded once; the exact columns are formed independently of
+        # the Atoms [LA-4, PRUNE-8]
+        X, dirs, cuts, Y = issue139(seed)
+        w = np.ones(len(X))
+        cond = ref.Conditioned(X, dirs, cuts, None, ref.Atoms(X), w)
+        coef, keep, rule = cond.coef(range(len(dirs)), Y, w)
+        kept = np.flatnonzero(keep)
+        B = exact_basis(X, dirs[kept], cuts[kept])
+        cols = [[row[k] for row in B] for k in range(len(kept))]
+        assert cols == [cond.exact_column(k) for k in kept]
+        C, betas, rss_c = coefficient_rule(cols, Y, w)
+        assert kept[~rule.joined].tolist() == out
+        assert np.flatnonzero(rule.joined).tolist() == C
+        # term 6 of seed 295 is in the span of C: gain 0, a near-tie
+        assert rule.near_tie.tolist() == [
+            seed == 295 and k == 4 for k in range(len(kept))
+        ]
+        expected = np.zeros((len(dirs), 1))
+        expected[kept[C], 0] = [float(b) for b in betas[0]]
+        np.testing.assert_array_equal(coef, expected)
+        assert rule.rss == float(rss_c)
+        assert rule.rss == pytest.approx(rss, rel=1e-9)
+
+    @pytest.mark.parametrize(
+        ("m", "weighted", "joined"),
+        [(1e11, False, True), (1e14, True, True), (4e15, False, False)],
+    )
+    def test_a_shifted_linear_column_and_a_constant_response(self, m, weighted, joined):
+        # x0 = m + U, y = x0 - m (PR #141's review): x0 joins C up to about
+        # m = 1e15 and leaves at 4e15, where the intercept's coefficient
+        # -m costs more than x0's gain. A second response constant at 2^50
+        # changes nothing, since the rule works on the w-centered responses
+        # [LA-4]; integer weights give the result of repeated rows
+        rng = np.random.default_rng(0)
+        x0 = m + rng.uniform(size=200)
+        Y = np.column_stack([x0 - m, np.full(200, 2.0**50)])
+        w = rng.integers(1, 4, size=200).astype(float) if weighted else np.ones(200)
+        cols = [np.ones(200), x0]
+        rule = ref.coefficient_set(cols, Y, w)
+        assert rule.joined.tolist() == [True, joined]
+        assert not rule.near_tie.any()
+        C, betas, rss_c = coefficient_rule(cols, Y, w)
+        assert np.flatnonzero(rule.joined).tolist() == C
+        np.testing.assert_array_equal(
+            rule.coef[C], np.array([[float(b) for b in beta] for beta in betas]).T
+        )
+        assert rule.rss == float(rss_c)
+        if joined:
+            assert rule.rss == 0.0
+            np.testing.assert_array_equal(rule.coef[:, 0], [-m, 1.0])
+        if weighted:
+            reps = w.astype(int)
+            repeated = ref.coefficient_set(
+                [np.repeat(c, reps) for c in cols],
+                np.repeat(Y, reps, axis=0),
+                np.ones(reps.sum()),
+            )
+            np.testing.assert_array_equal(repeated.coef, rule.coef)
+            assert repeated.joined.tolist() == rule.joined.tolist()
+
+
+# ---------------------------------------------------------------------------
 # Dependence after the exact shift [LA-1, LA-2, LA-4, FWD-11]
 
 
