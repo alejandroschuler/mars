@@ -56,7 +56,12 @@ of the scan can exceed LA-5. ``knot_scan`` therefore returns with each value
 a bound on its error: the worst-case first-order rounding of the sums, plus
 the departure of Q and E from exact orthonormality and orthogonality, which
 the caller guarantees (the preconditions ‖QᵀQ - I‖₂ ≤ (r + 1)·gamma_n and
-‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖, which Gram-Schmidt applied twice gives); the bound
+‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖). The forward pass meets them with Gram-Schmidt
+twice for the columns of its basis, and for a pair search's b·x with one pass
+when that pass keeps more than half of ‖v‖² and a second otherwise (DGKS),
+whose departure is a small multiple of r·u, far inside the margin;
+``test_every_scan_gets_q_and_e_that_meet_its_preconditions`` checks the
+margin on the oracle's draws. The bound
 is doubled for the second-order terms. It bounds the distance from exact
 arithmetic on the given Q and E, not the rounding that Q and E carry as a
 basis and residuals of the data, which is far inside LA-5. The caller decides
@@ -93,7 +98,6 @@ Public names, for ``_forward``:
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
 from typing import NamedTuple
 
 import numpy as np
@@ -129,16 +133,12 @@ class KnotScan(NamedTuple):
 
 class Rebuild(NamedTuple):
     """``rebuild``: ``Q`` with the new orthonormal columns appended, the
-    residuals ``resid`` (n, K) of the responses on it, ``rss``, their sum of
-    squares (LA-1), and ``kappa``, the largest ratio of a new column's size
-    (``sizes``, a bound on the magnitude of its entries) to the norm of its
-    part orthogonal to the earlier columns: the loss of digits in the new
-    directions (LA-4's error bound), 1.0 without ``sizes``."""
+    residuals ``resid`` (n, K) of the responses on it, and ``rss``, their sum
+    of squares (LA-1)."""
 
     Q: FloatArray
     resid: FloatArray
     rss: float
-    kappa: float = 1.0
 
 
 def _gamma(k: float) -> float:
@@ -242,6 +242,12 @@ def _to_unit(a: FloatArray) -> FloatArray:
     return np.ldexp(a, -int(np.frexp(top)[1])) if top > 0.0 else a
 
 
+def unit_gaps(x: FloatArray) -> FloatArray:
+    """The gaps diff(x) of a sorted x, times the power of 2 that puts the
+    largest in [0.5, 1), as ``knot_scan`` uses them. Complexity: O(n)."""
+    return _kernels.unit(x, True) if _kernels.ENABLED else _to_unit(np.diff(x))
+
+
 def _check(
     x: npt.ArrayLike, b: npt.ArrayLike, V: npt.ArrayLike, split: npt.ArrayLike
 ) -> tuple[FloatArray, FloatArray, FloatArray, npt.NDArray[np.int64]]:
@@ -293,6 +299,7 @@ def knot_scan(
     _checked: bool = False,
     _cache: tuple[dict, int] | None = None,
     _order: npt.NDArray[np.int64] | None = None,
+    _gaps: FloatArray | None = None,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -319,7 +326,9 @@ def knot_scan(
     in the caller's order and that row q in the order of x is row
     ``_order[q]``; the compiled scan (``_kernels``) then reads Q at those
     rows without a gathered copy. The compiled and the numpy scan
-    agree within the error bounds (``_kernels``).
+    agree within the error bounds (``_kernels``). ``_gaps``, for the forward pass, is
+    ``unit_gaps(x)``, which depends on x alone, so the pass keeps it per
+    covariate.
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -339,7 +348,10 @@ def knot_scan(
     if _cache is None and not _checked:
         x, b, _, split = _check(x, b, np.hstack((Q[:, q0:], E)), split)
     b0 = b
-    g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
+    if _gaps is not None:
+        g, b = _gaps, (_kernels.unit(b0, False) if fast else _to_unit(b0))
+    else:
+        g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
     if _cache is None:
         HV = _scan_hv(g, b, Q, q0, E, o, split)
         F = _scan_norms(g, b, split)
@@ -426,35 +438,53 @@ def _finish(HV, F, D, intercept, k, r, e2, x, b0, split, cst) -> KnotScan:
 
 
 def exact_knot(
-    Q: npt.ArrayLike, E: npt.ArrayLike, h: npt.ArrayLike, w: npt.ArrayLike | None = None
+    Q: npt.ArrayLike,
+    E: npt.ArrayLike,
+    h: npt.ArrayLike,
+    w: npt.ArrayLike | None = None,
+    *,
+    N: float | None = None,
 ) -> tuple[float, float]:
     """Return rho (LA-3) and the RSS reduction (LA-2) of one hinge column,
     computed from the column itself.
 
     Q (n, r) is the √w-scaled orthonormal basis of G, with the intercept, and E
     (n,) or (n, K) the √w-scaled residuals on G; h (n,) is the unscaled hinge
-    column and w the weights, or None. rho is
-    ``_linalg.collinearity_ratio(Q, h, w)``; the reduction is Σ_k (qᵀE_k)², with
-    q the unit vector of √w·h orthogonalized twice against Q
-    (``_linalg.gram_schmidt``), so the residuals' own departure from QᵀE = 0
-    does not enter; it is 0.0 when that part is exactly 0. For a column that
-    lies in the span only up to rounding the reduction is rounding noise, as
-    in ``rebuild``, so the caller decides LA-3 on rho first.
+    column and w the weights, or None; N is Σw (``math.fsum(w)`` when None).
+    One Gram-Schmidt of √w·h against Q (``_linalg.cgs2``) gives all three
+    values: rho = ‖h⊥‖²/‖h - h̄‖_w², as ``_linalg.collinearity_ratio`` gives it
+    (0.0 for an h that is constant over the cases); LA-4's test of h against G
+    (``_linalg.dependent`` on ‖h⊥‖ and ‖√w·h‖); and the reduction Σ_k (qᵀE_k)²
+    with q = h⊥/‖h⊥‖, so the residuals' own departure from QᵀE = 0 does not
+    enter. A dependent h has the reduction 0.0 (LA-2), so the rounding noise of
+    a column in the span never counts. h is first multiplied by a power of 2,
+    which changes none of the values and keeps the sums of squares in range.
     Complexity: O(n·(r + K)).
     """
     Q = np.asarray(Q, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
-    rho = _linalg.collinearity_ratio(Q, h, w)
-    v = h if w is None else np.sqrt(np.asarray(w, dtype=np.float64)) * h
-    q = _linalg.gram_schmidt(Q, v).q
-    return rho, 0.0 if q is None else float(np.sum(np.square(q @ E)))
+    E = np.asarray(E, dtype=np.float64)
+    wv = np.ones(h.shape[0]) if w is None else np.asarray(w, dtype=np.float64)
+    cases = h if w is None else h[wv > 0.0]
+    if cases.size == 0 or np.all(cases == cases[0]):
+        return 0.0, 0.0  # constant over the cases: LA-3 rejects it
+    hs = _to_unit(h if w is None else np.where(wv > 0.0, h, 0.0))  # W-3
+    N = math.fsum(wv) if N is None else N
+    d = hs - float(wv @ hs) / N
+    centered = float(wv @ (d * d))
+    o = _linalg.cgs2(Q, hs if w is None else np.sqrt(wv) * hs)
+    rho = o.norm**2 / centered if centered > 0.0 else 0.0
+    if _linalg.dependent(o.norm, o.vnorm):
+        return rho, 0.0
+    return rho, float(np.sum(np.square(o.perp @ E))) / o.norm**2
 
 
 def rebuild(
     Q: npt.ArrayLike,
     Y: npt.ArrayLike,
     columns: npt.ArrayLike,
-    sizes: Sequence[float] | None = None,
+    *,
+    _buffer: FloatArray | None = None,
 ) -> Rebuild | None:
     """Append the chosen candidate's columns to Q; return None when the part of
     a column orthogonal to the others is exactly 0.
@@ -462,25 +492,29 @@ def rebuild(
     ``columns`` (n, a) are the new columns in the order of FWD-6's span (b·x
     before the hinge of a pair), √w-scaled in weighted fits. Each is
     orthogonalized twice against Q and the columns before it
-    (``_linalg.gram_schmidt``). A column that lies in the span only up to
-    rounding gets a unit vector of rounding noise, so the caller tests a
-    hinge with LA-3 first. Y (n,) or (n, K) are the responses, centered
-    (√w·(Y - Ȳ_w) with weights): the residuals come from Y again,
-    orthogonalized twice, so rounding does not build up over the steps, but a
-    large mean of Y would keep the rounding of its projection. ``sizes`` (a
-    values) bound the entries of the new columns, for ``Rebuild.kappa``.
+    (``_linalg.cgs2``). A column that lies in the span only up to rounding
+    gets a unit vector of rounding noise, so the caller tests a hinge with
+    LA-3 first. Y (n,) or (n, K) are the responses, centered (√w·(Y - Ȳ_w)
+    with weights): the residuals come from Y again, orthogonalized twice, so
+    rounding does not build up over the steps, but a large mean of Y would
+    keep the rounding of its projection. ``_buffer``, for the forward pass, is
+    an (n, c) C-order array, c ≥ r + a: Q and the new columns go into it, and
+    ``Rebuild.Q`` is a view of it.
     Complexity: O(n·(r + a)·(a + K)) time, O(n·(r + a + K)) memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
     columns = np.asarray(columns, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
-    kappa = 1.0
-    for i, v in enumerate(columns.T):
-        gs = _linalg.gram_schmidt(Q, v)
-        if gs.q is None:
+    n, r = Q.shape
+    a = columns.shape[1]
+    if _buffer is None:
+        _buffer = np.empty((n, r + a))
+    _buffer[:, :r] = Q
+    for i in range(a):
+        o = _linalg.cgs2(_buffer[:, : r + i], columns[:, i], twice=True)
+        if o.norm == 0.0:
             return None
-        if sizes is not None:
-            kappa = max(kappa, sizes[i] / gs.norm)
-        Q = np.column_stack((Q, gs.q))
+        _buffer[:, r + i] = o.perp / o.norm
+    Q = _buffer[:, : r + a]
     resid, _ = _linalg.orthogonalize(Q, Y[:, None] if Y.ndim == 1 else Y)
-    return Rebuild(Q, resid, float(np.sum(resid * resid)), kappa)
+    return Rebuild(Q, resid, float(np.sum(resid * resid)))

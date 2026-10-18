@@ -120,6 +120,52 @@ def test_gram_schmidt_without_q_and_for_a_zero_column():
         la.gram_schmidt(np.zeros((3, 0)), np.zeros((3, 1)))
 
 
+@given(
+    seed=seeds,
+    n=st.integers(4, 40),
+    r=st.integers(0, 6),
+    a=st.integers(0, 6),
+    eps=st.sampled_from([10.0, 1.0, 1e-3, 1e-9]),
+)
+def test_cgs2_with_kept_coefficients_leaves_v_orthogonal(seed, n, r, a, eps):
+    """LA-1 and the plan's "Fast path": ``cgs2`` of v against Q, given Qᵀv for
+    the leading a columns from an earlier call, gives v⊥ orthogonal to Q to
+    working precision, with Q·total + v⊥ = v and the norms of v and v⊥, also
+    for a v whose part orthogonal to Q is eps of its norm, where the DGKS
+    second pass runs. The compiled kernel, its Python source and the numpy
+    form (the nonumba job) agree, and the kept coefficients change nothing."""
+    rng = np.random.default_rng(seed)
+    r, a = min(r, n - 1), min(a, r, n - 1)
+    Q = np.linalg.qr(rng.standard_normal((n, r)))[0]
+    v = Q @ rng.uniform(1.0, 2.0, r) + eps * _unit_orthogonal(rng, Q)
+    Qf, vf = _frozen(Q, v)
+    K = la._kernels
+    forms = ["numpy", "compiled", "source"] if K.AVAILABLE else ["numpy"]
+    out = []
+    for form in forms:
+        saved = K.ENABLED, K._first, K._project, K._cgs2
+        K.ENABLED = form != "numpy"
+        if form == "source":  # the kernels' Python source, under the interpreter
+            K._first, K._project = K._first.py_func, K._project.py_func
+            K._cgs2 = K._cgs2.py_func
+        try:
+            full = la.cgs2(Qf, vf, twice=False)
+            kept = la.cgs2(Qf, vf, full.coef[:a])
+        finally:
+            K.ENABLED, K._first, K._project, K._cgs2 = saved
+        for o in (full, kept):
+            assert np.abs(Q.T @ o.perp).max(initial=0.0) <= 1e-13 * o.norm
+            np.testing.assert_allclose(Q @ o.total + o.perp, v, rtol=0, atol=1e-14 * 4)
+            assert o.norm == pytest.approx(np.linalg.norm(o.perp), rel=1e-14)
+            assert o.vnorm == pytest.approx(np.linalg.norm(v), rel=1e-14)
+        assert full.norm == pytest.approx(eps if r else np.linalg.norm(v), rel=1e-6)
+        if eps == 10.0:  # DGKS: one pass, since ‖v⊥‖² > ‖v‖²/2 (r ≥ 1 too)
+            np.testing.assert_array_equal(full.total, full.coef)
+        np.testing.assert_allclose(kept.perp, full.perp, rtol=0, atol=1e-15 * 4)
+        out.append(full)
+    np.testing.assert_allclose(out[0].perp, out[-1].perp, rtol=0, atol=1e-15 * 4)
+
+
 # The collinearity test (LA-3)
 
 
