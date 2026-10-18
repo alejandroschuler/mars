@@ -459,6 +459,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 08:00 #158 spec recheck APPROVE; merged #158 (spec v3) as 89d4ae3. Closed #130, #139, #146, #154, #155 and PRs #147, #153 under v3's Limits. #150 stays open until C157o. Brief C157 ownership and order (o first). Starting c157o, c157r, c157f (opus).
 - 08:25 #159 APPROVE (both; adversarial: 7,560 knot_scan comparisons within bounds, 150 fits hash-equal on both paths). Merge refused: not on 89d4ae3. Sent k145a-scan a short round: rebase plus the test's zero-pattern fix; then update checks.
 - 08:40 #161 (C157r) draft at 610afee: reference 2230 -> 1540 lines; float64 LA-4 (1e-7), pivoted Householder QR, LA-6 centering; earth conformance 148 passed, no new difference. Its API change breaks tests in test_linalg.py and test_oracle.py, so the order is #160 (C157o, against current main), then #161 rebased with the forced edits in those two files, then C157f. Told all three authors.
+- 09:05 #159 update approvals (both, own posts) at 3a765ef. Merged #159 (K145a, compiled scan bounds and masks) as d718aab.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
