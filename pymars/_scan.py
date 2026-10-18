@@ -237,6 +237,12 @@ def _to_unit(a: FloatArray) -> FloatArray:
     return np.ldexp(a, -int(np.frexp(top)[1])) if top > 0.0 else a
 
 
+def unit_gaps(x: FloatArray) -> FloatArray:
+    """The gaps diff(x) of a sorted x, times the power of 2 that puts the
+    largest in [0.5, 1), as ``knot_scan`` uses them. Complexity: O(n)."""
+    return _kernels.unit(x, True) if _kernels.ENABLED else _to_unit(np.diff(x))
+
+
 def _check(
     x: npt.ArrayLike, b: npt.ArrayLike, V: npt.ArrayLike, split: npt.ArrayLike
 ) -> tuple[FloatArray, FloatArray, FloatArray, npt.NDArray[np.int64]]:
@@ -288,6 +294,7 @@ def knot_scan(
     _checked: bool = False,
     _cache: tuple[dict, int] | None = None,
     _order: npt.NDArray[np.int64] | None = None,
+    _gaps: FloatArray | None = None,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -314,7 +321,9 @@ def knot_scan(
     in the caller's order and that row q in the order of x is row
     ``_order[q]``; the compiled scan (``_kernels``) then reads Q at those
     rows without a gathered copy. The compiled and the numpy scan
-    agree within the error bounds (``_kernels``).
+    agree within the error bounds (``_kernels``). ``_gaps``, for the forward pass, is
+    ``unit_gaps(x)``, which depends on x alone, so the pass keeps it per
+    covariate.
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -334,7 +343,10 @@ def knot_scan(
     if _cache is None and not _checked:
         x, b, _, split = _check(x, b, np.hstack((Q[:, q0:], E)), split)
     b0 = b
-    g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
+    if _gaps is not None:
+        g, b = _gaps, (_kernels.unit(b0, False) if fast else _to_unit(b0))
+    else:
+        g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
     if _cache is None:
         HV = _scan_hv(g, b, Q, q0, E, o, split)
         F = _scan_norms(g, b, split)

@@ -273,7 +273,12 @@ class _Pass:
         self.order = np.argsort(X, axis=0, kind="stable")
         self.sorted_x = np.take_along_axis(X, self.order, axis=0)
         self.center = self.sorted_x[n // 2]  # a data value (FWD-10)
+        # O(n·p), once: x - c with contiguous columns, and the scan's gaps
+        self._xc = np.asfortranarray(X - self.center)
+        self._gaps = [_scan.unit_gaps(self.sorted_x[:, j]) for j in range(p)]
         self.cols = [np.ones(n)]
+        self._swcols = [self.sw]  # √w·b of each term, O(n·M)
+        self._bx_norms: dict = {}  # (k, j) -> ‖√w·b·x‖, which never changes
         self.degree = [0]
         self.spans = [self._spans(0, self.N)]
         L, E = self.spans[0]
@@ -296,6 +301,7 @@ class _Pass:
         self._setups: dict = {}  # (k, j) -> _Setup of this step
         self._scratch: tuple | None = None  # (k, j, E) of the q in column r
         self._E, _ = _linalg.orthogonalize(self.Q, self.Yw)
+        self._e2: FloatArray | None = None  # ‖E_k‖², when a pair search needs it
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
@@ -335,7 +341,7 @@ class _Pass:
 
     @E.setter
     def E(self, E: FloatArray) -> None:  # noqa: N802
-        self._E = E
+        self._E, self._e2 = E, None
         self._setups, self._scratch = {}, None
 
     def _reserve(self, width: int) -> None:
@@ -567,7 +573,7 @@ class _Pass:
     def _v(self, k: int, j: int) -> FloatArray:
         """v = √w·b·(x_j - c_j), the √w-scaled ``linear_column``, in the
         product order (√w·b)·(x - c). Complexity: O(n)."""
-        return self.sw * self.cols[k] * (self.X[:, j] - self.center[j])
+        return self._swcols[k] * self._xc[:, j]
 
     def setup(self, k: int, j: int) -> _Setup:
         """The search of covariate j on parent k: Gram-Schmidt of
@@ -590,7 +596,10 @@ class _Pass:
         pair = o.norm > 0.0 and _linalg.pair_search(o.norm**2, self.variances[V])
         dep, lin = False, 0.0
         if pair:
-            norm = float(np.linalg.norm(self.sw * self.cols[k] * self.X[:, j]))
+            norm = self._bx_norms.get((k, j))
+            if norm is None:
+                norm = float(np.linalg.norm(self._swcols[k] * self.X[:, j]))
+                self._bx_norms[k, j] = norm
             dep = _linalg.dependent(o.norm, norm)  # LA-2: b·x counts as 0
             if not dep:
                 lin = float(self._capped(float(np.sum(self._extend(k, j, o) ** 2))))
@@ -608,7 +617,9 @@ class _Pass:
         q = o.perp / o.norm
         E, t = _linalg.remove_direction(q, self._E)
         self._Qbuf[:, self._r] = q
-        if np.any(2.0 * np.sum(E * E, axis=0) < np.sum(self._E * self._E, axis=0)):
+        if self._e2 is None:
+            self._e2 = np.einsum("ik,ik->k", self._E, self._E)
+        if np.any(2.0 * np.einsum("ik,ik->k", E, E) < self._e2):
             E = _linalg.orthogonalize(self._Qbuf[:, : self._r + 1], self._E)[0]
         self._scratch = (k, j, E)
         return t
@@ -638,7 +649,7 @@ class _Pass:
         sr = self.setup(k, j)
         Q, E = self.basis(k, j)
         o, kc, row = self.order[:, j], self.knots_of(k, j), self.rows[k]
-        bw = self.sw[o] * self.cols[k][o]  # √w·b in the order of x
+        bw = self._swcols[k][o]  # √w·b in the order of x
         scan = _scan.knot_scan(
             self.sorted_x[:, j],
             bw,
@@ -649,6 +660,7 @@ class _Pass:
             _checked=True,
             _cache=self._scan_store(k, j, kc.split.shape[0]),
             _order=o,
+            _gaps=self._gaps[j],
         )
         red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
@@ -858,6 +870,7 @@ class _Pass:
             self.index[self._row_key(d, k)] = len(self.cols)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
+            self._swcols.append(col if self.w is None else self.sw * col)
             self.degree.append(self.degree[c.parent] + 1)
             active = col > 0.0  # KNOT-1; N_b is the weight of these cases (W-4)
             Nb = float(np.count_nonzero(active)) if self.w is None else None

@@ -464,6 +464,14 @@ def centered(g, w, split):
     return _centered(g, w, split, _blocks(n), _blocks(n - 1))
 
 
+def unit(a, gaps):
+    """``_scan._to_unit`` of diff(a) when ``gaps``, else of a, in one compiled
+    pass. Complexity: O(n)."""
+    out = np.empty(a.shape[0] - 1 if gaps else a.shape[0])
+    _scale(a, out, 1 if gaps else 0)
+    return out
+
+
 def prep(x, b0):
     """``_scan._to_unit`` of diff(x) and of b0, in one compiled pass. The
     scaling is by a power of 2, so the values are those of the numpy code.
