@@ -10,7 +10,7 @@ Version 2 is a rewrite. The fitting code follows a written specification, [docs/
 pip install git+https://github.com/alejandroschuler/mars
 ```
 
-The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), so pymars does not install numba there and runs the slower numpy code, which gives the same models.
+The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), so pymars does not install numba there and runs the slower numpy code. The two give the same models up to rounding, so they can differ only at near-ties, where two candidates are equal up to rounding.
 
 ## Regression
 
@@ -77,9 +77,11 @@ Columns of strings or categories raise an error that names `OneHotEncoder`; [doc
 
 ## Status and validation
 
-Two implementations of the specification exist: the fast code in `pymars/`, and a slow reference in `tests/reference/` that an agent wrote from the specification alone. The reference is compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws; every difference found there has a label, and none is a bug. Those counts are from the reference at commit 2a00063 of `main`. The fast code is compared with the reference by the oracle tests, and its direct comparison with earth is pending (C07); T22b updates this text after it. [docs/differences.md](docs/differences.md) lists the differences that a user can meet, and [validation/DIFFERENCES.md](validation/DIFFERENCES.md) has the full triage. [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made.
+Two implementations of the specification exist: the fast code in `pymars/`, and a slow reference in `tests/reference/` that an agent wrote from the specification alone. Both compute in float64; the specification's "Limits" section names the rare inputs where rounding can change the model (see [docs/differences.md](docs/differences.md)). Both are compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws: 124 fixtures and 197 draws agree with earth step by step, and the other 12 comparisons show 7 differences, each a documented rule or an earth quirk that pymars does not copy, none a bug. The fast code shows exactly the same differences as the reference. [docs/differences.md](docs/differences.md) lists the differences that a user can meet, and [validation/DIFFERENCES.md](validation/DIFFERENCES.md) has the full triage. [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made.
 
-Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 7.7 times as long as earth at its defaults for `EarthRegressor` (4.3 s against 0.56 s; 7.0 times for the internal `fit_mars`, at commit `ae9d199`; later changes to the fast code are not in that run yet). Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
+Accuracy: in a simulation of 51 settings (8 regression and 2 binary data-generating processes, 200 to 5,000 cases, two noise levels), `EarthRegressor(max_degree=2)` and `EarthClassifier(max_degree=2)` match earth's excess risk within 5 percent in 48 settings. On pure noise at 200 cases pymars is about 8 percent worse than earth, because it keeps slightly more noise terms, and two settings are not decided. [validation/REPORT.md](validation/REPORT.md) has the study, claim by claim.
+
+Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 2.2 times as long as earth at its defaults for `EarthRegressor` in a fresh process (1.1 s against 0.50 s), and 1.3 times for later fits in the same process. At 100,000 cases the two take about the same time. At a few hundred cases earth is faster, since pymars has a fixed cost of about 0.07 s per fit and about 0.3 s more for the first fit in a process. Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
 
 ## Legacy code
 

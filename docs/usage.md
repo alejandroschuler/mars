@@ -139,4 +139,6 @@ print(grid.best_params_)
 
 ## What the fit costs
 
-The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). In the benchmark the fit time grew roughly linearly in the number of cases and of covariates (log-log slopes 0.9 and 1.1 over 7 and 5 points); the term limit has 4 points and a slope of 0.9. The benchmark in [validation/bench/REPORT.md](../validation/bench/REPORT.md) has the measured factors. The memory of the fit is O(n·(p + nk)).
+The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
+
+In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 1.1 s in a fresh process and 0.63 s in a process that has already fitted, against 0.50 s for earth; with 100,000 cases it takes about 8 to 11 s, as earth does. Below a few thousand cases a fixed cost of about 0.07 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows about linearly in the number of cases. Weights cost little extra (0.45 s against 0.42 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).

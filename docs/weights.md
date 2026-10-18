@@ -6,7 +6,7 @@
 
 An integer weight w gives the same fit as w copies of the row. A zero weight gives the same fit as removing the row. Weights that are all 1 give the same fit as no weights (W-1, W-5).
 
-The equality holds up to rounding. Two fits that differ only in rounding can choose differently where two candidates tie in exact arithmetic (W-1, STOP-7). The weighted fit and the fit on repeated rows differ in float64 arithmetic, so such a tie can split them.
+The equality holds up to rounding. The weighted fit and the fit on repeated rows run different float64 sums, so where two candidates are equal up to rounding (a near-tie), the two fits can choose differently (W-1, STOP-7).
 
 ```python
 import numpy as np
@@ -36,6 +36,8 @@ Do not pass importance weights or survey weights as they are. Rescale them to `w
 Rows of weight 0 are dropped before anything else (W-3). They count neither in n and N, nor in the spans, nor in the knot search. This is the same fit as one on the data without those rows, and it is a departure from earth, which replaces a zero weight by a very small positive weight, so that the row still counts as a case in its spans and knots.
 
 For the classifier, a class that appears only on rows of weight 0 is not a class of the model, and the refit and the ConvergenceWarning ignore those rows (W-3, GLM-1, GLM-4).
+
+A tiny positive weight is not a zero weight. Weights so small next to the others that their products with squared values underflow in float64, such as 1e-300 next to 1, leave those rows in N and in the spans but give them no effect on the sums of squares ([differences.md](differences.md), LIM-4). Keep the positive weights within a factor of about 1e12 of each other, or set the tiny ones to 0.
 
 If every weight is 0, `fit` raises ValueError (the message matches `weight.*zero`). A weight below 0 or not finite, a weight array that is not 1-D with one entry per row, a bool, a 0-d array, and a total weight of 2^52 or more raise ValueError too (W-6). A scalar number is the weight of every row.
 

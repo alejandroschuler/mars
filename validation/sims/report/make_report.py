@@ -168,6 +168,17 @@ def gap_tables(df) -> None:
             hdr = ["DGP"] + [f"{a} / E-def" for a in arms]
             write(f"gap_n{n}_{noise}.md", md_table(hdr, rows))
     pd.DataFrame(recs).to_csv(TABLES / "gap.csv", index=False)
+    # Does moving the legacy code to earth's settings shrink its gap?
+    rows = []
+    for n, noise in ((200, "lo"), (200, "hi"), (1000, "lo")):
+        for d in DGPS:
+            nz = "na" if d == "D6" else noise
+            if (d == "D6" and noise == "hi") or d == "D7":
+                continue
+            g = paired(df, d, n, nz, "P-ear", "P-cur")
+            if g is not None:
+                rows.append([NAMES[d], nz, f"{n:,}", fmt_ratio(summary(g))])
+    write("gap_settings.md", md_table(["DGP", "noise", "n", "P-ear / P-cur"], rows))
 
 
 # The parity claim ----------------------------------------------------------
