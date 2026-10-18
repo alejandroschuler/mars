@@ -56,7 +56,12 @@ of the scan can exceed LA-5. ``knot_scan`` therefore returns with each value
 a bound on its error: the worst-case first-order rounding of the sums, plus
 the departure of Q and E from exact orthonormality and orthogonality, which
 the caller guarantees (the preconditions ‖QᵀQ - I‖₂ ≤ (r + 1)·gamma_n and
-‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖, which Gram-Schmidt applied twice gives); the bound
+‖QᵀE_k‖ ≤ √r·gamma_n·‖E_k‖). The forward pass meets them with Gram-Schmidt
+twice for the columns of its basis, and for a pair search's b·x with one pass
+when that pass keeps more than half of ‖v‖² and a second otherwise (DGKS),
+whose departure is a small multiple of r·u, far inside the margin;
+``test_every_scan_gets_q_and_e_that_meet_its_preconditions`` checks the
+margin on the oracle's draws. The bound
 is doubled for the second-order terms. It bounds the distance from exact
 arithmetic on the given Q and E, not the rounding that Q and E carry as a
 basis and residuals of the data, which is far inside LA-5. The caller decides

@@ -298,6 +298,7 @@ class _Pass:
         self._Qbuf[:, 0] = self.sw / math.sqrt(raw)
         self._r = 1
         self._coefs: dict = {}  # (k, j) -> Qᵀv of the first pass, kept
+        self._coef_count = 0  # values in _coefs, within _COEF_BUDGET
         self._setups: dict = {}  # (k, j) -> _Setup of this step
         self._scratch: tuple | None = None  # (k, j, E) of the q in column r
         self._E, _ = _linalg.orthogonalize(self.Q, self.Yw)
@@ -329,7 +330,7 @@ class _Pass:
         elif Q.base is not self._Qbuf:
             self._reserve(r + 2)
             self._Qbuf[:, :r] = Q
-            self._coefs = {}
+            self._coefs, self._coef_count = {}, 0
         self._r = r
         self._reserve(r + 2)
         self._setups, self._scratch = {}, None
@@ -508,6 +509,7 @@ class _Pass:
     # Budgets of the two caches, in multiples of n·(p + M) (a test lowers them).
     _KNOT_BUDGET = 1
     _SCAN_BUDGET = 4
+    _COEF_BUDGET = 1
 
     def knots_of(self, k: int, j: int) -> _knots.KnotCandidates:
         """The candidate knots of parent k and covariate j (KNOT-1 to KNOT-3):
@@ -591,7 +593,7 @@ class _Pass:
         if sr is not None:
             return sr
         o = _linalg.cgs2(self.Q, self._v(k, j), self._coefs.get((k, j)))
-        self._coefs[k, j] = o.coef
+        self._keep_coefs(k, j, o.coef)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
         pair = o.norm > 0.0 and _linalg.pair_search(o.norm**2, self.variances[V])
         dep, lin = False, 0.0
@@ -605,6 +607,21 @@ class _Pass:
                 lin = float(self._capped(float(np.sum(self._extend(k, j, o) ** 2))))
         sr = self._setups[k, j] = _Setup(pair, lin, dep, o.norm)
         return sr
+
+    def _keep_coefs(self, k: int, j: int, coef: FloatArray) -> None:
+        """Keep Qᵀv of search (k, j) for the next step, within a budget of
+        n·(p + M) values, so that memory stays O(n·(p + M)) however many
+        searches the pass makes (O(P·p·M) values without it). Past the budget
+        the entry is dropped, and the next call makes its full first pass,
+        which gives the same values. Complexity: O(1)."""
+        old = self._coefs.pop((k, j), None)
+        if old is not None:
+            self._coef_count -= old.size
+        n, p = self.X.shape
+        cap = self._COEF_BUDGET * n * (p + len(self.cols))
+        if self._coef_count + coef.size <= cap:
+            self._coefs[k, j] = coef
+            self._coef_count += coef.size
 
     def _extend(self, k: int, j: int, o: _linalg.Orthogonal) -> FloatArray:
         """Put q = v⊥/‖v⊥‖ of a pair search in the scratch column and keep the
@@ -636,7 +653,8 @@ class _Pass:
         if not sr.pair or sr.dep:
             return self.Q, self._E
         if self._scratch is None or self._scratch[:2] != (k, j):
-            self._extend(k, j, _linalg.cgs2(self.Q, self._v(k, j), self._coefs[k, j]))
+            v, known = self._v(k, j), self._coefs.get((k, j))
+            self._extend(k, j, _linalg.cgs2(self.Q, v, known))
         return self._Qbuf[:, : self._r + 1], self._scratch[2]
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:

@@ -125,7 +125,7 @@ def test_gram_schmidt_without_q_and_for_a_zero_column():
     n=st.integers(4, 40),
     r=st.integers(0, 6),
     a=st.integers(0, 6),
-    eps=st.sampled_from([1.0, 1e-3, 1e-9]),
+    eps=st.sampled_from([10.0, 1.0, 1e-3, 1e-9]),
 )
 def test_cgs2_with_kept_coefficients_leaves_v_orthogonal(seed, n, r, a, eps):
     """LA-1 and the plan's "Fast path": ``cgs2`` of v against Q, given Qᵀv for
@@ -159,6 +159,8 @@ def test_cgs2_with_kept_coefficients_leaves_v_orthogonal(seed, n, r, a, eps):
             assert o.norm == pytest.approx(np.linalg.norm(o.perp), rel=1e-14)
             assert o.vnorm == pytest.approx(np.linalg.norm(v), rel=1e-14)
         assert full.norm == pytest.approx(eps if r else np.linalg.norm(v), rel=1e-6)
+        if eps == 10.0:  # DGKS: one pass, since ‖v⊥‖² > ‖v‖²/2 (r ≥ 1 too)
+            np.testing.assert_array_equal(full.total, full.coef)
         np.testing.assert_allclose(kept.perp, full.perp, rtol=0, atol=1e-15 * 4)
         out.append(full)
     np.testing.assert_allclose(out[0].perp, out[-1].perp, rtol=0, atol=1e-15 * 4)
