@@ -877,18 +877,26 @@ class _Pass:
         s = len(self.rss)
         kappa = 2 * s
         dirs, cuts, b = self.dirs[c.parent], self.cuts[c.parent], self.cols[c.parent]
-        if self._spans_bx(c):  # the span of Q, as ``columns`` builds it
+        spans_bx = self._spans_bx(c)
+        if spans_bx:  # the span of Q, as ``columns`` builds it
             self.cond.span_append(*self._linear_row(c.parent, c.variable))
         if c.kind != KIND_LINEAR:
             self.cond.span_append(
                 *_terms.child_term(dirs, cuts, c.variable, _terms.PLUS, c.knot)
             )
+        # The terms registered in ``cond`` must span F_s (FWD-13): its reduced
+        # columns and LA-2's test of LA-4 work against them. A pair adds its
+        # two terms, which span what b·x and the hinge span; when LA-2 did not
+        # count b·x (case (b) of FWD-13), Q lacks b·x, and the mirror would
+        # bring it in, so only the hinge is registered (#142).
+        register = len(new) if spans_bx or c.kind != KIND_PAIR else 1
         self.exact = {}
         for i, (code, cut) in enumerate(new):
             d, k = _terms.child_term(dirs, cuts, c.variable, code, cut)
             self.dirs = np.vstack((self.dirs, d))
             self.cuts = np.vstack((self.cuts, k))
-            self.cond.append(d, k)
+            if i < register:
+                self.cond.append(d, k)
             self.index[self._row_key(d, k)] = len(self.cols)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)

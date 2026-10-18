@@ -1716,6 +1716,24 @@ def _case_b(seed: int, noise_seed: int) -> Case:
     )
 
 
+def _case_b_mirror() -> Case:
+    """``_case_b(25, 1)`` with y plus 0.1 times the step-4 mirror x0 (t - x1)+
+    (scaled to a largest value of 1) times (x2 - median)+ (#142, from the
+    adversarial review of #136). At step 7, A_w of x0 x1 on F_6 is 1.6e6
+    exactly (fast code 5e-8 off), far above LA-7's 7.0e-5: a pair search,
+    whose b x LA-2 rejects. On the terms, which hold the mirror, A_w is 0. A
+    fast code that reduces b x against the terms runs a single-hinge search
+    and adds x0 (x1 - t)+ as one term, which is no candidate of the
+    reference. The pair ties with the hinge on the intercept, whose column is
+    the same at the cases, so step 7 is a near-tie."""
+    c = _case_b(25, 1)
+    X = c.X
+    m = X[:, 0] * np.maximum(0.12699412509064878 - X[:, 1], 0.0)
+    bump = 0.1 * (m / np.max(np.abs(m))) * np.maximum(X[:, 2] - np.median(X[:, 2]), 0)
+    y = c.Y[:, 0] + bump
+    return Case(f"{c.name}, y with the step-4 mirror", X, y[:, None], None, c.params)
+
+
 #: The steps that must agree whatever the platform breaks the ties of later
 #: steps to: the step after which a reference with F_s from the terms' rows
 #: (or from the kept terms) differs from the fast code.
@@ -1723,6 +1741,8 @@ _PINNED = {
     "#110's generator, seed 1258, copy kind 2": 6,
     "case (b), seed 25, noise seed 1": 5,
     "case (b), seed 25, noise seed 0": 7,
+    # steps 1 to 6 agree, and the fast choice of the step-7 tie is legal
+    "case (b), seed 25, noise seed 1, y with the step-4 mirror": 6,
 }
 
 
@@ -1743,7 +1763,8 @@ def _forward_basis_cases() -> list[Case]:
       two programs broke that tie differently and nothing was compared.
     - Case (b) of FWD-13: ``_case_b``, two draws of a generator where x0
       enters as a linear term and a later pair on x0 has a b x that LA-2
-      rejects; ``test_reference`` checks the step on a small case.
+      rejects; ``test_reference`` checks the step on a small case. A third
+      draw, ``_case_b_mirror``, pins LA-7 and LA-2 on F_s after case (b).
     """
     x0 = 2.0**40 + 0.5 * np.array([1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1])
     x2 = 2.0**26 + 0.5 * np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0])
@@ -1784,7 +1805,13 @@ def _forward_basis_cases() -> list[Case]:
         None,
         kw | {"auto_linpreds": True, "minspan": None, "endspan": 1},
     )
-    return [seed1258, _family_134(41), _case_b(25, 1), _case_b(25, 0)]
+    return [
+        seed1258,
+        _family_134(41),
+        _case_b(25, 1),
+        _case_b(25, 0),
+        _case_b_mirror(),
+    ]
 
 
 # ---------------------------------------------------------------------------
