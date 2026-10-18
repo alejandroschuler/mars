@@ -1058,6 +1058,41 @@ def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(
     assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate
 
 
+def test_la3_g_holds_a_b_x_that_la2_does_not_count():
+    """LA-3 (#164): x0 = 1e8 + z is dependent on the intercept by LA-4 (its
+    part orthogonal to 1 is about 3e-9 of its norm), so LA-2 does not count
+    b·x0, but LA-3's G holds it, and the knots near the low end of z, whose
+    hinges are nearly linear, have ρ < τ. y bends at the low end. With G = B
+    every ρ would be 1 and the first pair would take the knot near z = 0.03;
+    the reference applies the spec, and the fast pass agrees with it."""
+    from test_oracle import Case, check_forward
+
+    rng = np.random.default_rng(3)
+    z = rng.uniform(size=100)
+    X = np.column_stack((1e8 + z, rng.uniform(size=100)))
+    y = 5 * np.maximum(z - 0.03, 0) + 0.01 * rng.normal(size=100)
+    st_ = _state(X, y)
+    assert (st_.setup(0, 0).pair, st_.setup(0, 0).dep) == (True, True)
+    low = _cand(_forward.KIND_PAIR, float(np.sort(X[:, 0])[1]))
+    assert st_.refine([low]) == []  # pass 2 decides LA-3 on G too
+    kw = {"fast_k": 0, "max_terms": 5, "minspan": 1, "endspan": 1}
+    case = Case("dependent b x", X, y[:, None], None, kw)
+    out = check_forward(case)
+    assert out.steps >= 1 and out.near_tie is None
+
+
+def test_a_dependent_hinge_is_not_in_the_forward_basis():
+    """FWD-13 (#164): ``columns`` leaves out a pair's hinge that LA-4 finds
+    dependent on B and b·x. With the knot below every x, the hinge is x - t,
+    in the span of 1 and x, so only b·x is added; an inner knot adds both."""
+    rng = np.random.default_rng(5)
+    x = rng.uniform(size=30)
+    st_ = _state(x[:, None], np.sin(4 * x))
+    pair = _forward.KIND_PAIR
+    assert st_.columns(_cand(pair, -1.0)).shape == (30, 1)
+    assert st_.columns(_cand(pair, float(np.median(x)))).shape == (30, 2)
+
+
 @pytest.mark.parametrize("budget", [0, 0.05, 0.2])
 def test_a_forward_pass_past_its_cache_budgets_is_the_same(budget, monkeypatch):
     """T20: past its budgets (kept knots, kept scan sums, kept Gram-Schmidt
