@@ -447,6 +447,10 @@ class _Pass:
         Complexity: O(p)."""
         return np.flatnonzero(self.dirs[k] == _terms.ABSENT).tolist()
 
+    # Budgets of the two caches, in multiples of n·(p + M) (a test lowers them).
+    _KNOT_BUDGET = 1
+    _SCAN_BUDGET = 4
+
     def knots_of(self, k: int, j: int) -> _knots.KnotCandidates:
         """The candidate knots of parent k and covariate j (KNOT-1 to KNOT-3):
         the active cases of k are those where its column is positive.
@@ -461,7 +465,7 @@ class _Pass:
             # A term's column and spans never change, so its knots are kept,
             # within a budget of n·(p + M) knots that keeps memory O(n·(p + M)).
             n, p = self.X.shape
-            if self._knot_count + kc.knots.size <= n * (p + len(self.cols)):
+            if self._knot_count + kc.knots.size <= self._KNOT_BUDGET * n * (p + len(self.cols)):
                 self._knot_cache[k, j] = kc
                 self._knot_count += kc.knots.size
         return kc
@@ -470,22 +474,23 @@ class _Pass:
         """The store of ``_scan.knot_scan`` for parent k and covariate j, with
         the number of leading columns of its Q that stay the same (the columns
         of the current basis; rebuilds only append), or None when keeping
-        them would pass a budget of 4·n·(p + M) values, so that memory stays
+        them (K·(m + 3) values: hᵀq, ‖h‖², D and the zero mask) would pass a
+        budget of 4·n·(p + M) values, so that memory stays
         O(n·(p + M)). The store changes no value (``knot_scan``).
         Complexity: O(1)."""
         m = self.Q.shape[1] - (k == 0)
         store = self._scan_stores.get((k, j))
         old = 0 if store is None else store["size"]
         n, p = self.X.shape
-        if self._scan_size - old + knots * m > 4 * n * (p + len(self.cols)):
+        if self._scan_size - old + knots * (m + 3) > self._SCAN_BUDGET * n * (p + len(self.cols)):
             if store is not None:
                 del self._scan_stores[k, j]
                 self._scan_size -= old
             return None
         if store is None:
             store = self._scan_stores[k, j] = {"size": 0}
-        self._scan_size += knots * m - old
-        store["size"] = knots * m
+        self._scan_size += knots * (m + 3) - old
+        store["size"] = knots * (m + 3)
         return store, m
 
     def _capped(self, red):

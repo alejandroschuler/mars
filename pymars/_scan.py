@@ -289,7 +289,8 @@ def knot_scan(
     ``_checked=True`` skips the checks of ``hinge_products``, for the forward
     pass, whose x, b and split are float64 and int64 arrays that meet them.
     ``_cache = (store, m)``, for the forward pass, keeps in ``store`` the
-    values that depend only on x, b and split, and hᵀq for the first m columns
+    K-vectors ‖h‖², D and the zero-hinge mask (not g and b, which cost O(n)
+    to recompute), which depend only on x, b and split, and hᵀq for the first m columns
     of Q (after the intercept column with ``intercept=True``), which the
     caller promises are the same at the next call with this store; a later
     call computes hᵀq only for the other columns. Every value is the one a
@@ -314,12 +315,12 @@ def knot_scan(
     else:  # the forward pass's own arrays, as with _checked
         store, m = _cache
         b0 = b
+        g, b = _to_unit(np.diff(x)), _to_unit(b0)  # O(n), not stored
         if "F" not in store:
-            g, b = _to_unit(np.diff(x)), _to_unit(b0)
-            store.update(g=g, b=b, F=_norms(g, b, split), m=0)
+            store.update(F=_norms(g, b, split), m=0)
             store["D"] = _centered(g, b * b, split) if intercept else None
             store["HV"] = np.empty((split.shape[0], 0))
-        g, b, F, D = store["g"], store["b"], store["F"], store["D"]
+        F, D = store["F"], store["D"]
         known = store["m"]
         HV = np.hstack((store["HV"], _hv(g, b, np.hstack((part[:, known:], E)), split)))
         store["HV"], store["m"] = HV[:, :m], m

@@ -1204,3 +1204,24 @@ def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, sh
     pair = found[0]
     assert st_.columns(pair)[0].shape == (24, 1)
     assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate
+
+
+@pytest.mark.parametrize("budget", [0, 0.05])
+def test_a_forward_pass_past_its_cache_budgets_is_the_same(budget, monkeypatch):
+    """T20: past its budgets (kept knots, kept scan sums) a search recomputes
+    in full, so the fit is bit-equal to the fit with the default budgets."""
+    from test_core import _same
+
+    from pymars import _core
+
+    rng = np.random.default_rng(7)
+    X = rng.uniform(size=(150, 4))
+    X[:, 1] += 1e4  # the exact test and the shifted path as well
+    y = np.sin(3 * X[:, 0]) + (X[:, 2] - 0.5) ** 2 + 0.1 * rng.standard_normal(150)
+    prm = _core.MarsParams(max_degree=2, max_terms=15)
+    default = _core.fit_mars(X, y[:, None], None, prm, record_candidates=True)
+    monkeypatch.setattr(_forward._Pass, "_KNOT_BUDGET", budget)
+    monkeypatch.setattr(_forward._Pass, "_SCAN_BUDGET", budget)
+    low = _core.fit_mars(X, y[:, None], None, prm, record_candidates=True)
+    assert default.selected.size > 5
+    _same(default, low)
