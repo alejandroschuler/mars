@@ -195,7 +195,7 @@ def test_the_kernels_round_every_product():
     g, split = np.diff(x), np.array([1, 2, 3])
     want = _scan._hv(g, b, V, split)
     assert want[1, 0] == 2.0**-29
-    hv, _ = _kernels.hv(g, b, V, 0, np.empty((4, 0)), np.arange(4), split)
+    hv = _kernels.hv(g, b, V, 0, np.empty((4, 0)), np.arange(4), split)
     assert np.array_equal(_bits(hv), _bits(want))
     assert np.array_equal(
         _bits(_kernels.norms(g, b, split)), _bits(_scan._norms(g, b, split))

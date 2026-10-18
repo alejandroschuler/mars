@@ -217,13 +217,13 @@ def _centered(g: FloatArray, w: FloatArray, split: npt.NDArray[np.int64]) -> Flo
     return SSW[split] + Wp * S**2 / (Ws * (Wp + Ws))
 
 
-def _scan_hv(g, b, Q, q0, E, o, split) -> tuple[FloatArray, FloatArray]:
-    """hᵀV for V = [Q[o, q0:], E[o]] at every split, and the squared norms
-    of the columns of E: the compiled kernel when ``_kernels.ENABLED``, else
-    ``_hv`` on V (Q and E then in the order of x, o unused)."""
+def _scan_hv(g, b, Q, q0, E, o, split) -> FloatArray:
+    """hᵀV for V = [Q[o, q0:], E] at every split: the compiled kernel when
+    ``_kernels.ENABLED``, else ``_hv`` on V (Q then in the order of x, o
+    unused)."""
     if _kernels.ENABLED:
         return _kernels.hv(g, b, Q, q0, E, o, split)
-    return _hv(g, b, np.hstack((Q[:, q0:], E)), split), np.sum(E * E, axis=0)
+    return _hv(g, b, np.hstack((Q[:, q0:], E)), split)
 
 
 def _scan_norms(g: FloatArray, b: FloatArray, split) -> FloatArray:
@@ -317,8 +317,8 @@ def knot_scan(
     (``_hv``), so the store changes no value.
     ``_order`` (n,), for the forward pass, says that the rows of Q and E are
     in the caller's order and that row q in the order of x is row
-    ``_order[q]``; the compiled scan (``_kernels``) then reads Q and E at
-    those rows without a gathered copy. The compiled and the numpy scan
+    ``_order[q]``; the compiled scan (``_kernels``) then reads Q at those
+    rows without a gathered copy. The compiled and the numpy scan
     agree within the error bounds (``_kernels``).
     Complexity: O(n·(r + K)) time and memory.
     """
@@ -329,8 +329,10 @@ def knot_scan(
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
     fast = _kernels.ENABLED
-    if _order is not None and not fast:  # the kernels read the rows at o
-        Q, E = Q[_order], E[_order]
+    if _order is not None:  # O(n·K); the kernels read Q at the rows o
+        E = E[_order]
+        if not fast:
+            Q = Q[_order]
     o = np.arange(n) if _order is None else _order  # read only by the kernels
     q0 = 1 if intercept else 0  # the columns of Q that enter hᵀV
     k = r - q0
@@ -339,7 +341,7 @@ def knot_scan(
     b0 = b
     g, b = _kernels.prep(x, b0) if fast else (_to_unit(np.diff(x)), _to_unit(b0))
     if _cache is None:
-        HV, e2 = _scan_hv(g, b, Q, q0, E, o, split)
+        HV = _scan_hv(g, b, Q, q0, E, o, split)
         F = _scan_norms(g, b, split)
         D = _scan_centered(g, b * b, split) if intercept else None
     else:  # the forward pass's own arrays, as with _checked
@@ -351,9 +353,10 @@ def knot_scan(
         F, D = store["F"], store["D"]
         known = store["m"]
         assert known <= m <= k, "the kept columns are a prefix of Q"
-        new, e2 = _scan_hv(g, b, Q, q0 + known, E, o, split)
+        new = _scan_hv(g, b, Q, q0 + known, E, o, split)
         HV = np.hstack((store["HV"], new))
         store["HV"], store["m"] = HV[:, :m], m
+    e2 = np.sum(E * E, axis=0)  # the squared norms of the responses
     lam = 2 * (math.isqrt(n - 1) + 1)  # the roundings of one blocked suffix sum
     g_n = _gamma(n + 2)
     cst = np.array(

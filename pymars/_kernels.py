@@ -8,11 +8,10 @@ rule (#145): the suffix sums keep the blocked order of ``_scan._suffix``, so
 the error bounds keep their form, and the two forms agree within those
 bounds.
 
-- ``hv`` replaces ``_scan._hv`` and the gathers ``Q[o]`` and ``E[o]`` of the
-  caller: one pass from the last row to the first, which forms b·v, its
-  blocked suffix sum P, g·P and the blocked suffix sum of that, and reads the
-  second sum at the splits. It also returns the squared norms of the columns
-  of E. It needs no n x c temporary.
+- ``hv`` replaces ``_scan._hv`` and the gather ``Q[o]`` of the caller: one
+  pass from the last row to the first, which forms b·v, its blocked suffix
+  sum P, g·P and the blocked suffix sum of that, and reads the
+  second sum at the splits. It needs no n x c temporary.
 - ``norms`` and ``centered`` replace ``_scan._norms`` and ``_scan._centered``
   with the same steps and O(n) temporaries.
 - ``prep`` gives the scaled gaps and parent (``_scan._to_unit``), and
@@ -77,11 +76,11 @@ def _suffix1(a, B):
 
 
 def _hv(g, b, Q, q0, E, o, split, B1, B2):
-    """hᵀV at every split, V = [Q[o, q0:], E[o]] (``_scan._hv``), and the
-    squared norms of the columns of E. g (n - 1,), b (n,) and o (n,) are in
-    the order of x; Q and E are in the caller's order and are read at the
-    rows o. The blocks of the two suffix sums are counted down, with no
-    modulo per row, and the loops over the columns have no branch.
+    """hᵀV at every split, V = [Q[o, q0:], E] (``_scan._hv``). g (n - 1,),
+    b (n,), E (n, K) and o (n,) are in the order of x; Q is in the caller's
+    order and is read at the rows o. The blocks of the two suffix sums are
+    counted down, with no modulo per row, and the loops over the columns have
+    no branch.
     Complexity: O(n·c + k·log k)."""
     n = b.shape[0]
     nq = Q.shape[1] - q0
@@ -89,9 +88,8 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
     c = nq + nE
     k = split.shape[0]
     out = np.empty((k, c))
-    e2 = np.zeros(nE)
     if k == 0:
-        return out, e2
+        return out
     rank = np.argsort(split)
     nxt = k - 1  # the largest split not yet read
     w1 = np.zeros(c)
@@ -120,16 +118,12 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
             for j in range(nq):
                 w1[j] = bq * Q[row, q0 + j]
             for j in range(nE):
-                e = E[row, j]
-                w1[nq + j] = bq * e
-                e2[j] += e * e
+                w1[nq + j] = bq * E[q, j]
         else:
             for j in range(nq):
                 w1[j] = w1[j] + bq * Q[row, q0 + j]
             for j in range(nE):
-                e = E[row, j]
-                w1[nq + j] = w1[nq + j] + bq * e
-                e2[j] += e * e
+                w1[nq + j] = w1[nq + j] + bq * E[q, j]
         if q >= 1:  # row i = q - 1 of the second sum, g_i·P(q)
             new2 = left2 == 0
             if new2:
@@ -153,32 +147,40 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
             for j in range(c):
                 out[rank[nxt], j] = w2[j] + c2[j]
             nxt -= 1
-    return out, e2
+    return out
+
+
+def _scale(a, out, start):
+    """out = a[1:] - a[:-1] when ``start`` is 1, else a, each times the
+    power of 2^e that puts its largest |value| in [0.5, 1). While 2^e is
+    normal, the product by it is the correctly rounded a·2^e, which is what
+    ``np.ldexp`` gives; otherwise ``math.ldexp`` scales each value.
+    Complexity: O(n)."""
+    m = out.shape[0]
+    top = 0.0
+    for i in range(m):
+        v = a[i + 1] - a[i] if start == 1 else a[i]
+        out[i] = v
+        top = max(top, abs(v))
+    if top > 0.0:
+        e = -math.frexp(top)[1]
+        if -1022 <= e <= 1023:
+            f = math.ldexp(1.0, e)
+            for i in range(m):
+                out[i] = out[i] * f
+        else:
+            for i in range(m):
+                out[i] = math.ldexp(out[i], e)
 
 
 def _prep(x, b0):
-    """g = diff(x) and b = b0, each times the power of 2 that puts its
-    largest |value| in [0.5, 1) (``_scan._to_unit``). Complexity: O(n)."""
+    """g = diff(x) and b = b0, each scaled by ``_scale``
+    (``_scan._to_unit``). Complexity: O(n)."""
     n = x.shape[0]
     g = np.empty(n - 1)
-    top = 0.0
-    for i in range(n - 1):
-        g[i] = x[i + 1] - x[i]
-        top = max(top, abs(g[i]))
-    if top > 0.0:
-        e = -math.frexp(top)[1]
-        for i in range(n - 1):
-            g[i] = math.ldexp(g[i], e)
+    _scale(x, g, 1)
     b = np.empty(n)
-    top = 0.0
-    for i in range(n):
-        top = max(top, abs(b0[i]))
-    if top > 0.0:
-        e = -math.frexp(top)[1]
-        for i in range(n):
-            b[i] = math.ldexp(b0[i], e)
-    else:
-        b[:] = b0
+    _scale(b0, b, 0)
     return g, b
 
 
@@ -291,6 +293,7 @@ if AVAILABLE:
     _jit = numba.njit(cache=True, fastmath=False, nogil=True, error_model="numpy")
     _suffix1 = _jit(_suffix1)
     _hv = _jit(_hv)
+    _scale = _jit(_scale)
     _prep = _jit(_prep)
     _finish = _jit(_finish)
     _norms = _jit(_norms)
@@ -298,9 +301,8 @@ if AVAILABLE:
 
 
 def hv(g, b, Q, q0, E, o, split):
-    """hᵀV (k, c) for V = [Q[o, q0:], E[o]] at every split, as ``_scan._hv``
-    gives for the gathered V, and the squared norms (K,) of the columns of E.
-    Complexity: O(n·c + k·log k) time, O(c + k·c) memory."""
+    """hᵀV (k, c) for V = [Q[o, q0:], E] at every split, as ``_scan._hv``
+    gives for the gathered V. Complexity: O(n·c + k·log k) time, O(c + k·c) memory."""
     n = b.shape[0]
     # A split outside 1..n - 1 would leave its row of the output unset; the
     # forward pass never passes one, and hinge_products checks it.
