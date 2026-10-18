@@ -35,18 +35,11 @@ equal) becomes 0 exactly and adds 0 to every sum. For the same reason
 way before the QR: a column far from 0 relative to its spread (x near 33 with
 a spread of 0.25, say) would otherwise make the factor ill-conditioned, and
 the RSS of a near-exact fit would lose about 1e-8 of its relative accuracy
-(#84). That is not enough for a term with a linear factor x_j of a
-covariate whose mean is far from 0 relative to its spread: the rounding of
-x_j·b hides the part that x_j spreads over b, and with b in the subset that
-part is all that counts (1e-5 of the RSS at 2^36). So when X and the terms
-(``dirs``, ``cuts``) are given and LA-4 shifts such a covariate, the pass
-writes the terms exactly in the shifted atoms of LA-4 (u_j = x_j - m_j and
-the hinges), factors the columns of those monomials once, and works on exact
-eliminations of the terms in each working order (``_Shifted``), and the
-final fit applies LA-4 after the shift (``_shifted_fit``). Y enters only through
-differences, products and sums, so multiplying Y by a power of 2 (EDGE-6)
-multiplies every RSS and GCV by its square and changes no other bit. Memory
-is O(n·(M_f + K) + M_f²), and O(n·(P + K) + M_f·P) for P monomials.
+(#84). Each RSS then meets LA-5's tolerance, whose factor grows with the
+condition number of the subset and with n; beyond ordinary data (the spec's
+Limits) it states no bound. Y enters only through differences, products and
+sums, so multiplying Y by a power of 2 (EDGE-6) multiplies every RSS and GCV
+by its square and changes no other bit. Memory is O(n·(M_f + K) + M_f²).
 
 Public functions, for ``_core``:
 
@@ -58,15 +51,12 @@ Public functions, for ``_core``:
 
 from __future__ import annotations
 
-import math
-from fractions import Fraction
 from typing import NamedTuple
 
 import numpy as np
 import numpy.typing as npt
-import scipy.linalg
 
-from pymars import _gcv, _linalg, _terms
+from pymars import _gcv, _linalg
 
 FloatArray = npt.NDArray[np.float64]
 IntArray = npt.NDArray[np.int64]
@@ -158,609 +148,44 @@ def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArr
     return D - mean, anchor + mean
 
 
-# The kept terms in shifted atoms (LA-4, LA-5). An atom is (s, kind, t_s) with s
-# the symbol of LA-4 (the lowest covariate of a class of copies), kind 0 for u_s,
-# 1 for the hinge (u_s - t_s)₊ and 2 for (t_s - u_s)₊, the key order of LA-4,
-# and t_s an exact Fraction (0 for u_s); kind 3, (s, 3, 0), is the difference
-# e_s = x_s - x_r of a near copy (``_near_copies``), and kind 4, (s, 4, t_s), the
-# difference of its hinge from the same hinge on the original, canonical
-# atoms only. A monomial is a
-# sorted tuple of atoms, () for the intercept, and a term is {monomial index:
-# Fraction}.
-_KIND = {_terms.LINEAR: 0, _terms.PLUS: 1, _terms.MINUS: 2}
-_ZERO = Fraction(0)
-
-
-class _Monomials(NamedTuple):
-    """The terms as exact polynomials in the atoms of LA-4. ``keys`` the
-    monomials of LA-4, in the symbols of LA-4 (copies u_j = 2^k·u_s only), and
-    ``terms`` (M,), term k as {index in keys: Fraction}: these decide LA-4 in
-    ``_shifted_fit``. ``canon`` each of ``keys`` as an exact polynomial in the
-    canonical monomials, whose columns are ``E`` (n, P), not centered, and
-    ``cterms`` the terms in them; ``ckeys`` the canonical monomials; ``atoms``
-    the column of each atom of ``keys``. The canonical atoms are u_s, one
-    hinge of each pair at a knot ((u_s - t_s)₊, or its mirror when that is
-    tiny), and the differences of near copies, so that the columns of a pair
-    at one knot and of u_s are not dependent on the data; they also use exact
-    affine copies and near copies, which LA-4 does not (#119). A canonical
-    monomial ("raw", key) is the column of the LA-4 monomial key itself, for
-    a key whose expansion cancels (#130)."""
-
-    keys: list
-    terms: list
-    canon: list
-    E: FloatArray
-    cterms: list
-    ckeys: list
-    atoms: dict
-
-
-def _times(poly: dict, parts: dict) -> dict:
-    """The product of {monomial: Fraction} and {atom or None: Fraction}, None
-    standing for the constant 1. Complexity: O(len(poly)·len(parts))."""
-    new: dict = {}
-    for e, f in poly.items():
-        for a, g in parts.items():
-            key = e if a is None else tuple(sorted((*e, a)))
-            new[key] = new.get(key, 0) + f * g
-    return {e: f for e, f in new.items() if f != 0}
-
-
-def _shifts(X: FloatArray) -> FloatArray:
-    """m_j of LA-4: the smallest value of covariate j over the cases when its
-    absolute value is larger than the range of x_j, else 0. Complexity: O(n·p)."""
-    lo, hi = X.min(axis=0), X.max(axis=0)
-    return np.where(np.abs(lo) > hi - lo, lo, 0.0)
-
-
-def _symbols(U: FloatArray, used: list) -> dict:
-    """The copies of LA-4 among the covariates ``used``, as {j: (s, k)}: u_j =
-    2^k·u_s at every case, exactly, with s the lowest covariate of the class
-    (the values compare as real numbers, so -0 equals +0). k is the difference
-    of the binary exponents of the largest |values|, and the column with the
-    smaller one is multiplied by 2^|k|, which does not round, before the
-    comparison. A column of zeros (a constant covariate) takes k = 0.
-    Complexity: O(n·u²) for u used covariates."""
-    out: dict = {}
-    reps: list = []
-    for j in used:
-        u = U[:, j]
-        top = float(np.max(np.abs(u)))
-        for s in reps:
-            us = U[:, s]
-            ts = float(np.max(np.abs(us)))
-            if top == 0.0 or ts == 0.0:
-                if top == ts:
-                    out[j] = (s, 0)
-                    break
-                continue
-            k = math.frexp(top)[1] - math.frexp(ts)[1]
-            if np.array_equal(np.ldexp(us, max(k, 0)), np.ldexp(u, max(-k, 0))):
-                out[j] = (s, k)
-                break
-        else:
-            reps.append(j)
-            out[j] = (j, 0)
-    return out
-
-
-def _copies(X: FloatArray, used: list) -> dict:
-    """The covariates among ``used`` that are exact affine copies of an earlier
-    one at the cases, x_j = a·x_r + b in rational arithmetic with a ≠ 0, as
-    {j: (r, a, b)}, r the first of its class. The canonical columns write a
-    copy in the atoms of x_r, so that a product with a large m_j on the copy
-    cancels exactly against the same product on the original (LA-5; LA-4
-    allows such an exact relation in the sums of squares). Complexity: O(n·u²)
-    for u used covariates, and O(n) rational operations for each candidate
-    pair."""
-    out: dict = {}
-    reps: list = []
-    for j in used:
-        x = X[:, j]
-        lo, hi = int(np.argmin(x)), int(np.argmax(x))
-        if x[lo] == x[hi]:
-            continue
-        for r in reps:
-            xr = X[:, r]
-            i0, i1 = int(np.argmin(xr)), int(np.argmax(xr))
-            a = (Fraction(float(x[i1])) - Fraction(float(x[i0]))) / (
-                Fraction(float(xr[i1])) - Fraction(float(xr[i0]))
-            )
-            b = Fraction(float(x[i0])) - a * Fraction(float(xr[i0]))
-            if a == 0 or not np.allclose(
-                x, float(a) * xr + float(b), rtol=1e-12, atol=0
-            ):
-                continue
-            if all(
-                Fraction(float(v)) == a * Fraction(float(u)) + b
-                for v, u in zip(x, xr, strict=True)
-            ):
-                out[j] = (r, a, b)
-                break
-        else:
-            reps.append(j)
-    return out
-
-
-def _near_copies(X: FloatArray, U: FloatArray, m: FloatArray, own: list) -> dict:
-    """{s: (r, e, c)} for a shifted symbol s that is a near copy of an earlier
-    shifted symbol r among ``own``: x_s = x_r + e exactly, with e ≠ 0 at a few
-    cases (each difference is exact by Sterbenz, the two values having one
-    sign and being within a factor of 2, or a value is 0) and ‖e‖ ≤
-    2^-10·‖u_s‖, such as a copy one ulp off at one case; c = m_r - m_s. The
-    canonical columns write u_s as u_r + e + c, so that the part of a product
-    that the terms span cancels as a formula and the small e is not lost under
-    a large m_j (LA-4 allows this exact relation in the sums of squares; the
-    fast forward pass does the same since PR #112; seeds 90 and 213 of #120).
-    e is 0 wherever the two covariates are equal, so it adds no direction that
-    the data nearly span. An unshifted near copy needs none of this, since no
-    factor m_j multiplies it. Complexity: O(n·u²) for u such symbols."""
-    out: dict = {}
-    cands = [s for s in own if m[s] != 0.0]
-    for a, s in enumerate(cands):
-        xs = X[:, s]
-        for r in cands[:a]:
-            if r in out:
-                continue
-            xr = X[:, r]
-            e = xs - xr
-            same = (np.sign(xs) == np.sign(xr)) & (np.abs(xs) <= 2 * np.abs(xr))
-            exact = np.all(
-                (xr == 0) | (xs == 0) | (same & (np.abs(xr) <= 2 * np.abs(xs)))
-            )
-            if exact and 0 < np.linalg.norm(e) <= 2.0**-10 * np.linalg.norm(U[:, s]):
-                out[s] = (r, e, Fraction(float(m[r])) - Fraction(float(m[s])))
-                break
-    return out
-
-
-def _monomials(X: FloatArray, dirs: IntArray, cuts: FloatArray) -> _Monomials:
-    """Write each term exactly in the atoms of LA-4: a linear factor x_j is
-    2^k·u_s + m_j for the symbol s of x_j (``_symbols``), a hinge is the atom
-    2^k·(u_s - t_s)₊ or 2^k·(t_s - u_s)₊ with t_s = 2^-k·(t - m_j); then each
-    monomial in the canonical atoms, where (t_s - u_s)₊ = (u_s - t_s)₊ - u_s +
-    t_s, a hinge that is linear on every case is that line and one that is 0
-    on every case is 0, and u_s is written in the atoms of an earlier symbol
-    when it is an exact affine copy (``_copies``) or a near copy (``_near_copies``)
-    of it. A term with L linear factors of shifted covariates has at most
-    3^L·2^h canonical monomials for h hinges. u_j = x_j - m_j is exact in
-    float64 (Sterbenz) when |m_j| ≥ 2·range, and its rounding is of the size
-    of the range otherwise, so no column of E carries the factor m_j.
-    Complexity: O(M·3^d) rational operations, O(n·d·P) for E, and O(n·p²·d)
-    rational operations at most for the copies."""
-    m = _shifts(X)
-    U = X - m[None, :]
-    used = np.flatnonzero(np.any(dirs != 0, axis=0)).tolist()
-    sym = _symbols(U, used)
-    own = [j for j in used if sym[j][0] == j]
-    affine = _copies(X, own)
-    near = _near_copies(X, U, m, [s for s in own if s not in affine])
-    where: dict = {}  # a hinge atom -> (covariate, knot, k) that evaluates it
-
-    def la4_parts(j: int, kind: int, t: float) -> dict:
-        s, k = sym[j]
-        scale = Fraction(2) ** k
-        if kind == 0:
-            mj = Fraction(float(m[j]))
-            return {(s, 0, _ZERO): scale} | ({None: mj} if mj else {})
-        ts = (Fraction(t) - Fraction(float(m[j]))) / scale
-        where.setdefault((s, kind, ts), (j, t, k))
-        where.setdefault((s, 3 - kind, ts), (j, t, k))  # the mirror hinge
-        return {(s, kind, ts): scale}
-
-    index: dict = {}
-    keys: list = []
-    terms: list = []
-    for row, cut in zip(dirs, cuts, strict=True):
-        poly: dict = {(): Fraction(1)}
-        for j in np.flatnonzero(row):
-            kind = _KIND[int(row[j])]
-            poly = _times(poly, la4_parts(int(j), kind, float(cut[j])))
-        term = {}
-        for key, f in poly.items():
-            term[index.setdefault(key, len(index))] = f
-            if len(keys) < len(index):
-                keys.append(key)
-        terms.append(term)
-
-    atoms: dict = {}
-
-    def column(atom: tuple) -> FloatArray:
-        if atom not in atoms:
-            s, kind, _ = atom
-            if kind == 0:
-                atoms[atom] = U[:, s]
-            elif kind == 3:
-                atoms[atom] = near[s][1]
-            elif kind == 4:
-                atoms[atom] = diffs[atom]
-            else:
-                j, t, k = where[atom]
-                code = _terms.PLUS if kind == 1 else _terms.MINUS
-                atoms[atom] = np.ldexp(_terms.factor(code, X[:, j], t), -k)
-        return atoms[atom]
-
-    def u_canon(s: int) -> dict:
-        if s in affine:
-            r, a, b = affine[s]
-            const = a * Fraction(float(m[r])) + b - Fraction(float(m[s]))
-            return {(r, 0, _ZERO): a} | ({None: const} if const else {})
-        if s in near:
-            r, _, const = near[s]
-            out = {(r, 0, _ZERO): Fraction(1), (s, 3, _ZERO): Fraction(1)}
-            return out | ({None: const} if const else {})
-        return {(s, 0, _ZERO): Fraction(1)}
-
-    diffs: dict = {}  # (s, 4, t_s) -> the difference of a near copy's hinge
-
-    def hinge_canon(atom: tuple) -> dict:
-        # A hinge (u_s - t_s)₊ or (t_s - u_s)₊ that is the canonical one of its
-        # pair. On a near copy s of r it is the same hinge on x_r plus h = the
-        # difference, when h is exact; h is 0 wherever x_s = x_r, as e_s is
-        # (the adversarial review of PR #123). The hinge itself may be small,
-        # as at a knot one ulp from a level, so h need not be small next to it.
-        s, _, ts = atom
-        j, t, k = where[atom]
-        if s in near and j == s and k == 0:  # kind 1, by ``base_kind``
-            r = near[s][0]
-            hs, hr = column(atom), _terms.factor(_terms.PLUS, X[:, r], t)
-            h = hs - hr
-            exact = np.all((hr == 0) | (hs == 0) | ((hs <= 2 * hr) & (hr <= 2 * hs)))
-            if exact:
-                tr = Fraction(t) - Fraction(float(m[r]))
-                for q in (1, 2):
-                    where.setdefault((r, q, tr), (r, t, 0))
-                out = dict(canonical((r, 1, tr)))
-                if np.any(h != 0):
-                    key = (s, 4, ts)
-                    diffs[key] = h
-                    out[key] = out.get(key, 0) + Fraction(1)
-                return out
-        return {atom: Fraction(1)}
-
-    def base_kind(s: int, ts: Fraction) -> int:
-        # The canonical hinge of the pair at t_s, 1 for (u_s - t_s)₊ and 2 for
-        # (t_s - u_s)₊; the other one is it plus or minus the line u_s - t_s.
-        # (u_s - t_s)₊ is canonical unless its mirror is tiny next to it, at a
-        # knot next to a level (one ulp off, #130): then (u_s - t_s)₊ is the
-        # line up to the mirror, and the mirror must carry that direction, or
-        # a linear factor's m_j multiplies the rounding of the line. A near
-        # copy keeps (u_s - t_s)₊, since ``hinge_canon`` writes it as the hinge
-        # of x_r, whose own choice is made here. Both are exact relations,
-        # which LA-4 allows in the sums of squares. The scope is knots that
-        # are data values, as the forward pass makes them: a knot 1e-6 to
-        # 3e-3 above a level has a ratio above 2^-20 and can miss LA-5, as on
-        # main; taking the smaller hinge always changed 6 of 533 fits of
-        # validation/bench/hash_fits.py and missed on another near copy (the
-        # adversarial review of PR #132).
-        if s in near:
-            return 1
-        P, Q = column((s, 1, ts)), column((s, 2, ts))
-        return 2 if np.linalg.norm(Q) <= 2.0**-20 * np.linalg.norm(P) else 1
-
-    def canonical(atom: tuple) -> dict:
-        s, kind, ts = atom
-        if kind == 0:
-            return u_canon(s)
-        j, t, _ = where[atom]
-        x = X[:, j]
-        if (kind == 1 and np.all(x <= t)) or (kind == 2 and np.all(x >= t)):
-            return {}
-        lin = u_canon(s)
-        if np.all(x >= t) or np.all(x <= t):  # the line ±(u_s - t_s) on every case
-            sign = 1 if kind == 1 else -1
-            out = {q: sign * f for q, f in lin.items()}
-            out[None] = out.get(None, 0) - sign * ts
-            return {q: f for q, f in out.items() if f != 0}
-        base = base_kind(s, ts)
-        if kind == base:
-            return hinge_canon(atom)
-        # (u_s - t_s)₊ = (t_s - u_s)₊ + u_s - t_s, and the mirror of it
-        sign = 1 if kind == 1 else -1
-        out = dict(hinge_canon((s, base, ts)))
-        for q, f in lin.items():
-            out[q] = out.get(q, 0) + sign * f
-        out[None] = out.get(None, 0) - sign * ts
-        return {q: f for q, f in out.items() if f != 0}
-
-    def mcol(ckey: tuple) -> FloatArray:  # the column of a canonical monomial
-        if ckey and ckey[0] == "raw":
-            return np.prod([column(a) for a in ckey[1]], axis=0)
-        col = np.ones(X.shape[0])
-        for atom in ckey:
-            col = col * column(atom)
-        return col
-
-    catoms: dict = {}
-    cindex: dict = {}
-    cols: list = []
-    canon: list = []
-    ckeys: list = []
-    for key in keys:
-        poly = {(): Fraction(1)}
-        for atom in key:
-            column(atom)
-            if atom not in catoms:
-                catoms[atom] = canonical(atom)
-            poly = _times(poly, catoms[atom])
-
-        # A monomial whose column is far smaller than the parts of its
-        # expansion, such as (x0 - t)₊·(t' - x3)₊ with a near copy x3, which is
-        # 0 at all cases but one, is its own canonical monomial ("raw", key):
-        # the parts would cancel only up to the rounding of their columns,
-        # which is then large next to the term's new part (#130).
-        if key:
-            D = mcol(("raw", key))
-            parts = sum(
-                abs(float(f)) * np.linalg.norm(mcol(q)) for q, f in poly.items()
-            )
-            # A column that is 0 at every case keeps its expansion: dropping
-            # it would make the terms dependent as formulas, which LA-4 does
-            # not find, and the pass would refuse B (seeds 26 and 49 of the
-            # adversarial review of PR #123).
-            if np.any(D != 0) and np.linalg.norm(D) < 2.0**-10 * parts:
-                poly = {("raw", key): Fraction(1)}
-        out = {}
-        for ckey, f in poly.items():
-            if ckey not in cindex:
-                cindex[ckey] = len(cols)
-                ckeys.append(ckey)
-                cols.append(mcol(ckey))
-            out[cindex[ckey]] = f
-        canon.append(out)
-    cterms = [_compose(t, canon) for t in terms]
-    return _Monomials(keys, terms, canon, np.column_stack(cols), cterms, ckeys, atoms)
-
-
-def _compose(poly: dict, canon: list) -> dict:
-    """A polynomial in the monomials of LA-4 as one in the canonical monomials.
-    Complexity: O(Σ len(canon[q]))."""
-    out: dict = {}
-    for q, f in poly.items():
-        for c, g in canon[q].items():
-            out[c] = out.get(c, 0) + f * g
-    return {c: f for c, f in out.items() if f != 0}
-
-
-def _shifted(X: FloatArray, dirs: IntArray) -> bool:
-    """Whether a term has a linear factor of a covariate that LA-4 shifts.
-    Complexity: O(n·p + M·p)."""
-    m = _shifts(X)
-    return bool(np.any((dirs == _terms.LINEAR) & (m != 0.0)))
-
-
-class _Reduced(NamedTuple):
-    """``_reduce``: ``cols`` g_k as {monomial: Fraction}, ``pivots`` their
-    pivots, and ``inverse`` T = U⁻¹ as columns {position: Fraction}, where
-    c_k = g_k + Σ_l U_lk·g_l, U unit upper triangular."""
-
-    cols: list
-    pivots: list
-    inverse: list
-
-
-def _reduce(terms: list, share: FloatArray) -> _Reduced:
-    """Exact Gaussian elimination of the terms in their order, in coefficient
-    space: g_k is c_k minus its parts along the earlier g_l, so that g_k is 0
-    at their pivots, and its pivot is the monomial with the largest share,
-    |coefficient|·``share`` (the first by index among equals). So the prefixes
-    of g span what the prefixes of the terms span, and a large m_j stays in
-    the coefficient of a monomial that an earlier term holds: x_j·b after b is
-    u_j·b. Terms of different monomials do not interact, so the work is that
-    of the terms that share monomials. Complexity: O(M·f·3^d) rational
-    operations, f the largest number of terms on one set of monomials."""
-    where: dict = {}
-    G: list = []
-    pivots: list = []
-    inverse: list = []
-    for k, c in enumerate(terms):
-        v = dict(c)
-        upper: dict = {}
-        while hits := [where[q] for q in v if q in where]:
-            r = min(hits)
-            f = v[pivots[r]] / G[r][pivots[r]]
-            for q, g in G[r].items():
-                v[q] = v.get(q, 0) - f * g
-            v = {q: g for q, g in v.items() if g != 0}
-            upper[r] = f
-        if not v:
-            raise ValueError("the columns of B must be linearly independent (FWD-11)")
-        p = max(sorted(v), key=lambda q: abs(float(v[q])) * share[q])
-        where[p] = k
-        G.append(v)
-        pivots.append(p)
-        t: dict = {k: Fraction(1)}  # T[:, k] = e_k - Σ_r U_rk·T[:, r]
-        for r, f in upper.items():
-            for i, g in inverse[r].items():
-                t[i] = t.get(i, 0) - f * g
-        inverse.append({i: g for i, g in t.items() if g != 0})
-    return _Reduced(G, pivots, inverse)
-
-
-def _scaled_columns(red: _Reduced, share: FloatArray, P: int) -> tuple:
-    """g_k as a dense float (P, M) matrix, each column times 2^-e_k so that its
-    largest share is in [0.5, 1), and the exponents e (M,). Complexity: O(P·M)."""
-    G = np.zeros((P, len(red.cols)))
-    e = np.zeros(len(red.cols), dtype=np.int64)
-    for k, g in enumerate(red.cols):
-        q = np.fromiter(g, dtype=np.int64, count=len(g))
-        v = np.array([float(g[i]) for i in q])
-        e[k] = np.frexp(np.max(np.abs(v) * share[q]))[1]
-        G[q, k] = np.ldexp(v, -e[k])
-    return G, e
-
-
-def _inverse_rows(red: _Reduced, e: npt.NDArray[np.int64]) -> FloatArray:
-    """T·2^-e as a dense float matrix, each row times a power of 2 so that its
-    largest entry is in [0.5, 1); a row's scale changes no drop cost.
-    Complexity: O(M²)."""
-    M = len(red.cols)
-    T = np.zeros((M, M))
-    for k, col in enumerate(red.inverse):
-        for i, g in col.items():
-            T[i, k] = float(g)
-    T = np.ldexp(T, -e[None, :])
-    return np.ldexp(T, -np.frexp(np.max(np.abs(T), axis=1))[1][:, None])
-
-
-class _Plain:
-    """The factor of PRUNE-9 for the columns of B: one QR, then downdates
-    (``_linalg.prefix_rss``, ``drop_costs`` and ``move_column``)."""
-
-    def __init__(self, R: FloatArray, Z: FloatArray, rss: float):
-        self.R, self.Z, self.rss = R, Z, rss
-
-    def prefix(self) -> FloatArray:
-        return _linalg.prefix_rss(self.Z, self.rss)
-
-    def drops(self, pos: int) -> FloatArray:
-        return _linalg.drop_costs(self.R, self.Z, pos)
-
-    def move(self, i: int, j: int) -> None:
-        self.R, self.Z = _linalg.move_column(self.R, self.Z, i, j)
-
-
-class _Shifted:
-    """The factor of PRUNE-9 for terms with a linear factor of a shifted
-    covariate (LA-4, LA-5): the terms are exact polynomials in the monomials
-    of shifted atoms (``_monomials``), whose columns carry no large mean.
-
-    A QR of the √w-scaled centered monomial columns E_w times the reduced
-    terms of the forward order (``_reduce``) gives an orthonormal basis Q_0 of
-    the span of all terms, the RSS of all terms, z = Q_0ᵀ(√w·Y) and H =
-    Q_0ᵀE_w. For a working order, the terms are reduced in that order and
-    A = H·G is factored, A = Q_A·R_A, with Z = Q_Aᵀz: the prefixes of
-    A span what the prefixes of the order span, and no column of A carries a
-    factor m_j that the earlier terms hold, so each prefix RSS keeps LA-5. The
-    RSS increase of a drop comes from the rows of (R_A·U)⁻¹ = T·R_A⁻¹, with T
-    = U⁻¹ exact (``_reduce``), so a term's coefficient m_j never multiplies a
-    rounded column. Complexity: O(n·M·(P + K)) once, P ≤ M·3^d monomials, and
-    per working order O(M³ + M²·(P + K)) floats and the rational work of
-    ``_reduce``."""
-
-    def __init__(self, mono: _Monomials, Yc: FloatArray, w: FloatArray | None):
-        n, P = mono.E.shape
-        self.terms, self.P = mono.cterms, P
-        sw = np.ones(n) if w is None else np.sqrt(w)
-        Ec = mono.E.copy()
-        rest = [q for q, key in enumerate(mono.ckeys) if key]
-        if rest:  # the intercept's monomial stays 1 (every subset holds it)
-            Ec[:, rest] = _centered(Ec[:, rest], w)[0]
-        As = sw[:, None] * Ec
-        self.share = np.sqrt(np.sum(np.square(As), axis=0))
-        red = _reduce(self.terms, self.share)
-        G, _ = _scaled_columns(red, self.share, P)
-        # The terms' columns are factored directly, not through a QR of the
-        # monomials: the canonical monomials can be dependent on the cases
-        # (the differences of a near copy are 0 at all but a few cases), and
-        # the rounding of such a factor in a direction the terms do not span
-        # would enter the RSS times m_j (the adversarial review of PR #123).
-        Q0, _ = np.linalg.qr(As @ G)
-        resid, self.z = _linalg.orthogonalize(Q0, sw[:, None] * Yc)
-        self.rss = float(np.sum(np.square(resid)))
-        self.H = Q0.T @ As
-        self.order = np.arange(len(self.terms))
-        self._factor(red)
-
-    def _factor(self, red: _Reduced | None = None) -> None:
-        if red is None:
-            red = _reduce([self.terms[o] for o in self.order], self.share)
-        G, self.e = _scaled_columns(red, self.share, self.P)
-        Q, self.R = np.linalg.qr(self.H @ G)
-        if np.any(np.diag(self.R) == 0.0):
-            raise ValueError("the columns of B must be linearly independent (FWD-11)")
-        self.Z = Q.T @ self.z
-        self.red = red
-
-    def prefix(self) -> FloatArray:
-        return _linalg.prefix_rss(self.Z, self.rss)
-
-    def drops(self, pos: int) -> FloatArray:
-        # The columns of A are scaled already, so R needs no scaling here.
-        W = scipy.linalg.solve_triangular(self.R[:pos, :pos], np.eye(pos))
-        rows = _inverse_rows(self.red, self.e)[:pos, :pos]
-        rows = np.ldexp(rows, -np.frexp(np.max(np.abs(rows), axis=1))[1][:, None]) @ W
-        beta = rows @ self.Z[:pos]
-        num = np.square(beta) if beta.ndim == 1 else np.sum(np.square(beta), axis=1)
-        return num / np.sum(np.square(rows), axis=1)
-
-    def move(self, i: int, j: int) -> None:
-        self.order = np.insert(np.delete(self.order, i), j, self.order[i])
-        self._factor()
-
-
 def _stages(
-    f: _Plain | _Shifted, M: int, several: bool
+    R: FloatArray, Z: FloatArray, rss: float, several: bool
 ) -> tuple[IntArray, FloatArray, BoolArray]:
-    """Run the stages of PRUNE-3 on the factor ``f`` of the forward order.
+    """Run the stages of PRUNE-3 on the factor R, Z (``_linalg.r_factor``) of
+    the forward order, whose full RSS is ``rss``.
 
     Returns ``removed``, R[m] for m = 1, …, M_f and the rows of T[m]. With
     ``several`` false (K = 1), each new working order is offered: a prefix of
     size m replaces T[m] when its RSS is lower than R[m], so the earlier offer
     wins a tie. With ``several`` true (K ≥ 2), T[m] is the set left after
-    M_f - m removals. Complexity: O(M_f³·(M_f + K)) in all, at most
-    O(M_f²·(M_f + K)) per stage for ``_Plain``; see ``_Shifted`` for it.
+    M_f - m removals. A stage reads the prefix RSS and the drop costs from R
+    and Z and moves the removed term by a downdate (PRUNE-9).
+    Complexity: O(M_f³·(M_f + K)) in all, at most O(M_f²·(M_f + K)) per stage.
     """
+    M = R.shape[1]
     order = np.arange(M)
-    offered = f.prefix()
+    offered = _linalg.prefix_rss(Z, rss)
     best = offered.copy()
     subsets = np.tri(M, dtype=bool)  # the prefixes of the starting order
     removed = np.empty(M - 1, dtype=np.int64)
     for pos in range(M, 1, -1):
         # Step 1: the RSS without each term at positions 2, …, pos (0-based 1 to
         # pos - 1); ties go to the term with the largest index.
-        drop = offered[pos - 1] + f.drops(pos)[1:]
+        drop = offered[pos - 1] + _linalg.drop_costs(R, Z, pos)[1:]
         tied = 1 + np.flatnonzero(drop == drop.min())
         i = int(tied[np.argmax(order[tied])])
         # Step 2: record the term and move it to position pos.
         removed[M - pos] = order[i]
-        f.move(i, pos - 1)
+        R, Z = _linalg.move_column(R, Z, i, pos - 1)
         order = np.insert(np.delete(order, i), pos - 1, order[i])
         # Step 3: offer the new order.
-        offered = f.prefix()
+        offered = _linalg.prefix_rss(Z, rss)
         sizes = [pos - 2] if several else np.flatnonzero(offered < best)
         for m in sizes:
             best[m] = offered[m]
             subsets[m] = False
             subsets[m, order[: m + 1]] = True
     return removed, best, subsets
-
-
-def _terms_of(
-    B: FloatArray,
-    keep: BoolArray | None,
-    X: npt.ArrayLike | None,
-    dirs: npt.ArrayLike | None,
-    cuts: npt.ArrayLike | None,
-) -> _Monomials | None:
-    """Check X, dirs and cuts, and return the monomials of the terms when a term
-    has a linear factor of a shifted covariate (LA-4), else None."""
-    if (X is None) != (dirs is None) or (X is None) != (cuts is None):
-        raise ValueError("X, dirs and cuts are given together or not at all")
-    if X is None:
-        return None
-    X = np.asarray(X, dtype=np.float64)
-    dirs, cuts = _terms.check_terms(dirs, cuts)
-    n = keep.size if keep is not None else B.shape[0]
-    if X.ndim != 2 or X.shape[0] != n or not np.isfinite(X).all():
-        raise ValueError(
-            f"X must be finite and 2-D with one row per case, not {X.shape}"
-        )
-    if dirs.shape != (B.shape[1], X.shape[1]) or np.any(dirs[0] != 0):
-        raise ValueError(
-            "dirs and cuts must be (M_f, p), as B and X say, from the intercept"
-        )
-    if keep is not None:
-        X = X[keep]
-    return _monomials(X, dirs, cuts) if _shifted(X, dirs) else None
-
-
-def _positive(w: npt.ArrayLike | None) -> BoolArray | None:
-    """The rows with positive weight, before ``_cases`` drops the others."""
-    if w is None:
-        return None
-    wa = np.asarray(w, dtype=np.float64)
-    return wa > 0.0 if wa.ndim == 1 and np.all(np.isfinite(wa)) else None
 
 
 def pruning_pass(
@@ -771,9 +196,6 @@ def pruning_pass(
     penalty: float,
     pmethod: str = "backward",
     nprune: int | None = None,
-    X: npt.ArrayLike | None = None,
-    dirs: npt.ArrayLike | None = None,
-    cuts: npt.ArrayLike | None = None,
 ) -> PruningPass:
     """Run the pruning pass on the kept forward terms (PRUNE-1 to PRUNE-7).
 
@@ -794,37 +216,26 @@ def pruning_pass(
 
     B (n, M_f), Y and w are as in the module docstring, with M_f ≤ n; the
     penalty d is resolved (GCV-1, GCV-4) and ``nprune`` is None or an integer
-    ≥ 1 (LIMIT-3). ``X`` (n, p), ``dirs`` and ``cuts`` (M_f, p) are optional,
-    and all three or none: the covariates and the terms that made B (TERM-3).
-    When a term has a linear factor of a covariate that LA-4 shifts, the
-    pass works on the terms in shifted atoms (``_Shifted``), so that every RSS
-    keeps LA-5 whatever the mean of x; else on B itself (``_Plain``). Raises
-    ValueError for input outside these ranges. Complexity: O(n·M_f·(M_f + K))
-    for the factor and O(M_f³·(M_f + K)) for the stages, at most O(n·M_f²) per
-    stage for K ≤ M_f (PRUNE-9); with shifted terms, O(n·P·(P + K)) once for
-    P ≤ M_f·3^d monomials and O(M_f³ + M_f²·(P + K)) per stage, plus the
-    exact elimination of ``_reduce``; memory O(n·(P + K) + M_f·P).
+    ≥ 1 (LIMIT-3). The pass works on one Householder QR of the √w-scaled B,
+    its columns after the intercept centered (#84), and its downdates
+    (PRUNE-9). Raises ValueError for input outside these ranges.
+    Complexity: O(n·M_f·(M_f + K)) for the factor and O(M_f³·(M_f + K)) for
+    the stages, at most O(n·M_f²) per stage for K ≤ M_f (PRUNE-9).
     """
     if pmethod not in PMETHODS:
         raise ValueError(f"pmethod must be 'backward' or 'none', not {pmethod!r}")
-    keep = _positive(w)
     B, Y, w, N, tau = _cases(B, Y, w)
     M = B.shape[1]
     m_max = _gcv.nprune_limit(M, nprune)
-    mono = _terms_of(B, keep, X, dirs, cuts)
     Yc = _centered(Y, w)[0]
-    if mono is not None:
-        factor: _Plain | _Shifted = _Shifted(mono, Yc, w)
-    else:
-        Bc = B.copy()
-        if M > 1:
-            Bc[:, 1:] = _centered(B[:, 1:], w)[0]  # the same spans (LA-5, #84)
-        R, Z, rss = _linalg.r_factor(Bc, Yc, w)
-        # fit_mars cannot reach this: FWD-11 drops a column constant over the cases.
-        if np.any(np.diag(R) == 0.0):
-            raise ValueError("the columns of B must be linearly independent (FWD-11)")
-        factor = _Plain(R, Z, rss)
-    removed, rss_per_size, subsets = _stages(factor, M, several=Y.shape[1] >= 2)
+    Bc = B.copy()
+    if M > 1:
+        Bc[:, 1:] = _centered(B[:, 1:], w)[0]  # the same spans (LA-5, #84)
+    R, Z, rss = _linalg.r_factor(Bc, Yc, w)
+    # fit_mars cannot reach this: FWD-11 drops a column constant over the cases.
+    if np.any(np.diag(R) == 0.0):
+        raise ValueError("the columns of B must be linearly independent (FWD-11)")
+    removed, rss_per_size, subsets = _stages(R, Z, rss, several=Y.shape[1] >= 2)
     gcv_per_size = _gcv.gcv(rss_per_size, np.arange(1, M + 1), penalty, N, tau)
     if _gcv.is_degenerate(Y, N):
         gcv_per_size = np.full(M, np.inf)
@@ -846,36 +257,26 @@ def final_fit(
     w: npt.ArrayLike | None = None,
     *,
     penalty: float,
-    X: npt.ArrayLike | None = None,
-    dirs: npt.ArrayLike | None = None,
-    cuts: npt.ArrayLike | None = None,
 ) -> FinalFit:
     """Return the coefficients and statistics of the selected terms (PRUNE-8).
 
     ``coef`` holds the weighted least-squares coefficients of Y on the columns
     ``selected`` of B, in increasing term order, one column per response, with
-    LA-4 for dependent columns (``_linalg.lm_fit``; on the shifted path the
-    kept terms come from ``_linalg.independent_terms``, as in FWD-11). The fit is of the
-    centered responses, and the intercept's coefficient takes back their
-    constants, so a constant response gets its value there and 0 for the other
-    terms, exactly. ``rss`` is the weighted RSS of the centered fit: that of
-    the returned coefficients, up to the rounding of the intercept's
-    coefficient. ``gcv``, ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7
+    LA-4's float64 test for dependent columns, which get 0 (``_linalg.lm_fit``,
+    the test of FWD-11). The fit is of the centered responses (LA-6), and the
+    intercept's coefficient takes back their constants, so a constant response
+    gets its value there and 0 for the other terms, exactly. ``rss`` is the
+    weighted RSS of the projection of the centered responses on the kept
+    selected columns: that of the returned coefficients, up to their rounding.
+    ``gcv``, ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7
     with that RSS, M = m* and N = Σw. With ``pmethod="none"`` and m* < M_f the
     selected terms are not T[m*], so ``rss`` differs from
     ``rss_per_size[m* - 1]`` (PRUNE-7).
 
     B, Y and w are as for ``pruning_pass``; ``selected`` is an increasing
     integer array that starts with the intercept, 0. Raises ValueError
-    otherwise. With ``X``, ``dirs`` and ``cuts`` of all M_f terms (as for
-    ``pruning_pass``) and a selected term with a linear factor of a covariate
-    that LA-4 shifts, the fit applies LA-4 after the exact shift and ``rss`` is
-    the RSS of the projection (``_shifted_fit``), so that a large mean of x
-    neither drops a term nor costs the RSS its accuracy (LA-5).
-    Complexity: O(n·m*·(m* + K)) time, O(n·(m* + K)) memory; with shifted
-    terms see ``_shifted_fit``.
+    otherwise. Complexity: O(n·m*·(m* + K)) time, O(n·(m* + K)) memory.
     """
-    keep = _positive(w)
     B, Y, w, N, tau = _cases(B, Y, w)
     sel = np.asarray(selected)
     if (
@@ -890,31 +291,9 @@ def final_fit(
             f"selected must be increasing term indices below {B.shape[1]}, from 0"
         )
     m = sel.size
-    mono = _terms_of(B, keep, X, dirs, cuts)
-    if mono is not None:
-        X_cases = np.asarray(X, dtype=np.float64)
-        X_cases = X_cases if keep is None else X_cases[keep]
-        mono = mono._replace(
-            terms=[mono.terms[k] for k in sel], cterms=[mono.cterms[k] for k in sel]
-        )
     Yc, constants = _centered(Y, w)
-    if mono is not None:
-        # LA-4 on the selected terms in increasing order, by the test of FWD-11
-        # (``_linalg.independent_terms``), so that the final fit and the
-        # forward pass decide alike (#137)
-        keep_terms = _linalg.independent_terms(
-            X_cases,
-            np.asarray(dirs)[sel],
-            np.asarray(cuts, dtype=np.float64)[sel],
-            w,
-            B[:, sel],
-        )
-        cuts_sel = np.asarray(cuts, dtype=np.float64)[sel]
-        terms = (X_cases, np.asarray(dirs)[sel], cuts_sel)
-        coef, rss = _shifted_fit(mono, Yc, w, keep_terms, terms)
-    else:
-        fit = _linalg.lm_fit(B[:, sel], Yc, w)
-        coef, rss = fit.coef, fit.rss
+    fit = _linalg.lm_fit(B[:, sel], Yc, w)
+    coef, rss = fit.coef, fit.rss
     coef[0] += constants  # column 0 is the intercept, a column of ones
     gcv = _gcv.gcv(rss, m, penalty, N, tau)
     if _gcv.is_degenerate(Y, N):
@@ -923,94 +302,3 @@ def final_fit(
     rsq = _gcv.rsq(rss, tss, m)
     grsq = _gcv.grsq(rss, tss, m, penalty, N, tau)
     return FinalFit(coef, rss, float(gcv), rsq, grsq)
-
-
-def _shifted_fit(
-    mono: _Monomials,
-    Yc: FloatArray,
-    w: FloatArray | None,
-    keep: BoolArray,
-    terms: tuple,
-) -> tuple[FloatArray, float]:
-    """Least squares of Yc on the terms of ``mono`` that ``keep`` marks, the
-    terms that LA-4 keeps after the exact shift (PRUNE-8): the coefficients
-    (M, K), 0 for a dependent term, and the RSS of the projection. The
-    coefficients solve the least squares on the reduced kept terms, g, and
-    b = T·g with T = U⁻¹ exact; the intercept's takes the constants of the
-    centered monomials. ``terms`` is (X, dirs, cuts) of the same M terms on
-    the cases.
-
-    A reduced column within ``_linalg.NEAR_SPAN`` of the span of the earlier
-    ones is replaced by the exact residual of its term on the earlier kept
-    terms, rounded once (``Conditioner.exact_residual``, as FWD-11 does in
-    ``independent_terms``): LA-4 keeps a term whose new part can be far below
-    the rounding of its reduced column, when a factor m_j multiplies a
-    monomial that the data span (a hinge one ulp from a level, u_j² of a
-    covariate with two levels), and the float column then holds only that
-    rounding, which lowered the RSS by up to 25 % (#140). The term then gets
-    the coefficient of the residual, and each earlier kept term that times
-    the exact coefficient of the projection. Complexity: O(n·m·(m + P)) and
-    the rational work of ``_reduce`` for m terms and P monomials; for each
-    replaced column, O(g·m) integer and O(m³) rational operations on g
-    distinct rows.
-    """
-    n, P = mono.E.shape
-    sw = np.ones(n) if w is None else np.sqrt(w)
-    Ec = mono.E.copy()
-    shift = np.zeros(P)
-    rest = [q for q, key in enumerate(mono.ckeys) if key]
-    if rest:
-        Ec[:, rest], shift[rest] = _centered(Ec[:, rest], w)
-    As = sw[:, None] * Ec
-    share = np.sqrt(np.sum(np.square(As), axis=0))
-    kept = np.flatnonzero(keep).tolist()
-    basis = [mono.cterms[k] for k in kept]
-    red = _reduce(basis, share)
-    G, e = _scaled_columns(red, share, P)
-    A = As @ G
-    Qa, Ra = np.linalg.qr(A)
-    # #140: the part of a column that the earlier ones do not span, |R_jj|,
-    # is accurate only to the rounding of the sum of its monomials' parts; it
-    # holds mostly rounding when it is far below that sum (never for the
-    # intercept, whose R_00 is its norm)
-    parts = np.abs(G).T @ share
-    near = np.abs(np.diag(Ra)) < _linalg.NEAR_SPAN * parts
-    beta: dict = {}
-    if near.any():
-        X, dirs, cuts = terms
-        cond = _linalg.Conditioner(X, w)
-        for j, k in enumerate(kept):
-            if near[j]:
-                r, beta[j] = cond.exact_residual(dirs[k], cuts[k], coef=True)
-                r = sw * r
-                top = np.max(np.abs(r))
-                e[j] = np.frexp(top)[1] if top > 0 else 0
-                A[:, j] = np.ldexp(r, -e[j])
-            cond.span_append(dirs[k], cuts[k])
-        Qa, Ra = np.linalg.qr(A)
-    # LA-4 can keep a term that the data span exactly (its new part counts as
-    # a formula), so a reduced column can be 0 after the earlier ones in
-    # float64 too; it adds nothing to the span and gets the coefficient 0
-    # (seed 295 of the spec review of PR #132, #137).
-    ok = np.diag(Ra) != 0.0
-    if not ok.all():
-        Qa, Ra = np.linalg.qr(A[:, ok])
-    resid, z = _linalg.orthogonalize(Qa, sw[:, None] * Yc)
-    gamma = np.zeros((len(kept), Yc.shape[1]))
-    gamma[ok] = np.ldexp(scipy.linalg.solve_triangular(Ra, z), -e[ok, None])
-    T = np.zeros((len(kept), len(kept)))
-    for j, col in enumerate(red.inverse):
-        for i, f in col.items():
-            T[i, j] = float(f)
-    exact = gamma[list(beta)]  # the coefficients of the exact residuals
-    gamma[list(beta)] = 0.0
-    coef = np.zeros((len(mono.terms), Yc.shape[1]))
-    coef[kept] = T @ gamma
-    coef[0] -= shift @ (np.ldexp(G, e[None, :]) @ gamma)  # Ec = E - 1·shiftᵀ
-    for (j, b), g in zip(beta.items(), exact, strict=True):
-        # the residual is term kept[j] - Σ_i b_i·(term kept[i]), uncentered
-        coef[kept[j]] += g
-        for i, f in enumerate(b):
-            if f:
-                coef[kept[i]] -= float(f) * g
-    return coef, float(np.sum(np.square(resid)))

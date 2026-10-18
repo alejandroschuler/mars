@@ -39,17 +39,14 @@ checked against FWD-4 with the rebuilt RSS; a candidate that fails is left
 out, its search is done again without it, and the step chooses again.
 
 Dependence (LA-1, LA-2, LA-4, FWD-11). A candidate's new column (b·x, a hinge)
-that LA-4 finds dependent on G counts as 0: no linear candidate, b·x not in G,
-a hinge with the gain 0. Without a linear factor of a shifted covariate
-(``_linalg.large_covariates``) in the column or in the terms, that is the plain
-test, on a distance that the search has already. Otherwise
-``_linalg.Conditioner.dependent`` applies it in the exact shift, from the float64
-distance of a column free of the mean, with its error bound, and exactly
-(rational arithmetic) where the bound does not decide. A column b·x within
-``_linalg.NEAR_SPAN`` of the span of B, whose float64 projection keeps only
-rounding, is replaced by its exact residual on B (LA-5); ``_linalg.Conditioner``
-keeps the exact span of the columns of Q for this. FWD-11 is the same test
-on the terms, in their order, so it does not depend on the order of the terms.
+that LA-4's float64 test (``_linalg.dependent``) finds dependent on G counts as
+0: no linear candidate, b·x not in G, a hinge with the gain 0. The test uses
+the distance to G that the search has already and the uncentered √w-norm of
+the column itself (b·x, not the centered b·(x - c) of the projections). FWD-11
+is the same test on the √w-scaled columns of the terms, in their order
+(``_linalg.independent_columns``). On inputs beyond ordinary data (the spec's
+Limits, LIM-1 to LIM-4) the decisions follow float64 rounding.
+
 FWD-12: the occurrences of one single hinge or linear candidate in several
 searches of a step (``_Pass.occurrences``) are one candidate, decided by the
 first in the order of FWD-5 (``_Pass.decide``); the others keep its reduction for
@@ -67,7 +64,6 @@ sorts, O(P·p·n·r) per step for P parents and rank r, O(n·M²) for FWD-11;
 memory O(n·(p + M_max)). The dependence tests add O(n·r) for each knot that
 pass 2 values and O(n) for each pair search; merging adds O(p) for each
 candidate that pass 2 values and O(n·r) for each alternate search that exists.
-With a linear factor of a shifted covariate see ``forward_pass``.
 
 Public names, for ``_core``:
 
@@ -204,7 +200,6 @@ class _Search(NamedTuple):
     Q: FloatArray
     E: FloatArray
     dep: bool = False
-    kappa: float = 1.0
 
 
 def _top_two(candidates: list[_Candidate]) -> list[_Candidate]:
@@ -283,11 +278,6 @@ class _Pass:
         self.E, _ = _linalg.orthogonalize(self.Q, self.Yw)
         self.rss = [tss]
         self.dirs, self.cuts = _terms.intercept_terms(p)
-        self.cond = _linalg.Conditioner(X, w)  # LA-4, LA-5
-        self.cond.append(self.dirs[0], self.cuts[0])
-        self.cond.span_append(self.dirs[0], self.cuts[0])
-        self.exact: dict = {}  # (k, j) -> the exact residual of b·x_j in this step
-        self.kappa = 1.0  # the loss of digits in Q (LA-4's error bound)
         self.lin_knot = [_knots.linear_option_knot(X[:, j]) for j in range(p)]
         self.index = {self._row_key(self.dirs[0], self.cuts[0]): 0}  # FWD-12
         self.parent, self.step_of = [-1], [0]
@@ -507,135 +497,34 @@ class _Pass:
 
     def linear_column(self, k: int, j: int) -> FloatArray:
         """The unscaled column that stands for b·x_j in the projections, b the
-        column of term k: it spans with B what b·x_j spans, since B holds b.
-        That is b·(x_j - c_j), c_j the covariate's middle value (the plan's
-        "Fast path"), unless b has a linear factor, or a hinge (t - x)₊, of a
-        covariate with a large mean: then the reduced expansion of b·x_j
-        (``_linalg.Conditioner``), so that no digits go to the mean (LA-5).
-        Complexity: O(n) and, with a large mean, O(M·3^d) rational operations
-        and O(n·d·3^d) for the column of a term of degree d."""
-        if not self.cond.expands(self.dirs[k]):
-            return self.cols[k] * (self.X[:, j] - self.center[j])
-        return self.cond.linear(k, self.dirs[k], self.cuts[k], j)
-
-    def hinge_column(self, c: _Candidate, h: FloatArray) -> tuple[FloatArray, float]:
-        """The unscaled column that stands for the hinge column h of the
-        candidate c in the projections, and a bound on its entries' magnitude
-        (the scaled norm, for LA-4's test): h itself, or, when the parent has a
-        linear factor, or a hinge (t - x)₊, of a covariate with a large mean,
-        its reduced expansion (``_linalg.Conditioner``), which spans the same
-        with B. Complexity: O(n), or see ``linear_column``."""
-        if not self.cond.expands(self.dirs[c.parent]):
-            return h, float(np.linalg.norm(self.sw * h))
-        d, k = _terms.child_term(
-            self.dirs[c.parent], self.cuts[c.parent], c.variable, _terms.PLUS, c.knot
-        )
-        col = self.cond.hinge(d, k)
-        return col, self.cond.size
-
-    def _linear_row(self, k: int, j: int) -> tuple[IntArray, FloatArray]:
-        """The row of b·x_j, b the term k (a linear factor in j). O(p)."""
-        return _terms.child_term(self.dirs[k], self.cuts[k], j, _terms.LINEAR)
-
-    def _linear_dependent(self, k: int, j: int, dist: float, size: float) -> bool:
-        """LA-2, LA-4: whether the column b·x_j is dependent on B, given the
-        norm ``dist`` of its part orthogonal to B (from a column that spans the
-        same with B) and the magnitude ``size`` of that column. Complexity: O(n)
-        and, with a large mean, see ``_linalg.Conditioner``."""
-        row, cut = self._linear_row(k, j)
-        if self.cond.shifted(row):
-            return self.cond.dependent(row, cut, dist, size, kappa=self.kappa)
-        raw = self.sw * self.cols[k] * self.X[:, j]
-        return _linalg.plain_dependent(dist, float(np.linalg.norm(raw)))
-
-    def _hinge_dependent(
-        self, c: _Candidate, sr: _Search, h: FloatArray, hg: FloatArray, size: float
-    ) -> bool:
-        """LA-2, LA-4: whether the hinge column of candidate c is dependent on G
-        (B, and b·x when LA-4 keeps it in a pair search). Complexity: O(n·r)
-        and, with a large mean, see ``_linalg.Conditioner``."""
-        dist = _linalg.gram_schmidt(sr.Q, self.sw * hg).norm
-        row, cut = _terms.child_term(
-            self.dirs[c.parent], self.cuts[c.parent], c.variable, _terms.PLUS, c.knot
-        )
-        extra = (
-            [self._linear_row(c.parent, c.variable)] if sr.pair and not sr.dep else []
-        )
-        if self.cond.shifted(row, *(r for r, _ in extra)):
-            return self.cond.dependent(row, cut, dist, size, extra, sr.kappa)
-        return _linalg.plain_dependent(dist, float(np.linalg.norm(self.sw * h)))
+        column of term k: b·(x_j - c_j), c_j the covariate's middle value (the
+        plan's "Fast path"). It spans with B what b·x_j spans, since B holds b.
+        Complexity: O(n)."""
+        return self.cols[k] * (self.X[:, j] - self.center[j])
 
     def setup(self, k: int, j: int) -> _Search:
         """The search of covariate j on parent k: Gram-Schmidt of b·(x - c)
         gives A of LA-7, and so the kind, where V holds the covariates of b
         and x; a pair search adds b·x to G, and its residuals are
-        orthogonalized twice against G, as ``_scan.knot_scan`` requires.
-        Every reduction goes through ``_capped``, here, in ``search`` and in
-        ``refine``. Where b·x is within ``_linalg.NEAR_SPAN`` of the span of B
-        and enters G, or where the rounding of its distance to B could change
-        the kind, its exact residual on B takes its place (``_exact_setup``,
-        LA-5), so that A_w and the RSS of the linear candidate do not rest on
-        the rounding of a projection (a copy up to rounding, such as x/8 + c
-        next to a covariate of few levels that B spans at the cases).
-        Complexity: O(n·r·K); with a large mean also the cost of
-        ``linear_column`` (worst case O(M²·3^d) rational operations over a
-        pass, O(n·d·3^d) for each column); with an exact residual, once per
-        step, O(g·r) rational operations for g distinct rows of X, and
-        O(g·r) for each term added since the last one."""
+        orthogonalized twice against G, as ``_scan.knot_scan`` requires. In a
+        pair search LA-2 tests b·x with LA-4 (``_linalg.dependent``): its
+        distance to B is that of b·(x - c), and its norm that of b·x itself,
+        not centered. Every reduction goes through ``_capped``, here, in
+        ``search`` and in ``refine``. Complexity: O(n·r·K)."""
         x, b = self.X[:, j], self.cols[k]
-        exact = self.exact.get((k, j))
-        if exact is not None:
-            v = self.sw * exact
-            size = float(np.linalg.norm(v))
-        elif self.cond.expands(self.dirs[k]):
-            v = self.sw * self.linear_column(k, j)
-            size = self.cond.size
-        else:  # the product order of the plain path: (√w·b)·(x - c)
-            v = self.sw * b * (x - self.center[j])
-            size = float(np.linalg.norm(v))
+        v = self.sw * b * (x - self.center[j])  # the product order: (√w·b)·(x - c)
         gs = _linalg.gram_schmidt(self.Q, v)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), j]
-        # The kind comes first: where rounding could change it, the exact
-        # column decides it, and the LA-2 test below then runs on that column
-        # too (an exactly spanned b·x gives A_w = 0, a single-hinge search).
-        if exact is None and self._kind_uncertain(gs.norm, size, self.variances[V]):
-            return self._exact_setup(k, j)
         pair = gs.q is not None and _linalg.pair_search(gs.norm**2, self.variances[V])
         if not pair:
-            return _Search(x, b, False, 0.0, self.Q, self.E, False, self.kappa)
-        if self._linear_dependent(k, j, gs.norm, size):  # LA-2: it counts as 0
-            return _Search(x, b, True, 0.0, self.Q, self.E, True, self.kappa)
-        if exact is None and gs.norm < _linalg.NEAR_SPAN * size:  # LA-5
-            return self._exact_setup(k, j)
+            return _Search(x, b, False, 0.0, self.Q, self.E)
+        norm = float(np.linalg.norm(self.sw * b * x))
+        if _linalg.dependent(gs.norm, norm):  # LA-2: b·x counts as 0
+            return _Search(x, b, True, 0.0, self.Q, self.E, True)
         Q = np.column_stack((self.Q, gs.q))
         lin = float(self._capped(float(np.sum((gs.q @ self.E) ** 2))))
-        kappa = max(self.kappa, size / gs.norm)
         E = _linalg.orthogonalize(Q, self.E)[0]
-        return _Search(x, b, True, lin, Q, E, False, kappa)
-
-    def _kind_uncertain(self, dist: float, size: float, variances) -> bool:
-        """Whether the rounding of ``dist``, the norm of the part of b·x
-        orthogonal to B from a column of magnitude ``size``, can change the
-        kind of the search (LA-7: A_w = dist² against 0.01·Π sigma_v²). The bound
-        is that of ``_linalg.Conditioner.dependent`` on a float64 distance.
-        Complexity: O(len(variances))."""
-        v = np.asarray(variances, dtype=np.float64)
-        if np.any(v == 0.0):  # a single-hinge search whatever A_w is
-            return False
-        r = self.Q.shape[1]
-        err = 16.0 * 2.0**-53 * size * (1.0 + self.kappa) * math.sqrt(r + 2)
-        limit = math.sqrt(_linalg.PAIR_SEARCH_FACTOR * math.prod(v.tolist()))
-        return abs(dist - limit) <= err
-
-    def _exact_setup(self, k: int, j: int) -> _Search:
-        """``setup`` with the exact residual of b·x_j on B in place of its
-        column (LA-5): where b·x_j is within ``_linalg.NEAR_SPAN`` of the span of B, or
-        where the rounding of its distance to B could change the kind of the
-        search. Kept for the step, so that every search of (k, j) in it, and
-        the chosen candidate's columns, use the same column.
-        Complexity: that of ``_linalg.Conditioner.exact_residual``."""
-        self.exact[k, j] = self.cond.exact_residual(*self._linear_row(k, j))
-        return self.setup(k, j)
+        return _Search(x, b, True, lin, Q, E)
 
     def search(self, k: int, j: int, excluded: set) -> list[_Candidate]:
         """Pass 1 for parent k and covariate j: every candidate that can be one
@@ -687,8 +576,10 @@ class _Pass:
     def refine(self, cands: list[_Candidate]) -> list[_Candidate]:
         """Pass 2: the explicit values of the knots (``_scan.exact_knot``), with
         LA-3 and FWD-4 decided on them; the illegal ones are left out, and the
-        linear candidates, whose values are explicit already, stay.
-        Complexity: O(n·r) per search and O(n·(r + K)) per knot."""
+        linear candidates, whose values are explicit already, stay. LA-2 tests
+        the hinge with LA-4 against G (``_hinge_dependent``); a dependent hinge
+        has the gain 0. Complexity: O(n·r) per search and O(n·(r + K)) per
+        knot."""
         out = [c for c in cands if c.kind == KIND_LINEAR]
         s, top = len(self.rss), self.max_legal()
         for k, j in sorted(
@@ -699,44 +590,33 @@ class _Pass:
                 if (c.parent, c.variable) != (k, j) or c.kind == KIND_LINEAR:
                     continue
                 h = sr.b * _terms.factor(_terms.PLUS, sr.x, c.knot)
-                hg, size = self.hinge_column(c, h)  # same span with G (LA-5)
-                rho, gain = _scan.exact_knot(sr.Q, sr.E, hg, self.w)
-                if hg is not h:  # LA-3 is the ratio of the hinge column itself
-                    rho = _linalg.collinearity_ratio(sr.Q, h, self.w)
-                if self._hinge_dependent(c, sr, h, hg, size):  # LA-2: counts as 0
+                rho, gain = _scan.exact_knot(sr.Q, sr.E, h, self.w)
+                if self._hinge_dependent(sr.Q, h):  # LA-2: it counts as 0
                     gain = 0.0
                 red = float(self._capped(gain + sr.lin))
                 if not _linalg.knot_rejected(rho, s) and 0.0 < red <= top:
                     out.append(c._replace(reduction=red, err=0.0, sure=True))
         return out
 
-    def columns(
-        self, c: _Candidate
-    ) -> tuple[FloatArray, FloatArray | None, list[float]]:
+    def _hinge_dependent(self, Q: FloatArray, h: FloatArray) -> bool:
+        """LA-2, LA-4: whether the hinge column h is dependent on G, whose
+        basis Q is that of the search (B, and b·x when LA-2 counted it in a
+        pair search). Complexity: O(n·r)."""
+        v = self.sw * h
+        dist = _linalg.gram_schmidt(Q, v).norm
+        return _linalg.dependent(dist, float(np.linalg.norm(v)))
+
+    def columns(self, c: _Candidate) -> FloatArray:
         """Return the √w-scaled columns that span the candidate's terms (b·x
-        before the hinge of a pair, FWD-6), its unscaled hinge column, or None,
-        and a bound on the magnitude of each scaled column (for the error
-        bound of LA-4). Complexity: O(n)."""
+        before the hinge of a pair, FWD-6), without a b·x that LA-2 did not
+        count (FWD-13). Complexity: O(n)."""
         x, b = self.X[:, c.variable], self.cols[c.parent]
-        h, sizes, cols = None, [], []
-        if self._spans_bx(c):  # a b·x that LA-4 finds dependent is not in the span
-            exact = self.exact.get((c.parent, c.variable))  # as in setup
-            if exact is not None:
-                cols.append(exact)
-                sizes.append(float(np.linalg.norm(self.sw * exact)))
-            else:
-                cols.append(self.linear_column(c.parent, c.variable))
-                plain = not self.cond.expands(self.dirs[c.parent])
-                sizes.append(
-                    float(np.linalg.norm(self.sw * cols[-1]))
-                    if plain
-                    else self.cond.size
-                )
+        cols = []
+        if self._spans_bx(c):
+            cols.append(self.linear_column(c.parent, c.variable))
         if c.kind != KIND_LINEAR:
-            h, size = self.hinge_column(c, b * _terms.factor(_terms.PLUS, x, c.knot))
-            cols.append(h)
-            sizes.append(size)
-        return self.sw[:, None] * np.column_stack(cols), h, sizes
+            cols.append(b * _terms.factor(_terms.PLUS, x, c.knot))
+        return self.sw[:, None] * np.column_stack(cols)
 
     def _spans_bx(self, c: _Candidate) -> bool:
         """Whether b·x is among the candidate's new columns (FWD-6, LA-2)."""
@@ -751,8 +631,7 @@ class _Pass:
         columns, so the ratio would be the same up to rounding. The rebuilt RSS and
         pass 2's reduction can differ in the last bits, so a knot at MaxLegal
         can fail here. Complexity: O(n·r·K)."""
-        cols, _, sizes = self.columns(c)
-        rb = _scan.rebuild(self.Q, self.Yw, cols, sizes)
+        rb = _scan.rebuild(self.Q, self.Yw, self.columns(c))
         if rb is None:
             return None
         reduction = self.rss[-1] - rb.rss
@@ -877,26 +756,10 @@ class _Pass:
         s = len(self.rss)
         kappa = 2 * s
         dirs, cuts, b = self.dirs[c.parent], self.cuts[c.parent], self.cols[c.parent]
-        spans_bx = self._spans_bx(c)
-        if spans_bx:  # the span of Q, as ``columns`` builds it
-            self.cond.span_append(*self._linear_row(c.parent, c.variable))
-        if c.kind != KIND_LINEAR:
-            self.cond.span_append(
-                *_terms.child_term(dirs, cuts, c.variable, _terms.PLUS, c.knot)
-            )
-        # The terms registered in ``cond`` must span F_s (FWD-13): its reduced
-        # columns and LA-2's test of LA-4 work against them. A pair adds its
-        # two terms, which span what b·x and the hinge span; when LA-2 did not
-        # count b·x (case (b) of FWD-13), Q lacks b·x, and the mirror would
-        # bring it in, so only the hinge is registered (#142).
-        register = len(new) if spans_bx or c.kind != KIND_PAIR else 1
-        self.exact = {}
         for i, (code, cut) in enumerate(new):
             d, k = _terms.child_term(dirs, cuts, c.variable, code, cut)
             self.dirs = np.vstack((self.dirs, d))
             self.cuts = np.vstack((self.cuts, k))
-            if i < register:
-                self.cond.append(d, k)
             self.index[self._row_key(d, k)] = len(self.cols)
             col = b * _terms.factor(code, x, cut)
             self.cols.append(col)
@@ -911,8 +774,9 @@ class _Pass:
             self.term_at[kappa + i] = len(self.cols) - 1
             self.lam.append(math.inf)
             self.kap.append(kappa)
+        # Q holds F_{s+1} (FWD-13): ``columns`` leaves out a b·x that LA-2 did
+        # not count, so a pair of case (b) adds only its hinge's direction.
         self.Q, self.E = rb.Q, rb.resid
-        self.kappa = max(self.kappa, rb.kappa)
         self.rss.append(rb.rss)
 
 
@@ -1025,13 +889,7 @@ def forward_pass(
     only with extreme weights: without weights the scaled Y has a value of
     size at least 1).
     Complexity: O(p·n·log n + S·P·p·n·r·K + n·M²) time for S steps of P
-    parents, O(n·(p + M_max + K)) memory. With a covariate of a large mean
-    (``_linalg.Conditioner``) there are also O(M²·p·3^d) rational operations
-    in all, O(n·d·3^d) per column that is formed, and O(M·p·3^d) memory for
-    the coefficients, for terms of degree d; a dependence test that the float64
-    error bound does not decide costs O(g·M²) rational operations for g distinct
-    rows of X (the data are few levels at a large mean and a column that the
-    terms span at the cases, not as a formula).
+    parents, O(n·(p + M_max + K)) memory.
     """
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
@@ -1090,7 +948,7 @@ def forward_pass(
     with np.errstate(over="ignore"):  # EDGE-6: an RSS above the range is inf
         rss = np.ldexp(np.array(st.rss), -2 * shift)
     B = _terms.basis_matrix(X, st.dirs, st.cuts)
-    kept = _linalg.independent_terms(X, st.dirs, st.cuts, w, B)  # FWD-11
+    kept = _linalg.independent_columns(B, w)  # FWD-11
     return ForwardPass(
         st.dirs,
         st.cuts,
