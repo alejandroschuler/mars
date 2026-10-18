@@ -20,12 +20,16 @@ from compare import (
     Difference,
     Skip,
     _dirs_row_groups,
+    basis_cond,
     compare_defaults,
     compare_fit,
     compare_forward_steps,
     condition_number,
+    is_near_dependence,
     is_near_tie,
     is_prune_near_tie,
+    la4_ratios,
+    la5_c,
     removed_sequence,
     steps_from_trace,
 )
@@ -211,15 +215,58 @@ class TestCompareFitGcvRsqGrsq:
         assert len(compare_fit(*pair(2e-7), zero_weights=True)) == 1
 
     def test_prune_near_tie_is_1e7_of_the_lower_plus_two_la5_epsilons(self):
-        # PRUNE-10 (LA-5's eps with c = 1e-14): 1e-7 of the lower RSS plus
-        # 2 eps(V, V) = 2e-8 V + 2e-14 sqrt(TSS V) + 2 (c/2)^2 TSS.
-        assert is_prune_near_tie(1.0, 1.0 + 1.0e-7, tss=1.0)
-        assert not is_prune_near_tie(1.0, 1.0 + 1.4e-7, tss=1.0)
+        # PRUNE-10 (LA-5's eps): 1e-7 of the lower RSS plus 2 eps(V, V, cond)
+        # = 2e-8 V + 2c sqrt(TSS V) + 2 (c/2)^2 TSS, c = max(1e-14, u cond
+        # sqrt(n)). At cond 1 and n 100, u sqrt(n) = 1.1e-15, so c = 1e-14.
+        assert is_prune_near_tie(1.0, 1.0 + 1.0e-7, tss=1.0, cond=1.0, n=100)
+        assert not is_prune_near_tie(1.0, 1.0 + 1.4e-7, tss=1.0, cond=1.0, n=100)
         # an exact fit: RSS values of rounding size are a tie by the third term
-        assert is_prune_near_tie(1e-60, 2e-29, tss=1.0)
-        assert not is_prune_near_tie(1e-60, 1e-28, tss=1.0)
+        assert is_prune_near_tie(1e-60, 2e-29, tss=1.0, cond=1.0, n=100)
+        assert not is_prune_near_tie(1e-60, 1e-28, tss=1.0, cond=1.0, n=100)
         # the second term: V = 1e-12 TSS adds 2e-14 sqrt(1e-12 TSS^2) = 2e-20
-        assert is_prune_near_tie(1e-12, 1e-12 + 1.2e-19 + 1.5e-20, tss=1.0)
+        assert is_prune_near_tie(1e-12, 1e-12 + 1.2e-19 + 1.5e-20, 1.0, 1.0, 100)
+        # c grows with cond and n: at cond 1e5 and n 1e4, c = u 1e7 = 1.1e-9,
+        # so the second term at V = 1e-12 is 2.2e-15, and the third 6e-19
+        c = la5_c(1e5, 10_000)
+        assert c == 2.0**-53 * 1e7
+        gap = 1e-7 * 1e-12 + 2 * (1e-8 * 1e-12 + c * 1e-6 + (c / 2) ** 2)
+        assert is_prune_near_tie(1e-12, 1e-12 + 0.99 * gap, 1.0, 1e5, 10_000)
+        assert not is_prune_near_tie(1e-12, 1e-12 + 1.01 * gap, 1.0, 1e5, 10_000)
+        # above cond 1e6 LA-5 states no bound: a near-dependence (STOP-7)
+        assert is_prune_near_tie(1.0, 2.0, tss=1.0, cond=1.01e6, n=100)
+        assert is_prune_near_tie(1.0, 2.0, tss=1.0, cond=np.inf, n=100)
+
+    def test_la4_ratio_cond_and_near_dependence(self):
+        # LA-4 on the sqrt(w)-scaled columns with the uncentered norm: x = m +
+        # z has the ratio sd(z) / m = 0.583 / m against the intercept, so it is
+        # kept at m = 4e6 (1.46e-7) and dropped at m = 6e6 (9.7e-8); a ratio
+        # within a factor 2 of 1e-7 is a near-dependence (STOP-7): 1.46e-7 and
+        # 5.83e-8 (m = 1e7) are, 5.83e-7 (m = 1e6) and 5.83e-9 (1e8) are not.
+        z = np.linspace(-1.0, 1.0, 101)
+        w = np.ones_like(z)
+        for m, kept, near in (
+            (1e6, True, False),
+            (4e6, True, True),
+            (6e6, False, True),
+            (1e7, False, True),
+            (1e8, False, False),
+        ):
+            ratios = la4_ratios(np.column_stack([np.ones_like(z), m + z]), w)
+            assert ratios[0] == pytest.approx(1.0)
+            assert ratios[1] == pytest.approx(0.583095189 / m, rel=1e-6)
+            assert (ratios[1] >= 1e-7) == kept
+            assert is_near_dependence(ratios) == near
+        # a bitwise copy is dependent (rounding), a column of zeros has ratio 0
+        B = np.column_stack([np.ones_like(z), z, z, np.zeros_like(z)])
+        ratios = la4_ratios(B, w)
+        assert ratios[2] < 1e-15
+        assert ratios[3] == 0.0
+        # cond of the kept columns, unit-norm: [1, z] is orthogonal (z has
+        # mean 0), so cond is 1, and the copy and the zero column drop out
+        assert basis_cond(B, w) == pytest.approx(1.0)
+        # weights scale the columns: w = 0 at a case removes it
+        w0 = np.r_[np.zeros(50), np.ones(51)]
+        assert la4_ratios(np.column_stack([np.ones_like(z), z]), w0)[1] < 0.6
 
     @pytest.mark.parametrize("field_name", ["rsq", "grsq"])
     def test_rsq_and_grsq_use_absolute_tolerance_not_relative(self, field_name):

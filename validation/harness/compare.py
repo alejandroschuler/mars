@@ -83,24 +83,88 @@ GLM_PROB_ABS = 1e-7
 # earth of a fit that has zero weights uses 1e-7 for rss, gcv, rss_per_subset
 # and gcv_per_subset.
 ZERO_WEIGHT_REL = 1e-7
-# LA-5: |V - V*| <= eps(V*, R) = 1e-8 R + c sqrt(TSS V*) + (c/2)^2 TSS.
+# LA-5 (spec v3): |V - V*| <= eps(V*, R, cond) = 1e-8 R + c sqrt(TSS V*) +
+# (c/2)^2 TSS, with c = max(1e-14, u cond sqrt(n)), u = 2^-53 and cond the
+# condition number of the unit-norm sqrt(w)-scaled kept columns; LA-5 states
+# no bound above cond = 1e6, where a value is a near-dependence (STOP-7).
 LA5_C = 1e-14
+UNIT_ROUNDOFF = 2.0**-53
+COND_LIMIT = 1e6
+# LA-4: a column is dependent when its part orthogonal to the kept columns is
+# below 1e-7 of its own uncentered sqrt(w)-norm; a computed ratio within a
+# factor 2 of 1e-7 is a near-dependence (STOP-7).
+LA4_TOL = 1e-7
 # PRUNE-10: two subsets of one size are a near-tie when their RSS values
-# differ by at most 1e-7 of the lower one plus 2 eps(V, V).
+# differ by at most 1e-7 of the lower one plus 2 eps(V, V, cond).
 PRUNE_NEAR_TIE_REL = 1e-7
 
 
-def la5_eps(v: float, r: float, tss: float) -> float:
+def la5_c(cond: float, n: int) -> float:
+    """LA-5's factor c = max(1e-14, u cond sqrt(n)) for n cases."""
+    return max(LA5_C, UNIT_ROUNDOFF * cond * float(np.sqrt(n)))
+
+
+def la5_eps(v: float, r: float, tss: float, cond: float, n: int) -> float:
     """LA-5's bound on the error of an RSS value v at the scale r, for the
-    total sum of squares tss (GCV-5)."""
-    return 1e-8 * r + LA5_C * float(np.sqrt(tss * v)) + (LA5_C / 2) ** 2 * tss
+    total sum of squares tss (GCV-5), the condition number cond of the
+    columns that v projects onto, and n cases."""
+    c = la5_c(cond, n)
+    return 1e-8 * r + c * float(np.sqrt(tss * v)) + (c / 2) ** 2 * tss
 
 
-def is_prune_near_tie(rss_a: float, rss_b: float, tss: float) -> bool:
+def is_prune_near_tie(
+    rss_a: float, rss_b: float, tss: float, cond: float, n: int
+) -> bool:
     """PRUNE-10: whether two RSS values of subsets of one size are a
-    near-tie."""
+    near-tie; cond is the larger of the two subsets' condition numbers
+    (``basis_cond``), and above 1e6 the pair is a near-dependence."""
+    if not cond <= COND_LIMIT:
+        return True
     low = min(rss_a, rss_b)
-    return abs(rss_a - rss_b) <= PRUNE_NEAR_TIE_REL * low + 2 * la5_eps(low, low, tss)
+    return abs(rss_a - rss_b) <= PRUNE_NEAR_TIE_REL * low + 2 * la5_eps(
+        low, low, tss, cond, n
+    )
+
+
+def la4_ratios(B: Any, w: Any) -> np.ndarray:
+    """LA-4's computed ratio of each column of B: the sqrt(w)-norm of its part
+    orthogonal to the earlier kept columns over its own uncentered
+    sqrt(w)-norm, by Gram-Schmidt with one reorthogonalization (LA-4 allows
+    it); 0 for a column whose computed norm is 0. A column is kept when its
+    ratio is at least 1e-7. O(n m^2) for m columns."""
+    A = np.asarray(B, dtype=float) * np.sqrt(np.asarray(w, dtype=float))[:, None]
+    Q = np.zeros((A.shape[0], 0))
+    ratios = np.zeros(A.shape[1])
+    for j in range(A.shape[1]):
+        size = float(np.linalg.norm(A[:, j]))
+        if not size > 0 or not np.isfinite(size):
+            continue
+        c = A[:, j] / size
+        rest = c - Q @ (Q.T @ c)
+        rest = rest - Q @ (Q.T @ rest)
+        ratios[j] = float(np.linalg.norm(rest))
+        if ratios[j] >= LA4_TOL:
+            Q = np.column_stack([Q, rest / ratios[j]])
+    return ratios
+
+
+def is_near_dependence(ratios: Any) -> bool:
+    """STOP-7: some LA-4 ratio is within a factor 2 of 1e-7."""
+    r = np.asarray(ratios, dtype=float)
+    return bool(np.any((r >= LA4_TOL / 2) & (r <= 2 * LA4_TOL)))
+
+
+def basis_cond(B: Any, w: Any) -> float:
+    """LA-5's cond: the 2-norm condition number of the columns of B that
+    LA-4 keeps (``la4_ratios``), each scaled by sqrt(w) to unit norm; 1 for
+    no column."""
+    B = np.asarray(B, dtype=float)
+    kept = la4_ratios(B, w) >= LA4_TOL
+    if not kept.any():
+        return 1.0
+    A = B[:, kept] * np.sqrt(np.asarray(w, dtype=float))[:, None]
+    A = A / np.linalg.norm(A, axis=0)
+    return float(np.linalg.cond(A))
 
 
 def condition_number(basis: Any) -> float:
