@@ -54,6 +54,9 @@ ALPHA = 0.05  # the probability in Friedman's span formulas [Notation]
 DEPENDENT_TOL = 1e-7  # the dependency test for coefficients [LA-4]
 EXACT_FIT = 1e-14  # the exact-fit band of FWD-5
 EPS = float(np.finfo(np.float64).eps)
+UNIT_ROUNDOFF = 2.0**-53  # u of LA-4's error scale eta
+LA5_C = 1e-14  # the constant c of LA-5's eps
+NEAR_TIE_FACTOR = 4.0  # LA-4: a gain within this factor of sum eta^2 is a near-tie
 
 
 # ---------------------------------------------------------------------------
@@ -485,14 +488,18 @@ def dependent_columns(B, w) -> np.ndarray:
 
 
 def lstsq_coef(B, Y, w) -> np.ndarray:
-    """Weighted least-squares coefficients of Y on the columns of B [LA-4].
+    """Weighted least-squares coefficients of Y on the columns of B, as R's
+    ``lm.fit`` gives them [LA-4, bb09.7].
 
     A dependent column (dependent_columns) gets the coefficient 0, and the
     kept columns get the least-squares solution, by a column-pivoted QR of
     the sqrt(w)-scaled kept columns. When column 0 is the intercept, Y is
     centered first and the mean is added back to its coefficient, which
     changes nothing but the rounding. Returns shape (M, K) for Y of shape
-    (n, K), and (M,) for a 1-D Y.
+    (n, K), and (M,) for a 1-D Y. This is not the final fit of PRUNE-8,
+    which also applies LA-4's coefficient rule (``coefficient_set``); the
+    reference uses it only for the intercept alone (EDGE-1), where the two
+    agree.
     """
     B = np.asarray(B, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
@@ -515,6 +522,178 @@ def lstsq_coef(B, Y, w) -> np.ndarray:
             beta[0] = beta[0] + shift
         coef[keep] = beta
     return coef if Y.ndim > 1 else coef[:, 0]
+
+
+def la5_eps(V: float, R: float, tss: float) -> float:
+    """eps(V*, R) of LA-5: 1e-8 R + c sqrt(TSS V*) + (c/2)^2 TSS, c = 1e-14."""
+    return 1e-8 * R + LA5_C * math.sqrt(tss * max(V, 0.0)) + (LA5_C / 2) ** 2 * tss
+
+
+@dataclasses.dataclass
+class CoefficientSet:
+    """The result of LA-4's coefficient rule on M columns (PRUNE-8).
+
+    ``coef`` (M, K): the exact least-squares coefficients on C, rounded once
+    to float64, and 0 outside C; ``joined`` (M,): the columns in C; ``rss``:
+    RSS(C) of LA-1, the exact value rounded once; ``tss``: the exact sum over
+    the responses of the w-centered sums of squares. For each column k >= 1,
+    ``gain[k]`` and ``eta_sq[k]`` are the two sides of its decision (the
+    gain sum_r RSS_r(C) - RSS_r(C + k) and sum_r eta_r(C + k)^2, with C the
+    set before k), and ``near_tie[k]`` says whether the decision is a near-
+    tie of LA-4: the two within a factor 4 of each other, or a gain of at
+    most 2 eps(V, V) of LA-5 with V = sum_r RSS_r(C). Column 0, the
+    intercept, has gain and eta_sq 0 and is no near-tie. Tests that compare
+    zero sets or coefficients skip the near-tie decisions."""
+
+    coef: np.ndarray
+    joined: np.ndarray
+    rss: float
+    tss: float
+    gain: np.ndarray
+    eta_sq: np.ndarray
+    near_tie: np.ndarray
+
+
+def coefficient_set(columns, Y, w) -> CoefficientSet:
+    """LA-4's coefficient rule and the final coefficients of PRUNE-8 (#139).
+
+    ``columns`` holds the M columns that LA-4 keeps, in increasing term
+    order, each as its exact values at the cases (floats or Fractions,
+    all dyadic: the products of the factors on the float64 X and knots
+    without rounding); column 0 is the intercept, 1 at every case. Y is
+    (n, K) and w (n,), both float64 and taken as exact.
+
+    Everything is in exact rational arithmetic on the w-centered responses
+    Y_r - Ybar_r. The intercept always joins C. Then, in order, column k
+    joins C when its gain sum_r (RSS_r(C) - RSS_r(C + k)) is larger than
+    sum_r eta_r(C + k)^2, with eta_r(G) = u sum_{j in G} |beta*_{G,r,j}|
+    ||B_j||_w (u = 2^-53, ||B_j||_w not centered); otherwise it gets 0. A
+    column in the span of C at the cases, or 0 at every case, has gain 0
+    and gets 0. The coefficients on C are beta* rounded once to float64
+    (Ybar_r added to the intercept's first), which is within eta_r(C) of
+    beta* in the fitted values, inside LA-4's bound of 16 eta_r(C).
+
+    Method: an exact LDL' factor of the w-Gram matrix of C, extended by one
+    row for each column k (forward substitution), so the gain of k is
+    z_k^2 / d_k per response and beta* on C + k is one back substitution.
+    The floats eta_r and sqrt(G_jj) carry relative errors near 1e-16, far
+    inside the near-tie factor of 4. Cost: O(n M^2) products of integers for
+    the Gram matrix (the dyadic values scaled to integers, of up to about
+    53 (degree + 2) bits), then O(M^3 K) operations on fractions, whose
+    sizes grow with M; the decision for one column costs O(M^2 K).
+    """
+    Y = np.asarray(Y, dtype=np.float64)
+    Y = Y.reshape(Y.shape[0], -1)
+    K, M = Y.shape[1], len(columns)
+    if M == 0:
+        raise ValueError("the coefficient rule needs the intercept")
+    W, ew = _dyadic(np.asarray(w, dtype=np.float64))
+    cols = [_dyadic(c) for c in columns]
+    ints, exps = [c[0] for c in cols], [c[1] for c in cols]
+    if any(a != (1 << exps[0]) for a in ints[0]):
+        raise ValueError("column 0 must be the intercept, 1 at every case")
+    WA = [[x * a for x, a in zip(W, A, strict=True)] for A in ints]
+    ys = [_dyadic(Y[:, r]) for r in range(K)]
+
+    def gram(i: int, j: int) -> Fraction:
+        total = sum(x * a for x, a in zip(WA[i], ints[j], strict=True))
+        return Fraction(total, 1 << (ew + exps[i] + exps[j]))
+
+    def cross(j: int, r: int) -> Fraction:
+        (Yr, ey) = ys[r]
+        total = sum(x * a for x, a in zip(WA[j], Yr, strict=True))
+        return Fraction(total, 1 << (ew + exps[j] + ey))
+
+    wsum = gram(0, 0)
+    ybar = [cross(0, r) / wsum for r in range(K)]
+    yy = []
+    for r, (Yr, ey) in enumerate(ys):
+        total = sum(x * a * a for x, a in zip(W, Yr, strict=True))
+        # sum w (y - ybar)^2 = sum w y^2 - ybar sum w y
+        yy.append(Fraction(total, 1 << (ew + 2 * ey)) - ybar[r] * cross(0, r))
+    tss = float(sum(yy, Fraction(0)))
+
+    def centered_cross(j: int, r: int) -> Fraction:
+        return cross(j, r) - ybar[r] * gram(0, j)
+
+    norms = [math.sqrt(float(gram(j, j))) for j in range(M)]
+    # LDL' of the Gram matrix of C: L[i] is row i (below the diagonal), D[i]
+    # its pivot, z[i][r] the forward-substituted centered cross product.
+    C, L, D, z = [0], [[]], [wsum], [[Fraction(0)] * K]
+    rss_c = list(yy)
+    gain = np.zeros(M)
+    eta_sq = np.zeros(M)
+    near_tie = np.zeros(M, dtype=bool)
+
+    def back(Lx, Dx, zx) -> list:
+        """beta from L' beta = D^-1 z, per response: [[beta_i,r]]."""
+        k = len(Dx)
+        beta = [[Fraction(0)] * K for _ in range(k)]
+        for i in range(k - 1, -1, -1):
+            for r in range(K):
+                v = zx[i][r] / Dx[i]
+                for t in range(i + 1, k):
+                    if Lx[t][i]:
+                        v -= Lx[t][i] * beta[t][r]
+                beta[i][r] = v
+        return beta
+
+    for k in range(1, M):
+        h: list = []
+        for i, ci in enumerate(C):
+            v = gram(ci, k)
+            for t in range(i):
+                if L[i][t]:
+                    v -= L[i][t] * h[t]
+            h.append(v)
+        lrow = [hi / Di for hi, Di in zip(h, D, strict=True)]
+        d = gram(k, k) - sum(
+            (hi * li for hi, li in zip(h, lrow, strict=True)), Fraction(0)
+        )
+        V = float(sum(rss_c, Fraction(0)))
+        if d == 0:  # in the span of C at the cases, or 0 at every case:
+            near_tie[k] = True  # gain 0, which is at most 2 eps(V, V)
+            continue
+        zk = [
+            centered_cross(k, r)
+            - sum((li * zi[r] for li, zi in zip(lrow, z, strict=True)), Fraction(0))
+            for r in range(K)
+        ]
+        g = sum((zr * zr for zr in zk), Fraction(0)) / d
+        beta = back([*L, lrow], [*D, d], [*z, zk])
+        cs = [*C, k]
+        e2 = 0.0
+        for r in range(K):
+            e = UNIT_ROUNDOFF * sum(
+                abs(float(beta[i][r])) * norms[j] for i, j in enumerate(cs)
+            )
+            e2 += e * e
+        gain[k], eta_sq[k] = float(g), e2
+        ratio_tie = e2 > 0 and 1 / NEAR_TIE_FACTOR <= gain[k] / e2 <= NEAR_TIE_FACTOR
+        near_tie[k] = ratio_tie or gain[k] <= 2 * la5_eps(V, V, tss)
+        if g > Fraction(e2):
+            C.append(k)
+            L.append(lrow)
+            D.append(d)
+            z.append(zk)
+            rss_c = [rc - zr * zr / d for rc, zr in zip(rss_c, zk, strict=True)]
+
+    beta = back(L, D, z)
+    coef = np.zeros((M, K))
+    joined = np.zeros(M, dtype=bool)
+    for i, j in enumerate(C):
+        joined[j] = True
+        for r in range(K):
+            coef[j, r] = float(beta[i][r] + (ybar[r] if j == 0 else 0))
+    return CoefficientSet(
+        coef=coef,
+        joined=joined,
+        rss=float(sum(rss_c, Fraction(0))),
+        tss=tss,
+        gain=gain,
+        eta_sq=eta_sq,
+        near_tie=near_tie,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -562,15 +741,18 @@ def prune(
     in place of the columns of B, which keeps the digits that a large
     covariate mean would cost in the float columns of B [LA-5]
     (``Conditioned.span_columns``). ``coef_of(selected, Y, w)``, when given,
-    returns the final coefficients and the mask of the selected terms that
-    LA-4 keeps (``Conditioned.coef``); else they come from B (lstsq_coef).
+    returns the final coefficients, the mask of the selected terms that
+    LA-4 keeps and LA-4's coefficient rule on those (``Conditioned.coef``);
+    else they come from the columns of B, taken as exact
+    (``coefficient_set``).
 
     The fit must not be degenerate: ``fit_mars`` applies EDGE-1 and the
     degenerate values of GCV-7 before it calls this function, so here
-    N > 1 and some response is not constant. The final rss is RSS(selected
-    terms) of LA-1, the centered projection on the columns of the selected
-    terms that LA-4 keeps, not the RSS of the rounded coefficients
-    [PRUNE-8], so it meets LA-5 also when Y has a large mean. Cost:
+    N > 1 and some response is not constant. The final rss is RSS(C) of
+    LA-1, the centered projection on the columns of C (the coefficient rule
+    of LA-4, #139), not the RSS of the rounded coefficients [PRUNE-8], so it
+    meets LA-5 also when Y has a large mean; ``coef_set`` holds the rule's
+    record. Cost:
     either rule refits O(M_f^2) distinct subsets, each in O(n M_f (M_f + K))
     time, so O(n M_f^3 (M_f + K)) in all, and the cache holds O(M_f^2) values.
     """
@@ -658,15 +840,21 @@ def prune(
 
     # The final model [PRUNE-8]; the intercept-only model has RSq = GRSq = 0
     # by definition [GCV-7]. The returned coefficients are the least-squares
-    # fit on the selected columns that LA-4 keeps, so their RSS is the RSS of
-    # the projection on those columns [LA-1], which the Projector computes
-    # centered; Y - BS coef on the raw Y would cancel at a large mean [LA-5].
+    # fit on C, the selected columns that LA-4 keeps and that its coefficient
+    # rule lets join (#139), so the final rss is RSS(C) [LA-1], which the
+    # Projector computes centered, as every value of rss_per_size; Y - BS
+    # coef on the raw Y would cancel at a large mean [LA-5]. When C holds
+    # every kept selected column this is RSS(selected terms), the value of
+    # rss_per_size[m* - 1] for pmethod="backward".
     if coef_of is None:
-        coef = lstsq_coef(B[:, selected], Y, w)
         keep = ~dependent_columns(B[:, selected], w)
+        rule = coefficient_set(list(B[:, selected][:, keep].T), Y, w)
+        coef = np.zeros((len(selected), Y.shape[1]))
+        coef[keep] = rule.coef
     else:
-        coef, keep = coef_of(selected, Y, w)
-    final_rss = rss_of(np.array(selected)[keep].tolist())
+        coef, keep, rule = coef_of(selected, Y, w)
+    in_c = np.array(selected)[keep][rule.joined].tolist()
+    final_rss = rss_of(in_c)
     tss = best_rss[1]
     final_gcv = gcv(final_rss, size, penalty, N, tau_N)
     if size == 1:
@@ -687,6 +875,7 @@ def prune(
         "rsq": final_rsq,
         "grsq": final_grsq,
         "tss": tss,
+        "coef_set": rule,
     }
 
 
@@ -1508,14 +1697,27 @@ class Conditioned:
         basis = Basis(self.atoms, [self._rewritten[k] for k in rows])
         return basis.columns(self._w)
 
-    def coef(self, rows, Y, w) -> tuple[np.ndarray, np.ndarray]:
-        """The least-squares coefficients of Y on the terms in ``rows``
-        [PRUNE-8], and the mask of the terms that LA-4 keeps (in order, each
-        against the kept earlier ones); a dependent term gets 0. Without a
-        shifted covariate this is ``lstsq_coef`` on the kept columns of B.
-        Otherwise the fit is made on the columns R of the kept terms' Basis,
-        gamma, and term k = sum_i T[k, i] R_i exactly, so the coefficients
-        solve T' coef = gamma, in exact arithmetic, then round to float64."""
+    def exact_column(self, k: int) -> list:
+        """Term k (an index of ``dirs``) at the cases in exact arithmetic: its
+        expansion summed over the exact monomial columns, so the products of
+        its factors on the float64 X and knots without rounding [LA-4]."""
+        n = self.atoms.X.shape[0]
+        out = [Fraction(0)] * n
+        for mono, f in self._terms[k].items():
+            col = self.atoms.exact_column(mono)
+            out = [o + f * v for o, v in zip(out, col, strict=True)]
+        return out
+
+    def coef(self, rows, Y, w) -> tuple[np.ndarray, np.ndarray, CoefficientSet]:
+        """The final coefficients of Y on the terms in ``rows`` [PRUNE-8], the
+        mask of the terms that LA-4 keeps (in order, each against the kept
+        earlier ones), and LA-4's coefficient rule on the kept terms
+        (``coefficient_set``, on their exact columns; its ``joined`` and
+        near-tie fields are per kept term). A dependent term, and a kept
+        term outside C, get 0. The rule reads the term columns only, never
+        the shifted basis of ``columns`` (#139). Cost: that of
+        ``coefficient_set``, plus O(n M 2^d) operations on fractions for the
+        exact columns of M terms of degree d."""
         rows = list(rows)
         S, keep = Echelon(), []
         for k in rows:
@@ -1524,22 +1726,11 @@ class Conditioned:
                 S.add(self._terms[k])
         keep = np.array(keep, dtype=bool)
         Y2 = np.asarray(Y, dtype=np.float64).reshape(len(w), -1)
-        coef = np.zeros((len(rows), Y2.shape[1]))
         kept = [k for k, ok in zip(rows, keep, strict=True) if ok]
-        if self.atoms.plain:
-            coef[keep] = lstsq_coef(self._B[:, kept], Y2, w)
-            return coef, keep
-        basis = Basis(self.atoms, [self._rewritten[k] for k in kept])
-        gamma = lstsq_coef(basis.columns(), Y2, w)
-        T = []
-        for k in kept:
-            T.append([])
-            basis.reduce(self._rewritten[k], record=T[-1])
-        Tt = [list(r) for r in zip(*T, strict=True)]
-        for col in range(Y2.shape[1]):
-            g = [Fraction(float(x)) for x in gamma[:, col]]
-            coef[np.flatnonzero(keep), col] = [float(x) for x in _solve_exact(Tt, g)]
-        return coef, keep
+        rule = coefficient_set([self.exact_column(k) for k in kept], Y2, w)
+        coef = np.zeros((len(rows), Y2.shape[1]))
+        coef[keep] = rule.coef
+        return coef, keep, rule
 
 
 def _solve_exact(A: list, b: list) -> list:

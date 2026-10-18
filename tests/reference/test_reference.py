@@ -1863,10 +1863,22 @@ class TestForwardPass:
             columns = np.flatnonzero(pruning["subsets"][m - 1])
             exact = exact_rss([[row[c] for c in columns] for row in B], y, w)
             assert abs(got - exact) <= 1e-8 * max(exact, floor)
-        # the final model's rss is the RSS of the selected size
-        assert fit["rss"] == pytest.approx(
-            pruning["rss_per_size"][pruning["selected_size"] - 1], rel=1e-10
-        )
+        # the final model's rss is RSS(C) [PRUNE-8, LA-4]: the RSS of the
+        # selected size when C holds every selected term, else the exact RSS
+        # of the terms in C (a coefficient other than 0), which is larger; at
+        # degree 3 and -2^36 C leaves out a product of shifted linear factors
+        # (#139)
+        size = pruning["selected_size"]
+        in_c = np.any(fit["coef"] != 0, axis=1)
+        if in_c.all():
+            assert fit["rss"] == pytest.approx(
+                pruning["rss_per_size"][size - 1], rel=1e-10
+            )
+        else:
+            B = exact_basis(shifted_X, fit["dirs"][in_c], fit["cuts"][in_c])
+            exact = exact_rss(B, y, w)
+            assert abs(fit["rss"] - exact) <= 1e-8 * exact
+            assert fit["rss"] > pruning["rss_per_size"][size - 1]
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
