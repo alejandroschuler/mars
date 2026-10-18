@@ -444,6 +444,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 03:45 review-149-adversarial APPROVE at 8e8bbf8 (450 case (b) draws agree; 6 mutants, survivors only touch hinge registration). Opened an issue for 4 of 150 _family_134 draws where fast and reference forward passes disagree (also before #149). #149 merges after #148 and #144 (rebase plus update checks).
 - 03:55 #153 (R139) ready at 9f713cd (on cce5c1a; gates B, C PASS): reference coefficient_set C in exact arithmetic, 1e-7 basis test gone; #141's numbers match; seed 968 now differs the other way (fast keeps 7, reference C = {0..4}) until F139. Reviews of #153 after the 5-hour reset (01:10 PDT; now 59 %). Merge #153 close to F139; F139's oracle must skip C near-ties (Conditioned.coef(...)[2].near_tie).
 - 04:15 #148 update approvals (each reviewer its own; the classifier had denied one agent posting both roles' verdicts, 'Merge Without Review'; not worked around). Merged #148 (T20b kernel A, numba in dev group, numpy fallback) as 8b6b417. Rebased #144 to 8a54447; spec reviewer runs gates B, C and posts its verdict, then the adversarial reviewer posts its own.
+- 04:40 #144 update approvals (both, own posts) at 8a54447; merged #144 (final fit exact residual near the span; closes #140) as 9b226ed. Asked f140-final-rss to rebase #147. Rebased #149 to f58ef29; spec reviewer runs range-diff, hash on both paths, gates B, C, then its verdict; adversarial after. F139 waits for the 5-hour reset (61 %).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
