@@ -545,441 +545,113 @@ class TestLinearAlgebra:
 
 
 # ---------------------------------------------------------------------------
-# Dependence after the exact shift [LA-1, LA-2, LA-4, FWD-11]
+# Dependence and accuracy in float64 [LA-2, LA-4, LA-5, PRUNE-8]
 
 
-def la5(V, R, tss):
-    """epsilon(V*, R) of LA-5, with c = 1e-14."""
-    return 1e-8 * R + 1e-14 * math.sqrt(tss * V) + 0.25e-28 * tss
+def la5(V, R, tss, cond, n):
+    """epsilon(V*, R, cond) of LA-5 (v3), with c = max(1e-14, u cond sqrt(n))."""
+    c = max(1e-14, 2.0**-53 * cond * math.sqrt(n))
+    return 1e-8 * R + c * math.sqrt(tss * V) + (c / 2) ** 2 * tss
 
 
-def issue75(shift=1e10, copy=None):
-    """#75's data (spec, LA-4): x0 = shift + (2, 0, 0, 2, 1, 2, 1, 2, 1, 0),
-    x1 = x2 = (1, 0, 0, 2, 2, 1, 0, 0, 1, 2), and x3 = x2 or 3 x2 + 1."""
-    x2 = np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2], dtype=float)
-    x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0], dtype=float)
-    x3 = x2.copy() if copy == "equal" else 3 * x2 + 1
-    return np.column_stack([x0, x2, x2, x3])
-
-
-def rows(*terms, p=4):
-    """dirs and cuts of terms given as {covariate: code} (linear factors)."""
-    dirs = np.zeros((len(terms), p), np.int8)
-    for k, term in enumerate(terms):
-        for j, code in term.items():
-            dirs[k, j] = code
-    return dirs, np.zeros((len(terms), p))
+def condition(B, w):
+    """cond of LA-5: the 2-norm condition number of the sqrt(w)-scaled
+    columns of B, each scaled to unit w-norm."""
+    A = np.asarray(B, dtype=float) * np.sqrt(w)[:, None]
+    return float(np.linalg.cond(A / np.linalg.norm(A, axis=0)))
 
 
 class TestDependence:
-    def test_the_examples_of_la_4(self):
-        w = np.ones(10)
-        X = issue75()
-        # x0 after the intercept: the new part is u0, so it counts
-        assert ref.la4_kept(X, *rows({}, {0: 2}), w).all()
-        # 1, x0, x0 x2, x2: the reduced rows are 1, u0, u0 x2 and x2
-        dirs, cuts = rows({}, {0: 2}, {0: 2, 2: 2}, {2: 2})
-        assert ref.la4_kept(X, dirs, cuts, w).all()
-        atoms = ref.Atoms(X)
-        echelon = ref.Echelon()
-        for row, cut in zip(dirs, cuts, strict=True):
-            echelon.add(atoms.expansion(row, cut))
-        # x1 = x2, so they share one symbol, that of x1 [#99]
-        u0, x2 = (0, ref.U_ATOM, Fraction(0)), (1, ref.U_ATOM, Fraction(0))
-        assert atoms.symbol == [0, 1, 1, 3]
-        assert [list(r) for r in echelon.ordered()] == [
-            [()],
-            [(u0,)],
-            [(x2,)],
-            [(u0, x2)],
-        ]
-        # 1, x0, x3, x0 x2, x0 x3 with x3 = x2 or 3 x2 + 1: the last term is
-        # dependent at every shift; the other terms count
-        for copy in ("equal", "affine"):
-            for shift in (0.0, 0.5, 1e4, 1e10, 3e15):
-                dirs, cuts = rows({}, {0: 2}, {3: 2}, {0: 2, 2: 2}, {0: 2, 3: 2})
-                kept = ref.la4_kept(issue75(shift, copy), dirs, cuts, w)
-                np.testing.assert_array_equal(kept, [True] * 4 + [False])
-        # no shift: x = 0, 1e-9, ..., 9e-9 and 90 values in (0.1, 1); the
-        # pair at the knot x[8] keeps both hinges
-        # the pivot monomial u0 h(x1 - 0.5) of x0 h(x1 - 0.5) is 0 at every
-        # case, so the new part m0 h(x1 - 0.5) decides; it equals h(x2 - 1.5)
-        # at the cases (x2 = x1 + 1), so the term is dependent
-        x1 = np.array([0.9, 0.1, 0.2, 0.3, 0.4, 0.5])
-        Z = np.column_stack([1e10 + np.array([0, 1, 2, 1, 2, 3.0]), x1, x1 + 1])
-        dirs = np.array([[0, 0, 0], [0, 0, 1], [2, 1, 0]], np.int8)
-        cuts = np.array([[0, 0, 0], [0, 0, 1.5], [0, 0.5, 0]])
-        np.testing.assert_array_equal(
-            ref.la4_kept(Z, dirs, cuts, np.ones(6)), [True, True, False]
-        )
-        # an affine copy x3 = 3 x2 + 1 under a hinge of x1, at a shift of 1e15:
-        # x0 h x3 = 3 x0 h x2 + x0 h, so the last term is in the span
-        s15 = 1e15 + np.array([0, 1, 1, 0, 1, 2, 0, 1, 2, 2, 1.0])
-        x1 = np.array([0.187, 0.167, 0.206, 0.557, 0.58, 0.585, 0.841, 0.6, 0.738])
-        x1 = np.concatenate([x1, [0.783, 0.39]])
-        x2 = np.array([0, 1, 1, 3, 2, 2, 0, 0, 0, 0, 1.0])
-        Z = np.column_stack([s15, x1, x2, 3 * x2 + 1])
-        dirs = np.array(
-            [[0, 0, 0, 0], [2, -1, 0, 0], [0, -1, 2, 0], [2, -1, 0, 2], [2, -1, 2, 0]],
-            np.int8,
-        )
-        cuts = np.zeros((5, 4))
-        cuts[1:, 1] = 0.585
-        np.testing.assert_array_equal(
-            ref.la4_kept(Z, dirs, cuts, np.ones(11)), [True] * 4 + [False]
-        )
-        x = np.concatenate(
-            [np.arange(10) * 1e-9, np.random.default_rng(2).uniform(0.1, 1, 90)]
-        )
-        dirs = np.array([[0], [1], [-1]], np.int8)
-        cuts = np.array([[0.0], [x[8]], [x[8]]])
-        assert ref.la4_kept(x[:, None], dirs, cuts, np.ones(100)).all()
-
-    @pytest.mark.parametrize("shift", [0.0, 1e10])
-    def test_a_part_that_is_nonzero_only_at_a_row_of_weight_0_is_dependent(self, shift):
-        # LA-4 with W-3: the hinge h(x - 5) is nonzero only at the last row.
-        # That row is a case with weight 1, so the term counts; with weight 0
-        # it is no case, the column is 0 at every case, and it is dependent.
-        X = (shift + np.array([0, 1, 2, 3, 9.0]))[:, None]
-        dirs, cuts = np.array([[0], [1]], np.int8), np.array([[0.0], [shift + 5]])
-        kept = ref.la4_kept(X, dirs, cuts, np.ones(5))
-        np.testing.assert_array_equal(kept, [True, True])
-        kept = ref.la4_kept(X, dirs, cuts, np.array([1, 1, 1, 1, 0.0]))
-        np.testing.assert_array_equal(kept, [True, False])
-
-    def test_the_orthogonal_part_is_exact_on_the_exact_products(self):
-        # LA-4: n = 6, x0 = x1 and the other columns at large means (a drawn
-        # case, EDGE-7 scaled, of the kind of seed 3002 in #112's recheck).
-        # x1·x2·x3 is a combination of the earlier terms, so the exact
-        # orthogonal part of its new part is 0. The float64 products that
-        # the reference used before leave 6e-57 of it, above 1e-7 times the
-        # tiny pivot, and it kept the term.
-        h = float.fromhex
-        X = np.array(
-            [
-                [h(a), h(a), h(b), h(c)]
-                for a, b, c in [
-                    (
-                        "0x1.dcd6500000000p+0",
-                        "0x1.d1a94a2000000p+0",
-                        "0x1.f400000000000p+0",
-                    ),
-                    (
-                        "0x1.dcd6500000000p+0",
-                        "0x1.d1a94a2000000p+0",
-                        "0x1.f400000000000p+0",
-                    ),
-                    (
-                        "0x1.dcd6500555555p+0",
-                        "0x1.d1a94a2000aabp+0",
-                        "0x1.f400000000000p+0",
-                    ),
-                    (
-                        "0x1.dcd6500555555p+0",
-                        "0x1.d1a94a2000aabp+0",
-                        "0x1.f42aaaaaaaaabp+0",
-                    ),
-                    (
-                        "0x1.dcd6500555555p+0",
-                        "0x1.d1a94a2000aabp+0",
-                        "0x1.f455555555555p+0",
-                    ),
-                    (
-                        "0x1.dcd6500000000p+0",
-                        "0x1.d1a94a2001555p+0",
-                        "0x1.f455555555555p+0",
-                    ),
-                ]
-            ]
-        )
-        dirs = np.array(
-            [[0, 0, 0, 0], [2, 1, 0, -1], [0, 2, 0, 0], [0, 0, 0, 1], [0, 2, 2, 2]],
-            np.int8,
-        )
-        cuts = np.zeros((5, 4))
-        cuts[1, 1], cuts[1, 3] = X[0, 1], h("0x1.f455555555555p+0")
-        cuts[3, 3] = h("0x1.f400000000000p+0")
-        kept = ref.la4_kept(X, dirs, cuts, np.array([1, 1, 1, 1, 2, 1.0]))
-        np.testing.assert_array_equal(kept, [True, True, True, True, False])
-
-    @pytest.mark.parametrize(
-        ("second", "symbol", "ratio"),
-        [
-            (lambda u: u.copy(), [0, 0], [1, 1]),  # equal bit for bit
-            (lambda u: u + 2.0**20, [0, 0], [1, 1]),  # a copy at another shift
-            (lambda u: u / 8 + 2.0**20, [0, 0], [1, Fraction(1, 8)]),  # x/8 + c
-            (lambda u: 8 * u, [0, 0], [1, 8]),  # a power of 2 at no shift
-            (lambda u: 3 * u + 1, [0, 1], [1, 1]),  # slope 3: its own symbol
-            (lambda u: -u, [0, 1], [1, 1]),  # a negative multiple
-            (lambda u: np.where(u == 1.0, np.nextafter(u, 2), u), [0, 1], [1, 1]),
-            (lambda u: np.where(u == 0.0, 5e-324, u), [0, 1], [1, 1]),  # subnormal
-        ],
-        ids=["equal", "shift", "x/8+c", "8x", "3x+1", "-x", "one ulp", "subnormal"],
-    )
-    def test_the_symbols_of_la_4_are_power_of_2_copies_on_the_scaled_x(
-        self, second, symbol, ratio
+    @pytest.mark.parametrize(("mean", "linear"), [(1e5, True), (1e7, False)])
+    def test_a_linear_column_counts_from_1e_7_of_its_uncentered_norm(
+        self, mean, linear
     ):
-        # S113 on #113: covariates j and s share a symbol when u_j = 2^k u_s
-        # at every case exactly, for an integer k (u = x - m on the scaled X);
-        # the symbol is the lowest index. An affine copy with another slope,
-        # a negative multiple, a near copy and a column that differs from the
-        # other only in a subnormal value (a check that scales down would
-        # merge them) are their own symbols.
-        u = np.array([0.0, 0.25, 0.5, 1.0])
-        atoms = ref.Atoms(np.column_stack([u, second(u)]))
-        assert atoms.symbol == symbol
-        assert atoms.ratio == ratio
-
-    def test_constant_columns_are_one_symbol_and_the_cases_decide_it(self):
-        # S113: the u of a constant covariate is 0 (k = 0), and -0 equals +0;
-        # a constant column next to a varying one is no copy. Rows of weight 0
-        # are no cases (W-3): they do not make a column vary or move a shift.
-        X = np.column_stack([[0.0, 0, 0, 0], [-0.0, 0, 0, 0], [0.0, 1, 2, 3]])
-        assert ref.Atoms(X).symbol == [0, 0, 2]
-        assert ref.Atoms(X).ratio == [1, 1, 1]
-        X = np.column_stack([1e10 + np.arange(5.0), [1e10, 1e10, 1e10, 1e10, 5.0]])
-        w = np.array([1, 1, 1, 1, 0.0])
-        assert ref.Atoms(X, w=w).symbol == [0, 1] and ref.Atoms(X, w=w).m[1] == 1e10
-        assert ref.Atoms(X).m[1] == 0.0  # with the row, 5 is within the range
-        # copy symbols come from the cases too (W-3): x1 differs from x0 only
-        # at the row of weight 0, so with the row they are two symbols
-        X = np.column_stack([[0.0, 1, 2, 3, 7], [0.0, 1, 2, 3, 9]])
-        assert ref.Atoms(X, w=w).symbol == [0, 0]
-        assert ref.Atoms(X).symbol == [0, 1]
-        # la4_kept builds its shifts from the cases: x0 = 1e10 + (1, ..., 4)
-        # counts after the intercept (u0 is its new part), whatever the row
-        # of weight 0 holds; with its 5 in the shift's range there would be
-        # no shift, and the part would be 1e-10 of its norm, dependent
-        x0 = np.array([1e10 + 1, 1e10 + 2, 1e10 + 3, 1e10 + 4, 5.0])
-        dirs, cuts = np.array([[0], [2]], np.int8), np.zeros((2, 1))
-        np.testing.assert_array_equal(
-            ref.la4_kept(x0[:, None], dirs, cuts, w), [True, True]
-        )
-
-    def test_the_reduced_echelon_form_does_not_depend_on_the_order(self):
-        # LA-4: the rows of the terms of #75 with hinges, in every order
-        X = issue75(2.0**36)
-        X[:, 1] = np.random.default_rng(3).uniform(size=10)
-        t = float(np.sort(X[:, 1])[4])
-        dirs = np.array(
-            [
-                [0, 0, 0, 0],
-                [2, 0, 0, 0],
-                [2, 1, 0, 0],
-                [0, -1, 2, 0],
-                [2, 0, 2, 0],
-                [0, 0, 2, 0],
-            ],
-            np.int8,
-        )
-        cuts = np.zeros((6, 4))
-        cuts[2:4, 1] = t
-        atoms = ref.Atoms(X)
-        forms = set()
-        for perm in [range(6), [5, 4, 3, 2, 1, 0], [2, 0, 5, 1, 3, 4]]:
-            echelon = ref.Echelon()
-            for k in perm:
-                echelon.add(atoms.expansion(dirs[k], cuts[k]))
-            forms.add(
-                tuple(
-                    sorted(
-                        (p, tuple(sorted(r.items()))) for p, r in echelon.rows.items()
-                    )
-                )
-            )
-        assert len(forms) == 1
-
-    def test_a_linear_candidate_dependent_at_the_data_level_is_not_legal(self):
-        # LA-2 (v2): x1 has two levels at a large mean, so with the terms 1,
-        # h0 = h(x0 - t) and h0 h(x1 - m1) in B, b x1 = h0 x1 equals a
-        # combination of them at the cases but not as a formula. LA-4 finds
-        # it dependent: its RSS is RSS_s and its reduction 0, and the knots of
-        # its pair search take their RSS on B (LA-3's G still holds b x)
-        rng = np.random.default_rng(4)
-        n, w = 30, np.ones(30)
-        X = np.column_stack([rng.uniform(size=n), 1e9 + rng.integers(0, 2, n)])
-        m1 = float(X[:, 1].min())
-        t = float(np.sort(X[:, 0])[10])
-        dirs = np.array([[0, 0], [1, 0], [1, 1]], np.int8)
-        cuts = np.array([[0.0, 0.0], [t, 0.0], [t, m1]])
-        B = ref.basis_matrix(X, dirs, cuts)
-        y = B @ [1.0, 2.0, 3.0] + X[:, 0] + 0.1 * rng.normal(size=n)
-        cond = ref.Conditioned(X, dirs, cuts, B)
-        assert cond.linear_column(dirs[1], cuts[1], 1, B[:, 1]).any()
-        P_B = ref.Projector(cond.columns, w)
-        rss_s = P_B.rss(y)
+        # LA-2 and LA-4 (v3), LIM-1: x0 = mean + k / 20 has sd 0.3, so its
+        # part orthogonal to the intercept is about 3e-6 or 3e-8 of its
+        # uncentered norm. At 1e5 the linear candidate of step 1 counts; at
+        # 1e7 LA-4 finds b x dependent, so the candidate has the RSS of F and
+        # is not legal, while the hinges of the same pair search count (x - t
+        # loses no digits). The pass then follows the line with hinges.
+        x0 = mean + np.arange(21.0) / 20
+        X, y, w = x0[:, None], 1 + 2 * (x0 - mean), np.ones(21)
+        F = np.ones((21, 1))
+        P = ref.Projector(F, w)
+        rss_s = P.rss(y)
         cands, _ = ref._parent_candidates(
-            1,
-            dirs[1],
+            0,
+            np.zeros(1, np.int8),
             X,
             y[:, None],
             w,
-            B,
-            P_B,
-            P_B.residual(y[:, None]),
-            ref.covariate_variances(X, w, 30.0),
-            30.0,
-            ref.weight_tol(30.0),
-            ref.Params(max_degree=2),
-            0.01,
-            cond,
-            cuts[1],
-            rss_s=rss_s,
-        )
-        linear = [c for c in cands if c.kind == ref.LINEAR and c.variable == 1]
-        assert all(c.rss == rss_s for c in linear)
-        assert not any(
-            c.variable == 1 and ref.reduction(c, rss_s) > 1e-8 * rss_s for c in cands
-        )
-
-    def test_a_pair_whose_b_x_la_2_rejects_adds_only_its_hinge(self):
-        # FWD-13 case (b), from the adversarial review of PR #129: F_1 = {1, x0}
-        # and the pair on parent x0 with covariate x2 at t = fl(1 + 0.5e-9).
-        # LA-2 rejects x0 x2, whose pivot u0 x2 is 0 at every case, and counts
-        # the hinge, so F_2 is F_1 with the hinge alone and RSS_2 = 35.24;
-        # FWD-11 keeps all four terms, whose RSS is 2.6e-14 (TSS 143). No fit
-        # reaches this step: the intercept's pair on x2 wins step 1.
-        i = np.arange(12.0)
-        x0 = 1e10 + np.r_[np.ones(8), np.zeros(12)]
-        x2 = np.r_[np.zeros(8), 1 + 1e-9 * (i - 5.5)]
-        X, y = np.column_stack((x0, x2)), np.r_[np.zeros(8), i - 5.5]
-        n, w, t = 20, np.ones(20), float(x2[14])
-        assert t == 1 + 0.5e-9
-        dirs, cuts = [np.array(r, np.int8) for r in ([0, 0], [2, 0])], [np.zeros(2)] * 2
-        F = ref.Conditioned(X, dirs, cuts, None, ref.Atoms(X), w)
-        P = ref.Projector(F.columns, w)
-        cands, _ = ref._parent_candidates(
-            1,
-            dirs[1],
-            X,
-            y[:, None],
-            w,
-            ref.basis_matrix(X, np.array(dirs), np.array(cuts)),
+            F,
             P,
             P.residual(y[:, None]),
-            ref.covariate_variances(X, w, float(n)),
-            float(n),
-            ref.weight_tol(float(n)),
-            ref.Params(max_degree=2, minspan=1, endspan=1),
+            ref.covariate_variances(X, w, 21.0),
+            21.0,
+            ref.weight_tol(21.0),
+            ref.Params(),
             0.01,
-            F,
-            cuts[1],
-            rss_s=P.rss(y),
         )
-        (c,) = [c for c in cands if c.kind == ref.PAIR and c.knot == t]
-        assert c.counted == (False, True)
-        # LA-3's G holds x0 x2 although LA-2 rejects it: rho is 1.7e-32 and
-        # 0.003 at the two lowest knots of the second group (0.50 and 0.57
-        # on F_1 alone), so they are no candidates
-        pairs = [c.knot for c in cands if c.kind == ref.PAIR]
-        assert min(pairs) == x2[10] and len(pairs) == 7
-        new = ref._basis_rows(c, dirs, cuts)
-        assert [(r.tolist(), u.tolist()) for r, u in new] == [([2, 1], [0.0, t])]
-        f2 = exact_rss(exact_basis(X, [*dirs, new[0][0]], [*cuts, new[0][1]]), y, w)
-        assert f2 == pytest.approx(35.2414, abs=1e-4)
-        assert abs(c.rss - f2) <= la5(f2, P.rss(y), 143.0)
-        terms = np.array([[0, 0], [2, 0], [2, 1], [2, -1]], np.int8)
-        term_cuts = np.array([[0.0, 0.0], [0.0, 0.0], [0.0, t], [0.0, t]])
-        assert ref.la4_kept(X, terms, term_cuts, w).all()
-        assert exact_rss(exact_basis(X, terms, term_cuts), y, w) < 1e-13
+        (lin,) = [c for c in cands if c.kind == ref.LINEAR]
+        assert lin.counted == (linear,)
+        assert (lin.rss < 1e-6 * rss_s) if linear else (lin.rss == rss_s)
+        pairs = [c for c in cands if c.kind == ref.PAIR]
+        assert pairs and all(c.counted == (linear, True) for c in pairs)
+        assert all(ref.reduction(c, rss_s) > 0.5 * rss_s for c in pairs)
+        rec = run_forward(X, y)
+        assert (rec["dirs"][1, 0] == 2) == linear
+        assert rec["rss"][-1] < (1e-6 if linear else 0.1) * rec["rss"][0]
 
-    @pytest.mark.parametrize("copy", ["equal", "plus 2^-16", "minus 2^35"])
-    def test_copies_of_a_large_mean_covariate_meet_la_5(self, copy):
-        # #99: X = (2^36 + u, a copy, z), y = 10 h + 6 h u + 4 h u^2 with h a
-        # hinge of z; the copy is equal bit for bit, 2^-16 above in every row,
-        # or 2^35 below, so its u = x - m is equal. Both share one symbol, so every RSS
-        # of the forward pass, of the pruning pass and the final rss meet LA-5
-        # against exact arithmetic; the final rss is the LA-1 value, which is
-        # rss_per_size of the selected size; the coefficients are those of
-        # exact least squares
+    def test_an_ordinary_fit_meets_la_5_and_the_exact_coefficients(self):
+        # LA-5 and PRUNE-8 (v3) on ordinary data at degree 3 (Limits): x0 at a
+        # mean of 8 times its spread (r about 28 < 30), an exact copy x1 (bit
+        # for bit), and a hinge of z. Every RSS of the forward pass, of the
+        # pruning pass and the final rss are within epsilon(V*, R, cond) of
+        # exact arithmetic, and the coefficients within a normwise 1e-6 of
+        # exact least squares, where cond <= 1e5
         rng = np.random.default_rng(3)
         n = 20
-        x0 = 2.0**36 + rng.uniform(size=n)
-        u = x0 - 2.0**36
-        z = rng.uniform(size=n)
-        x1 = {"equal": x0, "plus 2^-16": x0 + 2.0**-16, "minus 2^35": x0 - 2.0**35}[
-            copy
-        ]
-        # x - m is equal bit for bit; for "minus 2^35" EDGE-7 scales the two
-        # columns by different powers of 2, and the symbol is still shared
-        assert np.array_equal(x1 - x1.min(), x0 - x0.min())
-        X = np.column_stack([x0, x1, z])
+        u, z = rng.uniform(size=n), rng.uniform(size=n)
+        X = np.column_stack([8 + u, 8 + u, z])
         h = np.maximum(z - 0.4, 0)
-        y = 10 * h + 6 * h * u + 4 * h * u**2
+        y = 10 * h + 6 * h * u + 4 * h * u**2 + 0.01 * rng.normal(size=n)
         result = assert_fit_meets_la5(X, y, max_degree=3, fast_k=0, thresh=0.0)
-        B = exact_basis(X, result["dirs"], result["cuts"])
-        np.testing.assert_allclose(result["coef"][:, 0], exact_coef(B, y), rtol=1e-6)
-
-    def test_a_power_of_2_copy_at_another_shift_meets_la_5(self):
-        # #115 (the review of #110): x1 = 2^26 + u0/8 is a copy of x0 =
-        # -1e9 + u0 up to a power of 2 (S113: one symbol, u1 = u0/8), and x2
-        # is at 1e12. The reference gave 7.8353e-05 after step 3 where the
-        # exact RSS of its span is 7.836609779870418e-05, below it.
-        X = np.array(
-            [
-                [-999999999.3333334, 67108864.08333333, 1e12],
-                [-999999999.3333334, 67108864.08333333, 1e12],
-                [-999999999.6666666, 67108864.04166667, 1000000000000.3334],
-                [-999999999.6666666, 67108864.04166667, 1000000000000.3334],
-                [-999999999.6666666, 67108864.04166667, 1e12],
-                [-1e9, 67108864.0, 1000000000000.3334],
-            ]
-        )
-        y = np.array(
-            [
-                1.0091143405685823,
-                0.9986976788689693,
-                -0.00303819589316845,
-                0.00390625186264515,
-                -0.00303819589316845,
-                -0.01519097511967023,
-            ]
-        )
-        opts = {"max_degree": 2, "fast_k": 0, "thresh": 0.0, "adjust_endspan": 0.0}
-        assert_fit_meets_la5(X, y, **opts)
-
-    @pytest.mark.parametrize("seed", [13, 14])
-    def test_a_one_ulp_copy_at_a_large_mean_meets_la_5(self, seed):
-        # #115: x1 is x0 = -2^30 + (0 or 1/2) with one value one ulp up, x2 is
-        # at -1e9, and y is near 1e6. x1 is its own symbol (not a copy), and
-        # its columns are within an angle of 1e-7 of the others', so a float
-        # projection loses digits; every RSS of the forward pass, of the
-        # pruning pass and the final rss must meet LA-5 (the reference was off
-        # by 24 and 38 times the bound on these draws).
-        rng = np.random.default_rng(seed)
-        n = 30
-        x0 = -(2.0**30) + 0.5 * rng.integers(0, 2, n)
-        x1 = x0.copy()
-        i = int(rng.integers(n))
-        x1[i] = np.nextafter(x1[i], np.inf)
-        x2 = -1e9 + 0.5 * rng.integers(0, 2, n)
-        y = np.maximum(x0 - np.median(x0), 0) * 3 + (x1 - x1.mean()) * (x2 - x2.mean())
-        y = y + 0.3 * rng.standard_normal(n) + 1e6
-        opts = {"max_degree": 2, "fast_k": 0, "thresh": 0.001, "adjust_endspan": 2.0}
-        assert_fit_meets_la5(np.column_stack([x0, x1, x2]), y, **opts)
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        assert condition(B, np.ones(n)) <= 1e5
+        exact = exact_coef(exact_basis(X, result["dirs"], result["cuts"]), y)
+        got = result["coef"][:, 0]
+        assert np.linalg.norm(got - exact) <= 1e-6 * np.linalg.norm(exact)
 
 
 def assert_fit_meets_la5(X, y, **opts):
-    """Fit with the reference; every RSS of its forward pass (each step, on the
-    span of the terms added so far), of its pruning pass (each size, on its
-    subset) and its final rss meet LA-5 against exact arithmetic. Returns the
-    result."""
+    """Fit with the reference, on unit weights; every RSS of its forward pass
+    (each step, on the terms added so far, which span F_s when no term is
+    dropped), of its pruning pass (each size, on its subset) and its final
+    rss meet LA-5 against exact arithmetic, with cond of the float64 columns
+    whenever it is at most 1e6. Returns the result."""
     result = fit(X, y, **opts)
-    fwd, w = result["forward"], np.ones(len(y))
+    fwd, w, n = result["forward"], np.ones(len(y)), len(y)
+    assert fwd["dropped"].size == 0
     tss = fwd["rss"][0]
+    checked = 0
+
+    def check(got, dirs, cuts, R):
+        nonlocal checked
+        k = condition(ref.basis_matrix(X, dirs, cuts), w)
+        if k <= 1e6:
+            exact = exact_rss(exact_basis(X, dirs, cuts), y, w)
+            assert abs(got - exact) <= la5(exact, R, tss, k, n)
+            checked += 1
+
     for s in range(1, len(fwd["rss"])):
         terms = np.flatnonzero(fwd["step"] <= s)
-        exact = exact_rss(exact_basis(X, fwd["dirs"][terms], fwd["cuts"][terms]), y, w)
-        assert abs(fwd["rss"][s] - exact) <= la5(exact, fwd["rss"][s - 1], tss)
+        check(fwd["rss"][s], fwd["dirs"][terms], fwd["cuts"][terms], fwd["rss"][s - 1])
     kept, pruning = fwd["kept"], result["pruning"]
-    Bk = exact_basis(X, fwd["dirs"][kept], fwd["cuts"][kept])
     for m, got in enumerate(pruning["rss_per_size"], start=1):
-        columns = np.flatnonzero(pruning["subsets"][m - 1])
-        exact = exact_rss([[row[c] for c in columns] for row in Bk], y, w)
-        assert abs(got - exact) <= la5(exact, exact, tss)
-    B = exact_basis(X, result["dirs"], result["cuts"])
-    exact = exact_rss(B, y, w)
-    assert abs(result["rss"] - exact) <= la5(exact, exact, tss)
+        terms = kept[pruning["subsets"][m - 1]]
+        check(got, fwd["dirs"][terms], fwd["cuts"][terms], got)
+    check(result["rss"], result["dirs"], result["cuts"], result["rss"])
+    assert checked > len(fwd["rss"])
     assert result["rss"] == pruning["rss_per_size"][pruning["selected_size"] - 1]
     return result
 
@@ -988,12 +660,18 @@ def exact_coef(B, y):
     """Least-squares coefficients in exact arithmetic (normal equations), for
     a basis B of fractions with independent columns, unit weights."""
     m = len(B[0])
-    A = [[sum(r[a] * r[b] for r in B) for b in range(m)] for a in range(m)]
-    rhs = [
-        sum(r[a] * Fraction(float(v)) for r, v in zip(B, y, strict=True))
+    A = [
+        [sum(r[a] * r[b] for r in B) for b in range(m)] + [Fraction(0)]
         for a in range(m)
     ]
-    return [float(c) for c in ref._solve_exact(A, rhs)]
+    for a in range(m):
+        A[a][m] = sum(r[a] * Fraction(float(v)) for r, v in zip(B, y, strict=True))
+    for c in range(m):  # Gauss-Jordan; A is positive definite, so no pivoting
+        for i in range(m):
+            if i != c and A[i][c]:
+                f = A[i][c] / A[c][c]
+                A[i] = [x - f * v for x, v in zip(A[i], A[c], strict=True)]
+    return np.array([float(A[i][m] / A[i][i]) for i in range(m)])
 
 
 # ---------------------------------------------------------------------------
@@ -1700,173 +1378,37 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
-    @pytest.mark.parametrize(
-        ("degree", "case", "shift"),
-        [
-            (2, "hinges", 2.0**36),
-            (3, "hinges", 2.0**36),
-            (2, "continuous", 2.0**26),
-            (2, "continuous", -(2.0**36)),
-            (3, "continuous", 2.0**26),
-            (3, "continuous", -(2.0**36)),
-            (2, "grid", (1e8, 4e6, 7e8)),
-            (2, "binary", (2.0**36, 0.0)),
-            (3, "near the range", (1.001, -1.001, 0.5)),
-            (2, "mixed", (2.0**40, 0.0, 0.0)),
-            (2, "pruning", 2.0**23),
-        ],
-    )
-    def test_an_exact_shift_of_a_covariate_keeps_the_pass(
-        self, degree, case, shift, monkeypatch
-    ):
-        # "hinges": with auto_linpreds=False every term is a product of
-        # hinges, so an exact shift of x1 by 2^36 cannot change the fit
-        # (Conventions): the pass must give the same terms with the cuts
-        # shifted. The other cases use auto_linpreds=True, so covariates with
-        # a large mean enter products as linear factors, next to the same
-        # term without them, and the new part of a column is small beside the
-        # means. "continuous": every covariate shifted. "grid": values 0 to
-        # 4 and means near 1e8, 4e6 and 7e8, where the pass used to add x0 x2
-        # a second time, with a false RSS drop of 32 percent. "binary": a
-        # shifted 0/1 covariate times x1, next to a hinge pair on x1, whose
-        # sum is linear in x1. In all cases, the RSS of each step and of its
-        # second best candidate must be within 1e-8 of the RSS before the
-        # step [LA-5] of the exact rational RSS of the same terms, with every
-        # column formed exactly. "near the range": smallest values just above
-        # the range, where the float columns lose no digits, so the pass must
-        # be the same with and without the exact change of basis. "mixed": x0
-        # shifted, x1 and x2 not, with integer weights, so that mirror hinges
-        # of covariates without a large mean enter expanded terms. "pruning":
-        # covariates of spread 8 at the mean 2^23, a linear factor that LA-4
-        # still keeps (at a spread of 1 it drops it); the pruning pass then
-        # misses LA-5 on the float columns when it does not expand them
-        # (#84), and every case here checks rss_per_size of the whole fit.
-        w = None
-        opts = {"max_degree": degree, "auto_linpreds": case != "hinges"}
-        opts["max_terms"] = 11 if case == "hinges" else 13
-        if case == "hinges":
-            rng = np.random.default_rng(4)
-            n = 40
-            grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
-            X = np.column_stack(grid)[:, :degree]
-            shift = np.array([0.0, shift, 0.0][:degree])
-        elif case == "grid":
-            rng = np.random.default_rng(2)
-            n = 12
-            X = rng.integers(0, 5, size=(n, 3)).astype(float)
-            y = X[:, 2] + X[:, 0] * X[:, 2] + 0.1 * rng.normal(size=n)
-        elif case == "binary":
-            rng = np.random.default_rng(7)
-            n = 17
-            X = np.column_stack([rng.integers(0, 2, size=n), rng.uniform(size=n)])
-            coef = rng.uniform([1, 1, 1], [4, 4, 6])
-            y = (
-                coef[0] * X[:, 0]
-                + coef[1] * np.abs(X[:, 1] - 0.5)
-                + coef[2] * X[:, 0] * X[:, 1]
-                + 0.1 * rng.normal(size=n)
-            )
-            opts["max_terms"] = 9
-        elif case == "mixed":
-            rng = np.random.default_rng(93)
-            n = 16
-            X = rng.uniform(size=(n, 3))
-            y = X[:, 0] * X[:, 1] + np.maximum(X[:, 0] - X[:, 0].mean(), 0)
-            y = y + 0.1 * rng.normal(size=n)
-            w = rng.integers(1, 4, size=n).astype(float)
-            opts["max_terms"] = 11
-        elif case == "pruning":
-            rng = np.random.default_rng(35)
-            n = 40
-            noise = rng.choice([0.01, 0.2, 1.0])
-            U = rng.uniform(size=(n, 3))
-            h = np.maximum(U[:, 0] - 0.3, 0)
-            y = 2 * h + 3 * h * U[:, 1] + U[:, 1] * U[:, 2]
-            y = y + noise * rng.normal(size=n)
-            X = 8 * U
-        elif case == "near the range":
-            rng = np.random.default_rng(27)
-            n = 14
-            X = np.column_stack([rng.uniform(size=n) for _ in range(3)])
-            X[:, 0] = (X[:, 0] - X[:, 0].min()) / np.ptp(X[:, 0])
-            y = X[:, 0] * X[:, 1] + X[:, 1] * X[:, 2] + 0.1 * rng.normal(size=n)
-        else:
-            rng = np.random.default_rng(0)
-            n = 40
-            X = rng.uniform(size=(n, 3))
-        if case in ("hinges", "continuous"):
-            hinge = np.maximum(X[:, 0] - 0.3, 0)
-            y = 2 * hinge + 3 * hinge * X[:, 1]
-            if degree == 3:
-                y = y + 2 * hinge * X[:, 1] * X[:, 2]
-            y = y + (0.05 if case == "hinges" else 0.2) * rng.normal(size=n)
+    @pytest.mark.parametrize("degree", [2, 3])
+    def test_an_exact_shift_of_a_covariate_in_hinges_keeps_the_pass(self, degree):
+        # Conventions: with auto_linpreds=False every term is a product of
+        # hinges, so a shift of x1 by 2^10 that is exact at every value (a
+        # grid of multiples of 2^-10) gives the same hinge columns bit for
+        # bit. LA-2 still tests b x1, whose part orthogonal to F_s is about
+        # 3e-4 of its uncentered norm here, far from 1e-7; at a shift of
+        # 2^36 it would be dependent (LIM-1), so v3 asks a moderate shift.
+        # The pass must give the same terms with the cuts shifted.
+        rng = np.random.default_rng(4)
+        n = 40
+        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+        X = np.column_stack(grid)[:, :degree]
+        shift = np.array([0.0, 2.0**10, 0.0][:degree])
+        hinge = np.maximum(X[:, 0] - 0.3, 0)
+        y = 2 * hinge + 3 * hinge * X[:, 1]
+        if degree == 3:
+            y = y + 2 * hinge * X[:, 1] * X[:, 2]
+        y = y + 0.05 * rng.normal(size=n)
+        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
         shifted_X = X + shift
-        shifted = run_forward(shifted_X, y, w, **opts)
-        dirs = shifted["dirs"]
-        if case == "continuous":
-            # a linear factor is the new factor of a term of the given degree
-            # whose parent is not the intercept
-            assert any(
-                dirs[shifted["parent"][k], j] == 0
-                and ref.term_degree(dirs[k]) == degree
-                for k, j in np.argwhere(dirs == 2)
-            )
-        if case == "near the range":
-            assert ref._large_mean(shifted_X) == {0, 1}
-            monkeypatch.setattr(ref, "_large_mean", lambda X: set())
-            plain = run_forward(shifted_X, y, w, **opts)
-            for key in ("dirs", "cuts", "parent", "termination"):
-                np.testing.assert_array_equal(shifted[key], plain[key])
-            np.testing.assert_allclose(shifted["rss"], plain["rss"], rtol=1e-12)
-        if case == "hinges":
-            np.testing.assert_array_equal(shifted_X - shift, X)
-            base = run_forward(X, y, w, **opts)
-            for key in ("dirs", "parent", "step", "termination"):
-                np.testing.assert_array_equal(shifted[key], base[key])
-            cuts = base["cuts"].copy()
-            cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift[1], 0.0)
-            np.testing.assert_array_equal(shifted["cuts"], cuts)
-            before = base["rss"][:-1]
-            change = np.abs(shifted["rss"][1:] - base["rss"][1:])
-            assert np.all(change <= 1e-8 * before)
-        w = np.ones(n) if w is None else w
-        before, log = shifted["rss"][:-1], shifted["candidates"]
-        for s in range(1, len(shifted["rss"])):
-            terms = np.flatnonzero(shifted["step"] <= s)
-            B = exact_basis(shifted_X, dirs[terms], shifted["cuts"][terms])
-            exact = exact_rss(B, y, w)
-            assert abs(shifted["rss"][s] - exact) <= 1e-8 * before[s - 1]
-            # the second best of the step: RSS(B + {b x}), RSS(B + {b x, h})
-            # or RSS(B + {h}) [LA-2], with B the terms before the step
-            kind = log["second_kind"][s - 1]
-            if kind == ref.NO_KIND:
-                continue
-            k, j = log["second_parent"][s - 1], log["second_variable"][s - 1]
-            rows = [dirs[t] for t in terms if shifted["step"][t] < s]
-            cut_rows = [shifted["cuts"][t] for t in terms if shifted["step"][t] < s]
-            codes = {ref.LINEAR: [2], ref.PAIR: [2, 1], ref.SINGLE: [1]}[kind]
-            for code in codes:
-                rows.append(dirs[k].copy())
-                cut_rows.append(shifted["cuts"][k].copy())
-                rows[-1][j] = code
-                cut_rows[-1][j] = log["second_knot"][s - 1] if code == 1 else 0.0
-            exact = exact_rss(exact_basis(shifted_X, rows, cut_rows), y, w)
-            assert abs(log["second_rss"][s - 1] - exact) <= 1e-8 * before[s - 1]
-        # the pruning pass of the whole fit: rss_per_size of each size, in
-        # exact arithmetic on the terms of its subset, within 1e-8 of itself
-        # [LA-5, PRUNE-9]; a floor for the exact fits, as STOP-5 has
-        fit = ref.fit_mars(shifted_X, y, w, opts)
-        kept, pruning = fit["forward"]["kept"], fit["pruning"]
-        B = exact_basis(shifted_X, dirs[kept], fit["forward"]["cuts"][kept])
-        floor = 1e-10 * pruning["rss_per_size"][0] / (np.sum(w) - 1)
-        for m, got in enumerate(pruning["rss_per_size"], start=1):
-            columns = np.flatnonzero(pruning["subsets"][m - 1])
-            exact = exact_rss([[row[c] for c in columns] for row in B], y, w)
-            assert abs(got - exact) <= 1e-8 * max(exact, floor)
-        # the final model's rss is the RSS of the selected size
-        assert fit["rss"] == pytest.approx(
-            pruning["rss_per_size"][pruning["selected_size"] - 1], rel=1e-10
-        )
+        np.testing.assert_array_equal(shifted_X - shift, X)
+        shifted = run_forward(shifted_X, y, None, **opts)
+        base = run_forward(X, y, None, **opts)
+        for key in ("dirs", "parent", "step", "termination", "dropped"):
+            np.testing.assert_array_equal(shifted[key], base[key])
+        cuts = base["cuts"].copy()
+        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift[1], 0.0)
+        np.testing.assert_array_equal(shifted["cuts"], cuts)
+        change = np.abs(shifted["rss"][1:] - base["rss"][1:])
+        assert np.all(change <= 1e-8 * base["rss"][:-1])
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
         # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
@@ -2036,65 +1578,6 @@ class TestForwardPass:
             x[:, None], base + eps * v, minspan=1, endspan=1, thresh=thresh
         )
         assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
-
-    def test_a_linear_term_at_a_large_mean_counts(self):
-        # FWD-11 and LA-4 (v2): x0 = 1e7 + k / 20 is added as a linear term;
-        # its new part after the shift is u0 = k / 20, so it counts (v1 and
-        # earth dropped it), and every RSS meets LA-5 against exact arithmetic
-        x0 = 1e7 + np.arange(21.0) / 20
-        y = 1 + 2 * (x0 - 1e7)
-        rec = run_forward(x0[:, None], y)
-        np.testing.assert_array_equal(rec["dirs"][:2], [[0], [2]])
-        assert rec["dropped"].size == 0
-        exact = exact_rss(
-            exact_basis(x0[:, None], rec["dirs"][:2], rec["cuts"][:2]), y, np.ones(21)
-        )
-        assert abs(rec["rss"][1] - exact) <= 1e-8 * rec["rss"][0]
-
-    def test_candidate_rss_on_a_badly_conditioned_basis(self):
-        # LA-5: two knots 1e-6 apart and a linear term with offset 1e4 give a
-        # condition number above 1e10; each candidate RSS stays within 1e-8 of
-        # the RSS before the step, against exact rational least squares
-        rng = np.random.default_rng(29)
-        n = 20
-        x = np.sort(rng.uniform(size=n))
-        x[11] = x[10] + 1e-6
-        X = np.column_stack([x, rng.uniform(size=n)])
-        B = np.column_stack(
-            [np.ones(n), np.maximum(x - x[10], 0), np.maximum(x - x[11], 0), x + 1e4]
-        )
-        w = rng.uniform(0.5, 2.0, size=n)
-        y = np.abs(X[:, 1] - 0.5) + x + 0.1 * rng.normal(size=n)
-        assert np.linalg.cond(B * np.sqrt(w)[:, None]) > 1e10
-        N0 = ref.weight_sum(w)
-        tau_N = ref.weight_tol(N0)
-        N = ref.snap(N0, tau_N)
-        P_B = ref.Projector(B, w)
-        before = exact_rss(B, y, w)
-        cands, _ = ref._parent_candidates(
-            0,
-            np.zeros(2, np.int8),
-            X,
-            y[:, None],
-            w,
-            B,
-            P_B,
-            P_B.residual(y[:, None]),
-            ref.covariate_variances(X, w, N),
-            N,
-            tau_N,
-            ref.Params(minspan=3),
-            0.01,
-        )
-        assert len(cands) > 4
-        for c in cands:
-            cols = [B]
-            if c.kind in (ref.PAIR, ref.LINEAR):
-                cols.append(X[:, c.variable])
-            if c.kind != ref.LINEAR:
-                cols.append(np.maximum(X[:, c.variable] - c.knot, 0))
-            exact = exact_rss(np.column_stack(cols), y, w)
-            assert abs(c.rss - exact) <= 1e-8 * before
 
     def test_candidates_of_one_kind_that_add_the_same_rows_merge(self):
         # FWD-12, FAST-5: two searches of one step that add the same rows.
@@ -2405,24 +1888,27 @@ class TestFit:
 
     def test_a_dropped_term_before_kept_ones(self, monkeypatch):
         # FWD-11 in the fit: the pruning pass gets the terms of kept, and
-        # pruning index m is forward index kept[m] [CORE-3]. With v2's LA-4 a
-        # dropped term is rare (none in 1200 random fits), so LA-4 is made to
-        # find the second hinge of step 1, h(t - x1), dependent
+        # pruning index m is forward index kept[m] [CORE-3]. A dropped term
+        # is rare on such data, so FWD-11's test (dependent_columns on all
+        # M_a forward terms, its only call with that many columns) is made
+        # to find the second hinge of step 1, h(t - x1), dependent
         rng = np.random.default_rng(5)
         n = 60
         X = rng.uniform(size=(n, 2))
         y = 2 * X[:, 0] + 3 * np.abs(X[:, 1] - 0.5) + rng.normal(scale=0.05, size=n)
         base = fit(X, y)
         assert base["forward"]["dropped"].size == 0
-        row, cut = base["forward"]["dirs"][2], base["forward"]["cuts"][2]
-        assert -1 in row.tolist()
-        real = ref.la4_dependent
+        assert -1 in base["forward"]["dirs"][2].tolist()
+        M_a = len(base["forward"]["dirs"])
+        real = ref.dependent_columns
 
-        def la4_dependent(atoms, S, e, w):
-            target = atoms.expansion(row, ref.np.ldexp(cut, ref.x_scale_powers(X)))
-            return e == target or real(atoms, S, e, w)
+        def dependent_columns(B, w):
+            out = real(B, w)
+            if B.shape[1] == M_a:
+                out[2] = True
+            return out
 
-        monkeypatch.setattr(ref, "la4_dependent", la4_dependent)
+        monkeypatch.setattr(ref, "dependent_columns", dependent_columns)
         result = fit(X, y)
         fwd, pr = result["forward"], result["pruning"]
         np.testing.assert_array_equal(fwd["dropped"], [2])

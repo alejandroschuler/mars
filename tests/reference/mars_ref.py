@@ -1,6 +1,6 @@
 """Reference implementation of the pymars 2.0 fitting algorithm (the test oracle).
 
-This module implements ``docs/algorithm.md`` (spec v2) literally, so that the
+This module implements ``docs/algorithm.md`` (spec v3) literally, so that the
 oracle tests can compare the fast code in ``pymars/`` with it
 (VALIDATION_PLAN.md, "Tests and validation folders" and "Fast path"). It was
 written from the spec alone. It imports nothing from ``pymars``, and its
@@ -9,17 +9,17 @@ independently.
 
 How it computes, and how that differs from the fast code:
 
-- Every column is built explicitly from X, and every RSS is the residual of
-  an explicit weighted least-squares projection [LA-1]: a column-pivoted
-  Householder QR (``scipy.linalg.qr``) of the columns, with no updating
-  formula and no suffix sum.
+- All arithmetic is float64. Every column is built explicitly from X, and
+  every RSS is the residual of an explicit weighted least-squares
+  projection [LA-1]: a column-pivoted Householder QR (``scipy.linalg.qr``)
+  of the sqrt(w)-scaled columns, with no updating formula and no suffix sum.
+  Each column and each response is first centered by the data value
+  nearest its weighted mean, then by the remaining weighted mean [LA-6].
 - The collinearity ratio [LA-3] is an explicit regression of the centered
   hinge column on the centered current columns.
-- Dependence follows LA-4 after its exact shift of large-mean covariates:
-  the reduced echelon form of the terms' exact expansions decides it, and
-  in exact arithmetic when a covariate is shifted (``la4_dependent``). The
-  projections use columns from an exact change of basis (``Conditioned``),
-  so that a linear factor does not cost digits [LA-1, LA-5].
+- Dependence is LA-4's float64 test: the w-norm of a column's part
+  orthogonal to the kept columns against 1e-7 of its own w-norm, not
+  centered (``dependent_columns``, and the same test inside the search).
 - The pruning pass refits every subset that its rules consider [PRUNE-9].
 - The forward pass evaluates every candidate of every visited parent with
   its explicit columns, and follows the queue, the slots and the stopping
@@ -45,7 +45,6 @@ import itertools
 import math
 import numbers
 from collections.abc import Mapping
-from fractions import Fraction
 
 import numpy as np
 import scipy.linalg
@@ -384,20 +383,45 @@ def _residual(Q: np.ndarray, V: np.ndarray) -> np.ndarray:
     return R - Q @ (Q.T @ R)
 
 
+def centering(V, w) -> tuple[np.ndarray, np.ndarray]:
+    """The two shifts of LA-6 for each column of V (n,) or (n, m): the data
+    value nearest the column's weighted mean (the smallest such value on a
+    tie), and the weighted mean of the column minus that value. V minus the
+    first, then minus the second, is the centered column."""
+    V = np.asarray(V, dtype=np.float64)
+    w = np.asarray(w, dtype=np.float64)
+    W = V.reshape(V.shape[0], -1)
+    wsum = float(np.sum(w))
+    first = np.empty(W.shape[1])
+    for c in range(W.shape[1]):
+        gap = np.abs(W[:, c] - float(w @ W[:, c]) / wsum)
+        first[c] = W[gap == gap.min(), c].min()
+    second = (w @ (W - first)) / wsum
+    shape = V.shape[1:]
+    return first.reshape(shape), second.reshape(shape)
+
+
+def center(V, w) -> np.ndarray:
+    """V centered at its weighted mean as LA-6 says: minus the data value
+    nearest the weighted mean, then minus the remaining weighted mean, each
+    column on its own. A large mean then costs no digits of the spread."""
+    first, second = centering(V, w)
+    return (np.asarray(V, dtype=np.float64) - first) - second
+
+
 class Projector:
     """The w-orthogonal projection on the span of the columns of B [LA-1].
 
     Every vector is scaled by sqrt(w), so that the weighted problem becomes
     an ordinary one. When column 0 of B is a nonzero constant (the intercept
     of every RSS in the spec), every other column and every projected vector
-    is first centered at its weighted mean: that changes no span and no
+    is first centered as LA-6 says (``center``): that changes no span and no
     residual, and it keeps a large mean from costing digits.
     """
 
     def __init__(self, B, w):
         B = np.asarray(B, dtype=np.float64)
         self._w = np.asarray(w, dtype=np.float64)
-        self._wsum = float(np.sum(self._w))
         self._sw = np.sqrt(self._w)
         first = B[:, 0] if B.shape[1] else None
         self.centered = (
@@ -418,7 +442,7 @@ class Projector:
         """sqrt(w) times V, centered first when B holds the intercept."""
         V = np.asarray(V, dtype=np.float64)
         if self.centered:
-            V = V - (self._w @ V) / self._wsum
+            V = center(V, self._w)
         return V * (self._sw if V.ndim == 1 else self._sw[:, None])
 
     def residual(self, V) -> np.ndarray:
@@ -488,11 +512,12 @@ def lstsq_coef(B, Y, w) -> np.ndarray:
     """Weighted least-squares coefficients of Y on the columns of B [LA-4].
 
     A dependent column (dependent_columns) gets the coefficient 0, and the
-    kept columns get the least-squares solution, by a column-pivoted QR of
-    the sqrt(w)-scaled kept columns. When column 0 is the intercept, Y is
-    centered first and the mean is added back to its coefficient, which
-    changes nothing but the rounding. Returns shape (M, K) for Y of shape
-    (n, K), and (M,) for a 1-D Y.
+    kept columns get the least-squares solution, by a column-pivoted
+    Householder QR of the sqrt(w)-scaled kept columns and a triangular
+    solve, a backward-stable method. When column 0 is the intercept, each
+    response is centered first as LA-6 says, and the intercept's
+    coefficient takes the two shifts back. Returns shape (M, K) for Y of
+    shape (n, K), and (M,) for a 1-D Y.
     """
     B = np.asarray(B, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
@@ -501,18 +526,19 @@ def lstsq_coef(B, Y, w) -> np.ndarray:
     coef = np.zeros((B.shape[1], Y2.shape[1]))
     keep = ~dependent_columns(B, w)
     if keep.any():
-        shift = np.zeros(Y2.shape[1])
+        first = second = np.zeros(Y2.shape[1])
         if keep[0] and np.all(B[:, 0] == 1.0):
-            shift = (w @ Y2) / np.sum(w)
+            first, second = centering(Y2, w)
         sw = np.sqrt(w)
         Q, R, piv = scipy.linalg.qr(
             B[:, keep] * sw[:, None], mode="economic", pivoting=True
         )
-        solution = scipy.linalg.solve_triangular(R, Q.T @ ((Y2 - shift) * sw[:, None]))
+        Yc = (Y2 - first) - second
+        solution = scipy.linalg.solve_triangular(R, Q.T @ (Yc * sw[:, None]))
         beta = np.empty_like(solution)
         beta[piv] = solution
         if keep[0]:
-            beta[0] = beta[0] + shift
+            beta[0] = beta[0] + (first + second)
         coef[keep] = beta
     return coef if Y.ndim > 1 else coef[:, 0]
 
@@ -541,8 +567,6 @@ def prune(
     tau_N: float,
     pmethod: str = "backward",
     nprune: int | None = None,
-    columns_of=None,
-    coef_of=None,
 ) -> dict:
     """The pruning pass on the kept forward terms [PRUNE-2 to PRUNE-8].
 
@@ -555,15 +579,8 @@ def prune(
     gcv_per_size, subsets, selected_size) together with ``selected`` (the
     pruning indices of the selected terms, increasing), ``coef`` (m*, K),
     ``rss``, ``gcv``, ``rsq`` and ``grsq`` of the final model [PRUNE-8], and
-    ``tss``.
-
-    ``columns_of``, when given, maps the sorted indices of a subset of the
-    terms to columns that span what the terms span; every RSS then uses them
-    in place of the columns of B, which keeps the digits that a large
-    covariate mean would cost in the float columns of B [LA-5]
-    (``Conditioned.span_columns``). ``coef_of(selected, Y, w)``, when given,
-    returns the final coefficients and the mask of the selected terms that
-    LA-4 keeps (``Conditioned.coef``); else they come from B (lstsq_coef).
+    ``tss``. Every kept forward term counts in every subset [LA-1]: FWD-11
+    has dropped the dependent ones.
 
     The fit must not be degenerate: ``fit_mars`` applies EDGE-1 and the
     degenerate values of GCV-7 before it calls this function, so here
@@ -583,15 +600,11 @@ def prune(
         raise ValueError(f"nprune must be None or at least 1, not {nprune!r}")
     Mf = B.shape[1]
     memo: dict[frozenset, float] = {}
-    if columns_of is None:
-
-        def columns_of(rows):
-            return B[:, rows]
 
     def rss_of(terms) -> float:
         key = frozenset(terms)
         if key not in memo:
-            memo[key] = rss(columns_of(sorted(key)), Y, w)
+            memo[key] = rss(B[:, sorted(key)], Y, w)
         return memo[key]
 
     best_rss = [math.inf] * (Mf + 1)  # R[m], m = 1..Mf
@@ -661,11 +674,8 @@ def prune(
     # fit on the selected columns that LA-4 keeps, so their RSS is the RSS of
     # the projection on those columns [LA-1], which the Projector computes
     # centered; Y - BS coef on the raw Y would cancel at a large mean [LA-5].
-    if coef_of is None:
-        coef = lstsq_coef(B[:, selected], Y, w)
-        keep = ~dependent_columns(B[:, selected], w)
-    else:
-        coef, keep = coef_of(selected, Y, w)
+    coef = lstsq_coef(B[:, selected], Y, w)
+    keep = ~dependent_columns(B[:, selected], w)
     final_rss = rss_of(np.array(selected)[keep].tolist())
     tss = best_rss[1]
     final_gcv = gcv(final_rss, size, penalty, N, tau_N)
@@ -907,655 +917,13 @@ def window(table, fast_k: int) -> list[int]:
     return list(table[: max(3, fast_k)])
 
 
-# ---------------------------------------------------------------------------
-# Dependence after the exact shift [LA-1, LA-2, LA-4, FWD-11, PRUNE-8]
-#
-# A linear factor x_j carries the mean of x_j into its term, and a float
-# column loses the digits of a large mean. So LA-4 judges dependence after an
-# exact change of basis. Covariate j has the shift m_j, its smallest value
-# when that is larger in size than its range, else 0, and u_j = x_j - m_j.
-# Every term is a polynomial in the atoms u_j, (x_j - t)+ and (t - x_j)+ (a
-# hinge is its own atom; x_j = u_j + m_j), expanded into monomials with
-# exact rational coefficients. The reduced echelon form of a set of terms,
-# in LA-4's order of the monomials, is unique, so it does not depend on the
-# order of the terms, and it decides dependence (la4_dependent). Its rows can
-# carry a factor m_j on a monomial that is not a pivot, so the projections of
-# the forward pass, the subsets of the pruning pass and the final fit use the
-# rows of another exact elimination of the same terms, which span the same
-# (Basis) [LA-1].
-# Covariates whose columns u_j are equal bit for bit (an exact copy, or a
-# copy shifted by a constant that the shift removes) share one symbol, so a
-# product of such copies is exact too (#99).
-
-U_ATOM, PLUS_ATOM, MINUS_ATOM = 0, 1, 2  # the kinds of atoms, in LA-4's order
-
-
-def _large_mean(X) -> set:
-    """The covariates whose smallest value is larger in size than their range."""
-    low, high = X.min(axis=0), X.max(axis=0)
-    return {j for j in range(X.shape[1]) if abs(low[j]) > high[j] - low[j]}
-
-
-def monomial_order(monomial) -> tuple:
-    """The key of LA-4's total order of monomials (tuples of atoms, sorted):
-    by degree, highest first, then lexicographically on the atoms. An atom
-    is (symbol, kind, knot - m_j)."""
-    return (-len(monomial), monomial)
-
-
-def _copies(U) -> tuple[list, list]:
-    """The symbols of LA-4 (S113): covariates j and s are copies, one symbol,
-    when u_j = 2^k u_s at every row of U (the cases) exactly, for an integer
-    k. The symbol of a class is its lowest index s, and k_j its exponent
-    (0 for a column of zeros, whose class holds every such column). k is the
-    difference of the binary exponents of the largest values, and the check
-    scales the column with the smaller largest value up, which never rounds
-    while the result is finite, so a subnormal value cannot merge two
-    columns; ``==`` equates -0 and +0. Returns (symbol, k)."""
-    p = U.shape[1]
-    top = np.max(np.abs(U), axis=0)
-    expo = [math.frexp(float(t))[1] if t > 0 else None for t in top]
-    symbol, power = list(range(p)), [0] * p
-    for j in range(p):
-        for s in range(j):
-            if symbol[s] != s or (expo[j] is None) != (expo[s] is None):
-                continue
-            k = 0 if expo[j] is None else expo[j] - expo[s]
-            with np.errstate(over="ignore"):
-                if k >= 0:
-                    same = np.array_equal(U[:, j], np.ldexp(U[:, s], k))
-                else:
-                    same = np.array_equal(np.ldexp(U[:, j], -k), U[:, s])
-            if same:
-                symbol[j], power[j] = s, k
-                break
-    return symbol, power
-
-
-class Atoms:
-    """The atoms of LA-4 on the data X: the shifts m_j, the symbols, the
-    expansion of a term and the column of a monomial.
-
-    X is the scaled X of EDGE-7, and ``w`` holds the weights: rows of weight
-    0 are no cases [W-3] (without ``w`` every row is a case). The columns
-    u_j = x_j - m_j (float64) decide the symbols (``_copies``): u_j = r_j u_s
-    with r_j = 2^k_j, so that a hinge of x_j is r_j times a hinge of u_s.
-    The rule on the scaled X does not need the exponents of EDGE-7."""
-
-    def __init__(self, X, w=None):
-        self.X = np.asarray(X, dtype=np.float64)
-        p = self.X.shape[1]
-        cases = slice(None) if w is None else np.asarray(w) > 0
-        large = _large_mean(self.X[cases])
-        self.m = [
-            float(self.X[cases, j].min()) if j in large else 0.0 for j in range(p)
-        ]
-        self.U = self.X - np.array(self.m)
-        self.symbol, powers = _copies(self.U[cases])
-        self.ratio = [Fraction(2) ** k for k in powers]
-        # without a shift every term is one monomial with coefficient 1
-        self.plain = not large and all(r == 1 for r in self.ratio)
-        self._columns: dict = {}
-        self._exact: dict = {}
-        self._ints: dict = {}
-        self._gram: dict = {}
-
-    def atom(self, j: int, code: int, knot: float) -> tuple:
-        """The atom of the factor (code, knot) of x_j and its coefficient
-        r_j: x_j - m_j = r_j u_s, (x_j - t)+ = r_j (u_s - (t - m_j) / r_j)+."""
-        s, r = self.symbol[j], self.ratio[j]
-        if code == 2:
-            return (s, U_ATOM, Fraction(0)), r
-        kind = PLUS_ATOM if code == 1 else MINUS_ATOM
-        return (s, kind, (Fraction(float(knot)) - Fraction(self.m[j])) / r), r
-
-    def expansion(self, row, cut, rewrite: bool = False) -> dict:
-        """The term (rows of dirs and cuts) as {monomial: coefficient}. With
-        ``rewrite``, a factor (t - x_j)+ is written as (x_j - t)+ - u_j +
-        (t - m_j), so that an elimination sees that a pair of hinges spans
-        x_j (for the projections only; LA-4 keeps each hinge as its atom)."""
-        out = {(): Fraction(1)}
-        for j in np.flatnonzero(row):
-            code = int(row[j])
-            if rewrite and code == -1:
-                (plus, r), (u, _) = self.atom(j, 1, cut[j]), self.atom(j, 2, 0.0)
-                parts = {plus: r, u: -r, None: plus[2] * r}
-            else:
-                a, r = self.atom(j, code, cut[j])
-                parts = {a: r}
-            if code == 2 and self.m[j] != 0.0:
-                parts[None] = Fraction(self.m[j])  # x_j = u_j + m_j
-            new: dict = {}
-            for mono, f in out.items():
-                for a, g in parts.items():
-                    key = mono if a is None else tuple(sorted((*mono, a)))
-                    new[key] = new.get(key, 0) + f * g
-            out = new
-        return {mono: f for mono, f in out.items() if f != 0}
-
-    def gram(self, a, b, w) -> Fraction:
-        """sum_i w_i a_i b_i for the monomials a and b, exactly: the monomials
-        are the exact products of their atoms (``exact_column``), not float64
-        products, which round, so that a part that is 0 in exact arithmetic
-        is 0 here. Cached (for one weight vector)."""
-        if self._gram.get("w") is not w:
-            self._gram = {"w": w, "W": _dyadic(w)}
-            self._ints = {}
-        key = (a, b) if (len(a), a) <= (len(b), b) else (b, a)
-        if key not in self._gram:
-            for q in key:
-                if q not in self._ints:
-                    self._ints[q] = _dyadic(self.exact_column(q))
-            (W, ew), (A, ea), (B, eb) = self._gram["W"], self._ints[a], self._ints[b]
-            total = sum(x * y * z for x, y, z in zip(W, A, B, strict=True))
-            self._gram[key] = Fraction(total, 1 << (ew + ea + eb))
-        return self._gram[key]
-
-    def exact_column(self, mono) -> list:
-        """The monomial on the rows in exact arithmetic (Fractions): the
-        product of its atoms, the float64 column u_s without rounding of the
-        products and each hinge (u_s - knot)+ or (knot - u_s)+."""
-        if mono not in self._exact:
-            n = self.X.shape[0]
-            out = [Fraction(1)] * n
-            for s, kind, knot in mono:
-                if ("u", s) not in self._exact:
-                    self._exact["u", s] = [Fraction(float(x)) for x in self.U[:, s]]
-                u = self._exact["u", s]
-                if kind == U_ATOM:
-                    out = [o * v for o, v in zip(out, u, strict=True)]
-                else:
-                    sign = 1 if kind == PLUS_ATOM else -1
-                    out = [
-                        o * max(sign * (v - knot), 0)
-                        for o, v in zip(out, u, strict=True)
-                    ]
-            self._exact[mono] = out
-        return self._exact[mono]
-
-    def column(self, mono) -> np.ndarray:
-        """The monomial on the data, its factors multiplied in key order."""
-        if mono not in self._columns:
-            column = np.ones(self.X.shape[0])
-            for s, kind, knot in mono:
-                if kind == U_ATOM:
-                    column = column * self.U[:, s]
-                else:
-                    # a hinge of the atom's own scale, u_s - knot: its error is
-                    # relative to the range, not to a mean m_s
-                    t = float(knot)
-                    column = column * np.maximum(
-                        (self.U[:, s] - t) if kind == PLUS_ATOM else (t - self.U[:, s]),
-                        0.0,
-                    )
-            self._columns[mono] = column
-        return self._columns[mono]
-
-    def evaluate(self, row, absolute: bool = False) -> np.ndarray:
-        """sum_q c_q column(q) of a row {monomial: c_q}; with ``absolute``,
-        sum_q |c_q| |column(q)|, the scale of its rounding."""
-        out = np.zeros(self.X.shape[0])
-        for mono in sorted(row, key=monomial_order):
-            c = float(row[mono])
-            col = self.column(mono)
-            out = out + (abs(c) * np.abs(col) if absolute else c * col)
-        return out
-
-
-class Echelon:
-    """The reduced echelon form of a set of expansions, in LA-4's order:
-    {pivot monomial: row}, each row with coefficient 1 at its pivot and 0 at
-    the other pivots."""
-
-    def __init__(self, rows=None, cache=None):
-        self.rows = dict(rows or {})
-        # the factor of ``factor``, shared with copies until a row is added
-        self._cache = {} if cache is None else cache
-
-    def copy(self) -> Echelon:
-        return Echelon(self.rows, self._cache)
-
-    def factor(self, atoms, w) -> tuple:
-        """The exact Gram matrix H of the evaluated rows (in ``ordered``
-        order) in the w inner product, as L D L' by elimination, for
-        la4_dependent; cached until a row is added. Cost: O(k^2 q^2) Gram
-        lookups for k rows of q monomials and O(k^3) operations on
-        fractions."""
-        if self._cache.get("w") is not w:
-            rows = self.ordered()
-            k = len(rows)
-            H = [[_inner(atoms, w, x, y) for y in rows] for x in rows]
-            L = [[Fraction(0)] * k for _ in range(k)]
-            D = [Fraction(0)] * k
-            for i in range(k):
-                D[i] = H[i][i] - sum(L[i][t] ** 2 * D[t] for t in range(i) if D[t])
-                for r in range(i + 1, k):
-                    if D[i]:
-                        acc = H[r][i] - sum(
-                            L[r][t] * L[i][t] * D[t] for t in range(i) if D[t]
-                        )
-                        L[r][i] = acc / D[i]
-            self._cache.update(w=w, factor=(rows, L, D))
-        return self._cache["factor"]
-
-    def reduce(self, e) -> dict:
-        """e minus its components along the rows, exactly."""
-        v = dict(e)
-        for p, r in self.rows.items():
-            f = v.get(p, 0)
-            if f != 0:
-                v = _combine(v, -f, r)
-        return v
-
-    def add(self, e):
-        """Adds e; returns its new pivot, or None when e is in the span."""
-        v = self.reduce(e)
-        if not v:
-            return None
-        p = min(v, key=monomial_order)
-        v = {q: f / v[p] for q, f in v.items()}
-        for q, r in self.rows.items():
-            if r.get(p, 0) != 0:
-                self.rows[q] = _combine(r, -r[p], v)
-        self.rows[p] = v
-        self._cache = {}
-        return p
-
-    def ordered(self) -> list:
-        """The rows, the intercept's (degree 0) first."""
-        return [self.rows[p] for p in sorted(self.rows, key=lambda p: (len(p), p))]
-
-
-def _combine(a: dict, f, b: dict) -> dict:
-    """a + f b, without zero entries."""
-    out = dict(a)
-    for q, g in b.items():
-        value = out.get(q, 0) + f * g
-        if value != 0:
-            out[q] = value
-        else:
-            out.pop(q, None)
-    return out
-
-
-def _dyadic(v) -> tuple[list, int]:
-    """Integers a_i and e with v_i = a_i 2^-e exactly, for floats v_i."""
-    ratios = [
-        x.as_integer_ratio() if isinstance(x, Fraction) else float(x).as_integer_ratio()
-        for x in v
-    ]
-    e = max(d.bit_length() for _, d in ratios) - 1
-    return [a << (e - d.bit_length() + 1) for a, d in ratios], e
-
-
-def _inner(atoms, w, x: dict, y: dict) -> Fraction:
-    """The exact w inner product of two evaluated rows."""
-    return sum(
-        (f * g * atoms.gram(a, b, w) for a, f in x.items() for b, g in y.items()),
-        Fraction(0),
-    )
-
-
-def _exact_rest_sq(atoms: Atoms, new: dict, others: list, w) -> Fraction:
-    """The squared w-norm of the part of the evaluated row ``new`` orthogonal
-    to the evaluated rows ``others``, in exact arithmetic on the float64
-    monomial columns and weights: a Gram matrix of the monomials, then the
-    Schur complement. Cost: O(n) integer products for each entry of the
-    Gram matrix that the Atoms has not cached yet (O(n K^2) at most for K
-    monomials over the fit), O(k^2 q^2) operations on fractions for k rows of
-    q monomials, and O(k^3) for the elimination."""
-    vectors = [*others, new]
-
-    def inner(x, y):
-        return _inner(atoms, w, x, y)
-
-    k = len(vectors)
-    H = [[inner(x, y) for y in vectors] for x in vectors]
-    for i in range(k - 1):
-        pivot = H[i][i]
-        if pivot == 0:
-            continue  # a positive semidefinite row of zeros
-        for r in range(i + 1, k):
-            f = H[r][i] / pivot
-            if f != 0:
-                for c in range(i + 1, k):
-                    H[r][c] -= f * H[i][c]
-    return H[k - 1][k - 1]
-
-
-def la4_dependent(atoms: Atoms, S: Echelon, e: dict, w) -> bool:
-    """LA-4's test of a new column, the expansion e, against the kept set S.
-
-    Dependent when e lies in the span of S's expansions. Otherwise the
-    reduced echelon form of S with e has one new pivot, whose evaluated
-    reduced row is the new part; the column is dependent when the new part
-    is 0 at every case, or when the w-norm of its part orthogonal to the
-    other evaluated reduced rows is less than 1e-7 times the w-norm of the
-    evaluated pivot monomial (of the new part, when the monomial is 0 at
-    every case). With a shifted covariate, or a covariate that is a copy of
-    another up to a power of 2 other than 1 (no shift is needed for that),
-    the orthogonal part is computed in exact arithmetic, always, since the
-    other rows can carry large factors m_j or 2^k whose digits no float64
-    bound sees: from S's cached exact factor (Echelon.factor) when no row of
-    S holds the new pivot, else by _exact_rest_sq. With neither, every row is
-    a monomial, and this is the plain test of LA-4 on the columns, in
-    float64. Cost on the exact path: O(k^2)
-    operations on fractions per test for k kept terms, after the factor; a
-    fit of degree 3 with 48 terms, n = 100 and two shifted covariates takes
-    about 45 s (1.4 s without the shift).
-    """
-    v = S.reduce(e)
-    if not v:
-        return True
-    p = min(v, key=monomial_order)
-    new = {q: f / v[p] for q, f in v.items()}
-    others = [r if r.get(p, 0) == 0 else _combine(r, -r[p], new) for r in S.ordered()]
-    sw = np.sqrt(np.asarray(w, dtype=np.float64))
-    if not atoms.plain:
-        # Exact on the exact monomial columns (Atoms.exact_column), whose
-        # Gram matrix a row of weight 0 does not enter [W-3]: a part that is
-        # 0 at every case in exact arithmetic is dependent, whatever a float
-        # sum says. The pivot's norm is exact too.
-        new_sq = _inner(atoms, w, new, new)
-        if new_sq == 0:
-            return True
-        size_sq = atoms.gram(p, p, w)
-        if size_sq == 0:
-            size_sq = new_sq  # the new part's norm decides
-        limit = Fraction(DEPENDENT_TOL) ** 2 * size_sq
-        if S.rows and all(r.get(p, 0) == 0 for r in S.rows.values()):
-            # the other rows are S's rows: their exact factor is cached, and
-            # the squared rest is <new, new> - y' D^-1 y with L y = h
-            rows, L, D = S.factor(atoms, w)
-            h = [_inner(atoms, w, r, new) for r in rows]
-            rest_sq = new_sq
-            y: list = []
-            for i in range(len(rows)):
-                y.append(h[i] - sum(L[i][t] * y[t] for t in range(i) if D[t]))
-                if D[i]:
-                    rest_sq -= y[i] ** 2 / D[i]
-            return rest_sq < limit
-        return _exact_rest_sq(atoms, new, others, w) < limit
-    part = atoms.evaluate(new)
-    if not np.any(part[np.asarray(w) > 0]):  # a row of weight 0 is not a case [W-3]
-        return True
-    size = float(np.linalg.norm(sw * atoms.column(p)))
-    if size == 0.0:
-        size = float(np.linalg.norm(sw * part))
-    threshold = DEPENDENT_TOL * size
-    b = sw * part
-    if not others:
-        return float(np.linalg.norm(b)) < threshold
-    A = np.column_stack([atoms.evaluate(o) for o in others]) * sw[:, None]
-    return float(np.linalg.norm(_residual(_orthonormal_basis(A), b))) < threshold
-
-
-def la4_kept(X, dirs, cuts, w, atoms: Atoms | None = None) -> np.ndarray:
-    """The terms that FWD-11 keeps: in order, each term that LA-4 does not
-    find dependent on the kept earlier ones (a boolean mask)."""
-    atoms = Atoms(X, w=w) if atoms is None else atoms
-    S, keep = Echelon(), []
-    for row, cut in zip(dirs, cuts, strict=True):
-        e = atoms.expansion(row, cut)
-        keep.append(not la4_dependent(atoms, S, e, w))
-        if keep[-1]:
-            S.add(e)
-    return np.array(keep, dtype=bool)
-
-
-NEAR_SPAN = 1e-4  # an angle below this to the span makes a float residual lose digits
-
-
-class _ExactSpan:
-    """The span of evaluated rows ({monomial: coefficient}) on the rows of the
-    data, exactly: orthogonal vectors of Fractions by Gram-Schmidt in the w
-    inner product (a row that is dependent at the data adds none). Cost:
-    O(k n) operations on fractions to add a row to k, and for a residual."""
-
-    def __init__(self, atoms: Atoms, w):
-        self.atoms = atoms
-        self.w = [Fraction(float(x)) for x in w]
-        self.vectors: list = []
-        self.norms: list = []
-
-    def vector(self, row) -> list:
-        out = [Fraction(0)] * self.atoms.X.shape[0]
-        for mono, c in row.items():
-            out = [
-                a + c * b
-                for a, b in zip(out, self.atoms.exact_column(mono), strict=True)
-            ]
-        return out
-
-    def dot(self, a, b) -> Fraction:
-        return sum(
-            (w * x * y for w, x, y in zip(self.w, a, b, strict=True)), Fraction(0)
-        )
-
-    def residual(self, z: list) -> list:
-        """z minus its w-projection on the span."""
-        for u, d in zip(self.vectors, self.norms, strict=True):
-            f = self.dot(u, z) / d
-            if f:
-                z = [a - f * b for a, b in zip(z, u, strict=True)]
-        return z
-
-    def add(self, row) -> None:
-        z = self.residual(self.vector(row))
-        d = self.dot(z, z)
-        if d:
-            self.vectors.append(z)
-            self.norms.append(d)
-
-
-class Basis:
-    """Columns for the projections that span what a list of expansions spans:
-    Gaussian elimination in exact arithmetic, each kept row scaled to 1 at its
-    pivot, the monomial with the largest share of its column (the first in
-    LA-4's order among equal shares). Its rows, evaluated, have coefficients
-    of size about 1 on monomials whose values are of the size of the range,
-    so no digits go to a mean [LA-5]. The reduced echelon form of LA-4 decides
-    dependence; its rows can carry large factors m_j on monomials that are not
-    pivots, so they are not used for projections. The pivots depend on the
-    order of the expansions; the span does not."""
-
-    def __init__(self, atoms: Atoms, expansions=()):
-        self.atoms = atoms
-        self.pivots: list = []  # (pivot, row), in order
-        for e in expansions:
-            self.add(e)
-
-    def reduce(self, e, record=None) -> dict:
-        """e minus its components along the rows in order; with a list
-        ``record``, the multiple of each row is appended to it."""
-        v = dict(e)
-        for p, r in self.pivots:
-            f = v.get(p, 0)
-            if record is not None:
-                record.append(f)
-            if f != 0:
-                v = _combine(v, -f, r)
-        return v
-
-    def add(self, e) -> bool:
-        v = self.reduce(e)
-        if not v:
-            return False
-        size = {q: abs(v[q]) * float(np.linalg.norm(self.atoms.column(q))) for q in v}
-        p = max(sorted(v, key=monomial_order), key=lambda q: size[q])
-        self.pivots.append((p, {q: f / v[p] for q, f in v.items()}))
-        return True
-
-    def columns(self, w=None) -> np.ndarray:
-        """The rows evaluated. With the weights ``w``, a column that is within
-        NEAR_SPAN of the span of the earlier ones (as copies of one covariate
-        a few units in the last place apart make them: LA-4 asks only 1e-7 of
-        the pivot monomial) is replaced by its exact w-orthogonal residual on
-        the earlier rows, rounded once: the same span, and no digits go to
-        the cancellation [LA-5]."""
-        cols = [self.atoms.evaluate(r) for _, r in self.pivots]
-        if w is None or len(cols) < 2:
-            return np.column_stack(cols)
-        sw = np.sqrt(np.asarray(w, dtype=np.float64))
-        exact = None
-        for k in range(1, len(cols)):
-            v = sw * cols[k]
-            size = float(np.linalg.norm(v))
-            if size > 0:
-                Q = _orthonormal_basis(sw[:, None] * np.column_stack(cols[:k]))
-                if float(np.linalg.norm(_residual(Q, v))) < NEAR_SPAN * size:
-                    if exact is None:
-                        exact = _ExactSpan(self.atoms, w)
-                        for _, r in self.pivots[:k]:
-                            exact.add(r)
-                    z = exact.residual(exact.vector(self.pivots[k][1]))
-                    cols[k] = np.array([float(x) for x in z])
-            if exact is not None:
-                exact.add(self.pivots[k][1])
-        return np.column_stack(cols)
-
-
-class Conditioned:
-    """A list of columns, given as rows ``dirs``, ``cuts`` (columns ``B``),
-    after LA-4's exact shift: the forward basis F_s in the forward pass
-    [FWD-13], the kept terms in the final fit. ``echelon`` is their reduced
-    echelon form, for LA-4's test
-    of a new term (``la4_dependent``); ``columns`` span what the terms span
-    (``Basis``) [LA-1]; ``linear_column`` is the new part of a linear
-    candidate b x; ``span_columns`` and ``coef`` serve the pruning pass and
-    the final fit. Without a shifted covariate every term is one monomial,
-    and the columns are those of B. Cost: with M terms of degree d,
-    O(M^2 2^d) operations on fractions and O(n M 2^d) on floats."""
-
-    def __init__(self, X, dirs, cuts, B=None, atoms: Atoms | None = None, w=None):
-        self.atoms = Atoms(X) if atoms is None else atoms
-        self._w = None if w is None else np.asarray(w, dtype=np.float64)
-        self._proj = self._span = None
-        self._terms = [
-            self.atoms.expansion(r, c) for r, c in zip(dirs, cuts, strict=True)
-        ]
-        self._rewritten = [
-            self.atoms.expansion(r, c, rewrite=True)
-            for r, c in zip(dirs, cuts, strict=True)
-        ]
-        self.echelon = Echelon()
-        for e in self._terms:
-            self.echelon.add(e)
-        if B is None:
-            B = basis_matrix(self.atoms.X, np.array(dirs), np.array(cuts))
-        self._B = np.asarray(B, dtype=np.float64)
-        self._basis = None
-        if self.atoms.plain:
-            self.columns = self._B
-        else:
-            self._basis = Basis(self.atoms, self._rewritten)
-            self.columns = self._basis.columns(self._w)
-
-    def linear_expansion(self, parent_row, parent_cut, j, rewrite=False) -> dict:
-        """The expansion of b x_j, for the parent's rows of dirs and cuts."""
-        row = np.array(parent_row).copy()
-        row[j] = 2
-        cut = np.array(parent_cut, dtype=np.float64).copy()
-        cut[j] = 0.0
-        return self.atoms.expansion(row, cut, rewrite)
-
-    def linear_column(self, parent_row, parent_cut, j, b) -> np.ndarray:
-        """b x_j minus a combination of the kept terms, so that it has the
-        same A_w of LA-7 and spans with them what b x_j spans: b (x_j - min
-        x_j) without a shifted covariate, else b x_j reduced exactly by the
-        rows of ``columns`` and evaluated (0 when it is in their span)."""
-        if self.atoms.plain:
-            x = self.atoms.X[:, j]
-            return b * (x - x.min())
-        e = self.linear_expansion(parent_row, parent_cut, j, rewrite=True)
-        v = self._basis.reduce(e)
-        column = self.atoms.evaluate(v)
-        if self._w is not None and self._nearly_spanned(column):
-            return self._exact_residual(v)
-        return column
-
-    def _nearly_spanned(self, column) -> bool:
-        """Whether the column is within an angle of 1e-4 of the span of the
-        kept terms: then a float residual keeps only 1e-12 of its digits
-        (LA-4 only asks for 1e-7 of the pivot monomial, and a linear candidate
-        has no LA-3 test)."""
-        if self._proj is None:
-            self._proj = Projector(self.columns, self._w)
-        total = float(np.linalg.norm(self._proj.scaled(column)))
-        return total > 0 and float(np.linalg.norm(self._proj.residual(column))) < (
-            1e-4 * total
-        )
-
-    def _exact_residual(self, v) -> np.ndarray:
-        """The row ``v`` minus its exact w-projection on the span of the kept
-        terms (their echelon rows), rounded once to float64: a column that is
-        orthogonal to the others up to its own rounding, and accurate relative
-        to its own size. Cost: O(k^2 n) operations on fractions for k kept
-        terms, once for each Conditioned, then O(k n) for each column."""
-        if self._span is None:
-            self._span = _ExactSpan(self.atoms, self._w)
-            for row in self.echelon.ordered():
-                self._span.add(row)
-        z = self._span.residual(self._span.vector(v))
-        return np.array([float(x) for x in z])
-
-    def span_columns(self, rows) -> np.ndarray:
-        """Columns that span what the terms in ``rows`` span (pruning indices,
-        increasing, the intercept first)."""
-        rows = list(rows)
-        if self.atoms.plain:
-            return self._B[:, rows]
-        basis = Basis(self.atoms, [self._rewritten[k] for k in rows])
-        return basis.columns(self._w)
-
-    def coef(self, rows, Y, w) -> tuple[np.ndarray, np.ndarray]:
-        """The least-squares coefficients of Y on the terms in ``rows``
-        [PRUNE-8], and the mask of the terms that LA-4 keeps (in order, each
-        against the kept earlier ones); a dependent term gets 0. Without a
-        shifted covariate this is ``lstsq_coef`` on the kept columns of B.
-        Otherwise the fit is made on the columns R of the kept terms' Basis,
-        gamma, and term k = sum_i T[k, i] R_i exactly, so the coefficients
-        solve T' coef = gamma, in exact arithmetic, then round to float64."""
-        rows = list(rows)
-        S, keep = Echelon(), []
-        for k in rows:
-            keep.append(not la4_dependent(self.atoms, S, self._terms[k], w))
-            if keep[-1]:
-                S.add(self._terms[k])
-        keep = np.array(keep, dtype=bool)
-        Y2 = np.asarray(Y, dtype=np.float64).reshape(len(w), -1)
-        coef = np.zeros((len(rows), Y2.shape[1]))
-        kept = [k for k, ok in zip(rows, keep, strict=True) if ok]
-        if self.atoms.plain:
-            coef[keep] = lstsq_coef(self._B[:, kept], Y2, w)
-            return coef, keep
-        basis = Basis(self.atoms, [self._rewritten[k] for k in kept])
-        gamma = lstsq_coef(basis.columns(), Y2, w)
-        T = []
-        for k in kept:
-            T.append([])
-            basis.reduce(self._rewritten[k], record=T[-1])
-        Tt = [list(r) for r in zip(*T, strict=True)]
-        for col in range(Y2.shape[1]):
-            g = [Fraction(float(x)) for x in gamma[:, col]]
-            coef[np.flatnonzero(keep), col] = [float(x) for x in _solve_exact(Tt, g)]
-        return coef, keep
-
-
-def _solve_exact(A: list, b: list) -> list:
-    """The solution of the nonsingular system A x = b, in exact arithmetic."""
-    k = len(b)
-    M = [[*A[i], b[i]] for i in range(k)]
-    for c in range(k):
-        r = next((i for i in range(c, k) if M[i][c] != 0), None)
-        if r is None:
-            raise ValueError("the exact system for the coefficients is singular")
-        M[c], M[r] = M[r], M[c]
-        for i in range(k):
-            if i != c and M[i][c] != 0:
-                f = M[i][c] / M[c][c]
-                M[i] = [x - f * y for x, y in zip(M[i], M[c], strict=True)]
-    return [M[i][k] / M[i][i] for i in range(k)]
+def la4_dependent(column, residual, w) -> bool:
+    """LA-4's test of one column against a kept set: dependent when the
+    w-norm of its part orthogonal to the set, ``residual`` (already scaled
+    by sqrt(w), as Projector.residual gives it), is below 1e-7 times the
+    w-norm of the column, not centered, or when that w-norm is 0."""
+    size = float(np.linalg.norm(np.sqrt(w) * column))
+    return size == 0.0 or float(np.linalg.norm(residual)) < DEPENDENT_TOL * size
 
 
 def _parent_candidates(
@@ -1572,7 +940,7 @@ def _parent_candidates(
     tau_N,
     params,
     tau,
-    conditioned=None,
+    F=None,
     parent_cut=None,
     met=None,
     rss_s=None,
@@ -1580,6 +948,9 @@ def _parent_candidates(
     """The candidates of parent term k (column k of B), in the order of FWD-5,
     and whether some covariate could be searched for it [FWD-2, FWD-3].
 
+    B holds the columns of the terms (for the parent's column b). F holds the
+    columns of the forward basis F_s [FWD-13], the current columns of LA-2,
+    LA-3 and LA-7, and P_B is the projector of F; F defaults to B.
     ``met`` maps the candidates that earlier searches of the step met, by
     their kind and added rows (``merge_key``), to the Candidate of the first
     occurrence, or to None when LA-3 rejected it there. A candidate met
@@ -1590,30 +961,22 @@ def _parent_candidates(
 
     For each covariate that the parent lacks, in increasing order: the kind
     of the search by the pymars rule of LA-7; in a pair search the linear
-    candidate, with RSS(B + {b x}); then the knots of KNOT-6 from the
+    candidate, with RSS(F + {b x}); then the knots of KNOT-6 from the
     largest down, without the ones that LA-3 rejects, each with RSS(G + {h})
-    [LA-2], where G is B, and B with b x in a pair search when LA-2 counts
-    b x; LA-3's G holds b x in every pair search. Each hinge column
-    is built and projected on G explicitly; its RSS is that of the residual.
-    The column b x is formed as b (x - min x), which spans the same with B.
-    When ``conditioned`` is the Conditioned of the forward basis F_s [FWD-13]
-    (B still holds the terms, for the parent's column), P_B must be the
-    projector of its columns, which G uses in place of B, and b x is its
-    linear_column (``parent_cut`` is the cut row of the parent). The hinge
-    column h is used as it is: when a large mean would cost digits of its
-    part that is new to G, that part is a small fraction of h, and LA-3
-    rejects it. With ``conditioned``, LA-4 tests b x against F_s and each
-    hinge that LA-3 accepts against F_s, with b x when LA-2 counted it; a
-    dependent new column counts as 0 in the RSS [LA-2], so a linear
-    candidate whose b x is dependent has the RSS of B and is not legal. A
-    hinge's test reuses its orthogonal part from the RSS projection when
-    that is clearly above 1e-7 of the w-norm of its pivot monomial
-    (la4_dependent decides the others). Cost: up to n knots per covariate,
-    each projected on up to M + 1 columns, so O(p n^2 M) time, and O(n^2)
-    memory for the hinge matrix.
+    [LA-2], where G is F, and F with b x in a pair search when LA-2 counts
+    b x; LA-3's G holds b x in every pair search. Each hinge column is built
+    and projected on G explicitly; its RSS is that of the residual. LA-4
+    tests b x against F, and each hinge that LA-3 accepts against G, on the
+    columns as TERM-3 gives them (``la4_dependent``); a dependent new column
+    counts as 0 in the RSS [LA-2], so a linear candidate whose b x is
+    dependent has the RSS of F and is not legal. In the projections b x is
+    formed as b (x - min x), which spans the same with F, holds b. Cost: up
+    to n knots per covariate, each projected on up to M + 1 columns, so
+    O(p n^2 M) time, and O(n^2) memory for the hinge matrix.
     """
     p = X.shape[1]
     b = B[:, k]
+    F = B if F is None else F
     own = [j for j in range(p) if parent_row[j] != 0]
     covariates = [j for j in range(p) if parent_row[j] == 0]
     if not covariates:
@@ -1632,7 +995,6 @@ def _parent_candidates(
             params.endspan,
             params.adjust_endspan,
         )
-    B_proj = B if conditioned is None else conditioned.columns
     met = {} if met is None else met
     rss_s = float(np.sum(e_B**2)) if rss_s is None else rss_s
     cut_row = np.zeros(p) if parent_cut is None else parent_cut
@@ -1648,28 +1010,20 @@ def _parent_candidates(
 
     for j in covariates:
         x = X[:, j]
-        # b x enters only through its span with B, which holds b, so b (x - m)
-        # with m the smallest x serves in its place: the same A_w, the same
-        # linear candidate and the same G in exact arithmetic, and x - m
-        # loses no digits to a large mean (it is exact for m > 0 by
+        # b x enters the projections only through its span with F, which holds
+        # b, so b (x - m) with m the smallest x serves in its place: the same
+        # A_w, the same linear candidate and the same G in exact arithmetic,
+        # and x - m loses no digits to a large mean (it is exact for m > 0 by
         # Sterbenz's lemma, and rounded once otherwise) [LA-5]
-        bx_dependent, S = False, None
-        if conditioned is None:
-            bx = b * (x - x.min())
-        else:
-            bx = conditioned.linear_column(parent_row, parent_cut, j, b)
-            e_bx = conditioned.linear_expansion(parent_row, cut_row, j)
-            S = conditioned.echelon.copy()
-            bx_dependent = la4_dependent(conditioned.atoms, S, e_bx, w)  # [LA-2]
+        bx = b * (x - x.min())
+        bx_dependent = la4_dependent(b * x, P_B.residual(b * x), w)  # [LA-2]
         V = [*own, j]
         pair = all(sigma2[v] > 0 for v in V) and (
             P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
         )
         if pair and not bx_dependent:
-            P_G = Projector(np.column_stack([B_proj, bx]), w)
+            P_G = Projector(np.column_stack([F, bx]), w)
             e_G = P_G.residual(Y)
-            if S is not None:
-                S.add(e_bx)
         else:
             P_G, e_G = P_B, e_B
         if pair:
@@ -1688,7 +1042,7 @@ def _parent_candidates(
         # LA-3's G holds b x in a pair search, also when LA-2 does not count it
         size_g = size
         if pair and bx_dependent:
-            P_3 = Projector(np.column_stack([B_proj, bx]), w)
+            P_3 = Projector(np.column_stack([F, bx]), w)
             size_g = np.sum(P_3.residual(H) ** 2, axis=0)
         spread = np.sum(P_G.scaled(H) ** 2, axis=0)
         constant = np.all(H[0] == H, axis=0)
@@ -1698,19 +1052,9 @@ def _parent_candidates(
         for i in range(len(t)):
             c = None  # a knot that LA-3 rejects is no candidate
             if accept[i]:
-                # a dependent hinge counts 0: the RSS of G
+                # a dependent hinge counts 0: the RSS of G [LA-2]
                 value = rss_s if P_G is P_B else float(np.sum(e_G**2))
-                counted = S is None or not _hinge_dependent(
-                    conditioned,
-                    S,
-                    parent_row,
-                    cut_row,
-                    j,
-                    float(t[i]),
-                    H[:, i],
-                    size[i],
-                    w,
-                )
+                counted = not la4_dependent(H[:, i], H_perp[:, i], w)
                 if counted:
                     h = H_perp[:, i]
                     residual = e_G - np.outer(h, (h @ e_G) / size[i])
@@ -1719,33 +1063,6 @@ def _parent_candidates(
                 c = Candidate(k, j, kind, float(t[i]), value, flags)
             first(c, j, kind, float(t[i]))
     return out, True
-
-
-def _hinge_dependent(conditioned, S, parent_row, parent_cut, j, t, h, size, w):
-    """LA-4's test of the hinge b (x_j - t)+ against S [LA-2]. ``size`` is the
-    squared w-norm of its part orthogonal to the columns of S; when it is above
-    1e-7 of the w-norm of the pivot monomial by more than a bound on its
-    rounding, the hinge counts, else la4_dependent decides."""
-    atoms = conditioned.atoms
-    row = np.array(parent_row).copy()
-    row[j] = 1
-    cut = np.array(parent_cut, dtype=np.float64).copy()
-    cut[j] = t
-    sw = np.sqrt(w)
-    e = atoms.expansion(row, cut)
-    if atoms.plain:
-        pivot = float(np.linalg.norm(sw * h))
-    else:
-        v = S.reduce(e)
-        if not v:
-            return True
-        pivot = float(np.linalg.norm(sw * atoms.column(min(v, key=monomial_order))))
-        if pivot == 0.0:
-            return la4_dependent(atoms, S, e, w)  # the new part's norm decides
-    bound = 1e3 * EPS * float(np.linalg.norm(sw * h))
-    if math.sqrt(size) > DEPENDENT_TOL * pivot + bound:
-        return False
-    return la4_dependent(atoms, S, e, w)
 
 
 def merge_key(parent_row, parent_cut, j, kind, knot, X, auto_linpreds) -> tuple:
@@ -1868,10 +1185,9 @@ def forward_pass(
     the n x M_a matrix of the columns of the terms. When ``trace`` is a
     list, each step appends a dict with its queue table, the visited
     entries, the searched parents (forward indices), the queue entries after
-    the search, and the chosen candidate. X is the scaled X of EDGE-7 (the
-    symbols of LA-4, ``Atoms``, are those of the scaled X). Cost: a step
-    searches up to M parents, so it takes O(p n^2 M^2) time at worst,
-    and O(n (p + M) + n^2) memory, plus LA-4's tests (la4_dependent).
+    the search, and the chosen candidate. X is the scaled X of EDGE-7, on
+    which LA-4's test is made. Cost: a step searches up to M parents, so it
+    takes O(p n^2 M^2) time at worst, and O(n (p + M) + n^2) memory.
     """
     params = as_params(params)
     X = np.asarray(X, dtype=np.float64)
@@ -1886,7 +1202,6 @@ def forward_pass(
     slots = {1: 0}  # slot -> forward index of its term [FWD-9]
     entries = [[math.inf, 0]]  # entry e at index e - 1: [lambda_e, kappa_e]
     log = []
-    atoms = Atoms(X)
     # the forward basis F_s as rows of dirs and cuts, from the intercept [FWD-13]
     basis_dirs, basis_cuts = [dirs[0].copy()], [cuts[0].copy()]
     s = 0
@@ -1897,8 +1212,8 @@ def forward_pass(
             break
         B = np.column_stack(columns)
         # every candidate of the step is evaluated on F_s [FWD-13, LA-2]
-        conditioned = Conditioned(X, basis_dirs, basis_cuts, None, atoms, w)
-        P_B = Projector(conditioned.columns, w)
+        F = basis_matrix(X, np.array(basis_dirs), np.array(basis_cuts))
+        P_B = Projector(F, w)
         e_B = P_B.residual(Y)
         rss_s = rss_path[-1]
         limit = max_legal(rss_path)
@@ -1924,7 +1239,7 @@ def forward_pass(
                 tau_N,
                 params,
                 tau,
-                conditioned,
+                F,
                 cuts[k],
                 met,
                 rss_s,
@@ -1987,7 +1302,7 @@ def forward_pass(
             break
     B = np.column_stack(columns)
     # FWD-11 after the pass, on the terms; it changes no forward value
-    dropped = ~la4_kept(X, dirs, cuts, w, atoms)
+    dropped = dependent_columns(B, w)
     record = {
         "dirs": np.array(dirs, dtype=np.int8).reshape(-1, p),
         "cuts": np.array(cuts, dtype=np.float64).reshape(-1, p),
@@ -2134,9 +1449,6 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         record_candidates=record_candidates,
     )
     kept = forward["kept"]
-    conditioned = Conditioned(
-        X, forward["dirs"][kept], forward["cuts"][kept], B[:, kept], Atoms(X), w
-    )
     pruned = prune(
         B[:, kept],
         Ys,
@@ -2146,8 +1458,6 @@ def fit_mars(X, Y, w=None, params=None, *, record_candidates=False) -> dict:
         tau_N=tau_N,
         pmethod=params.pmethod,
         nprune=params.nprune,
-        columns_of=conditioned.span_columns,
-        coef_of=conditioned.coef,
     )
     selected = kept[pruned["selected"]]
     # the knots back on the original scale, exactly [EDGE-7]
