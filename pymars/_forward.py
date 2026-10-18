@@ -650,12 +650,13 @@ class _Pass:
         scan = _scan.knot_scan(
             self.sorted_x[:, j],
             bw,
-            sr.Q[o],
-            sr.E[o],
+            sr.Q,
+            sr.E,
             kc.split,
             intercept=k == 0,
             _checked=True,
             _cache=self._scan_store(k, j, kc.split.shape[0]),
+            _order=o,
         )
         red, err = self._capped(scan.gain + sr.lin), scan.gain_err
         tau = _linalg.collinearity_tolerance(len(self.rss))  # this is step s
