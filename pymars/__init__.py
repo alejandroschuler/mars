@@ -7,12 +7,39 @@ states them, and is validated against earth (VALIDATION_PLAN.md).
 refits the selected terms with a logistic model (GLM-1 to GLM-7). The legacy code,
 upstream commit d68b54a with the version string 1.0.4, is kept under the git
 tag ``legacy-1.0.4-head``.
+
+The types of the fit are public too: ``mars_`` is a ``MarsFit``, which holds a
+``ForwardRecord`` (with a ``Termination`` and, when recorded, a
+``CandidateLog``) and a ``PruningRecord``; ``MarsParams`` holds the parameters
+of a fit (CORE-2 to CORE-5). ``MarsFit.to_dict`` gives a dict with the key
+``"format"`` (``DICT_FORMAT``), which ``MarsFit.from_dict`` checks.
 """
 
+from pymars._core import (
+    DICT_FORMAT,
+    CandidateLog,
+    ForwardRecord,
+    MarsFit,
+    MarsParams,
+    PruningRecord,
+    Termination,
+)
 from pymars._estimators import EarthClassifier, EarthRegressor
 
 Earth = EarthRegressor
 
-__all__ = ["Earth", "EarthClassifier", "EarthRegressor", "__version__"]
+__all__ = [
+    "DICT_FORMAT",
+    "CandidateLog",
+    "Earth",
+    "EarthClassifier",
+    "EarthRegressor",
+    "ForwardRecord",
+    "MarsFit",
+    "MarsParams",
+    "PruningRecord",
+    "Termination",
+    "__version__",
+]
 
 __version__ = "2.0.0.dev0"

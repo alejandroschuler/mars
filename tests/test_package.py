@@ -2,6 +2,7 @@
 
 import importlib.metadata
 import re
+from pathlib import Path
 
 import numpy as np
 
@@ -20,6 +21,13 @@ def test_version_is_a_canonical_pep440_string():
 
 def test_version_equals_the_installed_metadata():
     assert pymars.__version__ == importlib.metadata.version("mars-earth")
+
+
+def test_citation_version_equals_the_package_version():
+    """CITATION.cff spells the version a second time; it must not drift."""
+    path = Path(__file__).resolve().parents[1] / "CITATION.cff"
+    versions = re.findall(r"^version: (\S+)$", path.read_text(), re.MULTILINE)
+    assert versions == [pymars.__version__]
 
 
 def test_runtime_dependencies_are_numpy_scipy_and_scikit_learn():

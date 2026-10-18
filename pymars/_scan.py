@@ -227,12 +227,14 @@ def _scan_hv(g, b, Q, q0, E, o, split) -> FloatArray:
 
 
 def _scan_norms(g: FloatArray, b: FloatArray, split) -> FloatArray:
-    """``_norms``, compiled when ``_kernels.ENABLED``; the same bits."""
+    """``_norms``, compiled when ``_kernels.ENABLED``; the two agree within
+    the error bounds (bit-identity is not a rule, #145)."""
     return (_kernels.norms if _kernels.ENABLED else _norms)(g, b, split)
 
 
 def _scan_centered(g: FloatArray, w: FloatArray, split) -> FloatArray:
-    """``_centered``, compiled when ``_kernels.ENABLED``; the same bits."""
+    """``_centered``, compiled when ``_kernels.ENABLED``; the two agree within
+    the error bounds (bit-identity is not a rule, #145)."""
     return (_kernels.centered if _kernels.ENABLED else _centered)(g, w, split)
 
 
@@ -364,7 +366,8 @@ def knot_scan(
             store["HV"] = np.empty((split.shape[0], 0))
         F, D = store["F"], store["D"]
         known = store["m"]
-        assert known <= m <= k, "the kept columns are a prefix of Q"
+        if not known <= m <= k:
+            raise ValueError("the kept columns must be a prefix of Q")
         new = _scan_hv(g, b, Q, q0 + known, E, o, split)
         HV = np.hstack((store["HV"], new))
         store["HV"], store["m"] = HV[:, :m], m

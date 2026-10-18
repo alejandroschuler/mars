@@ -5,8 +5,11 @@ code (``pymars._core.fit_mars`` with the candidate log) on the dataset
 fixtures, on the 200 draws of S15, and on 200 random small fits of its own
 (weights, shifted covariates, tied values, degrees 1 to 3), and hashes each
 ``MarsFit.to_dict()`` as JSON (floats by ``repr`` and arrays by their bytes,
-both exact). ``--no-numba`` runs the numpy knot scan in place of the
-compiled one (``pymars._kernels``); both must give the same hashes. It
+both exact), without its key ``"format"``, so that hashes made before that
+key existed still compare. ``--no-numba`` runs the numpy knot scan in place
+of the compiled one (``pymars._kernels``); bit-identity of the two is not a
+rule (#145), so their hashes can differ, and their models can differ only
+at near-ties (STOP-7). It
 writes the hashes to ``--out``; with ``--compare`` it lists the cases whose
 hash differs from those of an earlier run and exits 1 if there is one.
 
@@ -43,6 +46,7 @@ def _bits(v):
 
 
 def _digest(d: dict) -> str:
+    d = {k: v for k, v in d.items() if k != "format"}
     text = json.dumps(d, sort_keys=True, allow_nan=True, default=_bits)
     return hashlib.sha256(text.encode()).hexdigest()
 

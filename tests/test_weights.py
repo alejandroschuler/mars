@@ -20,6 +20,8 @@ random draws, with several responses, degree 2 and Fast MARS. Against earth,
 S16 goes through repeated rows in test_conformance.py.
 """
 
+import contextlib
+
 import numpy as np
 import pytest
 from hypothesis import event, given
@@ -171,7 +173,7 @@ def test_a_row_split_into_equal_parts(seed, n, p, degree, parts):
     of 1/10 are not exact, since N, N_b and the cumulative weights of the
     knot scan are compared with integers within τ_N (W-4's example of 100
     cases of weight 0.1). These weights are not integers and their mean is
-    1/parts, so fit warns (W-7)."""
+    1/parts, so fit warns when that is below 0.5 (W-7)."""
     X, Y = _draw(seed, n, p, 1)
     w = np.random.default_rng(seed).integers(1, 4, size=n)
     kw = {"max_degree": degree}
@@ -179,7 +181,8 @@ def test_a_row_split_into_equal_parts(seed, n, p, degree, parts):
     reps = w * parts
     Xs, Ys = np.repeat(X, reps, axis=0), np.repeat(Y, reps)
     ws = np.full(len(Ys), 1.0 / parts)
-    with pytest.warns(UserWarning, match="case counts"):
+    warns = pytest.warns(UserWarning, match="case counts")
+    with warns if parts > 2 else contextlib.nullcontext():
         split = EarthRegressor(**kw).fit(Xs, Ys, sample_weight=ws)
     assert split.mars_.n_eff == whole.mars_.n_eff == w.sum()
     _same_fit(whole, split, (X, Y, w.astype(float)), (Xs, Ys, ws), kw)
