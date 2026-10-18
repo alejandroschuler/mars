@@ -54,3 +54,4 @@ Notes for the trace parser (T02):
 | bb30 | the termination code for a GRSq′ below −10: code 2 below −1000, finite values included (spec v2) | STOP-3, CORE-4, FAST-6 |
 | bb31 | when R's `glm`, which earth's refit calls, warns that fitted probabilities are numerically 0 or 1: for a linear predictor above 30 in absolute value (spec v2) | GLM-4 |
 | bb32 | the basis of the forward pass after a step whose new term the dependence fix at the end of the pass removes: the later steps and the forward RSq keep that term's direction (spec v2, #127) | FWD-11, LA-1 |
+| bb33 | earth's float64 dependence tests: none for a linear candidate in the forward pass, an uncentered relative threshold of 1e-8 in the fix at the end of the pass, and lm.fit's 1e-7 in the final fit (spec v3, #157) | LA-4, FWD-11, PRUNE-8 |
