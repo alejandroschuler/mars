@@ -10,7 +10,7 @@ Version 2 is a rewrite. The fitting code follows a written specification, [docs/
 pip install git+https://github.com/alejandroschuler/mars
 ```
 
-The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), so pymars does not install numba there and runs the slower numpy code. The two give the same models up to rounding, so they can differ only at near-ties, where two candidates are equal up to rounding.
+The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), so pymars does not install numba there and runs the numpy code, which takes up to about 3 times as long as the numba code (see Status and validation). The two give the same models up to rounding, so they can differ only at near-ties, where two candidates are equal up to rounding.
 
 ## Regression
 
@@ -81,7 +81,7 @@ Two implementations of the specification exist: the fast code in `pymars/`, and 
 
 Accuracy: in a simulation of 51 settings (8 regression and 2 binary data-generating processes, 200 to 5,000 cases, two noise levels), `EarthRegressor(max_degree=2)` and `EarthClassifier(max_degree=2)` match earth's excess risk within 5 percent in 48 settings. On pure noise pymars is 3 to 8 percent worse than earth at every sample size, and it keeps slightly more noise terms; the study does not show which rule causes this. Two settings are not decided. [validation/REPORT.md](validation/REPORT.md) has the study, claim by claim.
 
-Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 1.7 times as long as earth at its defaults for `EarthRegressor` in a fresh process (0.80 s against 0.46 s), and about the same time (0.95 times, within the noise of the two measurements) for later fits in the same process. At 100,000 cases pymars is faster (5.9 s against 7.5 s, a factor of 0.79 fresh and 0.70 warm). At 250 cases earth is faster, by a factor of 20 in a fresh process and 3.5 in a warm one, since pymars has a fixed cost of about 0.06 s per fit and about 0.3 s more for the first fit in a process. Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
+Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 1.7 times as long as earth at its defaults for `EarthRegressor` in a fresh process (0.81 s against 0.46 s), and about the same time (0.92 times, within the noise of the two measurements) for later fits in the same process. The numpy code that Intel Macs run takes 2.6 to 2.7 times earth's time there. At 100,000 cases pymars with numba is faster than earth (5.8 s against 7.6 s, a factor of 0.76 fresh and 0.67 warm), and the numpy code takes 2.0 times. At 250 cases earth is faster, by a factor of 21 in a fresh process and 3.5 in a warm one, since pymars has a fixed cost of about 0.06 s per fit and about 0.3 s more for the first fit in a process. Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
 
 ## Legacy code
 

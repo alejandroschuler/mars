@@ -416,6 +416,52 @@ def binary(df) -> None:
     write("binary.md", md_table(hdr, rows))
 
 
+def binary_appendix(df, run_dirs: list[Path]) -> None:
+    """Excess Brier score (ratio to E-def) and clipped probabilities per fit.
+    The clipped counts are only in the per-repetition files of the runs, not
+    in results.csv; with --run-dirs they are collected into clipped.csv."""
+    out = TABLES / "clipped.csv"
+    if run_dirs:
+        recs = []
+        for root in run_dirs:
+            for f in sorted(root.glob("D[34]-bin_n*/*/rep*.json")):
+                r = json.loads(f.read_text())
+                if r.get("error"):
+                    continue
+                cell, arm = f.parent.parent.name, f.parent.name
+                recs.append({"cell": cell, "arm": arm, "rep": int(f.stem[3:]),
+                             "n_clipped": r.get("n_clipped_log_loss")})  # fmt: skip
+        c = pd.DataFrame(recs).drop_duplicates(["cell", "arm", "rep"], keep="last")
+        c.to_csv(out, index=False)
+    c = pd.read_csv(out) if out.is_file() else None
+    rows = []
+    for d in ["D3-bin", "D4-bin"]:
+        for n in (200, 1000, 5000):
+            for a in ["E-def", "EarthClassifier", "GLMEarth", "P-fix"]:
+                x = df[(df.dgp == d) & (df.n == n) & (df.arm == a)]
+                if x.empty:
+                    continue
+                if a == "E-def":
+                    br = "1 (reference)"
+                else:
+                    m = "excess_brier_score"
+                    e = df[(df.dgp == d) & (df.n == n) & (df.arm == "E-def")]
+                    xi, ei = x.set_index("rep")[m], e.set_index("rep")[m]
+                    j = xi.index.intersection(ei.index)
+                    br = fmt_ratio(
+                        summary(np.log(xi[j].to_numpy()) - np.log(ei[j].to_numpy()))
+                    )
+                clip = "not collected"
+                if c is not None:
+                    cc = c[(c.cell == f"{d}_n{n:05d}") & (c.arm == a)].n_clipped
+                    if len(cc):
+                        clip = f"{cc.mean():.1f} ({100 * (cc > 0).mean():.0f}%)"
+                rows.append([d, f"{n:,}", a, br, clip])
+    hdr = ["DGP", "n", "arm", "excess Brier score / E-def",
+           "clipped probabilities per fit, mean (share of fits with any)"]  # fmt: skip
+    write("binary_appendix.md", md_table(hdr, rows))
+
+
 # Failure counts --------------------------------------------------------------
 def failures(df) -> None:
     f = (
@@ -464,20 +510,25 @@ def speed_figure(b: pd.DataFrame) -> None:
         x = b[base & (b.system == s)].sort_values("n")
         if x.empty:
             continue
-        ax.plot(x.n, x.seconds, "-o", color=c, linewidth=2, markersize=6,
-                markeredgecolor="white", label=lab)  # fmt: skip
+        ax.plot(
+            x.n, x.seconds, marker="o", linestyle="solid", color=c, linewidth=2,
+            markersize=6, markeredgecolor="white", label=lab,
+        )  # fmt: skip
     warm = HERE / "warm_times.csv"
     if warm.is_file():
         w = pd.read_csv(warm).sort_values("n")
-        ax.plot(w.n, w.warm_median_s, "--o", color=BLUE, linewidth=2, markersize=6,
-                markerfacecolor="white", label="pymars 2.0, warm process")  # fmt: skip
+        ax.plot(
+            w.n, w.warm_median_s, marker="o", linestyle="dashed", color=BLUE,
+            linewidth=2, markersize=6, markerfacecolor="white",
+            label="pymars 2.0, warm process",
+        )  # fmt: skip
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("cases n (10 covariates, degree 2, 21 terms)", color=INK2)
     ax.set_ylabel("fit time, seconds (median of 3)", color=INK2)
     ax.grid(axis="y", color=GRID, linewidth=0.8)
     style(ax)
-    ax.legend(frameon=False, fontsize=8, loc="lower right")
+    ax.legend(frameon=False, fontsize=8, loc="lower right", handlelength=4)
     fig.tight_layout()
     fig.savefig(FIGURES / "speed.png", dpi=150, facecolor="white")
     plt.close(fig)
@@ -486,6 +537,10 @@ def speed_figure(b: pd.DataFrame) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench-run", type=Path)
+    ap.add_argument(
+        "--run-dirs", type=Path, nargs="*", default=[],
+        help="per-repetition run folders, for the clipped-probability counts",
+    )  # fmt: skip
     a = ap.parse_args()
     TABLES.mkdir(exist_ok=True)
     FIGURES.mkdir(exist_ok=True)
@@ -496,6 +551,7 @@ def main() -> None:
     box_figure(df)
     sparsity(df)
     binary(df)
+    binary_appendix(df, a.run_dirs)
     failures(df)
     if a.bench_run is not None or (HERE / "bench_times.csv").is_file():
         speed_figure(bench_times(a.bench_run))

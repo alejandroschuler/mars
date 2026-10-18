@@ -49,7 +49,7 @@ None of the differences below is a bug. On the fixtures, both the fast code and 
 
 ## Limits of float64 arithmetic
 
-pymars computes in float64, as earth does. On ordinary data this does not change the model. On the four kinds of input below, rounding can decide which term enters, so pymars and earth, and pymars on two platforms or with and without numba, can give different models. The fit still ends with a valid model and raises no new error. The ids point to the "Limits" section of [algorithm.md](algorithm.md).
+pymars computes in float64, as earth does. On ordinary data rounding changes the model only at a near-tie, where two choices are equal up to rounding. On the four kinds of input below, rounding can decide which term enters, so pymars and earth, and pymars on two platforms or with and without numba, can give different models. The fit still ends with a valid model and raises no new error. The ids point to the "Limits" section of [algorithm.md](algorithm.md).
 
 - **LIM-1** A covariate whose mean is far larger than its spread, such as a year or a timestamp. A linear term in such a covariate looks like a copy of the intercept once the mean is about 1e7 times the spread, and a product of two or three such terms at about 3,000 and 200 times. pymars then leaves the term out, as earth's final fit does. Subtract the mean (or a typical value) before the fit if such terms matter; at degree 2 or more this changes which models are possible, so pymars does not do it for you.
 - **LIM-2** Two covariates that are equal, or a linear function of each other, except for the last few digits at some rows. Which of them enters then follows rounding. Exact copies are not a problem: a fixed order decides between them.

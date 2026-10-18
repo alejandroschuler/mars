@@ -8,15 +8,15 @@ This report checks five claims about pymars 2.0, the rewrite in this fork, again
 |---|---|
 | [Conformance](#1-conformance): pymars reproduces earth's forward and pruning passes, except at documented rule differences and near-ties | Holds on the fixtures. 124 of 133 dataset fixtures and 197 of 200 random draws agree with earth in full; the other 12 comparisons show 7 labeled differences, none a bug, and the fast code shows exactly the same differences as the reference. |
 | [Gap](#2-gap): the legacy pymars has a higher excess risk than earth when the truth has interactions, and the gap shrinks with earth's settings | Narrowed. At 200 cases and low noise the legacy code is 1.2 to 1.6 times worse than earth on every nonlinear DGP, additive ones included, and it stays worse on D3, D4 and D8 at 1,000 cases. Earth's settings do not close the gap, so the legacy code's rules cause most of it; on D8, and on D4 at 1,000 cases, the legacy settings alone give a part of it. |
-| [Parity](#3-parity): pymars 2.0 is within a factor 1.05 of earth's excess risk on every cell | Holds with a condition. Equivalence is shown in 48 of 51 cells. On pure noise pymars is worse than earth at every n, resolved above 1 at all three sizes: 7.6 percent at 200 cases (interval 1.051 to 1.101, a failure), 3.0 percent at 1,000 cases (not decided) and 4.0 percent at 5,000 cases (equivalent by a hair). D1 at 5,000 cases and high noise is not decided either. Where the two programs differ, pymars is slightly worse more often than not. |
+| [Parity](#3-parity): pymars 2.0 is within a factor 1.05 of earth's excess risk on every cell | Holds with a condition. Equivalence is shown in 48 of 51 cells, 4 of them only after an extension of the cell that followed a failed interim look (optional stopping; see [Repetitions](#repetitions)). On pure noise pymars is worse than earth at every n, resolved above 1 at all three sizes: 7.6 percent at 200 cases (interval 1.051 to 1.101, a failure), 3.0 percent at 1,000 cases (not decided) and 4.0 percent at 5,000 cases (equivalent by a hair). D1 at 5,000 cases and high noise is not decided either. Where the two programs differ, pymars is slightly worse more often than not. |
 | [Sparsity](#4-sparsity): on pure noise and with many irrelevant covariates, pymars selects no more terms and no more irrelevant covariates than earth | No resolved excess on D4, D7 and D8 (the claim has no margin, so this is the most a test can show). On pure noise pymars selects a few more terms and irrelevant covariates than earth at every n: 0.11 and 0.11 more per fit at 200 cases, 0.05 more irrelevant covariates at 1,000 and 0.09 and 0.08 at 5,000, small but resolved excesses that agree with the parity results there. |
-| [Speed](#5-speed): pymars 2.0 fits within a stated factor of earth's time | At 10,000 cases, 10 covariates and degree 2, `EarthRegressor` takes 1.7 times earth's time in a fresh process and 0.95 times in a warm one. At 100,000 cases it is faster than earth (0.79 and 0.70). At 250 cases it is 20 times slower in a fresh process and 3.5 times in a warm one, because of a fixed cost per fit. |
+| [Speed](#5-speed): pymars 2.0 fits within a stated factor of earth's time | At 10,000 cases, 10 covariates and degree 2, `EarthRegressor` with numba takes 1.7 times earth's time in a fresh process and 0.92 times in a warm one; the numpy code (Intel Macs, and the plan's target of 10 times "in pure numpy") takes 2.6 and 2.7 times. At 100,000 cases the numba path is faster than earth (0.76 and 0.67) and the numpy path 2.0 times slower. At 250 cases the numba path is 21 times slower than earth in a fresh process and 3.5 times in a warm one, because of a fixed cost per fit. |
 
 No fit failed in any arm of the simulation ([failure counts](#failure-counts)).
 
 ## Versions and data
 
-- pymars 2.0 (arm P-fix): the freeze commit `0274c5a` (branch `sim-freeze-1`; spec v3, numba 0.68.0 knot scan). The benchmark ran later, on `main` at `faac561`, which adds the compiled forward-pass steps of K145c (#167). Speed work after the freeze changes fits only at near-ties and in the last bits: the reviews of #159 and #167 checked the changed code against the reference and against the previous `main` under the spec's tolerances. So the simulation results stand for the code on `main` at `faac561`, and the speed numbers are those of that code.
+- pymars 2.0 (arm P-fix): the freeze commit `0274c5a` (branch `sim-freeze-1`; spec v3, numba 0.68.0 knot scan). The benchmark ran later, on `main` at `95212fa`, which adds the compiled forward-pass steps of K145c (#167) and the near-span fixes of #172. Speed work and fixes after the freeze change ordinary fits only at near-ties and in the last bits: the reviews of #159, #167 and #172 checked the changed code against the reference and against the previous `main` under the spec's tolerances. So the simulation results stand for the code on `main` at `95212fa`, and the speed numbers are those of that code.
 - earth 5.3.4 on R 4.4.3. The legacy code: the mars-earth 1.0.4 wheel from PyPI (`validation/legacy/make_venv.sh`).
 - Machine: Apple M1 Pro, 10 cores, macOS; Python 3.12.13, numpy 2.5.3. Every fit used one thread.
 - Simulation results: `validation/sims/results/full/` (T21: P-fix and E-def, 94,500 fits) and `validation/sims/results/legacy/` (T04: the legacy arms, E-pym, OLS and HGB, 49,440 fits). The E-def fits are in both runs with the same seeds, and the 5,300 shared fits give identical values.
@@ -98,7 +98,7 @@ The sparsity measures are the number of selected terms, whether a fit uses any i
 
 ### Repetitions
 
-The legacy arms ran at the plan's caps: 300 repetitions at 200 cases and 200 at 1,000 cases (EarthClassifier 300, GLMEarth 20). Their pilot (`validation/sims/pilot_legacy.md`) showed that the caps resolve the large gaps but not every contrast; the gap tables show which.
+The legacy arms ran at the plan's caps: 300 repetitions at 200 cases and 200 at 1,000 cases (EarthClassifier 300, GLMEarth 20). GLMEarth ran 20 repetitions per binary cell only to confirm that it gives the same predictions as EarthClassifier in 1.0.4; it does, exactly, on all 40 (`validation/sims/results/legacy/README.md`), so its rows add no information beyond EarthClassifier's. Their pilot (`validation/sims/pilot_legacy.md`) showed that the caps resolve the large gaps but not every contrast; the gap tables show which.
 
 P-fix and E-def ran at the size that a post-freeze pilot of 100 repetitions per cell asked for, by the plan's equivalence rule n_sim = (2·3·s_p / log 1.05)², rounded up to tiers of 300, 600, 1,300 and 3,000 (`validation/sims/results/full/pilot_sizing.csv`). Seven cells failed the equivalence rule in that run. A reviewer found most of them under-sized for the spread seen in the full run, and the seven were extended on the same frozen code, with nested seeds, to the larger of the plan's rule and the count needed at the observed gap: D1 at 1,000 cases (900 at high noise, 750 at low), D1 at 5,000 cases and high noise (400, then 600), D5 at 200 cases and low noise (900), D6 at 200 cases (7,500), D6 at 1,000 cases (3,300, then 3,800) and D6 at 5,000 cases (12,400).
 
@@ -133,7 +133,7 @@ At high noise (Table A.2) the gap stays on the additive DGPs (D2 1.33, D3 1.41) 
 
 *Figure 2.1. Per-repetition log ratio of excess risk against E-def at 200 cases, for P-cur, P-ear, E-pym and P-fix, by DGP; blue low noise, orange high noise; boxes are quartiles, whiskers the 5th and 95th percentiles; the axis is cut at −4 and 3 (D6's E-pym box runs further left). It shows whether a few bad fits drive the means of Table 2.1 and of Figure 3.1.*
 
-The legacy arms' boxes are wide and shifted, so the gap is a shift of the whole distribution, not a few bad fits. The P-fix boxes have collapsed to a line at 0, because 72 to 100 percent of P-fix fits give the same excess risk as earth to 1e-9 (the "equal fits" column of Table A.1).
+The legacy arms' boxes are wide and shifted, so the gap is a shift of the whole distribution, and a few bad fits do not drive it. The P-fix boxes have collapsed to a line at 0, because 72 to 100 percent of P-fix fits give the same excess risk as earth to 1e-9 (the "equal fits" column of Table A.1).
 
 **Statement.** The legacy pymars has a higher excess risk than earth on every nonlinear DGP at 200 cases and low noise, additive or not, by factors of 1.2 to 1.6, and on D3, D4 and D8 at 1,000 cases. Earth's settings do not close the gap, and earth with the legacy settings opens only a part of it, on D8 and on D4 at 1,000 cases, so the legacy code's rules and implementation cause most of the gap and its settings a part of it on D4 and D8. The claim therefore changes from "when the truth has interactions" to "when the truth is nonlinear", with the condition that at high noise and 200 cases only the additive DGPs show a resolved gap. pymars 2.0 has no such gap on the same repetitions (last column).
 
@@ -209,28 +209,28 @@ The legacy code is much less sparse than earth: on pure noise it selects 4 more 
 
 ## 5. Speed
 
-**Aim.** pymars 2.0 fits within a stated factor of earth's time. The plan's target was 10 times earth's time at 10,000 cases, 10 covariates and degree 2 (definition of done, item 5).
+**Aim.** pymars 2.0 fits within a stated factor of earth's time. The plan's target was 10 times earth's time at 10,000 cases, 10 covariates and degree 2, "in pure numpy" (`VALIDATION_PLAN.md`, "Fast path"; definition of done, item 5). Since then numba became a dependency where it has wheels, so the report states both paths: numba, which most users run, and the numpy code, which Intel Macs run and which the target names.
 
-**Design.** The benchmark of `validation/bench/` (`VALIDATION_PLAN.md`, "Benchmark design"): Friedman #1 data with fixed seeds, one factor at a time around 1,000 cases, 10 covariates, degree 2 and a limit of 21 terms; cases from 250 to 100,000. Each point is the median of 3 runs, each in a fresh process with one thread, 4 cells at a time. pymars runs `EarthRegressor` and the internal `fit_mars`; earth runs at its defaults and with `fast.k = 0`; the legacy code runs up to 2,000 cases (its times are from the T19 run at `ae9d199`, since that code does not change). The timer covers the fit alone, after the imports and the data loading. In a fresh process it still includes pymars' first-call costs, about 0.3 s, mostly loading numba's compiled code from its disk cache, so `validation/sims/report/warm_times.py` also times later fits in the same process, as in cross-validation or a simulation.
+**Design.** The benchmark of `validation/bench/` (`VALIDATION_PLAN.md`, "Benchmark design"): Friedman #1 data with fixed seeds, one factor at a time around 1,000 cases, 10 covariates, degree 2 and a limit of 21 terms; cases from 250 to 100,000. Each point is the median of 3 runs, each in a fresh process with one thread, 4 cells at a time. pymars runs `EarthRegressor` and the internal `fit_mars` with numba; earth runs at its defaults and with `fast.k = 0`; the legacy code runs up to 2,000 cases (its times are from the T19 run at `ae9d199`, since that code does not change). The timer covers the fit alone, after the imports and the data loading. In a fresh process it still includes pymars' first-call costs, about 0.3 s, mostly loading numba's compiled code from its disk cache. So `validation/sims/report/warm_times.py` also times the first fit of a fresh process and the median of 3 later fits in the same process, as in cross-validation or a simulation, for the numba path and, with `pymars._kernels.ENABLED = False`, for the numpy path.
 
 **Evidence.**
 
 ![Fit time against the number of cases](sims/report/figures/speed.png)
 
-*Figure 5.1. Fit time against the number of cases, log-log, at 10 covariates, degree 2 and 21 terms: pymars 2.0 `EarthRegressor` in a fresh and in a warm process, earth at its defaults, and the legacy 1.0.4 code (up to 2,000 cases). Supports the speed claim.*
+*Figure 5.1. Fit time against the number of cases, log-log, at 10 covariates, degree 2 and 21 terms: pymars 2.0 `EarthRegressor` (numba) in a fresh and in a warm process, earth at its defaults, and the legacy 1.0.4 code (up to 2,000 cases). Supports the speed claim. Table 5.1 adds the numpy path.*
 
-| Cases | pymars, fresh (s) | pymars, warm (s) | earth defaults (s) | Factor, fresh | Factor, warm | legacy 1.0.4 (s) |
-|---|---|---|---|---|---|---|
-| 250 | 0.379 | 0.066 | 0.019 | 20 | 3.5 | 25.8 |
-| 1,000 | 0.400 | 0.097 | 0.049 | 8.2 | 2.0 | 144 |
-| 10,000 | 0.801 | 0.441 | 0.462 | 1.7 | 0.95 | not run |
-| 100,000 | 5.91 | 5.25 | 7.51 | 0.79 | 0.70 | not run |
+| Cases | earth defaults (s) | numba, fresh (s) | numba, warm (s) | numpy, fresh (s) | numpy, warm (s) | Factor: numba fresh / warm | Factor: numpy fresh / warm | legacy 1.0.4 (s) |
+|---|---|---|---|---|---|---|---|---|
+| 250 | 0.018 | 0.373 | 0.063 | 0.150 | 0.148 | 21 / 3.5 | 8.3 / 8.2 | 25.8 |
+| 1,000 | 0.049 | 0.388 | 0.094 | 0.244 | 0.238 | 7.9 / 1.9 | 5.0 / 4.9 | 144 |
+| 10,000 | 0.464 | 0.809 | 0.425 | 1.22 | 1.26 | 1.7 / 0.92 | 2.6 / 2.7 | not run |
+| 100,000 | 7.57 | 5.77 | 5.09 | 15.3 | 15.3 | 0.76 / 0.67 | 2.0 / 2.0 | not run |
 
-*Table 5.1. Fit times of `EarthRegressor` and earth, and their ratio, at 10 covariates, degree 2 and 21 terms, on `main` at `faac561`. Fresh: median of 3 fresh processes (`validation/bench/REPORT.md`). Warm: median of 3 fits after a first fit in the same process (`validation/sims/report/warm_times.csv`), run one size at a time, while the earth column comes from the fresh-process benchmark, which ran 4 cells at a time. The two run conditions differ by about 12 percent at 10,000 cases (the first warm-script fit took 0.71 s against 0.80 s in the benchmark), so a warm factor near 1 means "about equal". Supports the speed claim.*
+*Table 5.1. Fit times of `EarthRegressor` and earth, and their ratio, at 10 covariates, degree 2 and 21 terms, on `main` at `95212fa`. Earth and numba fresh: median of 3 fresh processes in the benchmark (`validation/bench/REPORT.md`). numba warm, numpy fresh and numpy warm: `warm_times.py` (`warm_times.csv`, `warm_times_numpy.csv`), where "fresh" is the first fit of a fresh process and "warm" the median of 3 later fits; it ran one size at a time, while the benchmark ran 4 cells at a time. At 10,000 cases the first numba fit of the script took 0.69 s against 0.81 s in the benchmark, so the run conditions differ by about 15 percent, and a factor near 1 means "about equal". Supports the speed claim.*
 
-At the plan's point, 10,000 cases, `EarthRegressor` takes 1.7 times earth's time in a fresh process (0.80 s against 0.46 s) and 0.95 times in a warm one, so the target of 10 is met. The internal `fit_mars` takes 1.7 times too. At 100,000 cases pymars is faster than earth (5.9 s against 7.5 s fresh, 5.3 s warm). At small n a fixed cost dominates: about 0.3 s more in the first fit of a process, and about 0.06 s per fit in a warm one, against earth's 0.02 s at 250 cases. Against the legacy code, pymars 2.0 is 68 times faster at 250 cases and 1,400 times faster at 2,000 cases. From 10,000 to 100,000 cases the time grows a little less than linearly in n (factor 7.4; `validation/bench/REPORT.md` has the other factors). With weights, pymars takes 0.44 s at 1,000 cases, where earth takes 16 s.
+At the plan's point, 10,000 cases, the numpy path takes 2.6 times earth's time in a fresh process and 2.7 times in a warm one, so the target of 10 "in pure numpy" is met. With numba, `EarthRegressor` takes 1.7 times earth's time in a fresh process (0.81 s against 0.46 s) and about the same time in a warm one (0.92 times); the internal `fit_mars` also takes 1.7 times. At 100,000 cases the numba path is faster than earth (5.8 s fresh and 5.1 s warm against 7.6 s), and the numpy path takes 2.0 times earth's time. At small n a fixed cost dominates the numba path: about 0.3 s more in the first fit of a process, and about 0.06 s per fit in a warm one, against earth's 0.02 s at 250 cases. The numpy path has no cache to load, so its first fit costs no more than the later ones, and below about 1,000 cases it is faster than the numba path in a fresh process. Against the legacy code, pymars 2.0 is 69 times faster at 250 cases and 1,400 times faster at 2,000 cases. From 10,000 to 100,000 cases the numba time grows by a factor of 7.1, a little less than linearly in n (`validation/bench/REPORT.md` has the other factors). With weights, pymars takes 0.45 s at 1,000 cases, where earth takes 16 s.
 
-**Statement.** pymars 2.0 fits within 1.7 times earth's time at 10,000 cases, 10 covariates and degree 2, and in about the same time in a warm process (within the noise of the two runs); at 100,000 cases it is faster than earth. At a few hundred cases earth is 3.5 to 20 times faster, because pymars has a fixed cost of about 0.06 s per fit, and about 0.3 s more in the first fit of a process. The legacy code was 68 to 1,400 times slower (250 to 2,000 cases).
+**Statement.** At 10,000 cases, 10 covariates and degree 2, pymars 2.0 fits within 2.7 times earth's time on the numpy path, which meets the plan's target of 10, and within 1.7 times with numba, or in about the same time in a warm process. At 100,000 cases the numba path is faster than earth and the numpy path 2.0 times slower. At a few hundred cases earth is 3.5 to 21 times faster than the numba path, because of a fixed cost of about 0.06 s per fit and about 0.3 s more in the first fit of a process. The legacy code was 69 to 1,400 times slower (250 to 2,000 cases).
 
 ## Failure counts
 
@@ -273,7 +273,7 @@ The binary DGPs belong to the parity claim. This table adds the legacy classifie
 
 *Table 6.1. Ratio of excess log loss to E-def with ±3 Monte Carlo standard errors (`*` resolved at 3 standard errors) and the median calibration slope on the test set (1 is well calibrated). Supports the parity claim for binary outcomes and measures the effect of the legacy penalized refit.*
 
-pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibration matches earth's at every n. Both are overconfident at 200 cases (slopes 0.36 to 0.44) and close to calibrated at 5,000 cases (0.95 and 0.96), as expected of an unpenalized logistic refit of a selected basis. At 200 cases the legacy EarthClassifier has 0.37 to 0.52 of earth's excess log loss, and the legacy classifiers have slopes near 1. Their penalized refit, which shrinks the coefficients, is a likely cause; no ablation here tests it, and the legacy forward pass differs too. This is a difference of method, not a defect of either program. pymars 2.0 offers the penalty as `glm_alpha` (default 0, earth's unpenalized fit), and users who fit binary outcomes at small n may want it. The binary part of the parity claim is about earth, and it holds.
+pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibration matches earth's at every n. Both are overconfident at 200 cases (slopes 0.36 to 0.44) and close to calibrated at 5,000 cases (0.95 and 0.96), as expected of an unpenalized logistic refit of a selected basis. At 200 cases the legacy EarthClassifier has 0.37 to 0.52 of earth's excess log loss, and the legacy classifiers have slopes near 1. Their penalized refit, which shrinks the coefficients, is a likely cause; no ablation here tests it, and the legacy forward pass differs too. Both programs follow their documented method here. pymars 2.0 offers the penalty as `glm_alpha` (default 0, earth's unpenalized fit), and users who fit binary outcomes at small n may want it. The binary part of the parity claim is about earth, and it holds.
 
 ## Appendix
 
@@ -333,7 +333,7 @@ pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibrati
 | D8 correlated | lo | 1,000 | 300 | 0.999 [0.978, 1.020] | 84% | equivalent |
 | D8 correlated | lo | 5,000 | 300 | 0.999 [0.997, 1.001] | 100% | equivalent |
 
-*Table A.1. P-fix over E-def in every cell, with ±3 Monte Carlo standard errors, the number of repetitions, the share of repetitions with equal excess risk (to 1e-9), and the equivalence decision at the margin 1.05. Supports the parity claim. The same numbers are in `validation/sims/results/full/parity.csv`. The cells where every fit is equal have intervals of width 0.*
+*Table A.1. P-fix over E-def in every cell, with ±3 Monte Carlo standard errors, the number of repetitions, the share of repetitions with equal excess risk (to 1e-9), and the equivalence decision at the margin 1.05. Supports the parity claim. The same numbers are in `validation/sims/results/full/parity.csv`. The cells where every fit is equal have intervals of width 0. D6 at 5,000 cases rounds to an upper bound of 1.050; its exact upper bound is 1.0495, 0.0004 inside the margin on the log scale, after an extension.*
 
 ### A.2 The gap at high noise, 200 cases
 
@@ -384,12 +384,40 @@ pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibrati
 
 *Table A.4. The legacy code with earth's settings over the legacy code at its defaults, paired by repetition. Tests the second half of the gap claim, that earth's settings shrink the gap: they shrink it by 7 to 15 percent in the 5 resolved cells below 1 and enlarge it in the 5 resolved cells above 1.*
 
-### A.5 How to rebuild
+### A.5 Binary outcomes: excess Brier score and clipped probabilities
+
+| DGP | n | arm | excess Brier score / E-def | clipped probabilities per fit, mean (share of fits with any) |
+|---|---|---|---|---|
+| D3-bin | 200 | E-def | 1 (reference) | 9.6 (15%) |
+| D3-bin | 200 | EarthClassifier | 0.782* [0.720, 0.849] | 0.0 (0%) |
+| D3-bin | 200 | GLMEarth | 1.059 [0.643, 1.744] | 0.0 (0%) |
+| D3-bin | 200 | P-fix | 1.011* [1.002, 1.020] | 12.1 (17%) |
+| D3-bin | 1,000 | E-def | 1 (reference) | 1.1 (5%) |
+| D3-bin | 1,000 | P-fix | 1.002 [0.995, 1.010] | 1.3 (5%) |
+| D3-bin | 5,000 | E-def | 1 (reference) | 0.0 (0%) |
+| D3-bin | 5,000 | P-fix | 1.000* [1.000, 1.000] | 0.0 (0%) |
+| D4-bin | 200 | E-def | 1 (reference) | 10.3 (15%) |
+| D4-bin | 200 | EarthClassifier | 0.525* [0.495, 0.558] | 0.0 (0%) |
+| D4-bin | 200 | GLMEarth | 0.595* [0.454, 0.779] | 0.0 (0%) |
+| D4-bin | 200 | P-fix | 1.003 [0.990, 1.015] | 11.6 (17%) |
+| D4-bin | 1,000 | E-def | 1 (reference) | 0.5 (2%) |
+| D4-bin | 1,000 | P-fix | 1.005 [0.994, 1.017] | 0.5 (2%) |
+| D4-bin | 5,000 | E-def | 1 (reference) | 0.0 (0%) |
+| D4-bin | 5,000 | P-fix | 1.004 [0.998, 1.010] | 0.0 (0%) |
+
+*Table A.5. The excess Brier score E[(μ̂(X) − μ(X))²] as a ratio to E-def with ±3 Monte Carlo standard errors (`*` resolved), and the number of fitted probabilities clipped to [1e-6, 1 − 1e-6] per fit (out of 10,000 test points), with the share of fits that clip any. The plan's "Performance measures" asks for both. The excess Brier score tells the same story as the excess log loss in Table 6.1. Earth and pymars 2.0 clip a few probabilities per fit at 200 cases (in 15 to 17 percent of fits) and almost none at 5,000; the clipped values enter the excess log loss at the clipping bound. The clipped counts come from the per-repetition files of the runs (`tables/clipped.csv`), since `results.csv` does not hold them.*
+
+### A.6 How to rebuild
 
 ```sh
 . dev/env.sh
 uv run --frozen --group validation python validation/sims/report/make_report.py \
-    --bench-run <a run folder of validation/bench/run.py>
+    --bench-run <a run folder of validation/bench/run.py> \
+    --run-dirs <the T21 run folder> <the T04 run folder>
+NUMBA_NUM_THREADS=1 nice -n 15 uv run --frozen --group validation python \
+    validation/sims/report/warm_times.py --out validation/sims/report/warm_times.csv
+NUMBA_NUM_THREADS=1 nice -n 15 uv run --frozen --group validation python \
+    validation/sims/report/warm_times.py --numpy --out validation/sims/report/warm_times_numpy.csv
 ```
 
-Without `--bench-run` the script uses the stored `validation/sims/report/bench_times.csv`. The simulation runs are described in `validation/sims/README.md`, `validation/sims/results/legacy/README.md` and `validation/sims/results/full/summary.md`, and the benchmark in `validation/bench/README.md`.
+Without `--bench-run` the script uses the stored `validation/sims/report/bench_times.csv`, and without `--run-dirs` the stored `tables/clipped.csv`. The run folders of this report were `.worktrees/runner-t21/validation/runs/full` and `.worktrees/runner-legacy/validation/runs/legacy_full` (ignored by git). The simulation runs are described in `validation/sims/README.md`, `validation/sims/results/legacy/README.md` and `validation/sims/results/full/summary.md`, and the benchmark in `validation/bench/README.md`.

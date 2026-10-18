@@ -12,6 +12,11 @@ covariates, degree 2 and 21 terms.
     . dev/env.sh
     NUMBA_NUM_THREADS=1 nice -n 15 uv run --frozen --group validation python \
         validation/sims/report/warm_times.py --out validation/sims/report/warm_times.csv
+
+With ``--numpy`` it sets ``pymars._kernels.ENABLED = False`` first, so the fit
+runs the numpy code that Intel Macs run (``warm_times_numpy.csv``). The
+column ``first_s`` is the first fit of a fresh process, the counterpart of
+the benchmark's fresh-process time.
 """
 
 from __future__ import annotations
@@ -35,10 +40,14 @@ sys.path.insert(0, str(ROOT / "validation" / "bench"))
 import core  # noqa: E402
 
 
-def one(n: int, reps: int) -> dict:
+def one(n: int, reps: int, numpy_only: bool) -> dict:
     import warnings
 
     import pymars
+    from pymars import _kernels
+
+    if numpy_only:  # the numpy code that runs where numba is missing
+        _kernels.ENABLED = False
 
     warnings.filterwarnings("ignore")
     X, y, _ = core.make_data(n, 10)
@@ -50,7 +59,12 @@ def one(n: int, reps: int) -> dict:
 
     first = fit()
     later = [fit() for _ in range(reps)]
-    return {"n": n, "first_s": first, "warm_median_s": statistics.median(later)}
+    return {
+        "n": n,
+        "path": "numpy" if numpy_only else ("numba" if _kernels.ENABLED else "numpy"),
+        "first_s": first,
+        "warm_median_s": statistics.median(later),
+    }
 
 
 def main() -> None:
@@ -58,10 +72,13 @@ def main() -> None:
     ap.add_argument("--sizes", type=int, nargs="+", default=[250, 1000, 10000, 100000])
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument(
+        "--numpy", action="store_true", help="time the numpy path (no numba)"
+    )
     ap.add_argument("--child", type=int, help=argparse.SUPPRESS)
     a = ap.parse_args()
     if a.child is not None:
-        print(json.dumps(one(a.child, a.reps)))
+        print(json.dumps(one(a.child, a.reps, a.numpy)))
         return
     commit = subprocess.run(
         ["git", "rev-parse", "--short=10", "HEAD"], cwd=ROOT, capture_output=True,
@@ -71,7 +88,7 @@ def main() -> None:
     for n in a.sizes:  # each size in its own fresh process
         out = subprocess.run(
             [sys.executable, __file__, "--child", str(n), "--reps", str(a.reps),
-             "--out", str(a.out)],
+             "--out", str(a.out), *(["--numpy"] if a.numpy else [])],
             capture_output=True, text=True, check=True,
         ).stdout.strip().splitlines()[-1]  # fmt: skip
         rows.append({**json.loads(out), "commit": commit})
