@@ -5,13 +5,15 @@ code (``pymars._core.fit_mars`` with the candidate log) on the dataset
 fixtures, on the 200 draws of S15, and on 200 random small fits of its own
 (weights, shifted covariates, tied values, degrees 1 to 3), and hashes each
 ``MarsFit.to_dict()`` as JSON (floats by ``repr`` and arrays by their bytes,
-both exact). It writes the hashes to ``--out``; with ``--compare`` it lists
-the cases whose hash differs from those of an earlier run and exits 1 if
-there is one.
+both exact). ``--no-numba`` runs the numpy knot scan in place of the
+compiled one (``pymars._kernels``); both must give the same hashes. It
+writes the hashes to ``--out``; with ``--compare`` it lists the cases whose
+hash differs from those of an earlier run and exits 1 if there is one.
 
     . dev/env.sh
     nice -n 15 uv run --frozen --group validation python \\
-        validation/bench/hash_fits.py --out <file> [--compare <file of main>]
+        validation/bench/hash_fits.py --out <file> [--compare <file of main>] \\
+        [--no-numba]
 """
 
 from __future__ import annotations
@@ -79,8 +81,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--compare")
+    ap.add_argument("--no-numba", action="store_true")
     a = ap.parse_args()
-    from pymars import _core
+    from pymars import _core, _kernels
+
+    if a.no_numba:
+        _kernels.ENABLED = False
+    print(f"compiled knot scan: {_kernels.ENABLED}")
 
     hashes: dict[str, str] = {}
     for name, X, Y, w, params in all_cases():

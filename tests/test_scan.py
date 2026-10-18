@@ -11,7 +11,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from pymars import _linalg, _scan
+from pymars import _kernels, _linalg, _scan
 
 seeds = st.integers(0, 2**32 - 1)
 TAU = 1e-5  # the smaller tolerance of LA-3
@@ -103,6 +103,102 @@ def test_knot_scan_equals_least_squares(seed, n, r, K, parent, ties, shift, weig
             G = sw[:, None] * np.column_stack((B, h))
             gain = base - _rss(G, sw[:, None] * Y)
             assert abs(scan.gain[i] - gain) <= max(scan.gain_err[i], 1e-10 * base)
+
+
+needs_numba = pytest.mark.skipif(not _kernels.AVAILABLE, reason="numba is missing")
+
+
+def _bits(a):
+    return np.ascontiguousarray(a, dtype=np.float64).view(np.int64)
+
+
+@needs_numba
+@given(
+    seeds,
+    st.integers(2, 60),
+    st.integers(1, 4),
+    st.integers(1, 2),
+    st.booleans(),
+    st.booleans(),
+    st.sampled_from([0.0, 1e6]),
+    st.booleans(),
+)
+def test_the_compiled_scan_gives_the_bits_of_the_numpy_scan(
+    seed, n, r, K, intercept, ties, shift, weighted
+):
+    """``_kernels`` changes no value (T20b): ``knot_scan`` with the kernels,
+    on rows in the caller's order (``_order``) and through the forward
+    pass's store, gives the bits of the numpy scan on the gathered rows, for
+    any order of the splits, repeated splits, block sizes from n = 2 up,
+    and weights that are not integers."""
+    x, b, _, Q, _, E, splits = _problem(seed, n, r, K, ties, shift, not intercept)
+    rng = np.random.default_rng(seed + 3)
+    if weighted:  # b = √w with weights that are not integers: W_pre's sums round
+        b = b * np.sqrt(rng.uniform(0.1, 5.0, n))
+    split = rng.permutation(np.concatenate((splits, splits[: len(splits) // 2])))
+    perm = rng.permutation(n)  # row q in the order of x is row perm[q]
+    Qc, Ec = np.empty_like(Q), np.empty_like(E)
+    Qc[perm], Ec[perm] = Q, E
+    kept = Q.shape[1] - intercept  # the columns of Q that enter hᵀV
+    m = rng.integers(0, kept + 1)
+    runs = []
+    for enabled in (False, True):
+        _kernels.ENABLED = enabled
+        try:
+            runs.append(_scan.knot_scan(x, b, Q, E, split, intercept=intercept))
+            store = {"size": 0}
+            for mm in (m, kept):  # a store, then more kept columns
+                runs.append(
+                    _scan.knot_scan(
+                        x,
+                        b,
+                        Qc,
+                        Ec,
+                        split,
+                        intercept=intercept,
+                        _checked=True,
+                        _cache=(store, mm),
+                        _order=perm,
+                    )
+                )
+        finally:
+            _kernels.ENABLED = _kernels.AVAILABLE
+    for run in runs[1:]:
+        for got, want in zip(run, runs[0], strict=True):
+            assert np.array_equal(_bits(got), _bits(want))
+
+
+@needs_numba
+def test_the_kernels_round_every_product():
+    """No fused multiply-add (the order of sums of T20b). At the last row
+    b·V = -1, and at the row before it b = V = a = 1 + 2^-30, so the suffix
+    sum there is -1 + a·a: 2^-29 when the product is rounded first, as numpy
+    does, and 2^-29 + 2^-60 when it is fused. The last gap is 0, so hᵀV at
+    split 2 is that sum. ‖h‖² and D are compared on the same data, and D
+    also on weights with trailing zeros, where it is nan."""
+    a = 1.0 + 2.0**-30
+    x = np.array([0.0, 1.0, 2.0, 2.0])
+    b = np.array([1.0, 1.0, a, 1.0])
+    V = np.array([[1.0], [1.0], [a], [-1.0]])
+    g, split = np.diff(x), np.array([1, 2, 3])
+    want = _scan._hv(g, b, V, split)
+    assert want[1, 0] == 2.0**-29
+    hv = _kernels.hv(g, b, V, 0, np.empty((4, 0)), np.arange(4), split)
+    assert np.array_equal(_bits(hv), _bits(want))
+    assert np.array_equal(
+        _bits(_kernels.norms(g, b, split)), _bits(_scan._norms(g, b, split))
+    )
+    w = b * b
+    assert np.array_equal(
+        _bits(_kernels.centered(g, w, split)), _bits(_scan._centered(g, w, split))
+    )
+    # Weights that underflow to 0 at the last rows: a division by 0 gives
+    # nan, as in numpy, not an exception (numba's error_model="numpy").
+    w = np.array([1.0, 1.0, 0.0, 0.0])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        want = _scan._centered(g, w, split)
+    assert np.isnan(want).any()
+    assert np.array_equal(_bits(_kernels.centered(g, w, split)), _bits(want))
 
 
 def _pair_basis(x, extra):

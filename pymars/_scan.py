@@ -99,7 +99,7 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 
-from pymars import _linalg
+from pymars import _kernels, _linalg
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -217,6 +217,25 @@ def _centered(g: FloatArray, w: FloatArray, split: npt.NDArray[np.int64]) -> Flo
     return SSW[split] + Wp * S**2 / (Ws * (Wp + Ws))
 
 
+def _scan_hv(g, b, Q, q0, E, o, split) -> FloatArray:
+    """hᵀV for V = [Q[o, q0:], E] at every split: the compiled kernel when
+    ``_kernels.ENABLED``, else ``_hv`` on the gathered V (Q in the order of
+    x, o unused). The same bits either way."""
+    if _kernels.ENABLED:
+        return _kernels.hv(g, b, Q, q0, E, o, split)
+    return _hv(g, b, np.hstack((Q[:, q0:], E)), split)
+
+
+def _scan_norms(g: FloatArray, b: FloatArray, split) -> FloatArray:
+    """``_norms``, compiled when ``_kernels.ENABLED``; the same bits."""
+    return (_kernels.norms if _kernels.ENABLED else _norms)(g, b, split)
+
+
+def _scan_centered(g: FloatArray, w: FloatArray, split) -> FloatArray:
+    """``_centered``, compiled when ``_kernels.ENABLED``; the same bits."""
+    return (_kernels.centered if _kernels.ENABLED else _centered)(g, w, split)
+
+
 def _to_unit(a: FloatArray) -> FloatArray:
     """a times the power of 2 that puts its largest |value| in [0.5, 1)."""
     top = float(np.max(np.abs(a))) if a.size else 0.0
@@ -273,6 +292,7 @@ def knot_scan(
     intercept: bool = False,
     _checked: bool = False,
     _cache: tuple[dict, int] | None = None,
+    _order: npt.NDArray[np.int64] | None = None,
 ) -> KnotScan:
     """Return rho (LA-3) and the RSS reduction (LA-2) of the hinge of every
     knot, with a bound on the error of each.
@@ -296,6 +316,11 @@ def knot_scan(
     call computes hᵀq only for the other columns. Every value is the one a
     call without the store computes, bit for bit: each column is summed on
     its own (``_hv``).
+    ``_order`` (n,), for the forward pass, says that the rows of Q and E are
+    in the caller's order and that row q in the order of x is row
+    ``_order[q]``; the compiled scan (``_kernels``) then reads Q at those
+    rows without a gathered copy. With or without numba, every value is the
+    same, bit for bit.
     Complexity: O(n·(r + K)) time and memory.
     """
     Q = np.asarray(Q, dtype=np.float64)
@@ -304,26 +329,34 @@ def knot_scan(
     if Q.ndim != 2 or Q.shape[1] < 1 or E.ndim != 2:
         raise ValueError("Q must be 2-D, intercept direction first; E (n,) or (n, K)")
     n, r = Q.shape
-    part = Q[:, 1:] if intercept else Q
+    fast = _kernels.ENABLED
+    if _order is not None:
+        E = E[_order]  # O(n·K); the norms of E below sum in the order of x
+        if not fast:
+            Q = Q[_order]
+    o = np.arange(n) if _order is None else _order  # read only by the kernel
+    q0 = 1 if intercept else 0  # the columns of Q that enter hᵀV
+    part = Q[:, q0:]
     k = part.shape[1]
     if _cache is None:
-        V = np.hstack((part, E))
-        x, b0, V, split = (x, b, V, split) if _checked else _check(x, b, V, split)
+        if not _checked:
+            x, b, _, split = _check(x, b, np.hstack((part, E)), split)
+        b0 = b
         g, b = _to_unit(np.diff(x)), _to_unit(b0)
-        HV, F = _products(g, b, V, split)
-        D = _centered(g, b * b, split) if intercept else None
+        HV, F = _scan_hv(g, b, Q, q0, E, o, split), _scan_norms(g, b, split)
+        D = _scan_centered(g, b * b, split) if intercept else None
     else:  # the forward pass's own arrays, as with _checked
         store, m = _cache
         b0 = b
         g, b = _to_unit(np.diff(x)), _to_unit(b0)  # O(n), not stored
         if "F" not in store:
-            store.update(F=_norms(g, b, split), m=0)
-            store["D"] = _centered(g, b * b, split) if intercept else None
+            store.update(F=_scan_norms(g, b, split), m=0)
+            store["D"] = _scan_centered(g, b * b, split) if intercept else None
             store["HV"] = np.empty((split.shape[0], 0))
         F, D = store["F"], store["D"]
         known = store["m"]
         assert known <= m <= k, "the kept columns are a prefix of Q"
-        HV = np.hstack((store["HV"], _hv(g, b, np.hstack((part[:, known:], E)), split)))
+        HV = np.hstack((store["HV"], _scan_hv(g, b, Q, q0 + known, E, o, split)))
         store["HV"], store["m"] = HV[:, :m], m
     he = HV[:, k:]
     if intercept:

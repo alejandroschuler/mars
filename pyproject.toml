@@ -49,6 +49,7 @@ dev = [
     "hypothesis>=6.100",
     "ruff>=0.9",
     "pandas>=2",
+    "numba>=0.63 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
 ]
 # For the harness, the simulations and the benchmarks; never shipped.
 validation = [
