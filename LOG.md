@@ -433,6 +433,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 01:45 #136 adversarial recheck APPROVE at f983272 (non-blocking: the retry can accept an order without case (b)). Merged #136 (reference follows FWD-13) as b64ee8d; closed #127. Opened #151 for the retry; given to f136-ref (sonnet).
 - 02:00 #141 round 4 at c25618d: APPROVE (both; narrow). Merge refused: not on b64ee8d. Rebased with gh pr update-branch --rebase to 033f3ed; started update-check-141 (sonnet: range-diff, gate B, CI, then update approvals). Note for F139 and the reference follow-up: near-tie gains up to 2e-8 RSS(C) mean tests of zero sets must skip near-ties.
 - 02:15 #148 (K143 kernel A) ready at 573ca9a (on 5bb2525; numba in dev group with an Intel-Mac marker; hash equal on main, numba and numpy paths; no fma in IR or asm; gates B, C PASS): fit 0.445/1.11/9.96 s vs main 0.194/1.67/18.7 vs earth 0.019/0.47/6.80 at 250/10k/100k (2.4x and 1.5x earth; first fit at 250 pays 0.28 s kernel load; import +0.5 s). Started review-148-spec a1ea9986d3ce50e18 and review-148-adversarial a6f7a3f4aa3e9b2ce (opus, per the user's T20b rule).
+- 02:30 update-check-141 APPROVE (both roles) at 033f3ed (range-diff '=', gate B PASS, CI 12/12). Merged #141 (LA-4 coefficient set C, PRUNE-8) as b3ba47a. Started r139-ref (opus; reference follows #141). F139 (fast) after #144 merges.
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
