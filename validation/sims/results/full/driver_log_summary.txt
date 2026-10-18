@@ -1,0 +1,13 @@
+=== 2026-10-18T14:05:26Z START all 51 cells reps 0:300 ===
+30600 (cell, arm, repetition) units to run, out of 30600 requested
+=== 2026-10-18T14:19:52Z DONE  all 51 cells reps 0:300 ===
+=== 2026-10-18T14:19:52Z START tier 600 reps 300:600 ===
+7800 (cell, arm, repetition) units to run, out of 7800 requested
+=== 2026-10-18T14:21:54Z DONE  tier 600 reps 300:600 ===
+=== 2026-10-18T14:21:54Z START tier 1300 reps 600:1300 ===
+9800 (cell, arm, repetition) units to run, out of 9800 requested
+=== 2026-10-18T14:24:15Z DONE  tier 1300 reps 600:1300 ===
+=== 2026-10-18T14:24:15Z START tier 3000 reps 1300:3000 ===
+10200 (cell, arm, repetition) units to run, out of 10200 requested
+=== 2026-10-18T14:26:06Z DONE  tier 3000 reps 1300:3000 ===
+=== 2026-10-18T14:26:06Z ALL BLOCKS DONE ===

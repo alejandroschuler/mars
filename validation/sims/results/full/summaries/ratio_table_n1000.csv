@@ -1,0 +1,9 @@
+DGP,P-cur / E-def,P-ear / E-def,E-pym / E-def
+D1 linear,missing,missing,missing
+D2 additive hinges,missing,missing,missing
+D3 additive smooth,"1.376 [1.293, 1.464]","1.276 [1.209, 1.346]","0.954 [0.847, 1.075]"
+D4 Friedman #1,"1.281 [1.202, 1.366]","1.109 [1.053, 1.168]","1.067 [1.012, 1.126]"
+D5 hinge interaction,"0.757 [0.672, 0.853]","0.973 [0.864, 1.095]","0.694 [0.556, 0.866]"
+D6 pure noise,missing,missing,missing
+D7 many covariates,n/a (legacy code too slow at p=50),n/a (legacy code too slow at p=50),missing
+D8 correlated,"1.319 [1.200, 1.449]","1.128 [1.045, 1.217]","1.162 [1.014, 1.333]"
