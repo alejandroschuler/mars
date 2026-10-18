@@ -147,3 +147,5 @@ Read #143, its measurement comment, and the needs-user issue #145 (the user deci
 4. Timings at 250, 10,000 and 100,000 x 10 x degree 2 against main and earth, one thread.
 5. A pure-Python fallback when numba is missing is not needed (numba becomes a dependency) unless the floor check forces it.
 Reviewers: 2 (`spec` and `adversarial`, opus for the first full review). Gates B and C. Draft PR early.
+
+K143 update (00:40): the floor check failed (numba >= 0.63 has Python 3.14 but no macOS x86_64 wheels; no release has both). The user decides on #145. Until then: add numba to the `dev` dependency group only (not to `[project] dependencies`); the kernel is used when `import numba` succeeds, and the current numpy code stays as the fallback, unchanged. Tests run both paths where numba is installed and check they give the same bits (hash_fits.py on both paths). CI: say in the PR body which jobs have numba. Everything else in K143 holds.
