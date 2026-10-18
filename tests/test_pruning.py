@@ -11,7 +11,9 @@ the exact terms at every size, relative 1e-8 for RSS and GCV (relative 1e-7
 where earth keeps a zero weight, W-3), absolute 1e-8 for RSq and GRSq,
 normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5, and 1e-8·sd(y) for
 fitted values. Against exact arithmetic the bound is LA-5's
-ε(V*, V*) = 1e-8 V* + c sqrt(TSS V*) + (c/2)² TSS, with c = 1e-14.
+ε(V*, V*) = 1e-8 V* + c sqrt(TSS V*) + (c/2)² TSS, with c = max(1e-14,
+u·cond·√n) and cond the condition number of the √w-scaled columns, each of
+unit norm (spec v3).
 
 The explicit answers come from a refit of every subset by numpy's SVD solver,
 which follows the steps of PRUNE-3 as the spec writes them. The inputs from
@@ -128,11 +130,21 @@ def _sets(subsets):
     return [frozenset(np.flatnonzero(row).tolist()) for row in subsets]
 
 
-def assert_la5(actual, exact, tss):
+def _cond(B, w):
+    """cond of LA-5: the 2-norm condition number of the √w-scaled columns of
+    B, each scaled to unit norm. It bounds that of every subset of the columns
+    (removing columns cannot raise it), as LA-5 lets a test use."""
+    A = B if w is None else np.sqrt(w)[:, None] * B
+    A = A[:, np.linalg.norm(A, axis=0) > 0]
+    return float(np.linalg.cond(A / np.linalg.norm(A, axis=0)))
+
+
+def assert_la5(actual, exact, tss, cond=1.0, n=1):
     """LA-5 with R = V*: every RSS within ε(V*, V*) of its exact value, for
-    the total sum of squares tss (GCV-5)."""
+    the total sum of squares tss (GCV-5), with c = max(1e-14, u·cond·√n)."""
     actual, exact = np.asarray(actual, float), np.asarray(exact, float)
-    bound = 1e-8 * exact + 1e-14 * np.sqrt(tss * exact) + (1e-14 / 2) ** 2 * tss
+    c = max(1e-14, 2.0**-53 * cond * np.sqrt(n))
+    bound = 1e-8 * exact + c * np.sqrt(tss * exact) + (c / 2) ** 2 * tss
     assert np.all(np.abs(actual - exact) <= bound), (actual, exact)
 
 
@@ -274,6 +286,31 @@ def test_exact_ties_and_constant_responses(k):
     fit = pr.final_fit(B, Y, [0], penalty=2.0)
     assert fit.coef.tolist() == [[2.5] * k] and fit.rss == 0.0
     assert np.isposinf(fit.gcv) and fit.rsq == 0.0 and fit.grsq == 0.0
+
+
+@pytest.mark.parametrize("weighted", [False, True])
+def test_the_centering_takes_the_smallest_of_two_values_nearest_the_mean(weighted):
+    """LA-6: each response is shifted first by its data value nearest its
+    weighted mean, the smallest such value on a tie, and then by the
+    weighted mean of the differences; the TSS does the same (GCV-5). Here
+    the first two cases are equally near the mean, and the second is the
+    smaller. With the first case as the anchor the centered values and the
+    TSS differ in their last bits, so the row order would decide."""
+    y = np.array([1.7373672197631647, 0.26263278023683534])
+    y = np.r_[y, 2.6115132581597926, -0.6115132581597924]
+    w = np.array([1.0, 1.0, 2.0, 2.0]) if weighted else None
+    dist = np.abs(y - np.average(y, weights=w))
+    assert dist[0] == dist[1] == dist.min()
+    d = y - y[1]
+    want = d - np.average(d, weights=w)
+    got, const = pr._centered(y[:, None], w)
+    np.testing.assert_array_equal(got[:, 0], want)
+    assert const[0] == y[1] + np.average(d, weights=w)
+    assert _gcv.tss(y, w) == float((np.ones(4) if w is None else w) @ (want * want))
+    if not weighted:  # the first case as the anchor gives other bits
+        r0 = (y - y[0]) - np.average(y - y[0])
+        assert not np.array_equal(r0, want)
+        assert _gcv.tss(y) != float(r0 @ r0)
 
 
 def test_a_constant_response_adds_nothing():
@@ -420,7 +457,6 @@ def test_errors():
         lambda: pr.pruning_pass(B[:, 1:], y, penalty=2.0),
         lambda: pr.pruning_pass(B + np.eye(12, 3), y, penalty=2.0),
         lambda: pr.pruning_pass(B[0], y, penalty=2.0),
-        lambda: pr.pruning_pass(B, y, penalty=2.0, X=np.zeros((12, 2))),
         lambda: pr.pruning_pass(B, y[:-1], penalty=2.0),
         lambda: pr.pruning_pass(B, np.empty((12, 0)), penalty=2.0),
         lambda: pr.pruning_pass(B, np.where(y > 0, np.inf, y), penalty=2.0),
@@ -469,88 +505,21 @@ def _exact(B, Y, w, cols):
     return np.array(beta), float(rss)
 
 
-def _exact_basis(X, dirs, cuts):
-    """The columns of the terms (TERM-3) as Fractions: every factor and every
-    product is exact."""
-    Bx = np.empty((X.shape[0], dirs.shape[0]), dtype=object)
-    for i, k in np.ndindex(Bx.shape):
-        Bx[i, k] = Fraction(1)
-        for j in np.flatnonzero(dirs[k]):
-            x, c = Fraction(X[i, j]), Fraction(float(cuts[k, j]))
-            Bx[i, k] *= {1: max(x - c, 0), -1: max(c - x, 0), 2: x}[int(dirs[k, j])]
-    return Bx
-
-
 def _linear_factor_case(rng, weights):
-    """Terms 1, (x0 - c0)+, x1, x0, x1·h0, h0·(x2 - c2)+, x2·h0, x1·x2 and
-    x1·x2·h0 on X = 2^36 + U (U uniform on (0, 1)), Y of a near-exact fit:
-    the rounded basis B, the exact basis of TERM-3 as Fractions, Y, w and the
-    keywords of ``pruning_pass`` that describe the terms. The last two terms
-    have a parent with a linear factor (x1, x1·h0), and x2·h0 and x1·x2 are
-    separated from their parents by other terms."""
+    """Terms 1, (x0 - c0)+, x1, x0, x2 and (x2 - c2)+ on X = 1000 + U (U uniform
+    on (0, 1)), so each covariate's mean is about 3,500 times its spread,
+    within ordinary data at degree 1 (Limits), and Y a near-exact fit: B, Y
+    and w. LA-4 keeps every column: each linear column's part orthogonal to
+    the intercept is about 3e-4 of its norm."""
     U = rng.uniform(size=(40, 3))
-    X = 2.0**36 + U
-    dirs = np.array(
-        [
-            [0, 0, 0],
-            [1, 0, 0],
-            [0, 2, 0],
-            [2, 0, 0],
-            [1, 2, 0],
-            [1, 0, 1],
-            [1, 0, 2],
-            [0, 2, 2],
-            [1, 2, 2],
-        ]
-    )
-    cuts = np.zeros(dirs.shape)
-    cuts[[1, 4, 5, 6, 8], 0] = np.sort(X[:, 0])[12]
-    cuts[5, 2] = np.sort(X[:, 2])[20]
-
-    h = np.maximum(U[:, 0] - 0.3, 0)
-    Y = 2 * h + 3 * h * U[:, 1] + U[:, 1] * U[:, 2] + U[:, 0]
-    Y = Y + 4 * h * U[:, 1] * U[:, 2] + 0.01 * rng.normal(size=40)
+    X = 1000 + U
+    h0 = np.maximum(X[:, 0] - np.sort(X[:, 0])[12], 0)
+    h2 = np.maximum(X[:, 2] - np.sort(X[:, 2])[20], 0)
+    B = np.column_stack([np.ones(40), h0, X[:, 1], X[:, 0], X[:, 2], h2])
+    Y = 2 * h0 + U[:, 1] + U[:, 0] + 0.5 * U[:, 2] + 3 * h2
+    Y = Y + 0.01 * rng.normal(size=40)
     w = None if weights == "none" else rng.uniform(0.5, 2, 40)
-    if w is not None:  # not a case (W-3), so it must not set m_j (LA-4)
-        X[0], w[0] = 0.5, 0.0
-    B = _terms.basis_matrix(X, dirs, cuts)
-    Bx = _exact_basis(X, dirs, cuts)
-    return B, Bx, Y, w, {"X": X, "dirs": dirs, "cuts": cuts}
-
-
-def _pair_case(basis):
-    """PR #96's review: the pair at one knot under a shifted linear parent,
-    1, x0, x1, x0·(x1 - t)+, x0·(t - x1)+, x0 = 2^36 + U0, x1 = U1. The two
-    hinges differ by x1 - t on every case, so their monomials and u1 are
-    dependent unless (t - x)+ is written (x - t)+ - x + t. Or a hinge that is
-    linear on the cases: 1, x1, x0·(x1 - t)+, x0·x1 with t = min x1. Or both
-    covariates shifted, x0 = 1000 + U0 and x1 = 5 + U1, with 1, x0, x1,
-    x0·(t - x1)+ at t = median x1, and x0·(x1 - 4.5)+, linear on the cases
-    with t - m_1 ≠ 0 (the round-1 recheck of PR #96)."""
-    if basis == "shifted hinges at 1000":
-        rng = np.random.default_rng(0)
-        U = rng.uniform(size=(20, 2))
-        X = np.column_stack([1000 + U[:, 0], 5 + U[:, 1]])
-        t = float(np.median(X[:, 1]))
-        dirs = np.array([[0, 0], [2, 0], [0, 2], [2, -1], [2, 1]])
-        cuts = np.array([[0, 0], [0, 0], [0, 0], [0, t], [0, 4.5]])
-        Y = U[:, 0] * U[:, 1] + U[:, 1] + 0.01 * rng.normal(size=20)
-        B = _terms.basis_matrix(X, dirs, cuts)
-        kw = {"X": X, "dirs": dirs, "cuts": cuts}
-        return B, _exact_basis(X, dirs, cuts), Y, None, kw
-    rng = np.random.default_rng(1)
-    U = rng.uniform(size=(30, 2))
-    X = np.column_stack([2.0**36 + U[:, 0], U[:, 1]])
-    t = float(np.sort(U[:, 1])[15])
-    dirs = np.array([[0, 0], [2, 0], [0, 2], [2, 1], [2, -1]])
-    cuts = np.array([[0, 0], [0, 0], [0, 0], [0, t], [0, t]])
-    if basis != "a pair under x0 at 2^36":
-        t = float(U[:, 1].min())
-        dirs = np.array([[0, 0], [0, 2], [2, 1], [2, 2]])
-        cuts = np.array([[0, 0], [0, 0], [0, t], [0, 0]])
-    Y = U[:, 0] * np.maximum(U[:, 1] - t, 0) + U[:, 1] + 0.01 * rng.normal(size=30)
-    B = _terms.basis_matrix(X, dirs, cuts)
-    return B, _exact_basis(X, dirs, cuts), Y, None, {"X": X, "dirs": dirs, "cuts": cuts}
+    return B, Y, w
 
 
 @pytest.mark.parametrize(
@@ -564,11 +533,8 @@ def _pair_case(basis):
         (1, "none", "binary at 33"),
         (1, "far first", "binary at 33"),
         (1, "far first", "x and a hinge at 33"),
-        (1, "none", "linear factors at 2^36"),
-        (1, "uniform", "linear factors at 2^36"),
-        (1, "none", "a pair under x0 at 2^36"),
-        (1, "none", "a hinge linear on the cases at 2^36"),
-        (1, "none", "shifted hinges at 1000"),
+        (1, "none", "linear factors at 1000"),
+        (1, "uniform", "linear factors at 1000"),
     ],
 )
 def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
@@ -589,28 +555,19 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
     first 10 of B = [1, x, (x - 33)+] lie at x = -1e9 with weight 1e-30. So
     the columns need the weighted rule of Y: an unweighted centering, a shift
     by the first row or by the unweighted mean misses by 1e-3 or more. In the
-    "linear factors at 2^36" cases X = 2^36 + U, with U in (0, 1) and a
-    near-exact fit (#84, #105; ``_linear_factor_case``). B is the rounded
-    product of the exact basis, and rounding x·h to 53 bits hides the part of
-    x1·h0 that x1 spreads over h0: the RSS of subsets that hold both missed by
-    1e-5 with B alone, and by 1.7e-4 with the terms rebuilt from x - a (PR
-    #96's first version), through x1·x2·h0, whose parent x1·h0 has a linear
-    factor too. Both functions take X, dirs and cuts and work in the shifted
-    atoms of LA-4, every RSS is compared with the exact basis of TERM-3, and
-    the final fit keeps the selected x1·h0, x2·h0, x1·x2 and x1·x2·h0, all
-    of which LA-4 without the shift drops. With weights, row 0 sits at
-    x = 0.5 with weight 0: not a case (W-3), so it must not set m_j; when it
-    did, the RSS missed LA-5 by a ratio of 6e4 (PR #96's review). The "pair
-    under x0" case is the pair at one knot under a shifted linear factor
-    (``_pair_case``), which missed by 2.5e-4 relative when the two hinges
-    were separate monomials; a hinge that is linear on the cases missed the
-    same way, unless it is written as that line."""
+    "linear factors at 1000" cases the covariates' means are about 3,500
+    times their spread, within ordinary data at degree 1 (Limits), and the fit
+    is near-exact (``_linear_factor_case``): every RSS meets LA-5's ε with the
+    factor u·cond·√n, the stages choose as the spec does in rational
+    arithmetic, and the final fit's coefficients, from Householder QR on the
+    √w-scaled columns (LA-4's paragraph on coefficients, PRUNE-8), are within
+    normwise 1e-6 of the exact ones, since cond ≤ 1e5. numpy's ``lstsq`` with
+    its default rcond, which LA-4 rules out, missed by up to 25 % of the RSS
+    on such bases (PR #158)."""
     rng = np.random.default_rng({"hinges": 0, "binary at 33": 189}.get(basis, 1))
-    kw, Bx = {}, None
-    if basis == "linear factors at 2^36":
-        B, Bx, Y, w, kw = _linear_factor_case(rng, weights)
-    elif basis.endswith(("at 2^36", "at 1000")):
-        B, Bx, Y, w, kw = _pair_case(basis)
+    linear = basis == "linear factors at 1000"
+    if linear:
+        B, Y, w = _linear_factor_case(rng, weights)
     elif basis == "binary at 33":
         x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
         w = None
@@ -635,424 +592,19 @@ def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
         if weights == "far first":
             Y[:30], w[:30] = -means, 1e-30
         Y = Y[:, 0] if k == 1 else Y
-    res = pr.pruning_pass(B, Y, w, penalty=2.0, **kw)
-    Bf, B = B, (B if Bx is None else Bx)  # the exact basis, where there is one
+    res = pr.pruning_pass(B, Y, w, penalty=2.0)
+    cond, n = _cond(B, w), B.shape[0]
     exact = [_exact(B, Y, w, np.flatnonzero(row))[1] for row in res.subsets]
-    assert_la5(res.rss_per_size, exact, exact[0])
-    if Bx is not None:  # the stages choose as the spec does in rational arithmetic
+    assert_la5(res.rss_per_size, exact, exact[0], cond, n)
+    if linear:  # the stages choose as the spec does in rational arithmetic
+        assert 1e3 < cond <= 1e5
         removed, _, sets, _ = _spec_pass(
-            Bx, Y, w, lambda B, Y, w, cols: _exact(B, Y, w, sorted(cols))[1]
+            B, Y, w, lambda B, Y, w, cols: _exact(B, Y, w, sorted(cols))[1]
         )
         assert res.removed.tolist() == removed
         assert _sets(res.subsets) == sets
     assert_la5([_gcv.tss(Y, w)], [exact[0]], exact[0])
-    fit = pr.final_fit(Bf, Y, res.selected, w, penalty=2.0, **kw)
+    fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
     beta, rss = _exact(B, Y, w, res.selected)
-    assert_la5([fit.rss], [rss], exact[0])
+    assert_la5([fit.rss], [rss], exact[0], cond, n)
     assert np.linalg.norm(fit.coef - beta.T) <= 1e-6 * np.linalg.norm(beta)
-
-
-def test_fit_mars_passes_the_terms_to_the_pruning_pass():
-    """LA-5 end to end (#84): a degree-2 fit of 40 cases at X = 2^23 + 8·U has
-    linear factors in its terms, and each rss_per_size of the fit matches
-    rational arithmetic on the exact basis of its own kept terms to relative
-    1e-8. Before the pass took the terms, this case (seed 11) missed by 1.1e-8."""
-    from pymars import _core
-
-    rng = np.random.default_rng(11)
-    noise = rng.choice([0.01, 0.2, 1.0])
-    U = rng.uniform(size=(40, 3))
-    h = np.maximum(U[:, 0] - 0.3, 0)
-    Y = 2 * h + 3 * h * U[:, 1] + U[:, 1] * U[:, 2] + noise * rng.normal(size=40)
-    X = 2.0**23 + 8 * U
-    fit = _core.fit_mars(X, Y, None, _core.MarsParams(max_degree=2, max_terms=13))
-    kept = fit.forward.kept
-    dirs, cuts = fit.forward.dirs[kept], fit.forward.cuts[kept]
-    assert (dirs == 2).any()
-    Bx = _exact_basis(X, dirs, cuts)
-    exact = [_exact(Bx, Y, None, np.flatnonzero(r))[1] for r in fit.pruning.subsets]
-    assert_rel(fit.pruning.rss_per_size, exact, 1e-8)
-
-
-@pytest.mark.parametrize("shift", [0.5, 1e4, 1e10])
-@pytest.mark.parametrize(
-    "terms",
-    [
-        "plain",
-        "copy last",
-        "copy before x2",
-        "power-of-2 copy before x2",
-        "exact copy before x2",
-    ],
-)
-@pytest.mark.parametrize("shift2", [0.0, 2.0**20])
-def test_the_final_fit_applies_la4_after_the_shift(shift, terms, shift2):
-    """LA-4 after the exact shift in the final fit (PRUNE-8), on the examples
-    of the spec with #75's data, x0 = shift + (2, 0, 0, 2, 1, 2, 1, 2, 1, 0).
-    The terms 1, x0, x0·x2, x2 all count, whatever the order of x0·x2 and x2
-    (without the shift, LA-4 drops x0 and x2 at 1e10). With x3 = 3·x2 + 1, the
-    term x0·x3 after 1, x0, x3, x0·x2 is dependent at every shift; the
-    canonical columns write x3 in the atoms of x2, else the RSS of the other
-    four misses by 1e-6 at 1e10. x3 is not a copy of LA-4 (its slope is not a
-    power of 2), so it is its own symbol in the test: in the order 1, x0,
-    x0·x3, x2, LA-4 drops x2 at 1e10 and keeps it at the other shifts, as the
-    reference does (#119 item 2: with x3 one symbol with x2, the final fit
-    kept x2 at 1e10). x4 = 2·x2 is a copy of LA-4, one symbol with x2 (u4 =
-    2·u2), so the order 1, x0, x0·x4, x2, x0·(t - x4)+ keeps every term at
-    every shift, as the spec says for 2·x2 and as the reference does; so does
-    the exact copy x5 = x2 (k = 0) in the order 1, x0, x0·x5, x2. With
-    x2 shifted by 2^20 too, x3 is an affine copy of a
-    shifted covariate, and its linear factor is x3 itself, not x3 - m_3 (PR
-    #96's review: an O(1) error). The RSS and the coefficients are those of
-    the kept terms in rational arithmetic, to 1e-8 and to normwise 1e-6."""
-    x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
-    x2 = shift2 + np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0])
-    X = np.column_stack([x0, np.zeros(10), x2, 3 * x2 + 1, 2 * x2, x2])
-    rows = {
-        "plain": [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 2, 0], [0, 0, 2, 0]],
-        "copy last": [
-            [0, 0, 0, 0],
-            [2, 0, 0, 0],
-            [0, 0, 0, 2],
-            [2, 0, 2, 0],
-            [2, 0, 0, 2],
-        ],
-        "copy before x2": [[0, 0, 0, 0], [2, 0, 0, 0], [2, 0, 0, 2], [0, 0, 2, 0]],
-        "power-of-2 copy before x2": [
-            [0, 0, 0, 0, 0],
-            [2, 0, 0, 0, 0],
-            [2, 0, 0, 0, 2],
-            [0, 0, 2, 0, 0],
-            [2, 0, 0, 0, -1],
-        ],
-        "exact copy before x2": [
-            [0, 0, 0, 0, 0, 0],
-            [2, 0, 0, 0, 0, 0],
-            [2, 0, 0, 0, 0, 2],
-            [0, 0, 2, 0, 0, 0],
-        ],
-    }[terms]
-    dropped = {"copy last": True, "copy before x2": shift == 1e10}.get(terms, False)
-    dirs = np.array([row + [0] * (6 - len(row)) for row in rows])
-    cuts = np.zeros(dirs.shape)
-    cuts[dirs[:, 4] == -1, 4] = 2 * (shift2 + 1)  # a value of x4
-    y = np.random.default_rng(3).normal(size=10)
-    B = _terms.basis_matrix(X, dirs, cuts)
-    sel = np.arange(len(rows))
-    kw = {"X": X, "dirs": dirs, "cuts": cuts}
-    fit = pr.final_fit(B, y, sel, None, penalty=2.0, **kw)
-    kept = fit.coef[:, 0] != 0.0
-    assert kept.tolist() == [True] * (len(rows) - dropped) + [False] * dropped
-    Bx = _exact_basis(X, dirs, cuts)
-    beta, exact = _exact(Bx, y, None, sel[kept])
-    assert_rel(fit.rss, exact, 1e-8)
-    assert np.linalg.norm(fit.coef[kept, 0] - beta[0]) <= 1e-6 * np.linalg.norm(beta)
-
-
-def _generated(seed, step=None):
-    """X, y and w of seed ``seed`` of the generator in the adversarial review
-    of PR #110 (#120): covariates on a few levels, shifted, with x1 a copy of
-    x0 one ulp off at one case for these seeds. Seed None is the case of the
-    adversarial review of PR #123: x0 = 2^33 + (0, 1/3 or 2/3) and x1 = x0
-    with the minimum case one ulp down and case 8 two ulps up. Seed "c" is the
-    case of its recheck: x0 = 9999.5 + (0 or 1/2), x1 = x0 with the minimum
-    case two ulps down, so m1 ≠ m0, and case 6 three ulps up; x2 on (0, 1/2).
-    Seeds "level" and "product" are the two kinds of #130: x0 = 1024 + (0,
-    1/2 or 1) with x2 = -1e9 + U, or x0 = 1e4 + (0, 1/4, 1/2 or 3/4) with x2 =
-    2^40 + U, and x2's column 1 here; x3 = x0 with one case one ulp up at the
-    lowest level, or one ulp down at the highest."""
-    if seed in ("level", "level 1e-8", "product"):
-        near = seed != "product"
-        seed = "level" if near else seed
-        rng = np.random.default_rng(2 if seed == "level" else 1)
-        n, levels = (20, 3) if seed == "level" else (24, 4)
-        base, top = (1024.0, 1.0) if seed == "level" else (1e4, 0.75)
-        x0 = base + rng.integers(0, levels, n) / (2 if seed == "level" else 4)
-        x2 = (-1e9 if seed == "level" else 2.0**40) + rng.uniform(size=n)
-        x3 = x0.copy()
-        i = int(np.flatnonzero(x0 == (base if seed == "level" else base + top))[0])
-        x3[i] = np.nextafter(x3[i], np.inf if seed == "level" else -np.inf)
-        if near and step:
-            x3[i] = 1024 + step
-        y = rng.normal(size=n)
-        if seed == "product":
-            y = y + (x0 - x0.mean()) * (x2 - x2.mean())
-        return np.column_stack([x0, x2, x3]), y, None
-    if seed == "c":
-        a = np.array([int(ch) for ch in "001101111101010110000000"]) / 2
-        b = np.array([int(ch) for ch in "110100110011010110011110"]) / 2
-        x0 = 9999.5 + a
-        x1 = x0.copy()
-        x1[1] = np.nextafter(np.nextafter(x1[1], -np.inf), -np.inf)
-        for _ in range(3):
-            x1[6] = np.nextafter(x1[6], np.inf)
-        y = np.random.default_rng(0).normal(size=24)
-        return np.column_stack([x0, x1, b]), y, None
-    if seed is None:
-        k = np.array([int(ch) for ch in "012101201212012122210100222201"])
-        x0 = 2.0**33 + k / 3
-        x1 = x0.copy()
-        x1[0] = np.nextafter(x1[0], -np.inf)
-        x1[8] = np.nextafter(np.nextafter(x1[8], np.inf), np.inf)
-        return np.column_stack([x0, x1]), np.random.default_rng(1).normal(size=30), None
-    rng = np.random.default_rng(seed)
-    n, p, lv = (int(rng.integers(a, b)) for a, b in ((12, 60), (2, 5), (2, 5)))
-    X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
-    if rng.uniform() < 0.5:
-        X[:, p - 1] = rng.uniform(size=n)
-    copy = rng.integers(0, 6)
-    assert copy == 4
-    shifts = [2.0**10, 1e4, 2.0**26, 1e9, 2.0**40, 1e12, 1e15, -1e9, -(2.0**30)]
-    X = X + rng.choice(shifts, p) * (rng.uniform(size=p) < 0.8)
-    X[:, 1] = X[:, 0]
-    i = int(rng.integers(n))
-    X[i, 1] = np.nextafter(X[i, 1], np.inf)
-    y = np.maximum(X[:, 0] - np.median(X[:, 0]), 0) * 3
-    y = y + (X[:, 1] - X[:, 1].mean()) * (X[:, p - 1] - X[:, p - 1].mean())
-    y = y + rng.choice([0.0, 0.01, 0.3]) * rng.standard_normal(n)
-    y = y + rng.choice([0.0, 1e6])
-    w = None
-    if rng.uniform() < 0.4:
-        w = rng.integers(0, 3, n).astype(float)
-        w[:3] = 1.0
-    return X, y, w
-
-
-@pytest.mark.parametrize(
-    ("seed", "dirs", "cuts"),
-    [
-        (
-            90,
-            [[0, 0, 0], [0, 0, 2], [0, 1, 0], [0, -1, 0], [2, 0, 2]],
-            {(2, 1): -1073741823.5, (3, 1): -1073741823.5},
-        ),
-        (
-            213,
-            [
-                [0, 0, 0],
-                [0, 2, 0],
-                [0, 0, 1],
-                [0, 0, -1],
-                [0, 0, 1],
-                [0, 2, -1],
-                [2, 0, 1],
-                [2, 0, 1],
-                [2, 2, -1],
-            ],
-            {(k, 2): 67108864.36437914 for k in (2, 3, 5, 6, 8)}
-            | {(4, 2): 67108864.78667153, (7, 2): 67108864.78667153},
-        ),
-        (
-            None,
-            [[0, 0], [0, -1], [0, 2], [-1, 2], [2, 1]],
-            {(1, 1): 2.0**33 + 1 / 3, (3, 0): 2.0**33 + 1 / 3, (4, 1): 2.0**33},
-        ),
-        (
-            "c",
-            [[0, 0, 0], [0, 2, 0], [0, 1, 0], [2, 0, 2], [0, -1, 2]],
-            {(2, 1): 1e4, (4, 1): 9999.5},
-        ),
-        (
-            "level",
-            [[0, 0, 0], [2, 2, 0], [2, 0, 2], [0, 0, 1], [0, 2, 0]],
-            {(3, 2): 1024 + 2.0**-42},
-        ),
-        (
-            "level 1e-8",
-            [[0, 0, 0], [2, 2, 0], [2, 0, 2], [0, 0, 1], [0, 2, 0]],
-            {(3, 2): 1024 + 1e-8},
-        ),
-        (
-            "product",
-            [[0, 0, 0], [1, 0, -1], [0, 2, 0], [0, 2, -1]],
-            {(1, 0): 1e4 + 0.5, (1, 2): 1e4 + 0.75, (3, 2): 1e4 + 0.5},
-        ),
-    ],
-    ids=[
-        "seed 90",
-        "seed 213",
-        "review of PR #123",
-        "recheck of PR #123",
-        "knot one ulp above a level (#130)",
-        "knot 1e-8 above a level (#130)",
-        "a product 0 at all cases but one (#130)",
-    ],
-)
-def test_a_near_copy_under_a_shifted_linear_factor_keeps_la5(seed, dirs, cuts):
-    """LA-5 for the pruning pass and the final fit on near copies, which LA-5's
-    scope paragraph keeps inside the bound. In seeds 90 and 213 of #120 (the
-    forward pass's kept terms) x1 is x0 with one case one ulp up, both
-    shifted (by -2^30 or 2^26), and x0 is a linear factor. LA-4 counts u0 and
-    u1 as two symbols, so a product with x0 spreads the rounding of the large
-    m_j over the direction u1 - u0, which is 0 at all cases but one. Before
-    the canonical columns wrote x1 as x0 + e, e exact, the pass missed by 9.3
-    and 7.5 times ε at sizes 4 and 5 of seed 90 and 1.03 times at size 7 of
-    seed 213. In the case of the review of PR #123, the hinge x0·(x1 - 2^33)+
-    sits on the near copy at the minimum of x0, so it equals x0·u0 at all
-    cases but two; the final RSS missed by 0.4 % and rss_per_size[4] by 6 %
-    until the hinges of a near copy were also written as the hinge of x0 plus
-    an exact difference, and the terms' columns were factored without a QR of
-    the dependent monomials. In the case of the recheck the two minima differ,
-    so u1 = u0 + e + (m0 - m1), and a linear factor x1 multiplies another
-    atom: with the sign of that constant flipped, the pass misses by 218
-    times ε. In the first case of #130 the knot of (x3 - t)+ is x3's value one
-    ulp above the lowest level, so (x3 - t)+ is the line u3 - t up to a mirror
-    of one ulp; in the second the product (x0 - 1e4 - 1/2)+·(1e4 + 3/4 - x3)+
-    is 0 at all cases but one. With the line or the expanded parts as the
-    canonical columns, the rounding of those large columns times m_j missed
-    by 21 and 224 times ε. With x3 1e-8 above the level (a mirror ratio of
-    about 1e-8, which a threshold of 2^-30 would not catch) the miss was 23.5
-    times ε. Every rss_per_size and the final RSS are within
-    LA-5's ε of rational arithmetic on the exact basis, and the pass on the
-    rows in another order keeps subsets whose exact RSS differ by at most a
-    near-tie of PRUNE-10 (the choices must not follow the rounding beyond
-    that)."""
-    X, y, w = _generated(seed, 1e-8 if seed == "level 1e-8" else None)
-    dirs = np.array(dirs)
-    cut = np.zeros(dirs.shape)
-    for (k, j), t in cuts.items():
-        cut[k, j] = t
-    B = _terms.basis_matrix(X, dirs, cut)
-    res = pr.pruning_pass(B, y, w, penalty=3.0, X=X, dirs=dirs, cuts=cut)
-    Bx = _exact_basis(X, dirs, cut)
-    exact = [_exact(Bx, y, w, np.flatnonzero(row))[1] for row in res.subsets]
-    assert_la5(res.rss_per_size, exact, exact[0])
-    fit = pr.final_fit(B, y, res.selected, w, penalty=3.0, X=X, dirs=dirs, cuts=cut)
-    assert_la5([fit.rss], [exact[res.selected_size - 1]], exact[0])
-    p = np.random.default_rng(0).permutation(len(y))
-    wp = None if w is None else w[p]
-    res2 = pr.pruning_pass(B[p], y[p], wp, penalty=3.0, X=X[p], dirs=dirs, cuts=cut)
-    # The subsets may differ only at a near-tie of PRUNE-10. In the case of the
-    # review, dropping term 1 or term 3 from all five terms gives the same RSS
-    # in exact arithmetic, so rounding decides the first stage (numpy 1.24 on
-    # Python 3.10 removed term 1, newer numpy term 3), and the subsets of size
-    # 3 then differ by 6e-9 of their RSS.
-    exact2 = [_exact(Bx, y, w, np.flatnonzero(row))[1] for row in res2.subsets]
-    assert_la5(res2.rss_per_size, exact2, exact[0])
-    gap = np.abs(np.subtract(exact2, exact))
-    assert np.all(gap <= 1e-7 * np.minimum(exact2, exact)), gap
-
-
-def _random_terms(seed):
-    """X (n, 4), dirs, cuts and y of seed ``seed`` of the LA-4 check of the
-    spec review of PR #132 (#137): x1 = x0 on other shifts (an affine copy),
-    with one or two cases one ulp up for some seeds, random terms of degree up
-    to 4, and knots at or one ulp off a data value."""
-    rng = np.random.default_rng(seed)
-    n = int(rng.integers(12, 30))
-    a = np.floor(rng.uniform(size=(n, 3)) * rng.integers(2, 5)) / 4
-    X = np.column_stack((a[:, 0], a[:, 0], a[:, 1], a[:, 2]))
-    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10, 1e4], 4)
-    if seed % 4 == 1:
-        i = int(rng.integers(n))
-        X[i, 1] = np.nextafter(X[i, 1], rng.choice([-np.inf, np.inf]))
-    elif seed % 4 == 2:
-        for i in rng.choice(n, 2, replace=False):
-            X[i, 1] = np.nextafter(X[i, 1], np.inf)
-    M = int(rng.integers(5, 10))
-    dirs = rng.integers(-1, 3, size=(M, 4)).astype(np.int8)
-    dirs[rng.uniform(size=dirs.shape) < 0.4] = 0
-    dirs[0] = 0
-    cuts = np.zeros((M, 4))
-    for r in range(M):
-        for j in range(4):
-            if dirs[r, j] in (1, -1):
-                v = X[rng.integers(n), j]
-                cuts[r, j] = v + rng.choice([0, 0, np.spacing(v), -np.spacing(v)])
-    return X, dirs, cuts, rng.normal(size=n)
-
-
-def _hard_terms(seed):
-    """The harder generator of the adversarial review of PR #144: as
-    ``_random_terms``, with shifts up to 3e14 and 0, x1 = x0, 2·x0 or -x0
-    (one or two cases one ulp off for some seeds), knots up to 2 ulps off a
-    data value, and y scaled by 1e-6 or 1e6."""
-    rng = np.random.default_rng(seed)
-    n = int(rng.integers(12, 30))
-    a = np.floor(rng.uniform(size=(n, 3)) * rng.integers(2, 6)) / rng.choice([4, 3, 8])
-    X = np.column_stack((a[:, 0], a[:, 0] * rng.choice([1, 2, -1]), a[:, 1], a[:, 2]))
-    X = X + rng.choice([1e3, 2.0**26, 1e9, -1e6, 1e10, 1e12, 3e14, -7e11, 0.0], 4)
-    if seed % 3 == 1:
-        for i in rng.choice(n, int(rng.integers(1, 3)), replace=False):
-            X[i, 1] = np.nextafter(X[i, 1], rng.choice([-np.inf, np.inf]))
-    M = int(rng.integers(5, 11))
-    dirs = rng.integers(-1, 3, size=(M, 4)).astype(np.int8)
-    dirs[rng.uniform(size=dirs.shape) < 0.35] = 0
-    dirs[0] = 0
-    cuts = np.zeros((M, 4))
-    for r in range(M):
-        for j in range(4):
-            if dirs[r, j] in (1, -1):
-                v = X[rng.integers(n), j]
-                cuts[r, j] = v + int(rng.choice([0, 0, 1, -1, 2, -2])) * np.spacing(v)
-    return X, dirs, cuts, rng.normal(size=n) * rng.choice([1, 1e-6, 1e6])
-
-
-_W618 = [1, 0, 1, 0.5, 0, 3, 1, 1, 0.5, 0, 1, 0.5, 0, 3, 1]
-
-
-@pytest.mark.parametrize(
-    ("seed", "nonzero", "w", "m", "kind"),
-    [
-        (42, [0, 1, 4, 5], None, None, None),
-        (295, None, None, None, None),
-        (618, [0, 3, 5], _W618, 8, None),
-        (201, [0, 1, 2, 4, 5, 6, 7], None, None, "reverse"),
-        (529, [0, 1, 2, 4, 7], "draw", None, None),
-        (1379, [0, 2, 3, 4, 6, 7], "draw", None, None),
-        (271, None, None, None, "hard"),
-        (8, None, "draw", None, "hard"),
-    ],
-)
-def test_the_final_fit_decides_la4_as_the_forward_pass(seed, nonzero, w, m, kind):
-    """PRUNE-8 uses the test of LA-4 that FWD-11 uses (#137). At seed 42 the
-    term (t - x0)+·(x1 - t1)+·(x2 - t2)+ is 0 at every case, since x1 is an
-    affine copy of x0 and the two hinges never overlap; LA-4 drops it (the
-    new part is 0 at every case), and x1·x3 after it too, as mars_ref's
-    la4_kept does. The final fit kept the first, through the rounding of its
-    expanded columns. At seed 295 LA-4 keeps x0 after x0·x2 because its new
-    part counts as a formula, while u0·u2 is 0 at every case, so the data span
-    x0 exactly: the final fit raised LinAlgError, and now gives that column
-    the coefficient 0, as the reference does, with the RSS of the span. At seed
-    618 the first 8 terms are fitted with weights that include zeros: LA-4 is
-    decided on the weighted columns, so term 6 is dropped.
-
-    #140: the last three cases (the non-intercept terms in reverse order, and
-    weights drawn as in the adversarial review of PR #138) each keep a term
-    whose new part is far below the rounding of its reduced column, where a
-    factor m_j multiplies a monomial that the data span. At seeds 201 and 529
-    (a hinge one ulp from a level under x1 at 1e9, u0² of a covariate with two
-    levels) the new part is 3e-17 and 3e-16 of the column and lowers the
-    exact RSS by 1 % and 47 %; the float column held only rounding, and
-    ``rss`` was 15 % and 25 % below V*. At seed 1379 the reduced column of
-    x1·(t - x3)+ is 1e9 times the difference of two hinges one ulp on either
-    side of a level, a cancellation that its own norm does not show, and
-    ``rss`` missed LA-5 by 9e-8 of V*. The RSS meets LA-5 and the
-    coefficients are the exact least-squares ones (PRUNE-8), to 1e-12. Seed
-    271 of the harder generator of the review of PR #144 (``_hard_terms``)
-    and its seed 8 with the review's weights pin the threshold of the test:
-    ``rss`` misses LA-5 with NEAR_SPAN 1000 times smaller at seed 271
-    (19.757352 against 19.757348), and 10 to 1000 times smaller at seed 8
-    (8.068214030e-12 against 8.068213947e-12)."""
-    X, dirs, cuts, y = (_hard_terms if kind == "hard" else _random_terms)(seed)
-    if kind == "reverse":
-        perm = np.r_[0, np.arange(len(dirs) - 1, 0, -1)]
-        dirs, cuts = dirs[perm], cuts[perm]
-    exact_coef = kind == "reverse" or w == "draw"
-    if w == "draw" and kind == "hard":
-        rng = np.random.default_rng(20_000 + seed)
-        w = rng.choice([0, 0.5, 1, 3, 1e-3], len(y), p=[0.2, 0.3, 0.2, 0.2, 0.1])
-    elif w == "draw":
-        rng = np.random.default_rng(10_000 + seed)
-        w = rng.choice([0.0, 0.5, 1.0, 3.0], len(y), p=[0.2, 0.3, 0.3, 0.2])
-    B = _terms.basis_matrix(X, dirs, cuts)
-    sel = np.arange(len(dirs) if m is None else m)
-    fit = pr.final_fit(B, y, sel, w, penalty=2.0, X=X, dirs=dirs, cuts=cuts)
-    kept = np.flatnonzero(np.any(fit.coef != 0.0, axis=1))
-    if nonzero is not None:
-        assert kept.tolist() == nonzero
-    Bx = _exact_basis(X, dirs, cuts)
-    beta, rss = _exact(Bx, y, w, sel[kept])
-    assert_la5([fit.rss], [rss], _exact(Bx, y, w, [0])[1])
-    if exact_coef:
-        np.testing.assert_allclose(fit.coef[kept, 0], beta[0], rtol=1e-12)

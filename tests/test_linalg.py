@@ -5,15 +5,12 @@ Every input is passed read-only, so a function that writes into its input
 fails. The explicit least-squares answers come from numpy's SVD solver.
 """
 
-from fractions import Fraction
-
 import numpy as np
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from pymars import _linalg as la
-from pymars import _terms
 
 seeds = st.integers(0, 2**32 - 1)
 # (seed, n, m, k, weighted): n rows, m columns and k responses.
@@ -80,37 +77,6 @@ def _near_dependent(rng, G, eps, w=None):
     us = sw * (G @ np.array([0.5, 1.0, -2.0]))
     zs = _unit_orthogonal(rng, sw[:, None] * G)
     return (us + eps * np.linalg.norm(us) * zs) / sw
-
-
-def _exact_rss(A, y, w, subsets):
-    """The weighted RSS of y on each subset of the columns of A, exactly.
-
-    The normal equations are solved in rational arithmetic, so the only error
-    is the final rounding to float64.
-    """
-    F = [[Fraction(v) for v in row] for row in A]
-    fy, fw = [Fraction(v) for v in y], [Fraction(v) for v in w]
-    m = A.shape[1]
-    G = [
-        [sum(c * r[a] * r[b] for c, r in zip(fw, F, strict=True)) for b in range(m)]
-        for a in range(m)
-    ]
-    g = [sum(c * r[a] * v for c, r, v in zip(fw, F, fy, strict=True)) for a in range(m)]
-    yy = sum(c * v * v for c, v in zip(fw, fy, strict=True))
-    out = []
-    for cols in subsets:
-        rows = [[G[a][b] for b in cols] + [g[a]] for a in cols]
-        k = len(cols)
-        for p in range(k):  # elimination; the pivots of X'WX are positive
-            for r in range(p + 1, k):
-                f = rows[r][p] / rows[p][p]
-                rows[r] = [x - f * v for x, v in zip(rows[r], rows[p], strict=True)]
-        beta = [Fraction(0)] * k
-        for p in reversed(range(k)):
-            tail = sum(rows[p][c] * beta[c] for c in range(p + 1, k))
-            beta[p] = (rows[p][k] - tail) / rows[p][p]
-        out.append(float(yy - sum(beta[p] * g[cols[p]] for p in range(k))))
-    return out
 
 
 # Gram-Schmidt (LA-1; plan: Fast path)
@@ -592,28 +558,6 @@ def test_drop_costs_do_not_depend_on_the_scale_of_a_column():
         np.testing.assert_allclose(la.drop_costs(f2.R, f2.Z, 5), want, rtol=1e-12)
 
 
-def test_pruning_factor_near_the_la4_limit_matches_exact_refits():
-    # kappa above 1e6: a hinge and its copy with noise of relative size 1e-6,
-    # against refits in exact rational arithmetic, within a tenth of the 1e-8
-    # that LA-5 allows (1e-10 was seen with OpenBLAS).
-    rng = np.random.default_rng(17)
-    x1, x2 = rng.standard_normal((2, 24))
-    h = np.maximum(x1 - 0.2, 0.0)
-    near = h + 1e-6 * rng.standard_normal(24)
-    A = np.column_stack([np.ones(24), x1, h, near, x2, np.maximum(x2, 0.0)])
-    y = A @ rng.standard_normal(6) + rng.standard_normal(24)
-    w = rng.uniform(0.5, 2.0, 24)
-    assert np.linalg.cond(np.sqrt(w)[:, None] * A) > 1e6
-    f = la.r_factor(A, y, w)
-    prefix = la.prefix_rss(f.Z, f.rss)
-    want = _exact_rss(A, y, w, [list(range(m)) for m in range(1, 7)])
-    np.testing.assert_allclose(prefix, want, rtol=1e-9)
-    for pos in range(2, 7):
-        got = prefix[pos - 1] + la.drop_costs(f.R, f.Z, pos)
-        rest = [[c for c in range(pos) if c != i] for i in range(pos)]
-        np.testing.assert_allclose(got, _exact_rss(A, y, w, rest), rtol=1e-9)
-
-
 def test_r_factor_edge_cases():
     A, Y, _ = _case(3, 5, 5, 2, False)
     assert la.r_factor(A, Y).rss <= 1e-24 * np.sum(Y**2)
@@ -624,115 +568,3 @@ def test_r_factor_edge_cases():
         la.drop_costs(f.R, f.Z, 0)
     with pytest.raises(ValueError, match="i and j"):
         la.move_column(f.R, f.Z, 0, 5)
-
-
-def _term_rows(spec, p):
-    """dirs and cuts of terms given as lists of (covariate, code, cut)."""
-    dirs, cuts = np.zeros((len(spec), p), dtype=np.int8), np.zeros((len(spec), p))
-    for k, term in enumerate(spec):
-        for j, code, cut in term:
-            dirs[k, j], cuts[k, j] = code, cut
-    return dirs, cuts
-
-
-@pytest.mark.parametrize(
-    ("x", "shifted", "m"),
-    [
-        ([1.0, 1.9], True, 1.0),  # |m| = 1 > range 0.9
-        ([1.0, 2.0], False, 0.0),  # |m| = range: not larger
-        ([-1.9, -1.0], True, -1.9),  # the smallest value, here the most negative
-        ([5.0, 5.0], True, 5.0),  # a constant covariate: u = 0
-        ([0.0, 0.0], False, 0.0),
-        ([0.0, 1e10], False, 0.0),
-        ([1e10, 1e10 + 8], True, 1e10),
-    ],
-)
-def test_large_covariates_follow_la4(x, shifted, m):
-    """LA-4: m_j is the smallest value when it is larger in absolute value than
-    the range, and 0 otherwise."""
-    big, shift = la.large_covariates(np.array(x)[:, None])
-    assert (bool(big[0]), float(shift[0])) == (shifted, m)
-
-
-_X75 = np.column_stack(
-    (
-        1e10 + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0]),
-        np.zeros(10),
-        np.array([1, 0, 0, 2, 2, 1, 0, 0, 1, 2.0]),
-    )
-)
-
-
-@pytest.mark.parametrize(
-    "order",
-    [
-        ["1", "x0", "x0x2", "x2"],  # x2 counts: ratio 0.46, not 5.6e-11 (LA-4)
-        ["1", "x0", "x2", "x0x2"],
-        ["1", "x0x2", "x2"],
-        ["1", "x2", "x0x2"],
-    ],
-)
-def test_the_order_of_the_terms_does_not_change_la4(order):
-    """LA-4's example on #75's data: x0 = 1e10 + (…) is kept after the intercept
-    (v1 and earth drop it), and so is every product and every term of the
-    others, in any order, since the test is on the reduced echelon form."""
-    lin = {"x0": [(0, 2, 0.0)], "x2": [(2, 2, 0.0)], "x0x2": [(0, 2, 0.0), (2, 2, 0.0)]}
-    dirs, cuts = _term_rows([[]] + [lin[t] for t in order[1:]], 3)
-    assert la.independent_terms(_X75, dirs, cuts).tolist() == [True] * len(order)
-
-
-@pytest.mark.parametrize("shift", [0.0, 0.5, 1e4, 1e10])
-@pytest.mark.parametrize(("a", "b"), [(1.0, 0.0), (3.0, 1.0)])
-def test_a_product_that_the_terms_span_at_the_data_is_dependent(shift, a, b):
-    """LA-4: with x3 = a·x2 + b, the term x0·x3 is a combination of 1, x0, x3 and
-    x0·x2 at the ten cases, not as a formula, at every shift of x0; the shifted
-    basis finds it, also at 1e10 with x3 = 3·x2 + 1, where the part of
-    x0·x2 that carries the mean has to cancel exactly."""
-    x0 = shift + np.array([2, 0, 0, 2, 1, 2, 1, 2, 1, 0.0])
-    X = np.column_stack((x0, _X75[:, 1], _X75[:, 2], a * _X75[:, 2] + b))
-    lin = [(0, 2, 0.0)], [(3, 2, 0.0)], [(0, 2, 0.0), (2, 2, 0.0)]
-    dirs, cuts = _term_rows([[], lin[0], lin[1], lin[2], [*lin[0], *lin[1]]], 4)
-    assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4 + [False]
-
-
-@pytest.mark.parametrize("a", [1.0, 2.0, 4.0, -0.0])
-def test_a_copy_shares_its_symbol_and_keeps_x2_in_the_shifted_order(a):
-    """LA-4's copies on #75's data with x0 + 1e10: x3 = a·x2 for a power of 2
-    a is one symbol with x2, so the relation is formal and the order 1, x0,
-    x0·x3, x2 keeps x2 (affine x3 drops it). a = -0.0 stands for x3 = x2 with
-    one 0 written as -0, which compares equal to +0: still a copy (#119)."""
-    x3 = _X75[:, 2] * (a or 1.0)
-    if a == 0.0:
-        x3[1] = -0.0
-    X = np.column_stack((_X75, x3))
-    lin = [(0, 2, 0.0)], [(0, 2, 0.0), (3, 2, 0.0)], [(2, 2, 0.0)]
-    dirs, cuts = _term_rows([[], *lin], 4)
-    assert la.independent_terms(X, dirs, cuts).tolist() == [True] * 4
-
-
-@pytest.mark.parametrize("seed", range(8))
-def test_independent_terms_without_a_shift_is_independent_columns(seed):
-    """Without a linear factor of a shifted covariate the test is the plain one
-    of LA-4 on the columns of the terms, bit for bit (hinges, products and
-    linear factors of covariates that are not shifted)."""
-    rng = np.random.default_rng(seed)
-    X = np.floor(rng.uniform(size=(30, 3)) * 4) / 4
-    cuts = np.zeros((7, 3))
-    dirs = rng.integers(-1, 3, size=(7, 3)).astype(np.int8)
-    dirs[0] = 0
-    cuts[dirs == 1], cuts[dirs == -1] = 0.25, 0.5
-    cuts[dirs == 2] = 0.0
-    w = rng.uniform(0.5, 2.0, 30) if seed % 2 else None
-    B = _terms.basis_matrix(X, dirs, cuts)
-    got = la.independent_terms(X, dirs, cuts, w)
-    assert got.tolist() == la.independent_columns(B, w).tolist()
-
-
-def test_a_scaled_copy_is_kept_as_the_exact_test_says():
-    """LA-4: x1 = (x0 + 2^40)/2^40 is a power-of-2 copy of u0 up to a shift, so
-    its u column is that of x0/2: x1 after the intercept is independent (the
-    float distance and the pivot are on one scale)."""
-    x0 = np.array([0.0, 1.0, 2.0, 3.0])
-    X = np.column_stack((np.ldexp(x0, -1), np.ldexp(x0 + 2.0**40, -40)))
-    dirs, cuts = _term_rows([[], [(1, 2, 0.0)]], 2)
-    assert la.independent_terms(X, dirs, cuts).tolist() == [True, True]

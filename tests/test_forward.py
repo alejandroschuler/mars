@@ -22,7 +22,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from reference import mars_ref
-from reference.test_reference import exact_basis, exact_rss
 
 from pymars import _forward, _gcv, _linalg, _scan, _terms
 from pymars._forward import Termination
@@ -458,24 +457,27 @@ def _on_binary_grids(design):
 @pytest.mark.parametrize(
     ("design", "x_shift", "y_shift"),
     [
-        ("one covariate", 2.0**46, 0),  # A of LA-7, in setup
-        ("pairs", 2.0**36, 0),  # the first column of a pair
-        ("linear", 2.0**24, 0),  # the column of the linear candidate
+        ("one covariate", 2.0**11, 0),  # A of LA-7, in setup
+        ("pairs", 2.0**11, 0),  # the first column of a pair
+        ("linear", 2.0**11, 0),  # the column of the linear candidate
         ("pairs", 0, 2.0**44),  # the TSS
-        ("interaction", 2.0**36, 0),  # b·(x - c) for a parent b other than 1
-        ("interaction", 2.0**26, 2.0**34),
+        ("interaction", 2.0**6, 0),  # b·(x - c) for a parent b other than 1
+        ("interaction", 2.0**5, 2.0**34),
     ],
 )
 def test_exact_shifts(design, x_shift, y_shift, weighted):
     """Exact shifts of x0 or of y give the fit of the unshifted data: the same
     terms, knots moved by the shift, and every RSS, rss[0] = TSS and the
     log's second included, within 1e-8 of the RSS before its step (LA-5,
-    CORE-3). x is centered before
-    Gram-Schmidt (the plan's "Fast path"), and the TSS comes from the centered
-    y (FWD-10); each case pins one of these uses. Near 1e14 an uncentered x
-    makes A of LA-7 rounding noise above its threshold, and a single-hinge
-    search becomes a pair search. In "linear", FWD-4 bars every knot of x0 at
-    step 2, and the linear candidate of x0 wins. "interaction" runs at degree
+    CORE-3). The shifts of x0 stay within ordinary data (Limits: a mean at
+    most 1e4 times the spread at degree 1 and 300 at degree 2; x0 has a
+    spread of about 0.29), and the shift of y has no limit, since y is
+    centered (FWD-10): the TSS comes from the centered y, which the case with
+    y + 2^44 pins. At these x shifts the centering of x before Gram-Schmidt
+    (the plan's "Fast path") changes no decision; it pinned the far larger
+    shifts of spec v2, which v3 leaves to the Limits (LIM-1). In "linear",
+    FWD-4 bars every knot of x0 at step 2, and the linear candidate of x0
+    wins. "interaction" runs at degree
     2 with auto_linpreds=False, where x0 enters products as b·(x0 - m)₊, which
     a shift does not change (FWD-6). With ``weighted`` the weights are
     multiples of 1/8 (W-8), and the shifted data get one more case: a copy of
@@ -649,7 +651,7 @@ def test_two_searches_that_add_the_same_hinge_product_are_one_candidate(monkeypa
     t = [float(np.sort(X[:, j])[12]) for j in (0, 1)]
     for j in (0, 1):
         c = _forward._Candidate(1.0, (0, j, 1), 0, j, _forward.KIND_PAIR, t[j])
-        st_.add(c, _scan.rebuild(st_.Q, st_.Yw, st_.columns(c)[0]))
+        st_.add(c, _scan.rebuild(st_.Q, st_.Yw, st_.columns(c)))
     assert sorted(st_.parents()) == [0, 1, 2, 3, 4]
     k0, k1 = 1, 3  # the terms h(x0 - t0) and h(x1 - t1)
     place = int(np.flatnonzero(st_.knots_of(k0, 1).knots == t[1])[0]) + 1
@@ -1013,196 +1015,40 @@ def test_bad_input(X, y, w, match):
         _forward.forward_pass(X, y, w, fast_k=0)
 
 
-def _copy_of(kind, x0):
-    """A covariate that copies x0 = 2^36 + u: the same, plus 2^-16 (the u columns
-    are bitwise equal), or one unit in the last place off in one row."""
-    if kind == "copy":
-        return x0.copy()
-    if kind == "scaled":
-        return x0 / 8  # u1 = u0/8 bit for bit: what EDGE-7's column scales make
-    if kind == "plus 2^-16":
-        return x0 + 2.0**-16
-    x1 = x0.copy()
-    x1[3] = np.nextafter(x1[3], np.inf)
-    return x1
-
-
-@pytest.mark.parametrize("kind", ["copy", "plus 2^-16", "one ulp", "scaled"])
-def test_rss_meets_la5_with_a_copy_of_a_large_mean_covariate(kind):
-    """LA-5 (#85, #99, #104): x1 copies x0 = 2^36 + u, bitwise, plus 2^-16 in
-    every row, or off by one unit in the last place in one row; degree 3 forms
-    x0·x1·h(z) on the parent x0·h(z). The u columns of the first two are bitwise
-    equal, so they are one symbol in the change of basis; the last is the copy
-    u0 + d, with the difference d kept apart from the mean. Each RSS is within
-    1e-8 of the RSS before its step of the exact rational RSS of the same terms
-    (the last two were off by up to 2e-5 before)."""
-    rng = np.random.default_rng(10)
-    u, z = rng.uniform(size=40), rng.uniform(size=40)
-    h = np.maximum(z - np.median(z), 0)
-    x0 = 2.0**36 + u
-    X = np.column_stack((x0, _copy_of(kind, x0), z))
-    y = 10 * h + 6 * h * u + 4 * h * u**2
-    fp = _forward.forward_pass(X, y, max_degree=3, thresh=0.0, fast_k=0, max_terms=9)
-    B = exact_basis(X, fp.dirs, fp.cuts)
-    for s in range(1, len(fp.rss)):
-        cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
-        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(40))
-        assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
-
-
-@pytest.mark.parametrize("draw", [None, 138])
-def test_rss_meets_la5_with_a_copy_up_to_rounding_at_another_scale(draw):
-    """LA-5's scope paragraph: x1 = x0/8 + 2^26 is a copy of x0 up to the
-    rounding of the shift, not a copy of LA-4 (x0 is not shifted), so x1 is
-    its own symbol. x0 has 3 levels, so B spans x1 at the cases after two
-    hinges of x0, and the column x2·x1 (x2 = 1e15 + a few levels of 1/8) is
-    in the span of B up to its part u1·u2, about 1e-16 of it. Its float64
-    projection kept only rounding there, and the linear candidate x2·x1 of
-    step 6 had an RSS 2e6 times LA-5's bound off (#110's generator, seed
-    1014, copy kind 2); the exact residual takes its place now
-    (``Conditioner.exact_residual``). Draw 138 of the adversarial review of
-    PR #122 perturbs x1 by about 7e-8·z/8, sets x2 = 1e6 + k2/8, permutes the
-    rows and scales X as EDGE-7 does; there the exact span must follow the
-    hinge of each single-hinge step (a wrong registered hinge missed LA-5 by
-    3.2e5 times). Each RSS is within 1e-8 of the RSS before its step of the
-    exact rational RSS of the same terms."""
-    x0 = np.array([int(c) for c in "2011122000102221020000120220220202020111"]) / 3
-    k2 = np.array([*"4116754141254576305512621857032774736314"], float) / 8
-    X = np.column_stack((x0, x0 / 8 + 2.0**26, 1e15 + k2))
-    y = (
-        np.array(
-            [
-                *[996, 20, 1, 10, -5, 1018, 1008, -7, 10, 7, 8, -8, 995, 1006, 1006],
-                *[3, -21, 997, -20, -9, 5, 12, -2, 1025, 16, 1020, 1012, -28, 1009],
-                *[987, 14, 1024, -18, 1008, -24, 989, -12, -2, -20, -11],
-            ]
-        )
-        / 1000
-    )
-    kw = {"max_degree": 3, "thresh": 0.0, "adjust_endspan": 0.0, "endspan": 1}
-    if draw is not None:
-        rng = np.random.default_rng(draw)
-        delta = 10.0 ** rng.uniform(-10, -5)
-        z = rng.integers(-4, 5, 40).astype(float)
-        m2 = float(rng.choice([1e3, 1e6, 1e9, 1e15]))
-        shift = 2.0 ** int(rng.choice([10, 26]))
-        X = np.column_stack((x0, x0 / 8 + shift + delta * z / 8, m2 + k2))
-        perm = rng.permutation(40) if rng.uniform() < 0.5 else np.arange(40)
-        y = y + rng.choice([0.0, 0.001, 0.05]) * rng.standard_normal(40)
-        y = y + rng.choice([0, 1]) * (X[:, 1] - X[:, 1].mean()) * 3
-        X, y = X[perm], y[perm]
-        X = np.ldexp(X, mars_ref.x_scale_powers(X))
-        kw["max_terms"] = 17
-    fp = _forward.forward_pass(X, y, fast_k=1, **kw)
-    B = exact_basis(X, fp.dirs, fp.cuts)
-    assert len(fp.rss) > 6
-    for s in range(1, len(fp.rss)):
-        cols = [k for k in range(len(fp.dirs)) if fp.step[k] <= s]
-        exact = exact_rss([[row[k] for k in cols] for row in B], y, np.ones(40))
-        assert abs(fp.rss[s] - exact) <= 1e-8 * fp.rss[s - 1]
-
-
-def _case_110(seed):
-    """#110's adversarial generator (the review comment of PR #110), with the
-    copy kind 4 forced after its draw (x1 = x0, one unit in the last place
-    off at one case), and X scaled as EDGE-7 does."""
-    rng = np.random.default_rng(seed)
-    n, p, lv = (
-        int(rng.integers(12, 60)),
-        int(rng.integers(2, 5)),
-        int(rng.integers(2, 5)),
-    )
-    X = np.floor(rng.uniform(size=(n, p)) * lv) / lv
-    if rng.uniform() < 0.5:
-        X[:, p - 1] = rng.uniform(size=n)
-    rng.integers(0, 6)  # the drawn copy kind, replaced by 4
-    shifts = [2.0**10, 1e4, 2.0**26, 1e9, 2.0**40, 1e12, 1e15, -1e9, -(2.0**30)]
-    X = X + rng.choice(shifts, p) * (rng.uniform(size=p) < 0.8)
-    X[:, 1] = X[:, 0]
-    i = int(rng.integers(n))
-    X[i, 1] = np.nextafter(X[i, 1], np.inf)
-    y = (
-        np.maximum(X[:, 0] - np.median(X[:, 0]), 0) * 3
-        + (X[:, 1] - X[:, 1].mean()) * (X[:, p - 1] - X[:, p - 1].mean())
-        + rng.choice([0.0, 0.01, 0.3]) * rng.standard_normal(n)
-    ) + rng.choice([0.0, 1e6])
-    w = None
-    if rng.uniform() < 0.4:
-        w = rng.integers(0, 3, n).astype(float)
-        w[:3] = 1.0
-    kw = {
-        "max_degree": int(rng.integers(1, 4)),
-        "fast_k": int(rng.choice([0, 0, 1, 3, 20])),
-        "thresh": float(rng.choice([0.0, 0.001])),
-        "adjust_endspan": float(rng.choice([0.0, 2.0])),
-        "auto_linpreds": bool(rng.uniform() < 0.7),
-        "minspan": rng.choice([None, 1]),
-        "endspan": rng.choice([None, 1]),
-    }
-    return np.ldexp(X, mars_ref.x_scale_powers(X)), y, w, kw
-
-
-@pytest.mark.parametrize("seed", [1150, 1281])
-def test_every_linear_candidate_meets_la5_with_a_one_ulp_copy(monkeypatch, seed):
-    """#120 item 4: #110's generator with copy kind 4 (x1 one unit in the last
-    place off x0 at a large shift). The linear candidates x0·b of steps 4 and
-    5 (parents 5 and 4) were 3.8 and 1.6e4 times LA-5's bound off the exact
-    RSS of their span on main; they were never chosen, so only the candidates
-    show it. Every linear candidate of the pass is checked against exact
-    rational arithmetic, with LA-5's bound at R = RSS_s."""
-    X, y, w, kw = _case_110(seed)
-    seen = []
-    real = _forward._Pass.setup
-
-    def setup(self, k, j):
-        sr = real(self, k, j)
-        if sr.pair and not sr.dep and sr.lin > 0.0:
-            seen.append(
-                (self, self.dirs.copy(), self.cuts.copy(), self.rss[-1], k, j, sr.lin)
-            )
-        return sr
-
-    monkeypatch.setattr(_forward._Pass, "setup", setup)
-    _forward.forward_pass(X, y, w, **kw)
-    st = seen[0][0]
-    yc = st.Yw[:, 0] / st.sw
-    ww = np.ones(len(yc)) if st.w is None else st.w
-    done = set()
-    for _, dirs, cuts, rss_s, k, j, lin in seen:
-        if (len(dirs), k, j) in done:
-            continue
-        done.add((len(dirs), k, j))
-        row, cut = dirs[k].copy(), cuts[k].copy()
-        row[j], cut[j] = 2, 0.0
-        B = exact_basis(st.X, np.vstack((dirs, row)), np.vstack((cuts, cut)))
-        exact = float(exact_rss(B, yc, ww))
-        tss = st.tss
-        bound = 1e-8 * rss_s + 1e-14 * math.sqrt(tss * exact) + 0.25e-28 * tss
-        assert abs(rss_s - lin - exact) <= bound, (len(dirs), k, j)
-
-
-@pytest.mark.parametrize("shifted", [False, True])
-def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(monkeypatch, shifted):
-    """LA-2: x2 is a combination of the intercept and x1 at the n cases (x2 =
-    3·x1 + 1, or a copy of x1 at another shift, whose u columns are bitwise
-    equal), so the column x2 is dependent, though not as a formula. In a pair
-    search (forced here) it has the reduction 0 and no linear candidate, it is
-    left out of G and of the chosen candidate's columns, and its rounding noise
-    never decides. Before, the direction of its noise entered G."""
+@pytest.mark.parametrize(("ratio", "dep"), [(0.25e-7, True), (4e-7, False)])
+def test_a_linear_candidate_that_la4_finds_dependent_counts_as_0(
+    monkeypatch, ratio, dep
+):
+    """LA-2 with LA-4's float64 test: after the linear term x1, the column x2 =
+    100 + 3·x1 + e·r, with r orthogonal to 1 and x1, has the part e·r
+    orthogonal to the current columns, ``ratio`` times its own norm, not
+    centered. Below 1e-7 (the first case) x2 is dependent: in a pair search
+    (forced here) it has the reduction 0 and no linear candidate, it is left
+    out of G and of the chosen candidate's columns, and its rounding noise
+    never decides. At 4e-7 it counts. Against the centered norm, about 95
+    times smaller here, both ratios would be above 1e-7, so the first case
+    pins the uncentered norm."""
     rng = np.random.default_rng(4)
     a, z = np.floor(rng.uniform(size=24) * 4) / 4, rng.uniform(size=24)
-    x1 = a + 2.0**30 if shifted else a
-    X = np.column_stack((x1, z, x1 + 2.0**40 if shifted else 3 * a + 1))
+    r = _linalg.orthogonalize(np.linalg.qr(np.column_stack((np.ones(24), a)))[0], z)[0]
+    base = 100 + 3 * a
+    x2 = base + ratio * np.linalg.norm(base) / np.linalg.norm(r) * r
+    X = np.column_stack((a, z, x2))
     st_ = _state(X, np.sin(5 * z) + a, max_degree=2, minspan=1, endspan=1)
     lin = _forward._Candidate(1.0, (0, 0, 0), 0, 0, _forward.KIND_LINEAR, math.nan)
-    st_.add(lin, _scan.rebuild(st_.Q, st_.Yw, st_.columns(lin)[0]))
+    st_.add(lin, _scan.rebuild(st_.Q, st_.Yw, st_.columns(lin)))
     monkeypatch.setattr(_forward._linalg, "pair_search", lambda *a, **k: True)
     sr = st_.setup(0, 2)
-    assert (sr.pair, sr.dep, sr.lin) == (True, True, 0.0) and sr.Q is st_.Q
+    assert (sr.pair, sr.dep) == (True, dep)
     found = st_.search(0, 2, set())
-    assert {c.kind for c in found} == {_forward.KIND_PAIR}  # no linear candidate
-    pair = found[0]
-    assert st_.columns(pair)[0].shape == (24, 1)
+    kinds = {c.kind for c in found}
+    if dep:
+        assert sr.lin == 0.0 and sr.Q is st_.Q
+        assert kinds == {_forward.KIND_PAIR}  # no linear candidate
+        assert st_.columns(found[0]).shape == (24, 1)
+    else:
+        assert sr.lin > 0.0 and sr.Q.shape[1] == st_.Q.shape[1] + 1
+        assert _forward.KIND_LINEAR in kinds
     assert st_.setup(0, 1).dep is False  # an independent covariate is a candidate
 
 
@@ -1216,7 +1062,6 @@ def test_a_forward_pass_past_its_cache_budgets_is_the_same(budget, monkeypatch):
 
     rng = np.random.default_rng(7)
     X = rng.uniform(size=(150, 4))
-    X[:, 1] += 1e4  # the exact test and the shifted path as well
     y = np.sin(3 * X[:, 0]) + (X[:, 2] - 0.5) ** 2 + 0.1 * rng.standard_normal(150)
     prm = _core.MarsParams(max_degree=2, max_terms=15)
     default = _core.fit_mars(X, y[:, None], None, prm, record_candidates=True)

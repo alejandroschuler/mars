@@ -193,7 +193,7 @@ def tss(Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -> float:
     the cases are all equal adds 0.0 exactly, not a computed value
     (Conventions, GCV-7), so the TSS of constant responses is 0.0. Each
     response is first shifted by its value nearest its weighted mean (the
-    first such case in a tie): the differences are exact for values within a
+    smallest such value on a tie, LA-6): the differences are exact for values within a
     factor of 2 of it, and the rounding is of the size of the spread, not of
     the mean, whatever the weights and the order of the cases. Y is (n,) or
     (n, K); w is (n,), or None for w_i = 1 (W-5). The rows are the cases of the
@@ -210,7 +210,8 @@ def tss(Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -> float:
         y = Y[:, k]
         if np.all(y == y[0]):
             continue
-        d = y - y[np.argmin(np.abs(y - float(wv @ y) / float(wv.sum())))]
+        dist = np.abs(y - float(wv @ y) / float(wv.sum()))
+        d = y - np.min(y[dist == dist.min()])  # LA-6: the smallest on a tie
         r = d - float(wv @ d) / float(wv.sum())
         total += float(wv @ (r * r))
     return total
