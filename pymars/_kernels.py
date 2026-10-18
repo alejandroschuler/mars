@@ -47,6 +47,8 @@ except ImportError:  # numba is optional; ``_scan`` then uses its numpy code
     numba = None
 
 AVAILABLE = numba is not None
+#: The rows of Q that ``hv`` gathers at a time.
+TILE = 128
 ENABLED = AVAILABLE
 
 
@@ -75,13 +77,32 @@ def _suffix1(a, B):
     return out
 
 
+def _rank(split):
+    """The order of ``split`` from the smallest to the largest: with no sort
+    when it is monotone, as ``_knots.candidate_knots`` gives it (largest
+    first). Complexity: O(k) when monotone, else O(k·log k)."""
+    k = split.shape[0]
+    up = True
+    down = True
+    for i in range(1, k):
+        if split[i] < split[i - 1]:
+            up = False
+        elif split[i] > split[i - 1]:
+            down = False
+    if up:
+        return np.arange(k)
+    if down:
+        return np.arange(k - 1, -1, -1)
+    return np.argsort(split)
+
+
 def _hv(g, b, Q, q0, E, o, split, B1, B2):
     """hᵀV at every split, V = [Q[o, q0:], E] (``_scan._hv``). g (n - 1,),
     b (n,), E (n, K) and o (n,) are in the order of x; Q is in the caller's
     order and is read at the rows o. The blocks of the two suffix sums are
     counted down, with no modulo per row, and the loops over the columns have
     no branch.
-    Complexity: O(n·c + k·log k)."""
+    Complexity: O(n·c), plus O(k·log k) when ``split`` is not monotone."""
     n = b.shape[0]
     nq = Q.shape[1] - q0
     nE = E.shape[1]
@@ -90,7 +111,7 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
     out = np.empty((k, c))
     if k == 0:
         return out
-    rank = np.argsort(split)
+    rank = _rank(split)
     nxt = k - 1  # the largest split not yet read
     w1 = np.zeros(c)
     c1 = np.zeros(c)
@@ -100,7 +121,19 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
     blocks1 = 0  # blocks of P started so far
     left2 = 0  # the same for the second sum (n - 1 rows)
     blocks2 = 0
+    # The rows of Q are gathered TILE rows at a time into buf, a loop of
+    # independent loads, so the cache misses of the random rows overlap.
+    buf = np.empty((TILE, nq))
+    left_t = 0  # rows of buf not yet used
+    t = 0  # the row of buf of row q
     for q in range(n - 1, -1, -1):
+        if left_t == 0:
+            left_t = min(TILE, q + 1)
+            for i in range(left_t):
+                row = o[q - i]
+                for j in range(nq):
+                    buf[i, j] = Q[row, q0 + j]
+            t = 0
         new1 = left1 == 0
         if new1:  # carry: the total of block 0, then carry + total
             if blocks1 == 1:
@@ -113,15 +146,14 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
             left1 = B1
         left1 -= 1
         bq = b[q]
-        row = o[q]
         if new1:
             for j in range(nq):
-                w1[j] = bq * Q[row, q0 + j]
+                w1[j] = bq * buf[t, j]
             for j in range(nE):
                 w1[nq + j] = bq * E[q, j]
         else:
             for j in range(nq):
-                w1[j] = w1[j] + bq * Q[row, q0 + j]
+                w1[j] = w1[j] + bq * buf[t, j]
             for j in range(nE):
                 w1[nq + j] = w1[nq + j] + bq * E[q, j]
         if q >= 1:  # row i = q - 1 of the second sum, g_i·P(q)
@@ -147,6 +179,8 @@ def _hv(g, b, Q, q0, E, o, split, B1, B2):
             for j in range(c):
                 out[rank[nxt], j] = w2[j] + c2[j]
             nxt -= 1
+        t += 1
+        left_t -= 1
     return out
 
 
@@ -292,6 +326,7 @@ if AVAILABLE:
     # (an intercept parent whose w = b·b underflows to 0), not an exception.
     _jit = numba.njit(cache=True, fastmath=False, nogil=True, error_model="numpy")
     _suffix1 = _jit(_suffix1)
+    _rank = _jit(_rank)
     _hv = _jit(_hv)
     _scale = _jit(_scale)
     _prep = _jit(_prep)
