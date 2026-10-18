@@ -278,6 +278,19 @@ def _kappa(B: np.ndarray, w: np.ndarray) -> float:
     return compare.condition_number(B * np.sqrt(w)[:, None])
 
 
+def _n(case: Case) -> int:
+    """n of LA-5: the cases of the fit, those with positive weight (W-3)."""
+    return int(np.count_nonzero(case.w > 0))
+
+
+def _dependence(B: np.ndarray, w: np.ndarray) -> bool:
+    """A near-dependence of STOP-7 in the columns of B: an LA-4 ratio within
+    a factor 2 of 1e-7, or cond of the kept columns above 1e6 (LA-5)."""
+    return compare.is_near_dependence(compare.la4_ratios(B, w)) or not (
+        compare.basis_cond(B, w) <= compare.COND_LIMIT
+    )
+
+
 def _label(dirs_row, cuts_row) -> str:
     """A term as TERM-5 writes it, with x numbered from 0."""
     parts = []
@@ -368,6 +381,9 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
                 (dirs_a, cuts_a, rows_a, B_a, rss_a),
                 (dirs_b, cuts_b, rows_b, B_b, rss_b),
                 NEAR_TIE * before,
+            ) or any(  # STOP-7's near-dependence
+                _dependence(B[:, done + rows], case.w)
+                for B, done, rows in ((B_a, done_a, rows_a), (B_b, done_b, rows_b))
             )
             diffs.append(
                 compare.Difference(
@@ -389,8 +405,10 @@ def _forward(impl: Any, case: Case, ours: dict) -> tuple[list, bool]:
             )
             theirs = earth_rss[max(rows_b)]
             # LA-5: the kappa-scaled 1e-8 of the RSS before the step, and the
-            # terms in sqrt(TSS V) and TSS
-            bound = tol * before + compare.la5_eps(theirs, 0.0, rss[0])
+            # terms in sqrt(TSS V) and TSS with c from cond and n
+            cond = compare.basis_cond(B_a[:, columns], case.w)
+            eps = compare.la5_eps(theirs, 0.0, rss[0], cond, _n(case))
+            bound = tol * before + eps
             if abs(rss[s] - theirs) > bound:
                 diffs.append(
                     compare.Difference(
@@ -449,15 +467,19 @@ def _fixed_basis(impl: Any, case: Case) -> dict:
     }
 
 
-def _rss_rtol(case: Case, ours: dict, m: int) -> float:
+def _rss_rtol(case: Case, ours: dict, m: int, B: np.ndarray) -> float:
     """The relative tolerance for earth's rss_per_subset and gcv_per_subset
     of size m: 1e-7 when some weight is 0 (W-3), else LA-5's eps with R = V
-    over V, for the RSS V of that size (GCV-2 passes it on to the GCV)."""
+    over V, for the RSS V of that size (GCV-2 passes it on to the GCV), with
+    cond that of our subset of that size (columns of B)."""
     if np.any(case.w == 0):
         return compare.ZERO_WEIGHT_REL
     V = float(ours["rss_per_subset"][m - 1])
     tss = float(ours["rss_per_subset"][0])
-    return compare.la5_eps(V, V, tss) / V if V > 0 else 0.0
+    cond = compare.basis_cond(
+        B[:, [t - 1 for t in ours["prune_terms"][m - 1] if t]], case.w
+    )
+    return compare.la5_eps(V, V, tss, cond, _n(case)) / V if V > 0 else 0.0
 
 
 def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list, int]:
@@ -477,7 +499,11 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
             if a != b:
                 rss_a = _wrss(B[:, [t - 1 for t in a]], case.Y, case.w)
                 rss_b = _wrss(B[:, [t - 1 for t in b]], case.Y, case.w)
-                tie = compare.is_prune_near_tie(rss_a, rss_b, ours["rss_per_subset"][0])
+                cond = max(
+                    compare.basis_cond(B[:, [t - 1 for t in T]], case.w) for T in (a, b)
+                )
+                tss = ours["rss_per_subset"][0]
+                tie = compare.is_prune_near_tie(rss_a, rss_b, tss, cond, _n(case))
                 diffs.append(
                     compare.Difference(
                         field="pruning",
@@ -498,7 +524,7 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
                 zeroed.append(f"{name}[{m}]")
             elif a != b:
                 metric = abs(a - b) / abs(b) if math.isfinite(b) and b else math.inf
-                if metric > _rss_rtol(case, ours, m):
+                if metric > _rss_rtol(case, ours, m, B):
                     diffs.append(
                         compare.Difference(
                             field=name,
@@ -506,7 +532,7 @@ def _pruning(case: Case, ours: dict, B: np.ndarray, zeroed: list) -> tuple[list,
                             a=a,
                             b=b,
                             metric=metric,
-                            tolerance=_rss_rtol(case, ours, m),
+                            tolerance=_rss_rtol(case, ours, m, B),
                         )
                     )
                     break
