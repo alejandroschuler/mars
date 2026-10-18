@@ -59,6 +59,7 @@ from pymars import _forward, _gcv, _pruning, _terms
 from pymars._forward import CandidateLog, Termination
 
 __all__ = [
+    "DICT_FORMAT",
     "CandidateLog",
     "ForwardRecord",
     "MarsFit",
@@ -101,6 +102,10 @@ _FORWARD_PARAMS = (
 )
 #: W-6: the total weight is below 2^52, the bound of W-4 (exact sums of integers).
 _MAX_WEIGHT_TOTAL = 2.0**52
+
+#: CORE-5: the version of the dict form, the key ``"format"`` of ``to_dict``.
+#: It changes when a key or a dtype of the dict changes.
+DICT_FORMAT = 1
 
 #: EDGE-6: the scaled TSS must be at least the smallest positive normal float64.
 _TINY = float(np.finfo(np.float64).tiny)
@@ -386,18 +391,28 @@ class MarsFit:
         """Return the fit as the nested dict of CORE-5: the field names as
         keys, ``forward``, ``pruning`` and ``candidates`` as dicts,
         ``termination`` as its integer code, and new arrays with the dtypes
-        and shapes of CORE-3. Complexity: O(size of the fit)."""
-        return _plain(self)
+        and shapes of CORE-3; the key ``"format"`` holds ``DICT_FORMAT``.
+        Complexity: O(size of the fit)."""
+        return {"format": DICT_FORMAT, **_plain(self)}
 
     @classmethod
     def from_dict(cls, d: Mapping) -> MarsFit:
         """Build a fit from the dict of CORE-5, such as the reference returns.
 
         The keys must be the field names (a missing ``forward.candidates`` is
-        None). Arrays may be numpy arrays or nested lists whose values convert
-        exactly to the dtypes of CORE-3. Raises ValueError otherwise.
-        Complexity: O(size of the fit).
+        None), and an optional ``"format"``, which must be ``DICT_FORMAT``
+        (the reference's dict has none). Arrays may be numpy arrays or nested
+        lists whose values convert exactly to the dtypes of CORE-3. Raises
+        ValueError otherwise. Complexity: O(size of the fit).
         """
+        if isinstance(d, Mapping) and "format" in d:
+            fmt = d["format"]
+            if isinstance(fmt, bool) or fmt != DICT_FORMAT:
+                raise ValueError(
+                    f"the fit's dict has format {fmt!r}; this pymars reads "
+                    f"format {DICT_FORMAT}"
+                )
+            d = {k: v for k, v in d.items() if k != "format"}
         d = _fields(d, cls, "the fit")
         fwd = d["forward"]
         if isinstance(fwd, Mapping) and "candidates" not in fwd:

@@ -340,20 +340,34 @@ def test_basis_matrix_and_summary_need_a_fit():
 
 
 def test_the_public_names_the_tags_and_what_is_left_out():
-    """API-2: ``Earth`` is ``EarthRegressor``, and the package exports only the
-    estimators and ``__version__``. API-5: the tags. API-6: no ``coef_``,
-    ``transform``, ``max_iter`` or ``feature_importances_``."""
+    """API-2: ``Earth`` is ``EarthRegressor``, and the package exports the
+    estimators, ``__version__`` and the types of ``mars_`` and its records
+    (CORE-2 to CORE-5). API-5: the tags. API-6: no ``coef_``, ``transform``,
+    ``max_iter`` or ``feature_importances_``."""
     assert pymars.Earth is pymars.EarthRegressor
-    assert sorted(pymars.__all__) == [
-        "Earth",
-        "EarthClassifier",
-        "EarthRegressor",
-        "__version__",
-    ]
+    assert sorted(pymars.__all__) == sorted(
+        [
+            "DICT_FORMAT",
+            "CandidateLog",
+            "Earth",
+            "EarthClassifier",
+            "EarthRegressor",
+            "ForwardRecord",
+            "MarsFit",
+            "MarsParams",
+            "PruningRecord",
+            "Termination",
+            "__version__",
+        ]
+    )
     tags = get_tags(EarthRegressor())
     assert tags.target_tags.multi_output is True
     assert tags.input_tags.allow_nan is False
     est = EarthRegressor().fit(X, y)
+    assert isinstance(est.mars_, pymars.MarsFit)
+    assert isinstance(est.mars_.forward, pymars.ForwardRecord)
+    assert isinstance(est.mars_.pruning, pymars.PruningRecord)
+    assert isinstance(est.mars_.forward.termination, pymars.Termination)
     for name in ("coef_", "transform", "max_iter", "feature_importances_"):
         assert not hasattr(est, name)
 

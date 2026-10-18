@@ -6,7 +6,8 @@ bounds. Each kernel has a numpy counterpart in ``_scan``, which runs when
 numba is missing (the ``nonumba`` CI job). Bit-identity of the two is not a
 rule (#145): the suffix sums keep the blocked order of ``_scan._suffix``, so
 the error bounds keep their form, and the two forms agree within those
-bounds.
+bounds. So the two paths give the same models except at near-ties (STOP-7),
+where they can choose different terms.
 
 - ``hv`` replaces ``_scan._hv`` and the gather ``Q[o]`` of the caller: one
   pass from the last row to the first, which forms b·v, its blocked suffix
@@ -442,8 +443,10 @@ def hv(g, b, Q, q0, E, o, split):
     gives for the gathered V. Complexity: O(n·c + k·log k) time, O(c + k·c) memory."""
     n = b.shape[0]
     # A split outside 1..n - 1 would leave its row of the output unset; the
-    # forward pass never passes one, and hinge_products checks it.
-    assert split.size == 0 or (split.min() >= 1 and split.max() <= n - 1)
+    # forward pass never passes one, and hinge_products checks it. The check
+    # is O(k), next to the O(n·c) kernel, and holds under ``python -O`` too.
+    if split.size and (split.min() < 1 or split.max() > n - 1):
+        raise ValueError(f"every split must be in 1 to {n - 1}")
     return _hv(g, b, Q, q0, E, o, split, _blocks(n), _blocks(n - 1))
 
 

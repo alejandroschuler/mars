@@ -29,6 +29,7 @@ from reference import mars_ref  # the oracle (tests/reference), as a black box
 
 from pymars import _core, _forward, _gcv, _terms
 from pymars._core import (
+    DICT_FORMAT,
     ForwardRecord,
     MarsFit,
     MarsParams,
@@ -396,9 +397,11 @@ LOG += [("second_knot", np.float64), ("second_kind", np.int8)]
 @pytest.mark.parametrize("case", FITS)
 def test_to_dict_and_from_dict(case):
     """CORE-5: the keys, the dtypes and shapes of CORE-3 and the integer code;
-    the round trip, also through JSON and pickle; new, read-only arrays."""
+    the round trip, also through JSON and pickle; new, read-only arrays; the
+    key "format", which ``from_dict`` checks and the reference's dict lacks."""
     fit = FITS[case]
     d = fit.to_dict()
+    assert d.pop("format") == DICT_FORMAT == 1
     assert set(d) == {f.name for f in dataclasses.fields(MarsFit)}
     fwd, prn = d["forward"], d["pruning"]
     M, p = d["dirs"].shape
@@ -457,12 +460,15 @@ def _set(path, value):
         _set("selected", lambda a: a[::-1]),
         _set("forward.termination", 9),
         _set("forward.candidates.best_rss", lambda a: a[1:]),
+        _set("format", 2),
+        _set("format", True),
     ],
 )
 def test_from_dict_rejects_a_bad_dict(change):
     """CORE-3 to CORE-5: a missing or an extra key, a wrong shape, a value that
     does not convert exactly to its dtype, selected out of order, a code that
-    CORE-4 does not define, and a log of the wrong length."""
+    CORE-4 does not define, a log of the wrong length, and a format other
+    than ``DICT_FORMAT``."""
     d = FITS["log"].to_dict()
     change(d)
     with pytest.raises(ValueError):

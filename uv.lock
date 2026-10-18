@@ -902,7 +902,6 @@ wheels = [
 
 [[package]]
 name = "mars-earth"
-version = "2.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "numba", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },

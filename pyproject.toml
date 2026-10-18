@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mars-earth"
-version = "2.0.0.dev0"
+# The version is read from pymars/__init__.py, its one place.
+dynamic = ["version"]
 description = "Multivariate adaptive regression splines (MARS) in Python, with a scikit-learn API"
 readme = "README.md"
 license = "Apache-2.0"
@@ -16,7 +17,7 @@ authors = [
 ]
 keywords = ["mars", "multivariate adaptive regression splines", "earth", "scikit-learn", "regression"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -60,11 +61,16 @@ validation = [
     "matplotlib>=3.9",  # summarize.py's ax.boxplot(tick_labels=...), added in 3.9
 ]
 
+[tool.hatch.version]
+path = "pymars/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["pymars"]
 
+# The tests stay out of the sdist: most of them read validation/fixtures or
+# import validation/, which the sdist does not ship. Run them from a clone.
 [tool.hatch.build.targets.sdist]
-include = ["/pymars", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md", "/CITATION.cff"]
+include = ["/pymars", "/README.md", "/LICENSE", "/CHANGELOG.md", "/CITATION.cff"]
 
 [tool.ruff]
 line-length = 88
