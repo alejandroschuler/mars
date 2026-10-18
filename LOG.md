@@ -475,11 +475,12 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 13:55 #163 single update APPROVE at 2402358 (gates B, C PASS on two float64 programs: near-tie stops at most 0.7 %, pruning 0). Merged #163 (N157) as 0274c5a. GATE D PASS: main 0274c5a has the same tree as 2402358 (gate B with parametrize_with_checks and integration tests; gate C oracle at thorough and fixtures). FREEZE: local annotated tag sim-freeze-1 at 0274c5a and pushed branch sim-freeze-1 (the session may push branches; pushing the tag waits for the user's OK). Starting T21.
 - 14:05 T21 full run started 07:05 PDT (runner .worktrees/runner-t21 at 0274c5a; driver.pid, run.pid, driver.log in validation/runs/full/; 6 workers, nice 15, one thread, NUMBA_NUM_THREADS=1, --resume). Pilot step 3: 0 failures, sizing equal to the pre-freeze pilot (D5 lo 564, D5 hi 408, others smaller, D3 lo degenerate). All 51 cells piloted (100 reps, 0 failures); tiers 300/600/1300/3000 reps; 3 cells at 3000 exceed the plan's 1,400 cap: accepted by the executor (about 2.3 core-hours in all). ETA 07:45 to 08:00 PDT.
 - 14:35 T21 full run finished 07:26 PDT (ALL BLOCKS DONE). t21-run collects results into a PR (Closes #23). Weekly 69 %, 5-hour 13 %.
+- 14:55 #168 (T21 results; closes #23) ready at b2a9f83: 0 failures of 58,400 units; 2.27 core-hours (wall 20.7 min). Parity (3-SE inside ±log 1.05) holds in 44 of 51 cells, fails in 7 (D1 n1000 hi/lo, D1 n5000 hi, D5 n200 lo, D6 n200/1000/5000; ratios 1.023 to 1.068); binary all equivalent. Gap at n=200 lo: P-cur/E-def 1.21 to 1.58 on D2, D3, D4, D5, D8 (D1 0.79). Sparsity: P-fix matches E-def. Harness gap: 'missing' rows for D6 and binary legacy in two tables. Started review-168-single (sonnet).
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
 |---|---|---|---|
-| 2026-10-18 | T21 post-freeze pilot (all 51 cells, 100 reps) and full run (runner-t21 at 0274c5a), 6 workers | about 2.5 (estimate; T21 PR gives the measured value) | started 07:05 PDT |
+| 2026-10-18 | T21 post-freeze pilot (all 51 cells, 100 reps) and full run (runner-t21 at 0274c5a), 6 workers | 2.27 (measured, sum of fit times; wall 20.7 min) | 0 failures of 58,400 units |
 | 2026-10-09 | T19 benchmark grid (runner-t19 at ae9d199), 4 workers, about 18:40 to 21:25 PDT plus earlier cells | about 10 | 80 ok, 1 timeout |
 | 2026-10-09 | T21a pre-freeze pilot (runner-t21a at 02f788c), 4 workers, 8.6 min | about 0.6 | no failures |
 | 2026-09-26 | T04 legacy full run (runner at 8760cee): 6 workers 01:47 to 11:08, 4 workers 11:08 to 16:13 PDT | about 76 | all blocks done; 49,441 result files; failures to be counted in T04 step 6 |
