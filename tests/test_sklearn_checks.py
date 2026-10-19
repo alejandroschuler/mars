@@ -13,10 +13,11 @@ Every check must pass, on both cores. A check that fails on the fast core
 for a known reason is listed in ``fast_core_failures`` with its issue; none
 is listed now (the classifier's weight check, #81, passes since #83).
 
-Several checks fit classes that a hyperplane of the basis separates, so the
-unpenalized refit (``glm_alpha=0``, GLM-2) warns as GLM-4 requires; the
-checks do not treat that warning as a failure, and this module does not
-either, for that one message.
+Several checks fit classes that a hyperplane of the basis separates. At
+``glm_alpha=0`` the unpenalized refit (GLM-2) warns on them as GLM-4
+requires, and the default ``glm_alpha=1`` has a finite minimum. The checks do
+not treat that warning as a failure, and this module does not either, for
+that one message.
 """
 
 import pytest

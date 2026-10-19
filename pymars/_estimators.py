@@ -497,11 +497,16 @@ class EarthClassifier(ClassifierMixin, _EarthBase):
     max_degree, max_terms, penalty, thresh, minspan, endspan, adjust_endspan, \
 auto_linpreds, fast_k, fast_beta, pmethod, nprune, allow_missing
         As in ``EarthRegressor``.
-    glm_alpha : float, default=0.0
+    glm_alpha : float, default=1.0
         The L2 penalty of the refit on the coefficients of the non-intercept
-        columns, each column standardized to weighted mean 0 and variance 1;
-        0 gives the unpenalized fit (GLM-2). A positive value gives a finite
-        fit when the classes are separated.
+        columns, each column standardized to weighted mean 0 and variance 1:
+        the refit minimizes the weighted negative log-likelihood plus
+        ``glm_alpha / 2`` times the sum of the squared coefficients (GLM-2).
+        The default 1 has the strength of scikit-learn's
+        ``LogisticRegression`` at its default ``C=1`` and gives a finite fit
+        when the classes are separated. ``glm_alpha=0`` is the unpenalized
+        refit of earth's ``glm = list(family = binomial)``: use it to match
+        earth.
 
     Attributes
     ----------
@@ -522,7 +527,8 @@ grsq_, max_terms_, penalty_, mars_
     The refit warns with a ConvergenceWarning when it does not converge or
     when a fitted probability of a case with positive weight is below
     1/(1 + e³⁰) or above its complement (|η| > 30), as with separated
-    classes; a positive ``glm_alpha`` avoids it (GLM-4). y must be 1-D: a
+    classes; at ``glm_alpha=0`` separated classes always trigger it, and a
+    positive value gives the refit a finite minimum (GLM-4). y must be 1-D: a
     column vector is raveled with a DataConversionWarning, and multi-output
     classification is not supported.
     """
@@ -542,7 +548,7 @@ grsq_, max_terms_, penalty_, mars_
         pmethod="backward",
         nprune=None,
         allow_missing=False,
-        glm_alpha=0.0,
+        glm_alpha=1.0,
     ):
         super().__init__(
             max_degree=max_degree,

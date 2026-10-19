@@ -77,7 +77,7 @@ For the binary DGPs, λ is the largest scale that keeps the 1st and 99th percent
 | Arm | Settings | Why it is here |
 |---|---|---|
 | E-def | earth, `degree = 2`, all else at its defaults (penalty 3, `nk` = min(200, max(20, 2p)) + 1, `thresh = 0.001`, automatic spans, `fast.k = 20`, backward pruning); for binary outcomes `glm = list(family = binomial)` | The reference for every ratio |
-| P-fix | pymars 2.0 `EarthRegressor(max_degree=2)` or `EarthClassifier(max_degree=2)`, all else at its defaults | The candidate (parity, sparsity) |
+| P-fix | pymars 2.0 `EarthRegressor(max_degree=2)` or `EarthClassifier(max_degree=2)`, all else at its defaults at the freeze (so `glm_alpha=0`; see the note under Binary outcomes) | The candidate (parity, sparsity) |
 | P-cur | the 1.0.4 wheel, `Earth(max_degree=2)`, all else at its defaults | The library as users had it (gap) |
 | P-ear | the 1.0.4 wheel with earth's settings where it has them: `penalty=1.5`, `minspan_alpha = endspan_alpha = 0.05` | Ablation: do the settings explain the gap? |
 | E-pym | earth with the legacy code's settings: penalty 6, `thresh = 0`, `minspan = endspan = 1`, `fast.k = 0`, `Adjust.endspan = 1` | Ablation: earth moved to the legacy settings |
@@ -273,7 +273,9 @@ The binary DGPs belong to the parity claim. This table adds the legacy classifie
 
 *Table 6.1. Ratio of excess log loss to E-def with ±3 Monte Carlo standard errors (`*` resolved at 3 standard errors) and the median calibration slope on the test set (1 is well calibrated). Supports the parity claim for binary outcomes and measures the effect of the legacy penalized refit.*
 
-pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibration matches earth's at every n. Both are overconfident at 200 cases (slopes 0.36 to 0.44) and close to calibrated at 5,000 cases (0.95 and 0.96), as expected of an unpenalized logistic refit of a selected basis. At 200 cases the legacy EarthClassifier has 0.37 to 0.52 of earth's excess log loss, and the legacy classifiers have slopes near 1. Their penalized refit, which shrinks the coefficients, is a likely cause; no ablation here tests it, and the legacy forward pass differs too. Both programs follow their documented method here. pymars 2.0 offers the penalty as `glm_alpha` (default 0, earth's unpenalized fit), and users who fit binary outcomes at small n may want it. The binary part of the parity claim is about earth, and it holds.
+pymars 2.0 matches earth on all six binary cells (Figure 3.1), and its calibration matches earth's at every n. Both are overconfident at 200 cases (slopes 0.36 to 0.44) and close to calibrated at 5,000 cases (0.95 and 0.96), as expected of an unpenalized logistic refit of a selected basis. At 200 cases the legacy EarthClassifier has 0.37 to 0.52 of earth's excess log loss, and the legacy classifiers have slopes near 1. Their penalized refit, which shrinks the coefficients, is a likely cause; no ablation here tests it, and the legacy forward pass differs too. Both programs follow their documented method here. pymars 2.0 offers the penalty as `glm_alpha`. The binary part of the parity claim is about earth, and it holds.
+
+**Note on the default of `glm_alpha` (issue #175).** The simulation and the conformance fixtures used `glm_alpha=0`, earth's unpenalized refit and the default at the freeze. The default is now 1, the strength of scikit-learn's `LogisticRegression` at `C=1`, because at 0 the refit warns on scikit-learn's breast_cancer, iris and wine data. The parity claim for binary outcomes holds at `glm_alpha=0`, the earth-compatible setting. No number in this report changed.
 
 ## Appendix
 

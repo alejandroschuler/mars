@@ -26,7 +26,7 @@ Both estimators take the parameters below. `None` means earth's automatic value.
 | `pmethod` | `"backward"` | `pmethod` | `"backward"` prunes by GCV. `"none"` keeps the forward terms (PRUNE-1). earth's other methods are not offered. |
 | `nprune` | None | `nprune` | The largest number of terms, intercept included, that pruning may keep. None is no limit. |
 | `allow_missing` | False | none | True raises NotImplementedError. Missing values are not supported; see issue #27. Impute first, for example with `SimpleImputer` in a pipeline. |
-| `glm_alpha` (classifier only) | 0.0 | none | The L2 penalty of the logistic refit. 0 is the plain fit; a positive value gives a finite fit when the classes are separated (GLM-2). |
+| `glm_alpha` (classifier only) | 1.0 | none | The L2 penalty of the logistic refit, on columns standardized to mean 0 and variance 1. The default 1 has the strength of scikit-learn's `LogisticRegression` at `C=1` and gives a finite fit when the classes are separated. `glm_alpha=0` is the plain fit of earth's `glm = list(family = binomial)`: use it to match earth (GLM-2). |
 
 earth arguments that pymars does not offer: `linpreds`, `allowed`, `newvar.penalty`, `nfold` and `Scale.y` (API-7). The estimators have no `coef_`, no `transform`, no `max_iter` and no `feature_importances_` (API-6). A parameter outside its range raises ValueError in `fit` (ERR-4).
 
@@ -80,7 +80,7 @@ A 2-D y with K columns gives one set of terms for all responses. `term_coef_` ha
 - `predict_proba(X)` has shape (n, Q) in the order of `classes_`.
 - `decision_function(X)` returns the linear predictor of `classes_[1]`, shape (n,), with two classes. With three or more it returns all Q predictors, shape (n, Q), and the first column is 0.
 - `predict(X)` returns the class of largest probability, and the first such class on a tie.
-- With separated classes the unpenalized refit has no finite minimum. The fit then issues a ConvergenceWarning and keeps its last step. Set `glm_alpha` to a small positive value, such as 1e-4, to get a finite fit (GLM-4).
+- The default `glm_alpha=1` shrinks the refit. `glm_alpha=0` is earth's unpenalized refit, which has no finite minimum when the classes are separated. The fit then issues a ConvergenceWarning and keeps its last step (GLM-4). This also happens on scikit-learn's breast_cancer, iris and wine data, with coefficients up to about 480 (issue #175). A positive value, the default 1 or a weaker one such as 1e-4, gives a finite fit. Use `glm_alpha=0` to reproduce earth.
 - y must be 1-D. A column vector is raveled with a DataConversionWarning. Multi-output classification is not supported.
 
 ## Text and categorical columns
