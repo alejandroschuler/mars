@@ -44,7 +44,7 @@ None of the differences below is a bug. On the fixtures, both the fast code and 
 ## Classification
 
 - **rule** With three or more classes, earth fits one binomial GLM for each class, and its probabilities need not sum to 1. pymars fits one multinomial model, so each row of `predict_proba` sums to 1. With two classes both fit the same binomial GLM (the refit agrees with R's `glm` to a relative 1e-7 or better). (GLM-2)
-- **rule** The logistic refit has no penalty in earth. `glm_alpha=0`, the default, gives the same unpenalized fit; a positive value is an addition. (API-7)
+- **rule** The logistic refit has no penalty in earth. `glm_alpha=0` gives the same unpenalized fit; pymars defaults to `glm_alpha=1`, which shrinks the refit, so the default binary fit differs from earth's. Set `glm_alpha=0` to match earth. (API-7)
 - **rule** Probabilities near 0 or 1 are the computed ones, where R reports 2.2e-16 for every linear predictor above 30 in absolute value. The ConvergenceWarning keeps earth's threshold. (GLM-4)
 
 ## Limits of float64 arithmetic

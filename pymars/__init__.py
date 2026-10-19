@@ -13,6 +13,9 @@ The types of the fit are public too: ``mars_`` is a ``MarsFit``, which holds a
 ``CandidateLog``) and a ``PruningRecord``; ``MarsParams`` holds the parameters
 of a fit (CORE-2 to CORE-5). ``MarsFit.to_dict`` gives a dict with the key
 ``"format"`` (``DICT_FORMAT``), which ``MarsFit.from_dict`` checks.
+
+Without numba, the knot scan runs in numpy, and the first fit of a process
+issues one ``NumbaUnavailableWarning``.
 """
 
 from pymars._core import (
@@ -25,6 +28,7 @@ from pymars._core import (
     Termination,
 )
 from pymars._estimators import EarthClassifier, EarthRegressor
+from pymars._kernels import NumbaUnavailableWarning
 
 Earth = EarthRegressor
 
@@ -37,6 +41,7 @@ __all__ = [
     "ForwardRecord",
     "MarsFit",
     "MarsParams",
+    "NumbaUnavailableWarning",
     "PruningRecord",
     "Termination",
     "__version__",

@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from pymars import EarthClassifier
 from validation.sims import learners
 
 
@@ -247,6 +248,10 @@ def test_p_fix_fits_the_classifier():
     assert outcome.predictions.shape == (len(x_test),)
     assert np.all((outcome.predictions > 0.0) & (outcome.predictions < 1.0))
     assert outcome.n_terms >= 2
+    # #175: the arm is earth's unpenalized refit, not the default glm_alpha=1.
+    clf = EarthClassifier(max_degree=learners.MARS_DEGREE, glm_alpha=0.0)
+    expect = clf.fit(x_train, y_train).predict_proba(x_test)[:, 1]
+    np.testing.assert_array_equal(outcome.predictions, expect)
 
 
 class _StandInEarthRegressor:

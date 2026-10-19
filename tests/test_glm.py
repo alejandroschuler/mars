@@ -217,7 +217,7 @@ def test_labels_of_any_type_give_the_fit_of_the_codes(codes, labels):
     assert_array_equal(est.dirs_, ls.dirs)
     assert_allclose(est.term_coef_, ls.coef[:, 0] if Q == 2 else ls.coef)
     B = est.basis_matrix(X)
-    assert_array_equal(est.glm_, _glm.fit_glm(B, codes, Q).coef)
+    assert_array_equal(est.glm_, _glm.fit_glm(B, codes, Q, alpha=est.glm_alpha).coef)
     decision = est.decision_function(X)
     if Q > 2:
         assert_array_equal(decision[:, 0], 0.0)
@@ -286,6 +286,22 @@ def test_glm_alpha_reaches_the_refit_and_must_be_a_finite_float(alpha):
     penalized = _glm.fit_glm(est.basis_matrix(X), CODES2, 2, alpha=3.0)
     assert_array_equal(est.glm_, penalized.coef)
     assert not np.allclose(est.glm_, _glm.fit_glm(est.basis_matrix(X), CODES2, 2).coef)
+
+
+def test_the_default_glm_alpha_is_1_and_0_is_earths_unpenalized_refit():
+    """API-2 and GLM-2 (issue #175): the default ``glm_alpha`` is 1, so the
+    refit of separated classes has a finite minimum and does not warn (pytest
+    turns a warning into an error), and it is the refit with ``alpha=1.0``.
+    GLM-4: ``glm_alpha=0``, earth's unpenalized refit, warns on the same data."""
+    x = np.linspace(-1.0, 1.0, 60)[:, None]
+    y = x[:, 0] > 0.0  # the classes are separated
+    est = EarthClassifier().fit(x, y)
+    assert est.glm_alpha == 1.0
+    assert_array_equal(
+        est.glm_, _glm.fit_glm(est.basis_matrix(x), y, 2, alpha=1.0).coef
+    )
+    with pytest.warns(ConvergenceWarning, match="glm_alpha"):
+        EarthClassifier(glm_alpha=0).fit(x, y)
 
 
 @pytest.mark.parametrize(

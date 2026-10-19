@@ -26,7 +26,7 @@ Both estimators take the parameters below. `None` means earth's automatic value.
 | `pmethod` | `"backward"` | `pmethod` | `"backward"` prunes by GCV. `"none"` keeps the forward terms (PRUNE-1). earth's other methods are not offered. |
 | `nprune` | None | `nprune` | The largest number of terms, intercept included, that pruning may keep. None is no limit. |
 | `allow_missing` | False | none | True raises NotImplementedError. Missing values are not supported; see issue #27. Impute first, for example with `SimpleImputer` in a pipeline. |
-| `glm_alpha` (classifier only) | 0.0 | none | The L2 penalty of the logistic refit. 0 is the plain fit; a positive value gives a finite fit when the classes are separated (GLM-2). |
+| `glm_alpha` (classifier only) | 1.0 | none | The L2 penalty of the logistic refit, on columns standardized to mean 0 and variance 1. The default 1 has the strength of scikit-learn's `LogisticRegression` at `C=1` and gives a finite fit when the classes are separated. `glm_alpha=0` is the plain fit of earth's `glm = list(family = binomial)`: use it to match earth (GLM-2). |
 
 earth arguments that pymars does not offer: `linpreds`, `allowed`, `newvar.penalty`, `nfold` and `Scale.y` (API-7). The estimators have no `coef_`, no `transform`, no `max_iter` and no `feature_importances_` (API-6). A parameter outside its range raises ValueError in `fit` (ERR-4).
 
@@ -80,7 +80,7 @@ A 2-D y with K columns gives one set of terms for all responses. `term_coef_` ha
 - `predict_proba(X)` has shape (n, Q) in the order of `classes_`.
 - `decision_function(X)` returns the linear predictor of `classes_[1]`, shape (n,), with two classes. With three or more it returns all Q predictors, shape (n, Q), and the first column is 0.
 - `predict(X)` returns the class of largest probability, and the first such class on a tie.
-- With separated classes the unpenalized refit has no finite minimum. The fit then issues a ConvergenceWarning and keeps its last step. Set `glm_alpha` to a small positive value, such as 1e-4, to get a finite fit (GLM-4).
+- The default `glm_alpha=1` shrinks the refit. `glm_alpha=0` is earth's unpenalized refit, which has no finite minimum when the classes are separated. The fit then issues a ConvergenceWarning and keeps its last step (GLM-4). This also happens on scikit-learn's breast_cancer, iris and wine data, with coefficients up to about 480 (issue #175). A positive value, the default 1 or a weaker one such as 1e-4, gives a finite fit. Use `glm_alpha=0` to reproduce earth.
 - y must be 1-D. A column vector is raveled with a DataConversionWarning. Multi-output classification is not supported.
 
 ## Text and categorical columns
@@ -139,6 +139,15 @@ print(grid.best_params_)
 
 ## What the fit costs
 
-The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). The two give the same models except at near-ties (STOP-7 of [algorithm.md](algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms. numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
+The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed. pip installs numba with pymars on every platform that has numba wheels. It does not on Intel Macs, nor on a Python version newer than the latest numba release supports (3.15 at the time of writing). There the fit uses the slower numpy code, and the first fit of each process issues one `pymars.NumbaUnavailableWarning` (a `UserWarning`) that says so. The two give the same models except at near-ties (STOP-7 of [algorithm.md](algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms. numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
 
-In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 0.81 s in a fresh process and 0.43 s in a process that has already fitted, against 0.46 s for earth; with 100,000 cases it takes about 5.1 to 5.8 s, against 7.6 s for earth. The numpy code (Intel Macs) takes 1.2 s at 10,000 cases and 15 s at 100,000, 2.6 and 2.0 times earth's time. Below about 10,000 cases a fixed cost of about 0.06 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows a little less than linearly in the number of cases. Weights cost little extra (0.45 s against 0.39 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).
+To install numba yourself, run `pip install numba` in an environment where it has wheels. To run the numpy code without the warning, filter it:
+
+```python
+import warnings
+import pymars
+
+warnings.filterwarnings("ignore", category=pymars.NumbaUnavailableWarning)
+```
+
+In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 0.81 s in a fresh process and 0.43 s in a process that has already fitted, against 0.46 s for earth; with 100,000 cases it takes about 5.1 to 5.8 s, against 7.6 s for earth. The numpy code takes 1.2 s at 10,000 cases and 15 s at 100,000, 2.6 and 2.0 times earth's time. Below about 10,000 cases a fixed cost of about 0.06 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows a little less than linearly in the number of cases. Weights cost little extra (0.45 s against 0.39 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).
