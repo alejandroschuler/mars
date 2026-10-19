@@ -15,6 +15,7 @@ These tests pin the rules that the checks leave open.
 
 import dataclasses
 import re
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.utils import get_tags
 
 import pymars
-from pymars import EarthClassifier, EarthRegressor, _core, _terms
+from pymars import EarthClassifier, EarthRegressor, _core, _kernels, _terms
 from pymars._core import MarsFit, MarsParams
 
 RECIPE = (
@@ -355,11 +356,40 @@ def test_basis_matrix_and_summary_need_a_fit():
         est.basis_matrix(X[:, :1])
 
 
+def test_the_numpy_fallback_warns_once_per_process(monkeypatch):
+    """#175: with numba available, a fit issues no ``NumbaUnavailableWarning``.
+    Without it, the first fit of the process issues one, of either estimator,
+    that says numba is missing, how much slower the fit is and how to install
+    it, and points at the caller of ``fit``; later fits issue none."""
+    labels = y > np.median(y)
+
+    def three_fits():
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            EarthRegressor().fit(X, y)
+            EarthClassifier().fit(X, labels)
+            EarthRegressor().fit(X, y)
+        return [w for w in caught if w.category is pymars.NumbaUnavailableWarning]
+
+    monkeypatch.setattr(_kernels, "_warned", False)
+    monkeypatch.setattr(_kernels, "ENABLED", False)
+    monkeypatch.setattr(_kernels, "AVAILABLE", True)
+    assert three_fits() == []
+    monkeypatch.setattr(_kernels, "AVAILABLE", False)
+    (warning,) = three_fits()
+    assert issubclass(pymars.NumbaUnavailableWarning, UserWarning)
+    for part in ("numba is not available", "3 times as long", "pip install numba"):
+        assert part in str(warning.message)
+    assert warning.filename == __file__
+    assert three_fits() == []
+
+
 def test_the_public_names_the_tags_and_what_is_left_out():
     """API-2: ``Earth`` is ``EarthRegressor``, and the package exports the
-    estimators, ``__version__`` and the types of ``mars_`` and its records
-    (CORE-2 to CORE-5). API-5: the tags. API-6: no ``coef_``, ``transform``,
-    ``max_iter`` or ``feature_importances_``."""
+    estimators, ``__version__``, the types of ``mars_`` and its records
+    (CORE-2 to CORE-5) and ``NumbaUnavailableWarning`` (#175). API-5: the
+    tags. API-6: no ``coef_``, ``transform``, ``max_iter`` or
+    ``feature_importances_``."""
     assert pymars.Earth is pymars.EarthRegressor
     assert sorted(pymars.__all__) == sorted(
         [
@@ -371,6 +401,7 @@ def test_the_public_names_the_tags_and_what_is_left_out():
             "ForwardRecord",
             "MarsFit",
             "MarsParams",
+            "NumbaUnavailableWarning",
             "PruningRecord",
             "Termination",
             "__version__",

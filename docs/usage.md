@@ -139,6 +139,15 @@ print(grid.best_params_)
 
 ## What the fit costs
 
-The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed (every platform except Intel Macs, which use the slower numpy code). The two give the same models except at near-ties (STOP-7 of [algorithm.md](algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms. numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
+The core runs in Python with numpy, and with numba-compiled loops in the knot scan wherever numba is installed. pip installs numba with pymars on every platform that has numba wheels. It does not on Intel Macs, nor on a Python version newer than the latest numba release supports (3.15 at the time of writing). There the fit uses the slower numpy code, and the first fit of each process issues one `pymars.NumbaUnavailableWarning` (a `UserWarning`) that says so. The two give the same models except at near-ties (STOP-7 of [algorithm.md](algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms. numba compiles the loops once and keeps them in a disk cache; the first fit in a process loads them, which adds about 0.3 s.
 
-In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 0.81 s in a fresh process and 0.43 s in a process that has already fitted, against 0.46 s for earth; with 100,000 cases it takes about 5.1 to 5.8 s, against 7.6 s for earth. The numpy code (Intel Macs) takes 1.2 s at 10,000 cases and 15 s at 100,000, 2.6 and 2.0 times earth's time. Below about 10,000 cases a fixed cost of about 0.06 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows a little less than linearly in the number of cases. Weights cost little extra (0.45 s against 0.39 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).
+To install numba yourself, run `pip install numba` in an environment where it has wheels. To run the numpy code without the warning, filter it:
+
+```python
+import warnings
+import pymars
+
+warnings.filterwarnings("ignore", category=pymars.NumbaUnavailableWarning)
+```
+
+In the benchmark ([validation/bench/REPORT.md](../validation/bench/REPORT.md); 10 covariates, degree 2, 21 terms, one thread), a fit with 10,000 cases takes 0.81 s in a fresh process and 0.43 s in a process that has already fitted, against 0.46 s for earth; with 100,000 cases it takes about 5.1 to 5.8 s, against 7.6 s for earth. The numpy code takes 1.2 s at 10,000 cases and 15 s at 100,000, 2.6 and 2.0 times earth's time. Below about 10,000 cases a fixed cost of about 0.06 s per fit dominates, so earth is faster there (0.02 s at 250 cases). Above that the time grows a little less than linearly in the number of cases. Weights cost little extra (0.45 s against 0.39 s at 1,000 cases). For many small fits, as in cross-validation, fit them in one process. The memory of the fit is O(n·(p + nk)).

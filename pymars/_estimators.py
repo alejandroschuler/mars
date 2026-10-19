@@ -52,7 +52,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_array, check_is_fitted, validate_data
 
-from pymars import _core, _glm, _terms
+from pymars import _core, _glm, _kernels, _terms
 
 __all__ = [
     "MISSING_VALUES_ISSUE",
@@ -263,7 +263,9 @@ class _EarthBase(BaseEstimator):
         params: _core.MarsParams,
     ) -> _core.MarsFit:
         """Call ``_core.fit_mars`` through the module (CORE-6) and set the
-        fitted attributes that come from the fit (API-3)."""
+        fitted attributes that come from the fit (API-3). Without numba, the
+        first fit of a process warns once (``_kernels``, #175)."""
+        _kernels.warn_if_numpy_fallback()
         fit = _core.fit_mars(X, Y, w, params)
         self.mars_ = fit
         self.dirs_, self.cuts_ = fit.dirs, fit.cuts

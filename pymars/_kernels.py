@@ -41,11 +41,18 @@ contraction would change the result.
 ``hash_fits.py --no-numba`` set it to False to run the numpy code. The
 compiled code is cached on disk (``cache=True``), so only the first call in
 a fresh environment pays the compilation.
+
+Without numba (``AVAILABLE`` False: an Intel Mac, a Python version that numba
+has no wheels for, or an environment without it), the first fit of a process
+issues one ``NumbaUnavailableWarning`` through ``warn_if_numpy_fallback``,
+because the numpy code takes up to about 3 times as long (#175). Setting
+``ENABLED`` to False on purpose, with numba installed, issues none.
 """
 
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 
@@ -58,6 +65,33 @@ AVAILABLE = numba is not None
 #: The rows of Q that ``hv`` gathers at a time.
 TILE = 128
 ENABLED = AVAILABLE
+
+
+class NumbaUnavailableWarning(UserWarning):
+    """numba is not installed, so the fit runs the numpy code of the knot scan,
+    which takes up to about 3 times as long. It is issued once per process, at
+    the first fit."""
+
+
+NUMPY_FALLBACK_MESSAGE = (
+    "numba is not available, so pymars runs its numpy code for the knot scan. "
+    "Fits with thousands of cases or more then take up to about 3 times as "
+    "long. Install it with `pip install numba`; numba has no wheels for Intel "
+    "Macs or for a Python version newer than its latest release supports. "
+    "This warning appears once per process."
+)
+_warned = False
+
+
+def warn_if_numpy_fallback() -> None:
+    """Issue ``NumbaUnavailableWarning`` at the first call of a process when
+    ``AVAILABLE`` is False, and never again; ``fit`` calls it (#175). The
+    warning points at the caller of ``fit``. Complexity: O(1)."""
+    global _warned
+    if AVAILABLE or _warned:
+        return
+    _warned = True
+    warnings.warn(NUMPY_FALLBACK_MESSAGE, NumbaUnavailableWarning, stacklevel=4)
 
 
 def _blocks(m: int) -> int:

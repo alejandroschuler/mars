@@ -34,9 +34,14 @@ dependencies = [
     "numpy>=1.24.4",
     "scipy>=1.9.3",
     "scikit-learn>=1.6",
-    # Compiled knot scan. numba 0.63 dropped the macOS Intel wheels, so that
-    # platform keeps the numpy code (decision of 2026-10-18, issue #145).
-    "numba>=0.63; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # Compiled knot scan. numba has no wheels for macOS Intel since 0.63, nor
+    # for a CPython newer than its latest release supports: those installs skip
+    # numba and run the numpy code, which warns once per process (decisions of
+    # 2026-10-18 and 2026-10-19, issues #145 and #175). numba 0.68.0 has wheels
+    # up to CPython 3.15 (PyPI, checked 2026-10-19). Raise the "3.16" bound when
+    # a numba release adds wheels for a newer CPython, and add that version to
+    # the classifiers and the CI matrix.
+    "numba>=0.63; python_version < '3.16' and (sys_platform != 'darwin' or platform_machine != 'x86_64')",
 ]
 
 [project.urls]
@@ -99,6 +104,9 @@ xfail_strict = true
 # Warnings are errors, except deprecations that other packages raise.
 filterwarnings = [
     "error",
+    # The nonumba CI job has no numba, so its first fit issues this warning once;
+    # tests/test_estimators.py checks it under pytest.warns.
+    "ignore:numba is not available:UserWarning",
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
     "error::DeprecationWarning:pymars",
