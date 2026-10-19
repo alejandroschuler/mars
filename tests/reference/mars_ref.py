@@ -1022,8 +1022,10 @@ def _parent_candidates(
         bx = b * (x - x.min())
         bx_dependent = la4_dependent(b * x, P_B.residual(b * x), w)  # [LA-2]
         V = [*own, j]
+        # LA-7: a pair search when A_w >= 0.01 times the product of 12 sigma_v^2
+        # over the covariates of b x; earth's 0.01 for sigma_v^2 = 1/12
         pair = all(sigma2[v] > 0 for v in V) and (
-            P_B.rss(bx) >= 0.01 * math.prod(sigma2[v] for v in V)
+            P_B.rss(bx) >= 0.01 * math.prod(12 * sigma2[v] for v in V)
         )
         if pair and not bx_dependent:
             P_G = Projector(np.column_stack([F, bx]), w)
