@@ -2,7 +2,7 @@
 
 Work done: yes
 
-Updated: 2026-10-17 20:25 PDT, by executor session `local_a3dbbbaa-86cb-4746-9ad7-7dae14ff92f9` (watchdog run; lock taken 20:17).
+Updated: 2026-10-19 10:39 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+POST-DONE FOLLOW-UP (2026-10-19, session local_a59469db): the user answered #175: EarthClassifier's default glm_alpha becomes 1.0 (glm_alpha=0 documented as earth-compatible; REPORT notes that the study used 0), and numba stays a dependency where it has wheels, with a Python-version guard and a once-per-process warning when the numpy fallback runs ("assuming the user is alerted that it will be slow without numba"). Brief briefs/U175-defaults.md; one sonnet author and one single review. The watchdog task is disabled (#180 closed).
 
 DONE 2026-10-18 11:25 PDT (executor local_a3dbbbaa): every definition of done item is met on main 7cf85d0 (map in LOG.md). Open for the user: #175 (EarthClassifier's default glm_alpha; numba as a hard dependency), #68 (push of the user's PR #64; #62, #65 wait with it), #60, #59, the push of the local tag sim-freeze-1. Later issues: #178, #179, #173, #27 to #33. If the user changes a default in #175, a new session restarts the work from this journal.
 

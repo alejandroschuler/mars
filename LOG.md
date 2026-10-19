@@ -517,6 +517,10 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 - 11:25 PDT (2026-10-18) #177 merged as 7cf85d0; #25 closed; CI on main 7cf85d0 green. Definition of done mapped above; all items met, with the needs-user items listed (#175, #68 with PR #64, #60, #59, the tag push). Work done: watchdog deleted, caffeinate stopped, final summary in the session.
 - 11:30 caffeinate (PID 92247) stopped. Deleting or disabling the watchdog task needs a person's approval in this unattended run (both delete_scheduled_task and update_scheduled_task were refused); left for the user. Each later watchdog run stops at step 1, since STATE says Work done: yes.
+
+## 2026-10-19
+- 10:39 The user answered #175 in this session: glm_alpha default 1.0; numba kept where wheels exist, plus a Python guard and a warning on the numpy fallback. Disabled the watchdog (#180 closed). Took the idle lock of local_a3dbbbaa. Brief U175-defaults; starting u175-defaults (sonnet).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
