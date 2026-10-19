@@ -1745,8 +1745,9 @@ def _designed_cases() -> list[Case]:
     yb = np.maximum(x0 - 0.5, 0) + np.sin(6 * Xb[:, 1]) + 0.05 * rng.normal(size=n)
     cases.append(Case("values below a tight bulk", Xb, yb, None, {"fast_k": 0}))
     # LA-7: x1 is x0 plus noise, so A of x0 after a pair on x1 is near the
-    # pair rule's threshold.
-    for sd in (4e-3, 1e-3):
+    # pair rule's threshold (0.01 times the product of 12 var): A is about 3
+    # times it for sd 0.013 and 0.3 times it for sd 0.004.
+    for sd in (1.3e-2, 4e-3):
         x0 = rng.uniform(size=200)
         Xp = np.column_stack((x0, x0 + sd * rng.normal(size=200)))
         yp = np.maximum(x0 - 0.5, 0) + 5 * Xp[:, 1]
@@ -1867,12 +1868,16 @@ def test_merged_candidates_record_the_reference_parents(case):
 
 def test_a_second_of_another_kind_may_add_the_chosen_rows():
     """FWD-12 and FWD-8: candidates of different kinds never merge. The
-    hypothesis draw "smooth seed=3421084" (n 57, p 4, no noise, integer
-    weights, auto_linpreds=False) chooses at step 9 a linear candidate on
-    parent 10, whose row is the hinge at the smallest x3, and the fast log's
-    second is the single hinge on parent 9 that adds the same row. That
-    second is legal, not the chosen candidate, and the comparison goes on."""
-    seed, n = 3421084, 57
+    hypothesis-style draw "smooth seed=3442" (n 57, p 4, no noise, integer
+    weights, auto_linpreds=False) adds at step 9 the row of the single hinge
+    h(x0 - 0.5627) on parent 8, which is also the linear candidate x1 on
+    parent 6, since its hinge on x1 is at the smallest x1. A fast log that
+    chooses the linear candidate on parent 6 has the single hinge on parent 8
+    as its second; that second is legal, not the chosen candidate, and the
+    comparison goes on. (The draw of C157f, seed 3421084, stops at step 8
+    under #173's pair threshold, so this seed, found by the same generator,
+    replaces it.)"""
+    seed, n = 3442, 57
     rng = np.random.default_rng(seed)
     X = rng.uniform(size=(n, 4))
     Y = _truth(rng, X, True)[:, None]
@@ -1890,30 +1895,29 @@ def test_a_second_of_another_kind_may_add_the_chosen_rows():
     }
     case = Case(f"hypothesis smooth seed={seed}", X, Y, w, params)
     assert check_forward(case).steps >= 9
-    # The record of C157f's fast code (#157): step 9 adds the row of the
-    # single hinge h(x2 - 0.6235) on parent 9 as the linear candidate x3 on
-    # parent 10, whose hinge at the smallest x3 it is, and the log's second
-    # is that single hinge on parent 9. The reference chooses the single
-    # hinge; the two are a cross-kind tie (FWD-12).
+    # Step 9 of the reference adds the row of the single hinge h(x0 - 0.5627)
+    # on parent 8; a fast code that chooses it as the linear candidate x1 on
+    # parent 6 (the record of C157f's fast code, #157, on another draw) has
+    # that single hinge as its second. The two are a cross-kind tie (FWD-12).
     ref = case.reference_fit()["forward"]
     row = np.flatnonzero(ref["step"] == 9)
     assert _rows(ref, 9) == [
         (
-            (1, 0, 1, 1),
-            (0.479049184595436, 0.0, 0.6235282280156149, 0.020212451904345508),
+            (1, 1, 0, -1),
+            (0.5626666165434576, 0.02498969832001352, 0.0, 0.5204537956288501),
         )
     ]
-    hinge = (9, 2, SINGLE, 0.6235282280156149)
+    hinge = (8, 0, SINGLE, 0.5626666165434576)
     log = {k: np.copy(v) for k, v in _plain(ref["candidates"]).items()}
     fields = ("second_parent", "second_variable", "second_kind", "second_knot")
     for field, value in zip(fields, hinge, strict=True):
         log[field][8] = value
     log["second_rss"][8] = ref["rss"][9]
     parent = np.copy(ref["parent"])
-    parent[row] = 10
+    parent[row] = 6
     fast = {**ref, "parent": parent, "candidates": log}
     readings = [key[:3] for key in _choice(case, fast, 9)]
-    assert readings == [(10, 3, SINGLE), (10, 3, LINEAR)]
+    assert readings == [(6, 1, SINGLE), (6, 1, LINEAR)]
     assert compare_forward(case, fast, ref).steps >= 9
 
 

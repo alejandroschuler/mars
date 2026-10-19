@@ -3,9 +3,12 @@ several responses.
 
 The earth fixtures (T05) are compared in the matched and the earth-compatible
 (defaults) modes at degrees 1 to 3 by the plan's rules ("What is compared,
-and the tolerances", "Ties"): the steps exactly up to the first near-tie, the
-RSS after each step within 1e-8 of the RSS before it (LA-5), and the
-termination code when the whole path matched. earth counts cases where
+and the tolerances", "Ties"): the steps exactly up to the first near-tie, or
+up to the step where earth and LA-7 differ by the units of its threshold (the
+harness's matrix has every variance 1, so pymars's threshold is 12^|V| times
+earth's; validation/differences.json, E1), the RSS after each step within 1e-8
+of the RSS before it (LA-5), and the termination code when the whole path
+matched. earth counts cases where
 pymars counts weight (W-2), so a weighted fit is compared with earth's fit of
 the repeated rows, its "_repeated" fixture (W-1, W-3; the plan's "Sample
 weights"). The queue with fast_k > 0, weights and several responses are
@@ -100,6 +103,18 @@ def _steps(dirs, cuts):
     return out
 
 
+def _rule_step(name):
+    """The step of the first difference from earth that LA-7 explains on this
+    fixture (validation/differences.json, E1), or None: a search whose A_w lies
+    between earth's threshold and pymars's is a pair search in earth and a
+    single-hinge search here."""
+    path = FIXTURES_DIR.parent / "differences.json"
+    for e in json.loads(path.read_text(encoding="utf-8"))["differences"]:
+        if "LA-7" in e["rules"] and e["field"] == "forward" and name in e["cases"]:
+            return e.get("per_case", {}).get(name, e)["step"]
+    return None
+
+
 @pytest.mark.parametrize("name", FIXTURES)
 def test_earth_fixture(load_fixture, name):
     """FWD, STOP and FAST against earth; RESP-1 for S17 (two responses), and
@@ -117,15 +132,19 @@ def test_earth_fixture(load_fixture, name):
     log = fp.candidates
     tie = log.second_rss - log.best_rss < 1e-7 * fp.rss[:-1]
     fwd_rss = result["fwd_rss"]
-    matched = 0
+    matched, rule = 0, _rule_step(name)
     for s in range(len(ours)):
         if tie[s]:
+            break
+        if s + 1 == rule:  # LA-7's threshold, not earth's
+            assert s < len(earth) and ours[s] != earth[s], f"step {s + 1}"
             break
         assert s < len(earth) and ours[s] == earth[s], f"step {s + 1}"
         last = int(np.flatnonzero(fp.step == s + 1)[-1])
         if fwd_rss is not None:
             assert abs(fp.rss[s + 1] - fwd_rss[last]) <= 1e-8 * fp.rss[s]
         matched += 1
+    assert rule is None or matched == rule - 1
     if fwd_rss is not None:  # None after earth's rank fix (bb32, #127)
         assert abs(fp.rss[0] - fwd_rss[0]) <= 1e-8 * fp.rss[0]
     if matched == len(ours):
@@ -149,10 +168,12 @@ def _queue_design(name):
     of M, FAST-4) and parents of degree 2 that hold both covariates (λ = -1,
     FAST-5). "ageing": the same data with other spans, fast_beta 2.5 (FAST-2)
     and adjust_endspan 0.5 (SPAN-4). "pair rule": x1 is x0 plus noise inside
-    an interaction, on covariates with variance 1/12, where the variances of
-    the parent's covariates decide the kind of a search (LA-7); in "pair
-    rule, weighted", with weight 3 in the tails of x0 and 0.3 elsewhere, the
-    weighted variances decide it (W-8). "window":
+    an interaction, where the parent's covariate x2 has the variance 3/4 and
+    x0 and x1 have 1/12: the factor 12 var of each covariate of the term decides
+    the kind of a search (LA-7, #173), so earth's A ≥ 0.01, a threshold that
+    leaves out the parent's covariate, or one without the 12, choose another
+    kind; "pair rule, weighted": the same data with weight 3 in the tails of x0
+    and 0.3 elsewhere (W-8). "window":
     fast_k = 1, which acts as 3 (FAST-3), with fast_beta 0.5, so the window
     leaves out rows of parents that could be searched. "weights": fast_k = 5
     at degree 3, two responses in different units (RESP-1, RESP-3) and
@@ -177,11 +198,9 @@ def _queue_design(name):
         y = 3 * np.maximum(X[:, 0] - 0.5, 0) * X[:, 1] + 0.05 * rng.normal(size=100)
         return X, _col(y), None, kw | {"max_terms": 11, "auto_linpreds": False}
     if name.startswith("pair rule"):
-        x0 = rng.uniform(size=100)
-        X = np.column_stack(
-            (x0, x0 + 0.003 * rng.normal(size=100), rng.uniform(size=100))
-        )
-        y = 5 * np.maximum(X[:, 2] - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
+        x0, u = rng.uniform(size=100), rng.uniform(size=100)
+        X = np.column_stack((x0, x0 + 0.003 * rng.normal(size=100), 3.0 * u))
+        y = 5 * np.maximum(u - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
         w = np.where(np.abs(x0 - 0.5) > 0.35, 3.0, 0.3)
         w = w if name.endswith("weighted") else None
         return (
