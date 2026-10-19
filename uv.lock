@@ -904,7 +904,7 @@ wheels = [
 name = "mars-earth"
 source = { editable = "." }
 dependencies = [
-    { name = "numba", marker = "(python_full_version < '3.16' and platform_machine != 'x86_64') or (python_full_version < '3.16' and sys_platform != 'darwin')" },
+    { name = "numba", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and platform_machine == 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32') or (python_full_version < '3.16' and platform_machine != 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'darwin') or (python_full_version < '3.16' and platform_machine != 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32') or (python_full_version < '3.16' and platform_python_implementation == 'CPython' and sys_platform != 'darwin' and sys_platform != 'win32')" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -935,7 +935,7 @@ validation = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numba", marker = "(python_full_version < '3.16' and platform_machine != 'x86_64') or (python_full_version < '3.16' and sys_platform != 'darwin')", specifier = ">=0.63" },
+    { name = "numba", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and platform_machine == 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32') or (python_full_version < '3.16' and platform_machine != 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'darwin') or (python_full_version < '3.16' and platform_machine != 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32') or (python_full_version < '3.16' and platform_python_implementation == 'CPython' and sys_platform != 'darwin' and sys_platform != 'win32')", specifier = ">=0.63" },
     { name = "numpy", specifier = ">=1.24.4" },
     { name = "scikit-learn", specifier = ">=1.6" },
     { name = "scipy", specifier = ">=1.9.3" },
