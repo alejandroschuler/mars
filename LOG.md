@@ -520,6 +520,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-10-19
 - 10:39 The user answered #175 in this session: glm_alpha default 1.0; numba kept where wheels exist, plus a Python guard and a warning on the numpy fallback. Disabled the watchdog (#180 closed). Took the idle lock of local_a3dbbbaa. Brief U175-defaults; starting u175-defaults (sonnet).
+- 11:25 review-181-single APPROVE at c0c41ca. Merged #181 (#175: glm_alpha default 1.0; numba marker python_version < 3.16 and not macOS x86_64; NumbaUnavailableWarning) as ba8ac19; #175 closed. Non-blocking items in #182 (GLM-4 wording, REPORT 'at its defaults', numba wheels missing on Windows ARM64 3.10/3.11/3.15, musllinux, PyPy). Started i173-noise a60ae1cac25694cc4 (opus; phase 1 diagnosis of #173, brief I173-noise.md).
 
 ## Core-hour ledger
 
