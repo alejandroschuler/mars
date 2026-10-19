@@ -172,8 +172,12 @@ def _queue_design(name):
     x0 and x1 have 1/12: the factor 12 var of each covariate of the term decides
     the kind of a search (LA-7, #173), so earth's A ≥ 0.01, a threshold that
     leaves out the parent's covariate, or one without the 12, choose another
-    kind; "pair rule, weighted": the same data with weight 3 in the tails of x0
-    and 0.3 elsewhere (W-8). "window":
+    kind. "pair rule, weighted": x0 is 0 and 1 in 10 cases each, x1 runs from 0
+    to 9 where x0 is 0 and is spread about 4.5 where x0 is 1, with weight 3 where
+    x0 is 0 and 1 elsewhere, and y = 2 x0 + 3 x0 x1; A_w of x1 on the parent x0
+    is 0.95 of the threshold with the weighted variances and 1.06 of it with the
+    unweighted ones, so the weights decide a single hinge, as on the repeated
+    rows (W-8). "window":
     fast_k = 1, which acts as 3 (FAST-3), with fast_beta 0.5, so the window
     leaves out rows of parents that could be searched. "weights": fast_k = 5
     at degree 3, two responses in different units (RESP-1, RESP-3) and
@@ -181,9 +185,17 @@ def _queue_design(name):
     knots (W-2, KNOT-6) and the weighted variances the kind of a search."""
     if name in ("window", "weights"):
         return _weighted_design(name)
-    seed = {"binary": 14, "pair rule": 4, "pair rule, weighted": 4}.get(name, 0)
+    seed = {"binary": 14, "pair rule": 4}.get(name, 0)
     rng = np.random.default_rng(seed)
     kw = {"max_degree": 2, "max_terms": 9, "thresh": 0.0}
+    if name == "pair rule, weighted":
+        eta = 0.6261577649583902  # puts A_w between the two thresholds
+        x0 = np.r_[np.zeros(10), np.ones(10)]
+        x1 = np.r_[np.arange(10.0), 4.5 + eta * np.linspace(-1, 1, 10)]
+        w = np.r_[np.full(10, 3.0), np.ones(10)]
+        y = 2 * x0 + 3 * x0 * x1
+        kw |= {"max_terms": 5, "minspan": 1, "endspan": 1}
+        return np.column_stack([x0, x1]), _col(y), w, kw
     if name == "binary":
         x0, x1 = rng.choice([-1.0, 1.0], size=200), rng.uniform(size=200)
         y = 2 * x0 + 3 * x0 * np.maximum(x1 - 0.4, 0)
@@ -201,12 +213,10 @@ def _queue_design(name):
         x0, u = rng.uniform(size=100), rng.uniform(size=100)
         X = np.column_stack((x0, x0 + 0.003 * rng.normal(size=100), 3.0 * u))
         y = 5 * np.maximum(u - 0.5, 0) * (np.maximum(X[:, 1] - 0.5, 0) + x0)
-        w = np.where(np.abs(x0 - 0.5) > 0.35, 3.0, 0.3)
-        w = w if name.endswith("weighted") else None
         return (
             X,
             _col(y + 0.01 * rng.normal(size=100)),
-            w,
+            None,
             kw | {"minspan": 1, "endspan": 1},
         )
     X = rng.uniform(size=(80, 2))

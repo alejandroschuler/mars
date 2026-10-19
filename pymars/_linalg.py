@@ -73,7 +73,7 @@ COLLINEARITY_TOL_EARLY = 0.01
 COLLINEARITY_TOL_LATE = 1e-5
 #: LA-3: the last forward step, counted from 1, with COLLINEARITY_TOL_EARLY.
 COLLINEARITY_LAST_EARLY_STEP = 7
-#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π UNIFORM_INV_VARIANCE·sigma².
+#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π(UNIFORM_INV_VARIANCE·sigma²).
 PAIR_SEARCH_FACTOR = 0.01
 #: LA-7: the inverse of 1/12, the variance of a covariate uniform on [0, 1], so
 #: that UNIFORM_INV_VARIANCE·sigma_v² is 1 for such a covariate and the
@@ -333,7 +333,7 @@ def pair_search(resid_ss: float, variances: npt.ArrayLike) -> bool:
     """Return True for a pair search, False for a single-hinge search (LA-7).
 
     pymars runs a pair search for a parent b and a covariate x when
-    A_w ≥ 0.01·Π_{v∈V} 12·sigma_v², and a single-hinge search otherwise, and
+    A_w ≥ 0.01·Π_{v∈V}(12·sigma_v²), and a single-hinge search otherwise, and
     always when some v ∈ V is constant (a pymars departure: the rule does not
     depend on the units of x, and it is earth's A ≥ 0.01 for covariates of the
     variance 1/12 of a uniform on [0, 1], #173). ``resid_ss`` is A_w, the
