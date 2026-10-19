@@ -1,0 +1,117 @@
+[
+  {
+    "arms": {
+      "P-fix": {}
+    },
+    "cache": "none",
+    "cells": [
+      "D4skew_n00200_lo",
+      "D1skew_n00200_lo",
+      "D2skew_n00200_lo",
+      "D3skew_n00200_lo",
+      "D5skew_n00200_lo",
+      "D7skew_n00200_lo",
+      "D8skew_n00200_lo"
+    ],
+    "n_jobs": 4,
+    "reps": [
+      0,
+      1000
+    ],
+    "resume": true,
+    "started": "2026-10-19T21:08:34Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "fdaca4a1f5142bc601fffb44d4ef9862c6039591",
+      "pymars_file": "/Users/aschuler/Documents/research/projects/pymars/.worktrees/runner-t173-skew-old/pymars/__init__.py",
+      "python": "3.12.13",
+      "scipy": "1.18.1",
+      "script_sha256": "999e90309d27d461ed728c8f1936e4fe31cc0b97a415482d112a98446f88d32a",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arms": {
+      "P-fix": {}
+    },
+    "cache": "none",
+    "cells": [
+      "D4skew_n01000_lo"
+    ],
+    "n_jobs": 4,
+    "reps": [
+      0,
+      1000
+    ],
+    "resume": true,
+    "started": "2026-10-19T21:12:56Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "fdaca4a1f5142bc601fffb44d4ef9862c6039591",
+      "pymars_file": "/Users/aschuler/Documents/research/projects/pymars/.worktrees/runner-t173-skew-old/pymars/__init__.py",
+      "python": "3.12.13",
+      "scipy": "1.18.1",
+      "script_sha256": "999e90309d27d461ed728c8f1936e4fe31cc0b97a415482d112a98446f88d32a",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arms": {
+      "P-fix": {}
+    },
+    "cache": "none",
+    "cells": [
+      "D4skew_n00200_lo",
+      "D4skew_n01000_lo"
+    ],
+    "n_jobs": 4,
+    "reps": [
+      1000,
+      7000
+    ],
+    "resume": true,
+    "started": "2026-10-19T21:16:11Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "fdaca4a1f5142bc601fffb44d4ef9862c6039591",
+      "pymars_file": "/Users/aschuler/Documents/research/projects/pymars/.worktrees/runner-t173-skew-old/pymars/__init__.py",
+      "python": "3.12.13",
+      "scipy": "1.18.1",
+      "script_sha256": "999e90309d27d461ed728c8f1936e4fe31cc0b97a415482d112a98446f88d32a",
+      "sklearn": "1.9.1"
+    }
+  },
+  {
+    "arms": {
+      "P-fix": {}
+    },
+    "cache": "none",
+    "cells": [
+      "D8skew_n00200_lo"
+    ],
+    "n_jobs": 4,
+    "reps": [
+      1000,
+      23000
+    ],
+    "resume": true,
+    "started": "2026-10-19T21:20:46Z",
+    "test_n": 10000,
+    "versions": {
+      "numpy": "2.5.3",
+      "pymars": "2.0.0.dev0",
+      "pymars_commit": "fdaca4a1f5142bc601fffb44d4ef9862c6039591",
+      "pymars_file": "/Users/aschuler/Documents/research/projects/pymars/.worktrees/runner-t173-skew-old/pymars/__init__.py",
+      "python": "3.12.13",
+      "scipy": "1.18.1",
+      "script_sha256": "999e90309d27d461ed728c8f1936e4fe31cc0b97a415482d112a98446f88d32a",
+      "sklearn": "1.9.1"
+    }
+  }
+]
