@@ -1425,8 +1425,8 @@ class TestForwardPass:
         assert np.all(change <= 1e-8 * base["rss"][:-1])
 
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
-        # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
-        # covariates of the parent and x; with a power of 2 every value scales
+        # [LA-7] the threshold is 0.01 times the product of 12 sigma_v^2 over
+        # the covariates of the parent and x; with a power of 2 every value scales
         # exactly, so the pass is the same bit for bit and the cuts scale
         X, y = noisy_data(23, n=80, p=3)
         base = run_forward(X, y, max_degree=3)
@@ -1443,7 +1443,9 @@ class TestForwardPass:
     @pytest.mark.parametrize(("ratio", "pair"), [(1.02, True), (0.98, False)])
     def test_the_kind_of_a_search_near_the_la_7_threshold(self, ratio, pair):
         # B = [1, x0] and x1 = x0 + eta z, with eta such that
-        # A_w / (0.01 sigma^2(x1)) = ratio; a pair search has a linear candidate
+        # A_w / (0.01 12 sigma^2(x1)) = ratio; a pair search has a linear
+        # candidate. At 0.98 the search is a single hinge: the first form of
+        # the rule, 0.01 sigma^2(x1), would have run a pair search [#173]
         rng = np.random.default_rng(24)
         n, N, w = 20, 20.0, np.ones(20)
         x0, z = rng.uniform(size=n), rng.normal(size=n)
@@ -1452,13 +1454,14 @@ class TestForwardPass:
         rest = float(np.sum(P_B.residual(z) ** 2))
         s0, sz = np.var(x0), np.var(z)
         c = float(np.mean((x0 - x0.mean()) * (z - z.mean())))
+        thr = 0.01 * 12
         roots = np.roots(
-            [rest - 0.01 * ratio * sz, -0.02 * ratio * c, -0.01 * ratio * s0]
+            [rest - thr * ratio * sz, -2 * thr * ratio * c, -thr * ratio * s0]
         )
         eta = float(max(roots.real))
         X = np.column_stack([x0, x0 + eta * z])
         sigma2 = ref.covariate_variances(X, w, N)
-        assert P_B.rss(X[:, 1]) / (0.01 * sigma2[1]) == pytest.approx(ratio, rel=1e-9)
+        assert P_B.rss(X[:, 1]) / (thr * sigma2[1]) == pytest.approx(ratio, rel=1e-9)
         y = X[:, 1] + 0.1 * rng.normal(size=n)
         cands, _ = ref._parent_candidates(
             0,
@@ -2191,9 +2194,10 @@ class TestFit:
 
 @pytest.mark.parametrize("name", ["S01_matched_d1", "S01_defaults_d1"])
 def test_the_fit_matches_earth_on_s01(name, load_fixture):
-    # The harness divides the fixture's x by its standard deviation, so
-    # earth's rule for the kind of a search and the pymars rule agree
-    # [LA-7]. Tolerances from the plan's table.
+    # The harness divides the fixture's x by its standard deviation, so every
+    # sigma_v^2 is 1 and the threshold of the pymars rule is 12^|V| times
+    # earth's [LA-7, E1]; the pass is the same on S01. Tolerances from the
+    # plan's table.
     fixture = load_fixture(name)
     earth = fixture["result"]
     X = np.array(fixture["inputs"]["X"])
@@ -2665,9 +2669,11 @@ class TestForwardPassRules:
         assert expected == [] and found == []
 
     def test_the_pair_rule_uses_weighted_variances(self):
-        # LA-7: A_w is 0.95 of the weighted threshold, so the search on the
-        # parent x0 and x1 is a single hinge, as on the repeated rows
-        eta = 0.0520134012737919
+        # LA-7: A_w is 0.95 of the weighted threshold 0.01 (12 sigma^2(x0))
+        # (12 sigma^2(x1)), so the search on the parent x0 and x1 is a single
+        # hinge, as on the repeated rows; with sigma_v^2 of the unweighted
+        # cases it would be 1.06 of it, a pair search
+        eta = 0.6261577649583902
         x0 = np.r_[np.zeros(10), np.ones(10)]
         x1 = np.r_[np.arange(10.0), 4.5 + eta * np.linspace(-1, 1, 10)]
         X = np.column_stack([x0, x1])
@@ -2687,12 +2693,12 @@ class TestForwardPassRules:
         same_pass(weighted, repeated)
 
     @pytest.mark.parametrize(
-        ("eta", "code"), [(0.01622815768436774, 2), (0.015905943651091013, 1)]
+        ("eta", "code"), [(0.05667399955458973, 2), (0.05553666869049212, 1)]
     )
     def test_the_kind_of_a_search_at_the_la_7_threshold_in_the_pass(self, eta, code):
         # LA-7 through the pass, which divides sigma_v^2 by N: with x0 binary,
-        # step 1 adds x0, and at step 2 A_w / (0.01 sigma^2(x1)) is 1.02 (a
-        # pair search, the linear x1) or 0.98 (a hinge)
+        # step 1 adds x0, and at step 2 A_w / (0.01 12 sigma^2(x1)) is 1.02
+        # (a pair search, the linear x1) or 0.98 (a hinge)
         n = 20
         x0 = (np.arange(n) % 2).astype(float)
         X = np.column_stack([x0, x0 + eta * np.sin(np.arange(n) * 1.7)])
@@ -2820,10 +2826,19 @@ def test_the_forward_pass_matches_earth_step_by_step(load_fixture, name):
 
 
 @pytest.mark.slow
-def test_the_forward_pass_matches_earth_on_every_small_fixture(load_fixture):
+def test_the_forward_pass_matches_earth_on_every_small_fixture(
+    load_fixture, monkeypatch
+):
     # every unweighted matched and defaults fixture with n <= 400, raw x left
-    # out (the LA-7 departure); factor responses have no least-squares pass
-    compared = 0
+    # out (the LA-7 departure); factor responses have no least-squares pass.
+    # On the harness's matrix every sigma_v^2 is 1, so the pair threshold
+    # 0.01 times the product of 12 sigma_v^2 is 12^|V| times earth's, and a
+    # search with A_w between the two is a pair search in earth and a single
+    # hinge here. A fixture on which the pass differs from earth's must then
+    # match earth when the rule uses earth's threshold (sigma_v^2 / 12 in
+    # the rule): the departure is the only difference [LA-7, E1]
+    covariate_variances = ref.covariate_variances
+    compared = by_rule = 0
     for path in sorted((HARNESS.parent / "fixtures").glob("S*.json")):
         name = path.stem
         if ("matched" not in name and "defaults" not in name) or "raw" in name:
@@ -2838,9 +2853,20 @@ def test_the_forward_pass_matches_earth_on_every_small_fixture(load_fixture):
         if any(isinstance(v, str) for v in y) or all(v == y[0] for v in y):
             continue  # a factor response, or a constant one (EDGE-1)
         record, _ = forward_on_fixture(fixture)
-        check_forward_steps(record, fixture["result"])
-        compared += 1
-    assert compared >= 60
+        try:
+            check_forward_steps(record, fixture["result"])
+            compared += 1
+        except AssertionError:
+            with monkeypatch.context() as m:
+                m.setattr(
+                    ref,
+                    "covariate_variances",
+                    lambda X, w, N: [v / 12 for v in covariate_variances(X, w, N)],
+                )
+                record, _ = forward_on_fixture(fixture)
+            check_forward_steps(record, fixture["result"])
+            by_rule += 1
+    assert compared >= 60 and by_rule >= 1
 
 
 def test_the_second_best_candidate_where_the_limit_binds(load_fixture):

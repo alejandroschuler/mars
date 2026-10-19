@@ -1,30 +1,418 @@
 {
-  "about": "Every difference between the new fitting code and earth 5.3.4 on the fixtures in validation/fixtures/, with its label (VALIDATION_PLAN.md, Triage of differences) and the spec rules that explain it. tests/test_conformance.py fails on a difference that this file does not list and on a listed one that does not occur; validation/DIFFERENCES.md explains each entry by its id. An entry holds for every implementation unless it names some in 'implementations'. 'pymars' and 'earth' give the two choices, and 'candidate_rss' their RSS values on the basis before the step, in that order.",
+  "about": "Every difference between the new fitting code and earth 5.3.4 on the fixtures in validation/fixtures/, with its label (VALIDATION_PLAN.md, Triage of differences) and the spec rules that explain it. tests/test_conformance.py fails on a difference that this file does not list and on a listed one that does not occur; validation/DIFFERENCES.md explains each entry by its id. An entry holds for every implementation unless it names some in 'implementations'. 'pymars' and 'earth' give the two choices, and 'candidate_rss' their RSS values on the basis before the step, in that order. An entry may hold 'per_case', a map from a case to the 'step', 'pymars', 'earth' and 'candidate_rss' of that case, which replace the entry's own values there.",
   "differences": [
     {
       "id": "E1",
       "cases": [
-        "S12_x_1em8_raw_d1"
+        "S04_p05_n0200_defaults_d2",
+        "S04_p05_n0200_matched_d2",
+        "S06_defaults_d3",
+        "S06_matched_d3",
+        "S12_x_1em8_raw_d1",
+        "S14_matched_d2",
+        "s15_draws/draw021",
+        "s15_draws/draw027",
+        "s15_draws/draw033",
+        "s15_draws/draw035",
+        "s15_draws/draw047",
+        "s15_draws/draw053",
+        "s15_draws/draw059",
+        "s15_draws/draw061",
+        "s15_draws/draw069",
+        "s15_draws/draw091",
+        "s15_draws/draw095",
+        "s15_draws/draw105",
+        "s15_draws/draw113",
+        "s15_draws/draw125",
+        "s15_draws/draw139",
+        "s15_draws/draw151",
+        "s15_draws/draw153",
+        "s15_draws/draw169",
+        "s15_draws/draw171"
       ],
       "field": "forward",
-      "step": 1,
-      "label": "quirk",
+      "label": "rule",
       "rules": [
         "LA-7"
       ],
-      "pymars": [
-        "h(x0-4.08098e-09)",
-        "h(4.08098e-09-x0)"
-      ],
-      "earth": [
-        "h(x0-4.08098e-09)"
-      ],
-      "candidate_rss": [
-        0.36376841094440215,
-        0.3678187937537397
-      ],
-      "rss_before": 25.870380638504514,
-      "note": "The raw mode keeps x in its own units, here 1e-8 times the base x of S12. earth runs a single-hinge search because A, the RSS of x on the intercept in these units, is 1.4e-15, below 0.01; pymars compares A with 0.01 times the variance of x (A is 150 variances) and runs a pair search at the same knot. The Quirks section of the spec lists this dependence on the units of x among the quirks that pymars does not copy. The pruning pass on earth's forward basis agrees with earth."
+      "per_case": {
+        "S04_p05_n0200_defaults_d2": {
+          "step": 8,
+          "pymars": [
+            "h(x0-2.37265)*h(x1-1.9027)"
+          ],
+          "earth": [
+            "h(x0-1.69594)*h(x1-0.533593)",
+            "h(x0-1.69594)*h(0.533593-x1)"
+          ],
+          "candidate_rss": [
+            213.26025884290945,
+            211.1709221450181
+          ],
+          "rss_before": 235.07404989326346
+        },
+        "S04_p05_n0200_matched_d2": {
+          "step": 9,
+          "pymars": [
+            "h(x2-0.948602)*h(1.89005-x3)",
+            "h(0.948602-x2)*h(1.89005-x3)"
+          ],
+          "earth": [
+            "h(x0-1.62379)*h(x1-0.525359)",
+            "h(x0-1.62379)*h(0.525359-x1)"
+          ],
+          "candidate_rss": [
+            190.5981135309691,
+            184.80023173117863
+          ],
+          "rss_before": 206.1086021588643
+        },
+        "S06_defaults_d3": {
+          "step": 2,
+          "pymars": [
+            "h(x0-0.701277)*h(x2-3.23584)"
+          ],
+          "earth": [
+            "x0*h(x2-3.23584)"
+          ],
+          "candidate_rss": [
+            1.162629140062164,
+            1.1616718034216034
+          ],
+          "rss_before": 1.1999479070003323
+        },
+        "S06_matched_d3": {
+          "step": 2,
+          "pymars": [
+            "h(x0-0.525596)*h(x2-3.23584)"
+          ],
+          "earth": [
+            "h(x0-2.95406)*h(x2-3.23584)",
+            "h(2.95406-x0)*h(x2-3.23584)"
+          ],
+          "candidate_rss": [
+            1.1613052948432785,
+            1.1532103673244483
+          ],
+          "rss_before": 1.1999479070003323
+        },
+        "S12_x_1em8_raw_d1": {
+          "step": 1,
+          "pymars": [
+            "h(x0-4.08098e-09)",
+            "h(4.08098e-09-x0)"
+          ],
+          "earth": [
+            "h(x0-4.08098e-09)"
+          ],
+          "candidate_rss": [
+            0.36376841094440215,
+            0.3678187937537397
+          ],
+          "rss_before": 25.870380638504514
+        },
+        "S14_matched_d2": {
+          "step": 4,
+          "pymars": [
+            "h(x0-0.729043)*h(-0.27027-x1)",
+            "h(0.729043-x0)*h(-0.27027-x1)"
+          ],
+          "earth": [
+            "h(x0-1.4904)*h(x3-0.357811)",
+            "h(x0-1.4904)*h(0.357811-x3)"
+          ],
+          "candidate_rss": [
+            105.14871078265233,
+            105.13086240707145
+          ],
+          "rss_before": 106.66340312598551
+        },
+        "s15_draws/draw021": {
+          "step": 5,
+          "pymars": [
+            "h(x7-3.17981)",
+            "h(3.17981-x7)"
+          ],
+          "earth": [
+            "h(x1-0.0147268)*h(x2-3.08562)"
+          ],
+          "candidate_rss": [
+            193.75791477557618,
+            193.41158649912734
+          ],
+          "rss_before": 202.15404010221465
+        },
+        "s15_draws/draw027": {
+          "step": 7,
+          "pymars": [
+            "h(x3-2.82974)*h(3.26525-x5)"
+          ],
+          "earth": [
+            "h(x3-2.82974)*h(3.26525-x5)",
+            "h(2.82974-x3)*h(3.26525-x5)"
+          ],
+          "candidate_rss": [
+            16291.821138247029,
+            16285.156910778624
+          ],
+          "rss_before": 16753.12044181033
+        },
+        "s15_draws/draw033": {
+          "step": 4,
+          "pymars": [
+            "h(3.3732-x0)*h(x2-0.873451)",
+            "h(3.3732-x0)*h(0.873451-x2)"
+          ],
+          "earth": [
+            "h(x0-3.3732)*h(x7-0.0162102)"
+          ],
+          "candidate_rss": [
+            169.47750317215622,
+            167.73728558132393
+          ],
+          "rss_before": 172.83667463416018
+        },
+        "s15_draws/draw035": {
+          "step": 3,
+          "pymars": [
+            "h(x9-3.07787)",
+            "h(3.07787-x9)"
+          ],
+          "earth": [
+            "h(x1-3.21609)*x8"
+          ],
+          "candidate_rss": [
+            216.8078189004023,
+            210.71069706679427
+          ],
+          "rss_before": 222.80297028164472
+        },
+        "s15_draws/draw047": {
+          "step": 8,
+          "pymars": [
+            "h(x0-1.64748)*h(3.31701-x9)"
+          ],
+          "earth": [
+            "x4*h(x9-3.31701)"
+          ],
+          "candidate_rss": [
+            168.0357938945692,
+            167.7288421496993
+          ],
+          "rss_before": 171.50609229199955
+        },
+        "s15_draws/draw053": {
+          "step": 3,
+          "pymars": [
+            "h(x1-2.33006)",
+            "h(2.33006-x1)"
+          ],
+          "earth": [
+            "h(x0-3.17714)*h(x1-0.00449311)"
+          ],
+          "candidate_rss": [
+            68.26835573562691,
+            68.20616832821113
+          ],
+          "rss_before": 70.94651041701539
+        },
+        "s15_draws/draw059": {
+          "step": 8,
+          "pymars": [
+            "h(x5-1.18505)*h(x6-2.34279)",
+            "h(1.18505-x5)*h(x6-2.34279)"
+          ],
+          "earth": [
+            "h(x7-3.29596)*x9"
+          ],
+          "candidate_rss": [
+            7828.7259518464925,
+            7795.371772385847
+          ],
+          "rss_before": 8095.695745636295
+        },
+        "s15_draws/draw061": {
+          "step": 6,
+          "pymars": [
+            "h(x1-3.01181)",
+            "h(3.01181-x1)"
+          ],
+          "earth": [
+            "h(x1-0.00056534)*h(x6-3.24085)"
+          ],
+          "candidate_rss": [
+            133.88846252955045,
+            133.25150188681286
+          ],
+          "rss_before": 136.53476982273585
+        },
+        "s15_draws/draw069": {
+          "step": 4,
+          "pymars": [
+            "h(x3-2.58608)*h(x6-2.05701)",
+            "h(x3-2.58608)*h(2.05701-x6)"
+          ],
+          "earth": [
+            "h(x1-0.00880282)*h(x4-3.05925)"
+          ],
+          "candidate_rss": [
+            18097.139939988796,
+            18020.189413876004
+          ],
+          "rss_before": 18636.16269847747
+        },
+        "s15_draws/draw091": {
+          "step": 6,
+          "pymars": [
+            "h(x1-1.69429)*h(2.45285-x7)",
+            "h(1.69429-x1)*h(2.45285-x7)"
+          ],
+          "earth": [
+            "h(x1-3.35181)*x6"
+          ],
+          "candidate_rss": [
+            183.40368517713625,
+            181.00072061000395
+          ],
+          "rss_before": 190.10581202394286
+        },
+        "s15_draws/draw095": {
+          "step": 9,
+          "pymars": [
+            "h(3.2674-x2)*h(x7-2.79922)",
+            "h(3.2674-x2)*h(2.79922-x7)"
+          ],
+          "earth": [
+            "h(0.193491-x4)*x6"
+          ],
+          "candidate_rss": [
+            40.742041860005486,
+            39.56566048912578
+          ],
+          "rss_before": 41.74458010167799
+        },
+        "s15_draws/draw105": {
+          "step": 10,
+          "pymars": [
+            "h(x2-0.758156)*h(x8-2.7665)",
+            "h(x2-0.758156)*h(2.7665-x8)"
+          ],
+          "earth": [
+            "h(x1-2.98943)*h(x8-0.0233684)"
+          ],
+          "candidate_rss": [
+            192.66740962141162,
+            191.44655854779262
+          ],
+          "rss_before": 198.31032150516734
+        },
+        "s15_draws/draw113": {
+          "step": 6,
+          "pymars": [
+            "h(1.48749-x1)*h(x9-0.969394)",
+            "h(1.48749-x1)*h(0.969394-x9)"
+          ],
+          "earth": [
+            "h(x4-3.03965)*h(x8-0.00719697)"
+          ],
+          "candidate_rss": [
+            66.2473894878217,
+            66.10891819695416
+          ],
+          "rss_before": 68.24453887753589
+        },
+        "s15_draws/draw125": {
+          "step": 10,
+          "pymars": [
+            "h(x0-1.35594)*h(x9-0.599591)"
+          ],
+          "earth": [
+            "h(x0-1.35594)*h(x9-0.599591)",
+            "h(1.35594-x0)*h(x9-0.599591)"
+          ],
+          "candidate_rss": [
+            12468.935967052425,
+            12467.436998649711
+          ],
+          "rss_before": 13066.204114206206
+        },
+        "s15_draws/draw139": {
+          "step": 7,
+          "pymars": [
+            "h(x1-2.59373)*h(3.16777-x8)",
+            "h(2.59373-x1)*h(3.16777-x8)"
+          ],
+          "earth": [
+            "x4*h(x8-3.16777)"
+          ],
+          "candidate_rss": [
+            15108.543918486115,
+            15069.287722018562
+          ],
+          "rss_before": 15799.636387402355
+        },
+        "s15_draws/draw151": {
+          "step": 9,
+          "pymars": [
+            "h(x1-0.649867)*h(x6-0.812857)",
+            "h(x1-0.649867)*h(0.812857-x6)"
+          ],
+          "earth": [
+            "x0*h(x2-3.02716)"
+          ],
+          "candidate_rss": [
+            41.42271360933951,
+            41.09086544647296
+          ],
+          "rss_before": 42.10176594021783
+        },
+        "s15_draws/draw153": {
+          "step": 7,
+          "pymars": [
+            "h(2.87517-x4)*h(x7-2.63252)",
+            "h(2.87517-x4)*h(2.63252-x7)"
+          ],
+          "earth": [
+            "h(x3-0.0124945)*h(x6-3.25126)"
+          ],
+          "candidate_rss": [
+            16628.74039168463,
+            16619.94325971704
+          ],
+          "rss_before": 17126.919408335438
+        },
+        "s15_draws/draw169": {
+          "step": 4,
+          "pymars": [
+            "h(1.59952-x1)*h(x8-0.959608)",
+            "h(1.59952-x1)*h(0.959608-x8)"
+          ],
+          "earth": [
+            "h(x0-3.16186)*h(x3-0.00683095)"
+          ],
+          "candidate_rss": [
+            70.46056485785434,
+            69.84253959963925
+          ],
+          "rss_before": 72.91829550901349
+        },
+        "s15_draws/draw171": {
+          "step": 10,
+          "pymars": [
+            "h(x1-0.883915)*h(3.22273-x6)",
+            "h(0.883915-x1)*h(3.22273-x6)"
+          ],
+          "earth": [
+            "h(x6-3.22273)*x9"
+          ],
+          "candidate_rss": [
+            8807.829893528768,
+            8788.170415326415
+          ],
+          "rss_before": 9032.276291088005
+        }
+      },
+      "note": "The kind of a search (LA-7, #173). pymars runs a pair search when A_w >= 0.01 * the product of (12 sigma_v^2) over the covariates of b.x. The harness divides each covariate by sigma_v, so sigma_v^2 = 1 on its matrix and the threshold is 0.01 * 12^|V|: 0.12 for a term of one covariate and 1.44 for two, against earth's 0.01. In the other 24 cases the same fit agreed with earth up to the listed step before #173, so the threshold decides: A of a search that earth wins lies between the two thresholds, earth runs it as a pair search and pymars as a single-hinge search, so earth's candidate has the column b.x in its RSS and the lower RSS, and the programs choose differently from this step on. The comparison stops at that step, and the pruning on earth's forward basis agrees with earth. In S12_x_1em8_raw_d1 the cause is earth's units: the raw x is 1e-8 times the base x of S12, A is 1.4e-15 in these units, below 0.01, and earth runs a single-hinge search, while the threshold of pymars follows the spread of x and runs a pair search (before #173 this case was labeled quirk). The draws 21, 33 and 61 were E5 to E7 before #173 (earth's hidden term, FWD-11); under the new threshold their first difference comes earlier, at steps 5, 4 and 6, so those entries no longer occur."
     },
     {
       "id": "E2",
@@ -76,89 +464,6 @@
         0.0,
         0
       ]
-    },
-    {
-      "id": "E5",
-      "cases": [
-        "s15_draws/draw021"
-      ],
-      "field": "forward",
-      "step": 7,
-      "label": "quirk",
-      "rules": [
-        "FWD-11",
-        "OQ-6",
-        "FAST-4"
-      ],
-      "pymars": [
-        "h(2.8584-x0)*h(x1-1.1211)",
-        "h(2.8584-x0)*h(1.1211-x1)"
-      ],
-      "earth": [
-        "h(3.24208-x7)*h(x9-0.664554)",
-        "h(3.24208-x7)*h(0.664554-x9)"
-      ],
-      "candidate_rss": [
-        176.64601298766252,
-        176.63399682138416
-      ],
-      "rss_before": 184.2567300017018,
-      "note": "The DGP D1 at the high noise level, degree 2, matched mode (Auto.linpreds = FALSE). earth's trace prints the rank fix: the linear option of step 5 added earth's hidden term, in the empty second slot of that step. earth's parent at step 7, h(3.24208-x7), is the second term of step 6, in slot 13. pymars has 12 terms, so it does not search that slot yet (FAST-4); earth, with its hidden term, has 13 and does. A scratch copy of the reference that adds one empty queue entry (FAST-1) after the linear option of step 5 follows earth's whole path in this draw."
-    },
-    {
-      "id": "E6",
-      "cases": [
-        "s15_draws/draw033"
-      ],
-      "field": "forward",
-      "step": 7,
-      "label": "quirk",
-      "rules": [
-        "FWD-11",
-        "OQ-6",
-        "FAST-4"
-      ],
-      "pymars": [
-        "h(3.3732-x0)*h(x9-2.62033)",
-        "h(3.3732-x0)*h(2.62033-x9)"
-      ],
-      "earth": [
-        "h(2.03371-x2)*h(x9-0.951963)",
-        "h(2.03371-x2)*h(0.951963-x9)"
-      ],
-      "candidate_rss": [
-        151.0823446122114,
-        148.705730583402
-      ],
-      "rss_before": 154.94244645559493,
-      "note": "The DGP D6, degree 2, matched mode. As in E5: the linear option of step 4 added earth's hidden term, and earth's parent at step 7, h(2.03371-x2), the second term of step 6, is in slot 13, which pymars, with 12 terms, does not search yet (FAST-4). A scratch copy of the reference that adds one empty queue entry (FAST-1) after the linear option of step 4 follows earth's whole path in this draw."
-    },
-    {
-      "id": "E7",
-      "cases": [
-        "s15_draws/draw061"
-      ],
-      "field": "forward",
-      "step": 10,
-      "label": "quirk",
-      "rules": [
-        "FWD-11",
-        "OQ-6",
-        "FAST-4"
-      ],
-      "pymars": [
-        "h(x7-0.609737)*h(x9-0.738223)"
-      ],
-      "earth": [
-        "h(x8-0.813011)*h(x9-0.537277)",
-        "h(0.813011-x8)*h(x9-0.537277)"
-      ],
-      "candidate_rss": [
-        120.5298001805806,
-        119.36386027987149
-      ],
-      "rss_before": 123.536576669401,
-      "note": "The DGP D6, degree 2, matched mode. The fit has linear options at steps 2 and 6, and one of them added earth's hidden term; these data do not say which. earth's parent at step 10, h(x9-0.537277), is the first term of step 9, in slot 18. pymars, with 17 terms, does not search slot 18 yet (FAST-4); earth, with 18 terms, searches slot 18 but not slot 19. A scratch copy of the reference with one empty queue entry after step 2, or after step 6, follows earth's whole path in this draw; with entries after both, it searches slot 19 and takes the linear option h(x5-0.00182745)*h(0.537277-x9), whose RSS on the common basis, 119.08, is below earth's choice, 119.36. So in this fit one linear option added a hidden term and the other did not (OQ-6)."
     }
   ]
 }

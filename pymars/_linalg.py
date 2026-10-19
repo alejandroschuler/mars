@@ -73,8 +73,12 @@ COLLINEARITY_TOL_EARLY = 0.01
 COLLINEARITY_TOL_LATE = 1e-5
 #: LA-3: the last forward step, counted from 1, with COLLINEARITY_TOL_EARLY.
 COLLINEARITY_LAST_EARLY_STEP = 7
-#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
+#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π(UNIFORM_INV_VARIANCE·sigma²).
 PAIR_SEARCH_FACTOR = 0.01
+#: LA-7: the inverse of 1/12, the variance of a covariate uniform on [0, 1], so
+#: that UNIFORM_INV_VARIANCE·sigma_v² is 1 for such a covariate and the
+#: threshold is earth's 0.01 there (#173).
+UNIFORM_INV_VARIANCE = 12.0
 
 
 class GramSchmidt(NamedTuple):
@@ -329,20 +333,24 @@ def pair_search(resid_ss: float, variances: npt.ArrayLike) -> bool:
     """Return True for a pair search, False for a single-hinge search (LA-7).
 
     pymars runs a pair search for a parent b and a covariate x when
-    A_w ≥ 0.01·Π_{v∈V} sigma_v², and a single-hinge search otherwise, and
+    A_w ≥ 0.01·Π_{v∈V}(12·sigma_v²), and a single-hinge search otherwise, and
     always when some v ∈ V is constant (a pymars departure: the rule does not
-    depend on the units of x). ``resid_ss`` is A_w, the weighted RSS of b·x on
-    the current columns (``gram_schmidt(Q, √w·b·x).norm ** 2``); ``variances``
-    holds sigma_v² from ``weighted_variances`` for the covariates V of b·x, the
-    parent's and x, where 0.0 marks a constant covariate.
-    Complexity: O(len(variances)).
+    depend on the units of x, and it is earth's A ≥ 0.01 for covariates of the
+    variance 1/12 of a uniform on [0, 1], #173). ``resid_ss`` is A_w, the
+    weighted RSS of b·x on the current columns
+    (``gram_schmidt(Q, √w·b·x).norm ** 2``); ``variances`` holds sigma_v² from
+    ``weighted_variances`` for the covariates V of b·x, the parent's and x,
+    where 0.0 marks a constant covariate. Each factor 12·sigma_v² scales with
+    the units of v as A_w does, so a scaling of X by powers of 2 (EDGE-7)
+    scales both sides exactly. Complexity: O(len(variances)).
     """
     v = np.asarray(variances, dtype=np.float64).ravel()
     if v.size == 0:
         raise ValueError("variances must hold sigma² of at least the covariate x")
     if np.any(v == 0.0):
         return False
-    return bool(resid_ss >= PAIR_SEARCH_FACTOR * math.prod(v.tolist()))
+    threshold = PAIR_SEARCH_FACTOR * math.prod((UNIFORM_INV_VARIANCE * v).tolist())
+    return bool(resid_ss >= threshold)
 
 
 def dependent(dist: float, norm: float) -> bool:

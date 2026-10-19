@@ -656,9 +656,10 @@ def check(differences: list, implementation: str, case: str, entries: list) -> N
     labeled it ``tie``; on an entry for this case and implementation that
     did not occur (a ``tie`` entry may be absent); and on a ``bug`` entry.
     An entry's recorded choices must be those observed, and its candidate
-    RSS values too, to a relative 1e-8."""
+    RSS values too, to a relative 1e-8. An entry for many cases keeps the
+    step, the choices and the RSS values of each case in ``per_case``."""
     mine = [
-        e
+        {**e, **e.get("per_case", {}).get(case, {})}  # the case's own values
         for e in entries
         if case in e["cases"]
         and implementation in e.get("implementations", [implementation])
