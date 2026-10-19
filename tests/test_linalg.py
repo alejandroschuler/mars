@@ -318,11 +318,18 @@ def test_weighted_variances_with_integer_weights_equal_repeated_rows(seed, n):
     )
 
 
-def test_pair_search_threshold_is_one_percent_of_the_variance_product():
-    assert la.pair_search(0.01, [2.0, 0.5]) is True
-    assert la.pair_search(np.nextafter(0.01, 0.0), [2.0, 0.5]) is False
-    assert la.pair_search(0.0101, np.array([1.0])) is True
-    assert la.pair_search(0.0099, [1.0]) is False
+def test_pair_search_threshold_is_earths_for_uniform_covariates():
+    # LA-7 (#173): A_w >= 0.01 * prod(12 * var_v), which is earth's A >= 0.01
+    # where every var_v is 1/12, the variance of a uniform on [0, 1].
+    u = 1.0 / 12.0
+    assert la.pair_search(0.0101, np.array([u])) is True
+    assert la.pair_search(0.0099, [u]) is False
+    assert la.pair_search(0.0101, [u, u]) is True
+    assert la.pair_search(0.0099, [u, u, u]) is False
+    # each covariate counts with its own factor: 12·0.25 = 3 and 12·4 = 48
+    threshold = 0.01 * 144.0
+    assert la.pair_search(threshold, [0.25, 4.0]) is True
+    assert la.pair_search(np.nextafter(threshold, 0.0), [0.25, 4.0]) is False
     assert la.pair_search(1e300, [4.0, 0.0]) is False  # a constant covariate
     with pytest.raises(ValueError, match="at least"):
         la.pair_search(1.0, [])

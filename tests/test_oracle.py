@@ -646,7 +646,7 @@ class _Step:
         out, w = [], self.kept.w
         b, x, knot = self.scaled(key)
         V = [*np.flatnonzero(self.dirs[k]).tolist(), v]
-        thr = 0.01 * math.prod(self.sigma2[u] for u in V)
+        thr = 0.01 * math.prod(12 * self.sigma2[u] for u in V)  # LA-7
         searchable = all(self.sigma2[u] > 0 for u in V)
         lin = b * x
         A = self.P_F.rss(lin)
