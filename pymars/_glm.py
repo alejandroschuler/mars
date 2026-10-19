@@ -34,7 +34,7 @@ gives up after ``MAX_ITER`` steps, or when the line search finds no
 decrease. Under separation the minimum is not attained: the iterates grow
 without bound and the relative decrement stays near 1/2, so the fit ends at
 ``MAX_ITER`` without converging. A ConvergenceWarning that
-suggests a positive ``glm_alpha`` follows when the fit did not converge, or
+suggests a larger ``glm_alpha`` follows when the fit did not converge, or
 when some fitted probability of a case with positive weight is below
 1/(1 + e³⁰) or above its complement (|η| > 30, GLM-4); the last
 iterate is kept.
@@ -280,8 +280,8 @@ def fit_glm(
             "The logistic refit of EarthClassifier "
             + " and ".join(why)
             + ", as with separated classes; the coefficients are those of the "
-            "last step. A positive glm_alpha, such as 1e-4, gives an L2 penalty "
-            "with a finite minimum.",
+            "last step. A larger glm_alpha strengthens the L2 penalty, which has "
+            "a finite minimum.",
             ConvergenceWarning,
             stacklevel=3,
         )

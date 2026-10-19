@@ -139,7 +139,7 @@ The legacy arms' boxes are wide and shifted, so the gap is a shift of the whole 
 
 ## 3. Parity
 
-**Aim.** pymars 2.0 (P-fix) at its defaults with `max_degree=2` has an excess risk within a factor of 1.05 of earth's (E-def), in either direction, on every cell of the grid, and an excess log loss within 5 percent on the binary DGPs. The plan named two likely boundaries: small samples with many irrelevant covariates, and correlated covariates.
+**Aim.** pymars 2.0 (P-fix) at its defaults (`glm_alpha=0`, the default at the freeze, for the binary cells) with `max_degree=2` has an excess risk within a factor of 1.05 of earth's (E-def), in either direction, on every cell of the grid, and an excess log loss within 5 percent on the binary DGPs. The plan named two likely boundaries: small samples with many irrelevant covariates, and correlated covariates.
 
 **Design.** All 51 cells, P-fix against E-def, with 300 to 12,400 repetitions per cell as described under [Repetitions](#repetitions). The test is the equivalence rule with the margin log 1.05.
 
@@ -169,7 +169,7 @@ The fits differ in a minority of repetitions (a median of 11 percent of repetiti
 
 This study does not show which rule makes pymars keep more terms on noise. The documented differences (`docs/differences.md`) include the scaling of the pair rule by the covariates' variance (LA-7, E1) and the fixed tie order, and either could act on pure noise, where many candidates have nearly equal small gains. A comparison of the forward passes in the differing D6 repetitions would settle it; that is left as a follow-up.
 
-**Statement.** pymars 2.0 at its defaults matches earth's excess risk within 5 percent on 48 of 51 cells, including every interaction, many-covariate, correlated-covariate and binary cell. The claim gains a condition: on pure noise pymars is worse than earth at every sample size, resolved above 1 at all three. At 200 cases it is 5 to 10 percent worse; at 1,000 cases the study cannot tell whether the gap is inside 5 percent; at 5,000 cases it is inside 5 percent only by a small margin (|ḡ| + 3 standard errors = 0.0484 against log 1.05 = 0.0488) and only after the extension to 12,400 repetitions. On the linear DGP at 5,000 cases and high noise the study cannot tell either. Where the two programs differ, pymars is the worse of the two more often than not, by a few percent. On pure noise both excess risks are small, so the ratio is one of two small numbers.
+**Statement.** pymars 2.0 at its defaults (`glm_alpha=0`, the default at the freeze, for the binary cells) matches earth's excess risk within 5 percent on 48 of 51 cells, including every interaction, many-covariate, correlated-covariate and binary cell. The claim gains a condition: on pure noise pymars is worse than earth at every sample size, resolved above 1 at all three. At 200 cases it is 5 to 10 percent worse; at 1,000 cases the study cannot tell whether the gap is inside 5 percent; at 5,000 cases it is inside 5 percent only by a small margin (|ḡ| + 3 standard errors = 0.0484 against log 1.05 = 0.0488) and only after the extension to 12,400 repetitions. On the linear DGP at 5,000 cases and high noise the study cannot tell either. Where the two programs differ, pymars is the worse of the two more often than not, by a few percent. On pure noise both excess risks are small, so the ratio is one of two small numbers.
 
 ## 4. Sparsity
 

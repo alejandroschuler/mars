@@ -34,14 +34,18 @@ dependencies = [
     "numpy>=1.24.4",
     "scipy>=1.9.3",
     "scikit-learn>=1.6",
-    # Compiled knot scan. numba has no wheels for macOS Intel since 0.63, nor
-    # for a CPython newer than its latest release supports: those installs skip
-    # numba and run the numpy code, which warns once per process (decisions of
-    # 2026-10-18 and 2026-10-19, issues #145 and #175). numba 0.68.0 has wheels
-    # up to CPython 3.15 (PyPI, checked 2026-10-19). Raise the "3.16" bound when
-    # a numba release adds wheels for a newer CPython, and add that version to
-    # the classifiers and the CI matrix.
-    "numba>=0.63; python_version < '3.16' and (sys_platform != 'darwin' or platform_machine != 'x86_64')",
+    # Compiled knot scan. numba 0.68.0 (PyPI, checked 2026-10-19) has no wheels
+    # for macOS Intel (since 0.63), for PyPy, for CPython 3.16 and later, or for
+    # Windows ARM64 on CPython 3.10, 3.11 and 3.15. Those installs skip numba
+    # and run the numpy code, which warns once per process (decisions of
+    # 2026-10-18 and 2026-10-19, issues #145, #175 and #182). PEP 508 has no
+    # marker for musllinux, 32-bit Python or other CPU architectures, where
+    # pip fails on numba: the README says how to install without it. Each time
+    # a numba release adds or drops wheels, update this marker: raise the
+    # "3.16" bound when it supports a newer CPython (and add that version to
+    # the classifiers and the CI matrix), and move the Windows ARM64 window
+    # ("3.12" to "3.15", exclusive) with its win_arm64 wheels.
+    "numba>=0.63; platform_python_implementation == 'CPython' and python_version < '3.16' and (sys_platform != 'darwin' or platform_machine != 'x86_64') and (sys_platform != 'win32' or platform_machine != 'ARM64' or (python_version >= '3.12' and python_version < '3.15'))",
 ]
 
 [project.urls]
