@@ -521,6 +521,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 ## 2026-10-19
 - 10:39 The user answered #175 in this session: glm_alpha default 1.0; numba kept where wheels exist, plus a Python guard and a warning on the numpy fallback. Disabled the watchdog (#180 closed). Took the idle lock of local_a3dbbbaa. Brief U175-defaults; starting u175-defaults (sonnet).
 - 11:25 review-181-single APPROVE at c0c41ca. Merged #181 (#175: glm_alpha default 1.0; numba marker python_version < 3.16 and not macOS x86_64; NumbaUnavailableWarning) as ba8ac19; #175 closed. Non-blocking items in #182 (GLM-4 wording, REPORT 'at its defaults', numba wheels missing on Windows ARM64 3.10/3.11/3.15, musllinux, PyPy). Started i173-noise a60ae1cac25694cc4 (opus; phase 1 diagnosis of #173, brief I173-noise.md).
+- 11:53 Merged #183 (#182: numba marker narrowed to wheel platforms, GLM-4 wording, REPORT glm_alpha notes) as fdaca4a; follow-ups in #184. #173 phase 1 (i173-noise): all 1,145 differing D6 n=200 reps come from LA-7's pair rule (pymars threshold 144x smaller than earth's raw 0.01 on [0,1] data). The user chose the scale-invariant threshold 0.01·Π(12σ²) (D6 n=200 ratio 0.997 [0.993, 1.001]). Brief I173-noise.md phase 2: one PR t173-pair-rule, author A (spec, fast, conformance), author B (reference, clean room), full T21 grid rerun as the pre-set acceptance check. Weekly 5 %.
 
 ## Core-hour ledger
 
