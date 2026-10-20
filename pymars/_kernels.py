@@ -76,9 +76,12 @@ class NumbaUnavailableWarning(UserWarning):
 NUMPY_FALLBACK_MESSAGE = (
     "numba is not available, so pymars runs its numpy code for the knot scan. "
     "Fits with thousands of cases or more then take up to about 3 times as "
-    "long. Install it with `pip install numba`; numba has no wheels for Intel "
-    "Macs or for a Python version newer than its latest release supports. "
-    "This warning appears once per process."
+    "long. Install it with `pip install numba`. That fails where numba has no "
+    "wheels: on PyPy, on Windows ARM64 with Python 3.10, 3.11 or 3.15, on "
+    "musllinux (Alpine Linux), with 32-bit Python, with free-threaded Python, "
+    "on CPUs other than x86-64 and ARM64, and with a Python version newer than "
+    "its latest release supports. Intel Macs get no wheels of numba 0.63 or "
+    "later. This warning appears once per process."
 )
 _warned = False
 
