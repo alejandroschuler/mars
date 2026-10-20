@@ -532,6 +532,7 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 
 ## 2026-10-20
 - 12:50 WRAP-UP (the user: 'wrap it all up'). Updated the user's #64 with gh pr update-branch (no force push); gate B PASS on 1e07d57; update-check-64 APPROVE; merged #64 as ff93d4b (closes #62); closed #68. Closed #59; #65 marked later. Removed 43 clean task worktrees with no unpushed commits (git worktree remove, no --force). Started w184-wrapup ae850386b8a013211 (sonnet; #184 and the benchmark rerun after #185).
+- 13:20 #187 review APPROVE at db261e2; merged #187 (closes #184) as 7ee9878; nits in #188 (later). Removed 5 more clean worktrees. Deleted the watchdog task (475 run sessions archived). WRAPPED UP: main 7ee9878; open issues are 'later' items and #60 (the user's cleanup).
 
 ## Core-hour ledger
 

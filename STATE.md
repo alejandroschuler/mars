@@ -2,7 +2,7 @@
 
 Work done: yes
 
-Updated: 2026-10-20 12:50 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
+Updated: 2026-10-20 13:20 PDT, by executor session `local_a59469db-c3f1-480c-81c4-a4c7beae39f4`.
 
 This file and LOG.md are the executor journal (branch `executor`; only the executor pushes). A new executor rebuilds its state from this file, LOG.md, the issues and pull requests of `alejandroschuler/mars`, ListAgents and the job manifests.
 
@@ -14,6 +14,8 @@ This file and LOG.md are the executor journal (branch `executor`; only the execu
 - Briefs: `briefs/` in this journal.
 
 ## Phase
+
+WRAPPED UP 2026-10-20 (session local_a59469db, at the user's request 'wrap it all up'). main is 7ee9878. After the first DONE: #181 (glm_alpha default 1.0; numba where wheels exist, with NumbaUnavailableWarning), #183 (numba marker narrowed to wheel platforms), #185 (LA-7 pair rule 0.01·Π(12σ²); the T21 grid rerun gives 51 of 51 cells at parity; the pure-noise gap is gone), #186 (REPORT.md after #185, with the skewed-covariate known limit: D4 1.9 % at n = 200 and 0.7 % at n = 1,000 against the old rule), #64 (the user's TOOLS-2, updated with gh pr update-branch), #187 (#184 install notes and the benchmark after #185: 10,000 x 10 x degree 2, numba 1.8 times earth fresh and 1.0 warm, numpy 3.3; 100,000 cases 0.76 to 0.78). The watchdog task is deleted. No agent or job runs. Open issues are all 'later' (#188, #179, #178, #65, #27 to #33) plus #60 (the user's local cleanup of worktrees that need --force). If work resumes, a new session reads this journal; there is no watchdog.
 
 POST-DONE FOLLOW-UP (2026-10-19, session local_a59469db): the user answered #175: EarthClassifier's default glm_alpha becomes 1.0 (glm_alpha=0 documented as earth-compatible; REPORT notes that the study used 0), and numba stays a dependency where it has wheels, with a Python-version guard and a once-per-process warning when the numpy fallback runs ("assuming the user is alerted that it will be slow without numba"). Brief briefs/U175-defaults.md; one sonnet author and one single review. The watchdog task is disabled (#180 closed).
 
