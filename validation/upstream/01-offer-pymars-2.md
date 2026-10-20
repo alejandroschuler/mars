@@ -21,7 +21,7 @@ Numbers, from `validation/REPORT.md` and `validation/bench/REPORT.md` (refresh t
 
 - Conformance: the reference implementation agrees with `earth` in full on 119 of 133 dataset fixtures and 181 of 200 random draws; the other differences each have a label and a reason in `validation/DIFFERENCES.md`, and all of them are documented rule differences. The fast code shows the same differences as the reference on all 333 comparisons.
 - Parity in prediction error: equivalence to within a factor of 1.05 of `earth`'s excess risk is shown in 51 of 51 cells, in a rerun after a change to the pair rule (LA-7) that removed a 7.6 percent gap on pure noise at 200 cases (the rerun also holds two later changes to the fitting code, #172 and #167, so a separate diagnosis, not the rerun, ties the gap to the pair rule). On skewed covariates the change costs up to 1.9 percent on one function (a known limit in the report). The report says which cells are weaker evidence.
-- Speed, at 10,000 cases, 10 covariates, degree 2: `EarthRegressor` takes 1.7 times `earth`'s time in a fresh process and about 0.9 times in a warm one with numba, and 2.6 and 2.7 times with the numpy fallback. The 1.0.4 code takes 144 s for 1,000 cases with the same settings, where the new code takes under a second.
+- Speed, at 10,000 cases, 10 covariates, degree 2: `EarthRegressor` takes 1.8 times `earth`'s time in a fresh process and about 1.0 times in a warm one with numba, and 3.3 and 3.4 times with the numpy fallback. The 1.0.4 code takes 144 s for 1,000 cases with the same settings, where the new code takes under a second.
 
 ## What would change for users
 
