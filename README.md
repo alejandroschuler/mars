@@ -10,13 +10,13 @@ Version 2 is a rewrite. The fitting code follows a written specification, [docs/
 pip install git+https://github.com/alejandroschuler/mars
 ```
 
-The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), PyPy, or Windows ARM64 with Python 3.10, 3.11 or 3.15, nor for a Python version newer than its latest release supports (3.15 now), so pymars does not install numba there and runs the numpy code, which takes up to about 3 times as long as the numba code (see Status and validation). The first fit of each process then issues one `NumbaUnavailableWarning`; `pip install numba` removes the cause where numba has wheels, and `warnings.filterwarnings("ignore", category=pymars.NumbaUnavailableWarning)` silences it. The two give the same models except at near-ties (STOP-7 of [docs/algorithm.md](docs/algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms.
+The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), PyPy, or Windows ARM64 with Python 3.10, 3.11 or 3.15, nor for Python 3.16 and later (numba 0.68, its latest release, supports up to 3.15), so pymars does not install numba there and runs the numpy code, which takes up to about 3 times as long as the numba code (see Status and validation). The first fit of each process then issues one `NumbaUnavailableWarning`; `pip install numba` removes the cause where numba has wheels, and `warnings.filterwarnings("ignore", category=pymars.NumbaUnavailableWarning)` silences it. The two give the same models except at near-ties (STOP-7 of [docs/algorithm.md](docs/algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms.
 
-numba also has no wheels for musllinux (for example Alpine Linux), for 32-bit Python, or for CPU architectures other than x86-64 and ARM64. The install markers of pip cannot name those, so `pip install` fails there while it builds numba. Install without numba instead, and pymars runs the numpy code:
+numba also has no wheels for musllinux (for example Alpine Linux), for 32-bit Python, for free-threaded Python (3.13t and 3.15t on every platform, and 3.14t on Windows ARM64), or for CPU architectures other than x86-64 and ARM64. The install markers of pip cannot name those, so `pip install` fails there while it builds numba. Install without numba instead, and pymars runs the numpy code. Install the three dependencies first, then pymars with `--no-deps`, so that pip does not look for numba:
 
 ```bash
-pip install --no-deps git+https://github.com/alejandroschuler/mars
 pip install numpy scipy scikit-learn
+pip install --no-deps git+https://github.com/alejandroschuler/mars
 ```
 
 ## Regression

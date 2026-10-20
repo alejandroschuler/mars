@@ -378,7 +378,14 @@ def test_the_numpy_fallback_warns_once_per_process(monkeypatch):
     monkeypatch.setattr(_kernels, "AVAILABLE", False)
     (warning,) = three_fits()
     assert issubclass(pymars.NumbaUnavailableWarning, UserWarning)
-    for part in ("numba is not available", "3 times as long", "pip install numba"):
+    for part in (
+        "numba is not available",
+        "3 times as long",
+        "pip install numba",
+        "PyPy",
+        "Windows ARM64",
+        "musllinux",
+    ):
         assert part in str(warning.message)
     assert warning.filename == __file__
     assert three_fits() == []
