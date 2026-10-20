@@ -11,8 +11,8 @@ a docstring of ``pymars/_linalg.py`` only), with ``driver_t173.sh`` (the log
 is ``driver_log_summary.txt``, the invocations are ``manifest.json``). Same
 cells, seeds and repetitions as the study at the freeze commit 0274c5a: the
 repetitions of a cell are ``0:n_sim`` with the n_sim of ``../full/parity.csv``.
-286d994 also holds #164, #167 and other changes made after the freeze, so the
-rerun does not isolate the pair rule; phase 1 of #173 does.
+286d994 also holds #172 (the fix for #164), #167 and other changes made after
+the freeze, so the rerun does not isolate the pair rule; phase 1 of #173 does.
 
 Writes ``results.csv`` (one row per fit, with the columns of
 ``../full/results.csv``) and ``failure_counts.csv``. Only the arm P-fix ran;
