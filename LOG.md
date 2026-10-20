@@ -530,6 +530,9 @@ Merges, incidents, decisions and the core-hour ledger. Times are PDT.
 - 16:58 #186 (report after #185) ready; executor commit e41c867 (summary.md provenance notes that the author's Write tool refused; four settings; counts in the upstream draft and the ctml note); gate B PASS on e41c867. review-186-single REQUEST_CHANGES: stale ctml note lines 9 and 11, README lines 87 and 89; numbers otherwise rebuild byte for byte. Sent round 1 to r185-report.
 - 17:26 #186 round 1 fixed by r185-report (1f564f3; README and ctml note); recheck APPROVE; executor fixed three wording nits (6a2a198; gate B PASS); update check APPROVE; CI green. Merged #186 (report after #185: parity 51 of 51 at the new rule, the skewed-covariate known limit, results and scripts in validation/sims/results/t173-grid and skew) as 37ffcb2. Open: #184 (numba install-note follow-ups), #68/#64, #60, #59, the optional tag push; the benchmark was not rerun after #185.
 
+## 2026-10-20
+- 12:50 WRAP-UP (the user: 'wrap it all up'). Updated the user's #64 with gh pr update-branch (no force push); gate B PASS on 1e07d57; update-check-64 APPROVE; merged #64 as ff93d4b (closes #62); closed #68. Closed #59; #65 marked later. Removed 43 clean task worktrees with no unpushed commits (git worktree remove, no --force). Started w184-wrapup ae850386b8a013211 (sonnet; #184 and the benchmark rerun after #185).
+
 ## Core-hour ledger
 
 | Date | Block | Core-hours | Notes |
