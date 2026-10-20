@@ -1,0 +1,18 @@
+runner HEAD fdaca4a1f5142bc601fffb44d4ef9862c6039591, arms P-fix
+=== 2026-10-19T21:08:32Z START screen n=200, reps 0:1000 ===
+350 tasks for 7 cells, reps 0:1000
+=== 2026-10-19T21:12:55Z DONE  screen n=200, reps 0:1000 ===
+=== 2026-10-19T21:12:55Z START pilot D4 n=1000, reps 0:1000 ===
+50 tasks for 1 cells, reps 0:1000
+=== 2026-10-19T21:13:29Z DONE  pilot D4 n=1000, reps 0:1000 ===
+=== 2026-10-19T21:13:29Z STAGE 1 DONE ===
+runner HEAD fdaca4a1f5142bc601fffb44d4ef9862c6039591, arms P-fix
+=== 2026-10-19T21:16:09Z START confirm D4 n=200 and n=1000, reps 1000:7000 ===
+600 tasks for 2 cells, reps 1000:7000
+      275.53 real      1082.00 user        10.29 sys
+=== 2026-10-19T21:20:45Z DONE  confirm D4 n=200 and n=1000, reps 1000:7000 ===
+=== 2026-10-19T21:20:45Z START extension D8 n=200, reps 1000:23000 ===
+1100 tasks for 1 cells, reps 1000:23000
+      372.82 real      1458.95 user        17.78 sys
+=== 2026-10-19T21:26:58Z DONE  extension D8 n=200, reps 1000:23000 ===
+=== 2026-10-19T21:26:58Z STAGE 2 DONE ===

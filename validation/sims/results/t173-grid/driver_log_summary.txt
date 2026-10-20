@@ -1,0 +1,29 @@
+runner HEAD 286d9946cbff88b15cc3fbd53bf5a680ac340226
+=== 2026-10-19T19:51:28Z START all 51 cells reps 0:300 ===
+15300 (cell, arm, repetition) units to run, out of 15300 requested
+=== 2026-10-19T20:01:19Z DONE  all 51 cells reps 0:300 ===
+=== 2026-10-19T20:01:19Z START n_sim 600: reps 300:600 ===
+1800 (cell, arm, repetition) units to run, out of 1800 requested
+=== 2026-10-19T20:01:52Z DONE  n_sim 600: reps 300:600 ===
+=== 2026-10-19T20:01:52Z START n_sim 750: reps 300:750 ===
+450 (cell, arm, repetition) units to run, out of 450 requested
+=== 2026-10-19T20:02:06Z DONE  n_sim 750: reps 300:750 ===
+=== 2026-10-19T20:02:06Z START n_sim 900: reps 300:900 ===
+1200 (cell, arm, repetition) units to run, out of 1200 requested
+=== 2026-10-19T20:02:25Z DONE  n_sim 900: reps 300:900 ===
+=== 2026-10-19T20:02:25Z START n_sim 1300: reps 300:1300 ===
+3000 (cell, arm, repetition) units to run, out of 3000 requested
+=== 2026-10-19T20:02:54Z DONE  n_sim 1300: reps 300:1300 ===
+=== 2026-10-19T20:02:54Z START n_sim 3000: reps 300:3000 ===
+2700 (cell, arm, repetition) units to run, out of 2700 requested
+=== 2026-10-19T20:03:20Z DONE  n_sim 3000: reps 300:3000 ===
+=== 2026-10-19T20:03:20Z START n_sim 3800: reps 300:3800 ===
+3500 (cell, arm, repetition) units to run, out of 3500 requested
+=== 2026-10-19T20:03:57Z DONE  n_sim 3800: reps 300:3800 ===
+=== 2026-10-19T20:03:57Z START n_sim 7500: reps 300:7500 ===
+7200 (cell, arm, repetition) units to run, out of 7200 requested
+=== 2026-10-19T20:04:53Z DONE  n_sim 7500: reps 300:7500 ===
+=== 2026-10-19T20:04:53Z START n_sim 12400: reps 300:12400 ===
+12100 (cell, arm, repetition) units to run, out of 12100 requested
+=== 2026-10-19T20:09:15Z DONE  n_sim 12400: reps 300:12400 ===
+=== 2026-10-19T20:09:15Z ALL BLOCKS DONE ===

@@ -10,8 +10,12 @@ Reads the per-repetition results of the T21 full run
 T04 legacy run (``validation/sims/results/legacy/results.csv``: P-cur, P-ear,
 E-pym, EarthClassifier, GLMEarth, OLS, HGB, and E-def on the same seeds).
 The two E-def columns are equal where both exist, so every contrast is paired
-on the same datasets. With ``--bench-run`` it also copies the benchmark's
-medians to ``bench_times.csv``; without it the stored copy is used.
+on the same datasets. It also reads the rerun of the P-fix arm over the whole
+grid after PR #185 (``results/t173-grid/results.csv``, arm ``P-fix-185``, at
+the same seeds and repetitions, paired with the stored E-def) and the
+skewed-covariate study (``results/skew/results.csv``: arms P-old, P-new and
+E-def). With ``--bench-run`` it also copies the benchmark's medians to
+``bench_times.csv``; without it the stored copy is used.
 
 Writes, in this folder, ``tables/*.md`` (pasted into REPORT.md),
 ``tables/*.csv`` and ``figures/*.png``. Nothing here fits a model.
@@ -41,6 +45,7 @@ ROOT = SIMS.parents[1]
 TABLES, FIGURES = HERE / "tables", HERE / "figures"
 DELTA = math.log(1.05)
 K = 3.0
+RERUN = "P-fix-185"  # the P-fix arm at 286d994, after the pair rule of PR #185
 DGPS = ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"]
 NAMES = {
     "D1": "D1 linear",
@@ -82,7 +87,10 @@ def load() -> pd.DataFrame:
         d["noise"] = d.noise.fillna("na")
     # E-def is in both files with the same seeds and values; keep the full run's.
     leg = leg[leg.arm != "E-def"]
-    df = pd.concat([full, leg], ignore_index=True)
+    rerun = pd.read_csv(SIMS / "results" / "t173-grid" / "results.csv")
+    rerun["noise"] = rerun.noise.fillna("na")
+    rerun["arm"] = RERUN
+    df = pd.concat([full, leg, rerun], ignore_index=True)
     df["n"] = df.n.astype(int)
     df["rep"] = df.rep.astype(int)
     return df
@@ -105,6 +113,17 @@ def paired(df, dgp, n, noise, a, b="E-def", max_rep=None):
     if len(j) == 0:
         return None
     return np.log(x[j].to_numpy()) - np.log(y[j].to_numpy())
+
+
+def paired_series(df, dgp, n, noise, a, b="E-def"):
+    """The log ratios g_i of arm a over arm b as a Series indexed by the
+    repetition i (sorted), so that two such Series can be subtracted."""
+    m = measure(dgp)
+    cell = df[(df.dgp == dgp) & (df.n == n) & (df.noise == noise)]
+    x = cell[cell.arm == a].set_index("rep")[m]
+    y = cell[cell.arm == b].set_index("rep")[m]
+    j = x.index.intersection(y.index).sort_values()
+    return pd.Series(np.log(x[j].to_numpy()) - np.log(y[j].to_numpy()), index=j)
 
 
 def summary(g) -> dict:
@@ -237,7 +256,9 @@ def style(ax) -> None:
     ax.set_axisbelow(True)
 
 
-def parity_figure(p: pd.DataFrame) -> None:
+def parity_figure(
+    p: pd.DataFrame, name: str = "parity.png", arm: str = "P-fix"
+) -> None:
     order = ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D3-bin", "D4-bin"]
     marks = {
         "lo": ("o", "low noise"),
@@ -272,7 +293,7 @@ def parity_figure(p: pd.DataFrame) -> None:
         style(ax)
     axes[0].set_yticks(range(len(order)), [NAMES[d] for d in order])
     axes[0].invert_yaxis()
-    axes[1].set_xlabel("ratio of excess risk, P-fix / E-def (log scale)", color=INK2)
+    axes[1].set_xlabel(f"ratio of excess risk, {arm} / E-def (log scale)", color=INK2)
     handles = [
         plt.Line2D([], [], color=colors[k], linewidth=2, label=k) for k in colors
     ] + [
@@ -284,8 +305,117 @@ def parity_figure(p: pd.DataFrame) -> None:
         bbox_to_anchor=(0.5, -0.01),
     )  # fmt: skip
     fig.tight_layout(rect=(0, 0.06, 1, 1))
-    fig.savefig(FIGURES / "parity.png", dpi=150, facecolor="white")
+    fig.savefig(FIGURES / name, dpi=150, facecolor="white")
     plt.close(fig)
+
+
+def parity_rerun(df: pd.DataFrame, p: pd.DataFrame) -> pd.DataFrame:
+    """The parity grid again after PR #185 (issue #173): P-fix at 286d994 over
+    E-def, on the same cells, seeds and repetitions as the study at the freeze
+    (``p``, from parity()), with the E-def fits of the study. The columns with
+    the prefix old are the study's, those with new the rerun's."""
+    recs = []
+    for r in p.itertuples():
+        gn = paired_series(df, r.dgp, r.n, r.noise, RERUN)
+        go = paired_series(df, r.dgp, r.n, r.noise, "P-fix")
+        if not go.index.equals(gn.index):
+            raise SystemExit(f"{r.dgp} n={r.n} {r.noise}: other repetitions")
+        so, sn = summary(go.to_numpy()), summary(gn.to_numpy())
+        ch = summary((gn - go).to_numpy())  # the paired change of the log ratio
+        m = measure(r.dgp)
+        cell = df[(df.dgp == r.dgp) & (df.n == r.n) & (df.noise == r.noise)]
+        cell = cell[cell.rep.isin(go.index)]
+        by = {a: cell[cell.arm == a].set_index("rep").loc[go.index] for a in
+              ("E-def", "P-fix", RERUN)}  # fmt: skip
+        same = np.abs(np.log(by[RERUN][m]) - np.log(by["P-fix"][m])) < 1e-9
+        rec = {
+            "dgp": r.dgp, "n": r.n, "noise": r.noise, "n_sim": sn["n_sim"],
+            "same_fit_as_freeze": float(same.mean()),
+            "chg_ratio": ch["ratio"], "chg_lo": ch["lo"], "chg_hi": ch["hi"],
+        }  # fmt: skip
+        for tag, st in (("old", so), ("new", sn)):
+            rec.update({f"{tag}_{k}": st[k] for k in ("ratio", "lo", "hi", "g_bar")})
+            rec[f"{tag}_equal"] = st["share_equal"]
+            rec[f"{tag}_decision"] = decision(st)
+        for tag, a in (("freeze", "P-fix"), ("new", RERUN), ("earth", "E-def")):
+            rec[f"terms_{tag}"] = float(by[a].n_terms.mean())
+            rec[f"irrelevant_{tag}"] = float(by[a].n_irrelevant_covariates.mean())
+        recs.append(rec)
+    q = pd.DataFrame(recs)
+    # The acceptance test of the issue, fixed before the rerun: in no cell with
+    # signal does the ratio rise above the stored cell's upper bound (to within
+    # 1e-9) or the verdict go from equivalent to another one; D6's ratio falls.
+    q["signal"] = q.dgp != "D6"
+    q["ratio_within_stored_bound"] = q.new_ratio <= q.old_hi + 1e-9
+    q["verdict_kept"] = ~(
+        (q.old_decision == "equivalent") & (q.new_decision != "equivalent")
+    )
+    q.to_csv(TABLES / "parity_rerun.csv", index=False)
+
+    def cellname(r) -> list[str]:
+        return [NAMES[r.dgp], r.noise, f"{r.n:,}", f"{r.n_sim:,}"]
+
+    def interval(r, tag) -> str:
+        return f"{r[f'{tag}_ratio']:.3f} [{r[f'{tag}_lo']:.3f}, {r[f'{tag}_hi']:.3f}]"
+
+    def row(r) -> list[str]:
+        return [
+            *cellname(r),
+            interval(r, "old"),
+            interval(r, "new"),
+            f"{r.old_decision} to {r.new_decision}"
+            if r.old_decision != r.new_decision
+            else r.new_decision,
+            f"{100 * r.old_equal:.0f}% to {100 * r.new_equal:.0f}%",
+        ]
+
+    hdr = ["DGP", "noise", "n", "reps", "freeze: P-fix / E-def",
+           "after #185: P-fix / E-def", "decision",
+           "equal fits to E-def"]  # fmt: skip
+    ordered = [r for _, r in q.sort_values(["dgp", "noise", "n"]).iterrows()]
+    write("parity_rerun_all.md", md_table(hdr, [row(r) for r in ordered]))
+    changed = [
+        r for r in ordered
+        if r.dgp == "D6" or r.old_decision != r.new_decision
+    ]  # fmt: skip
+    hdr2 = [*hdr, "paired change"]
+    rows2 = [
+        [*row(r), f"{r.chg_ratio:.3f} [{r.chg_lo:.3f}, {r.chg_hi:.3f}]"]
+        for r in changed
+    ]
+    write("parity_rerun_changed.md", md_table(hdr2, rows2))
+
+    sig = q[q.signal]
+    d6 = q[~q.signal].sort_values("n")
+    counts = {
+        "cells": len(q),
+        "equivalent_freeze": int((q.old_decision == "equivalent").sum()),
+        "equivalent_after": int((q.new_decision == "equivalent").sum()),
+        "signal_cells": len(sig),
+        "signal_ratio_above_stored_bound": sig[~sig.ratio_within_stored_bound][
+            ["dgp", "n", "noise"]
+        ].to_dict("records"),
+        "signal_verdict_lost": sig[~sig.verdict_kept][["dgp", "n", "noise"]].to_dict(
+            "records"
+        ),
+        "signal_cells_above_stored_point": int(
+            (sig.new_ratio > sig.old_ratio + 1e-9).sum()
+        ),
+        "signal_ratio_range_after": [
+            float(sig.new_ratio.min()),
+            float(sig.new_ratio.max()),
+        ],
+        "signal_highest_upper_bound_after": float(sig.new_hi.max()),
+        "d6_ratio_falls_at_every_n": bool((d6.new_ratio < d6.old_ratio).all()),
+        "d6_paired_change": {
+            int(r.n): [r.chg_ratio, r.chg_lo, r.chg_hi] for r in d6.itertuples()
+        },
+        "verdict_changes": q[q.old_decision != q.new_decision][
+            ["dgp", "n", "noise", "old_decision", "new_decision"]
+        ].to_dict("records"),
+    }
+    (TABLES / "parity_rerun_counts.json").write_text(json.dumps(counts, indent=1))
+    return q
 
 
 def box_figure(df) -> None:
@@ -335,53 +465,83 @@ def box_figure(df) -> None:
 
 
 # The sparsity claim --------------------------------------------------------
+SPARSITY_ARMS = [
+    ("E-def", "E-def"),
+    ("P-cur", "P-cur"),
+    ("P-fix", "P-fix (freeze)"),
+    (RERUN, "P-fix (after #185)"),
+]
+
+
+def sparsity_rows(df, d, n, nz, arms, recs, digits=2):
+    """The rows of Table 4.1 for one cell: the size and selection of every arm,
+    and its mean paired difference from E-def with ±3 Monte Carlo SEs."""
+    rows = []
+    cell = df[(df.dgp == d) & (df.n == n) & (df.noise == nz)]
+    e = cell[cell.arm == "E-def"].set_index("rep")
+    for a, label in arms:
+        x = cell[cell.arm == a].set_index("rep")
+        if x.empty:
+            rows.append(
+                [NAMES[d], nz, f"{n:,}", label, "not run (too slow)", "", "", "", ""]
+            )
+            continue
+        q = x.n_terms.quantile([0.25, 0.5, 0.75])
+        diff = ""
+        if a != "E-def":
+            j = x.index.intersection(e.index)
+            parts = []
+            for col in ("n_terms", "n_irrelevant_covariates"):
+                dd = (x.loc[j, col] - e.loc[j, col]).astype(float)
+                m, se = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
+                lo, hi = m - K * se, m + K * se
+                parts.append(f"{m:+.{digits}f} [{lo:+.{digits}f}, {hi:+.{digits}f}]")
+                recs.append(
+                    {"dgp": d, "n": n, "noise": nz, "arm": a, "measure": col,
+                     "mean_diff": m, "se": se, "reps": len(dd)}
+                )  # fmt: skip
+            diff = " / ".join(parts)
+        rows.append(
+            [
+                NAMES[d],
+                nz,
+                f"{n:,}",
+                label,
+                f"{q[0.5]:.0f} ({q[0.25]:.0f} to {q[0.75]:.0f})",
+                f"{x.n_terms.mean():.2f}",
+                f"{100 * x.uses_irrelevant_covariate.mean():.0f}%",
+                f"{x.n_irrelevant_covariates.mean():.2f}",
+                diff,
+            ]
+        )
+    return rows
+
+
+SPARSITY_HEADER = [
+    "DGP",
+    "noise",
+    "n",
+    "arm",
+    "terms, median (IQR)",
+    "terms, mean",
+    "uses an irrelevant covariate",
+    "irrelevant covariates, mean",
+    "minus E-def: terms / irrelevant covariates",
+]
+
+
 def sparsity(df) -> None:
     rows, recs = [], []
     for d in ["D4", "D6", "D7", "D8"]:
         for nz in ["na"] if d == "D6" else ["lo", "hi"]:
-            cell = df[(df.dgp == d) & (df.n == 200) & (df.noise == nz)]
-            e = cell[cell.arm == "E-def"].set_index("rep")
-            for a in ["E-def", "P-cur", "P-fix"]:
-                x = cell[cell.arm == a].set_index("rep")
-                if x.empty:
-                    rows.append([NAMES[d], nz, a, "not run (too slow)", "", "", ""])
-                    continue
-                q = x.n_terms.quantile([0.25, 0.5, 0.75])
-                diff = ""
-                if a != "E-def":
-                    j = x.index.intersection(e.index)
-                    parts = []
-                    for col in ("n_terms", "n_irrelevant_covariates"):
-                        dd = (x.loc[j, col] - e.loc[j, col]).astype(float)
-                        m, se = dd.mean(), dd.std(ddof=1) / math.sqrt(len(dd))
-                        parts.append(f"{m:+.2f} [{m - K * se:+.2f}, {m + K * se:+.2f}]")
-                        recs.append(
-                            {"dgp": d, "noise": nz, "arm": a, "measure": col,
-                             "mean_diff": m, "se": se, "reps": len(dd)}
-                        )  # fmt: skip
-                    diff = " / ".join(parts)
-                rows.append(
-                    [
-                        NAMES[d],
-                        nz,
-                        a,
-                        f"{q[0.5]:.0f} ({q[0.25]:.0f} to {q[0.75]:.0f})",
-                        f"{100 * x.uses_irrelevant_covariate.mean():.0f}%",
-                        f"{x.n_irrelevant_covariates.mean():.2f}",
-                        diff,
-                    ]
-                )
-    hdr = [
-        "DGP",
-        "noise",
-        "arm",
-        "terms, median (IQR)",
-        "uses an irrelevant covariate",
-        "irrelevant covariates, mean",
-        "minus E-def: terms / irrelevant covariates",
-    ]
-    write("sparsity.md", md_table(hdr, rows))
-    pd.DataFrame(recs).to_csv(TABLES / "sparsity.csv", index=False)
+            rows += sparsity_rows(df, d, 200, nz, SPARSITY_ARMS, recs)
+    write("sparsity.md", md_table(SPARSITY_HEADER, rows))
+    # Pure noise at every sample size, for the freeze and after #185.
+    d6, arms = [], [a for a in SPARSITY_ARMS if a[0] != "P-cur"]
+    for n in (200, 1000, 5000):
+        d6 += sparsity_rows(df, "D6", n, "na", arms, recs, digits=3)
+    write("sparsity_d6.md", md_table(SPARSITY_HEADER, d6))
+    pd.DataFrame(recs).drop_duplicates().to_csv(TABLES / "sparsity.csv", index=False)
 
 
 # Binary outcomes ------------------------------------------------------------
@@ -462,8 +622,86 @@ def binary_appendix(df, run_dirs: list[Path]) -> None:
     write("binary_appendix.md", md_table(hdr, rows))
 
 
+# Skewed covariates ------------------------------------------------------------
+SKEW_ORDER = ["D1", "D2", "D3", "D4", "D5", "D7", "D8"]
+SKEW_CONTRASTS = {
+    "new_old": ("P-new", "P-old"),
+    "new_earth": ("P-new", "E-def"),
+    "old_earth": ("P-old", "E-def"),
+}
+
+
+def load_skew() -> pd.DataFrame:
+    sk = pd.read_csv(SIMS / "results" / "skew" / "results.csv")
+    sk["noise"] = sk.noise.fillna("na")
+    return sk
+
+
+def skew(sk) -> pd.DataFrame:
+    """Lognormal covariates, truth f(U): the pair rule of PR #185 (arm P-new)
+    against the rule before it (P-old) and against earth, paired by
+    repetition. The decision rule was fixed in advance: no material loss when
+    every upper bound of new / old is below 1.05."""
+    recs = []
+    cells = sk[["dgp", "n", "noise"]].drop_duplicates().itertuples(index=False)
+    for c in sorted(cells, key=lambda c: (SKEW_ORDER.index(c.dgp), c.n)):
+        cell = sk[(sk.dgp == c.dgp) & (sk.n == c.n) & (sk.noise == c.noise)]
+        if cell.error.notna().any():
+            raise SystemExit(f"{c}: failed fits in the skewed study")
+        hashes = cell.groupby("rep").data_hash.nunique()
+        if (hashes != 1).any():
+            raise SystemExit(f"{c}: the arms did not see the same data")
+        rec = {"dgp": c.dgp, "n": c.n, "noise": c.noise}
+        for name, (a, b) in SKEW_CONTRASTS.items():
+            st = summary(paired(sk, c.dgp, c.n, c.noise, a, b))
+            rec.update({f"{name}_{k}": v for k, v in st.items()})
+        for arm in ("P-old", "P-new"):
+            rec[f"terms_{arm}"] = float(cell[cell.arm == arm].n_terms.mean())
+        recs.append(rec)
+    q = pd.DataFrame(recs)
+    q.to_csv(TABLES / "skew.csv", index=False)
+
+    def ratio(r, name) -> str:
+        st = {k: r[f"{name}_{k}"] for k in ("ratio", "lo", "hi", "z")}
+        return fmt_ratio(st)
+
+    rows = [
+        [
+            NAMES[r.dgp],
+            f"{r.n:,}",
+            f"{int(r.new_old_n_sim):,}",
+            ratio(r, "new_old"),
+            ratio(r, "new_earth"),
+            ratio(r, "old_earth"),
+            f"{100 * r.new_old_share_equal:.0f}%",
+            f"{100 * r.old_earth_share_equal:.0f}% / "
+            f"{100 * r.new_earth_share_equal:.0f}%",
+        ]
+        for _, r in q.iterrows()
+    ]
+    hdr = ["DGP", "n", "reps", "new / old", "new / E-def", "old / E-def",
+           "equal fits, new vs old", "equal fits to E-def, old / new"]  # fmt: skip
+    write("skew.md", md_table(hdr, rows))
+    resolved = q[q.new_old_lo > 1.0]
+    counts = {
+        "cells": len(q),
+        "largest_upper_bound": float(q.new_old_hi.max()),
+        "no_material_loss": bool((q.new_old_hi < 1.05).all()),
+        "resolved_losses": {
+            f"{r.dgp} n={r.n}": [r.new_old_ratio, r.new_old_lo, r.new_old_hi]
+            for r in resolved.itertuples()
+        },
+        "not_resolved_range": [
+            float(q[q.new_old_lo <= 1.0].new_old_ratio.min()),
+            float(q[q.new_old_lo <= 1.0].new_old_ratio.max()),
+        ],
+    }
+    (TABLES / "skew_counts.json").write_text(json.dumps(counts, indent=1))
+    return q
+
+
 # Failure counts --------------------------------------------------------------
-def failures(df) -> None:
+def failures(df, sk) -> None:
     f = (
         df.assign(failed=df.error.notna() & (df.error.astype(str) != ""))
         .groupby("arm")
@@ -471,6 +709,16 @@ def failures(df) -> None:
         .reset_index()
     )
     rows = [[r.arm, f"{r.attempted:,}", f"{r.failed}"] for r in f.itertuples()]
+    g = (
+        sk.assign(failed=sk.error.notna())
+        .groupby("arm")
+        .agg(attempted=("rep", "size"), failed=("failed", "sum"))
+        .reset_index()
+    )
+    rows += [
+        [f"{r.arm} (skewed covariates)", f"{r.attempted:,}", f"{r.failed}"]
+        for r in g.itertuples()
+    ]
     write("failures.md", md_table(["arm", "fits attempted", "failed"], rows))
 
 
@@ -545,14 +793,22 @@ def main() -> None:
     TABLES.mkdir(exist_ok=True)
     FIGURES.mkdir(exist_ok=True)
     df = load()
+    sk = load_skew()
     gap_tables(df)
     p = parity(df)
     parity_figure(p)
+    q = parity_rerun(df, p)
+    parity_figure(
+        q.assign(ratio=q.new_ratio, lo=q.new_lo, hi=q.new_hi, decision=q.new_decision),
+        "parity_rerun.png",
+        "P-fix after #185",
+    )
     box_figure(df)
     sparsity(df)
     binary(df)
     binary_appendix(df, a.run_dirs)
-    failures(df)
+    skew(sk)
+    failures(df, sk)
     if a.bench_run is not None or (HERE / "bench_times.csv").is_file():
         speed_figure(bench_times(a.bench_run))
 

@@ -6,9 +6,9 @@ This note is for the maintainer of the `supervised-learning` skill in the stats-
 
 pymars 2.0 can be the MARS learner in a Python super learner library.
 
-- On earth's own fixtures it takes the same forward steps and the same pruning path as earth, except at 7 documented rule differences and near-ties (`validation/DIFFERENCES.md`).
-- In the simulation study, its excess risk is within 5 percent of earth's on 48 of 51 cells, including every cell with interactions, many irrelevant covariates, correlated covariates or a binary outcome.
-- One cell fails: on pure noise at 200 cases it is 7.6 percent worse than earth. On pure noise it is 3 to 8 percent worse at every sample size, and it keeps slightly more noise terms than earth; the study does not show which rule causes this (#173). Two other cells are not decided.
+- On earth's own fixtures it takes the same forward steps and the same pruning path as earth, except at 4 documented rule differences and near-ties (`validation/DIFFERENCES.md`).
+- In the simulation study, its excess risk is within 5 percent of earth's on 51 of 51 cells in a rerun after the pair-rule change of #185 (48 of 51 before), including every cell with interactions, many irrelevant covariates, correlated covariates or a binary outcome.
+- Before #185 one cell failed (pure noise at 200 cases, 7.6 percent worse than earth) and two were not decided. The cause was the pair rule of LA-7 (#173), and after #185 all 51 cells are equivalent. On lognormal covariates the new rule costs up to 1.9 percent of excess risk on one function (D4 at 200 cases), a known limit in the report.
 - The legacy pymars (the `mars-earth` 1.0.4 wheel on PyPI) was 1.2 to 1.6 times worse than earth on every nonlinear truth at 200 cases, and 69 to 1,400 times slower than pymars 2.0 at 250 to 2,000 cases. The skill's current advice to install from the repository and not from PyPI stays right.
 
 ## Settings to use
