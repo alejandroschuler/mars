@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from pymars import EarthClassifier
 from validation.sims import learners
 
 
@@ -237,13 +238,20 @@ def test_logreg_is_unpenalized_and_predicts_probabilities():
     assert not np.allclose(outcome.predictions, penalized_predictions, atol=1e-6)
 
 
-def test_p_fix_raises_not_implemented_today():
-    x_train, y_train = _linear_data(seed=0)
-    x_test, _y_test = _linear_data(seed=1)
-    with pytest.raises(NotImplementedError, match="EarthRegressor"):
-        learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, False)
-    with pytest.raises(NotImplementedError, match="EarthClassifier"):
-        learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, True)
+def test_p_fix_fits_the_classifier():
+    # pymars.EarthClassifier exists since T14: P-fix's binary arm returns
+    # the probabilities of class 1 and the size of the selected basis.
+    x_train, y_train = _linear_data(seed=0, binary=True)
+    x_test, _y_test = _linear_data(seed=1, binary=True)
+    outcome = learners.ARMS["P-fix"].fit_predict(x_train, y_train, x_test, True)
+    assert outcome.ok
+    assert outcome.predictions.shape == (len(x_test),)
+    assert np.all((outcome.predictions > 0.0) & (outcome.predictions < 1.0))
+    assert outcome.n_terms >= 2
+    # #175: the arm is earth's unpenalized refit, not the default glm_alpha=1.
+    clf = EarthClassifier(max_degree=learners.MARS_DEGREE, glm_alpha=0.0)
+    expect = clf.fit(x_train, y_train).predict_proba(x_test)[:, 1]
+    np.testing.assert_array_equal(outcome.predictions, expect)
 
 
 class _StandInEarthRegressor:

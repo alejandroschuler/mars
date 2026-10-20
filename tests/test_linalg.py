@@ -5,8 +5,6 @@ Every input is passed read-only, so a function that writes into its input
 fails. The explicit least-squares answers come from numpy's SVD solver.
 """
 
-from fractions import Fraction
-
 import numpy as np
 import pytest
 from hypothesis import assume, given
@@ -81,37 +79,6 @@ def _near_dependent(rng, G, eps, w=None):
     return (us + eps * np.linalg.norm(us) * zs) / sw
 
 
-def _exact_rss(A, y, w, subsets):
-    """The weighted RSS of y on each subset of the columns of A, exactly.
-
-    The normal equations are solved in rational arithmetic, so the only error
-    is the final rounding to float64.
-    """
-    F = [[Fraction(v) for v in row] for row in A]
-    fy, fw = [Fraction(v) for v in y], [Fraction(v) for v in w]
-    m = A.shape[1]
-    G = [
-        [sum(c * r[a] * r[b] for c, r in zip(fw, F, strict=True)) for b in range(m)]
-        for a in range(m)
-    ]
-    g = [sum(c * r[a] * v for c, r, v in zip(fw, F, fy, strict=True)) for a in range(m)]
-    yy = sum(c * v * v for c, v in zip(fw, fy, strict=True))
-    out = []
-    for cols in subsets:
-        rows = [[G[a][b] for b in cols] + [g[a]] for a in cols]
-        k = len(cols)
-        for p in range(k):  # elimination; the pivots of X'WX are positive
-            for r in range(p + 1, k):
-                f = rows[r][p] / rows[p][p]
-                rows[r] = [x - f * v for x, v in zip(rows[r], rows[p], strict=True)]
-        beta = [Fraction(0)] * k
-        for p in reversed(range(k)):
-            tail = sum(rows[p][c] * beta[c] for c in range(p + 1, k))
-            beta[p] = (rows[p][k] - tail) / rows[p][p]
-        out.append(float(yy - sum(beta[p] * g[cols[p]] for p in range(k))))
-    return out
-
-
 # Gram-Schmidt (LA-1; plan: Fast path)
 
 
@@ -151,6 +118,52 @@ def test_gram_schmidt_without_q_and_for_a_zero_column():
     assert g0.norm == 0.0
     with pytest.raises(ValueError, match="1-D"):
         la.gram_schmidt(np.zeros((3, 0)), np.zeros((3, 1)))
+
+
+@given(
+    seed=seeds,
+    n=st.integers(4, 40),
+    r=st.integers(0, 6),
+    a=st.integers(0, 6),
+    eps=st.sampled_from([10.0, 1.0, 1e-3, 1e-9]),
+)
+def test_cgs2_with_kept_coefficients_leaves_v_orthogonal(seed, n, r, a, eps):
+    """LA-1 and the plan's "Fast path": ``cgs2`` of v against Q, given Qᵀv for
+    the leading a columns from an earlier call, gives v⊥ orthogonal to Q to
+    working precision, with Q·total + v⊥ = v and the norms of v and v⊥, also
+    for a v whose part orthogonal to Q is eps of its norm, where the DGKS
+    second pass runs. The compiled kernel, its Python source and the numpy
+    form (the nonumba job) agree, and the kept coefficients change nothing."""
+    rng = np.random.default_rng(seed)
+    r, a = min(r, n - 1), min(a, r, n - 1)
+    Q = np.linalg.qr(rng.standard_normal((n, r)))[0]
+    v = Q @ rng.uniform(1.0, 2.0, r) + eps * _unit_orthogonal(rng, Q)
+    Qf, vf = _frozen(Q, v)
+    K = la._kernels
+    forms = ["numpy", "compiled", "source"] if K.AVAILABLE else ["numpy"]
+    out = []
+    for form in forms:
+        saved = K.ENABLED, K._first, K._project, K._cgs2
+        K.ENABLED = form != "numpy"
+        if form == "source":  # the kernels' Python source, under the interpreter
+            K._first, K._project = K._first.py_func, K._project.py_func
+            K._cgs2 = K._cgs2.py_func
+        try:
+            full = la.cgs2(Qf, vf, twice=False)
+            kept = la.cgs2(Qf, vf, full.coef[:a])
+        finally:
+            K.ENABLED, K._first, K._project, K._cgs2 = saved
+        for o in (full, kept):
+            assert np.abs(Q.T @ o.perp).max(initial=0.0) <= 1e-13 * o.norm
+            np.testing.assert_allclose(Q @ o.total + o.perp, v, rtol=0, atol=1e-14 * 4)
+            assert o.norm == pytest.approx(np.linalg.norm(o.perp), rel=1e-14)
+            assert o.vnorm == pytest.approx(np.linalg.norm(v), rel=1e-14)
+        assert full.norm == pytest.approx(eps if r else np.linalg.norm(v), rel=1e-6)
+        if eps == 10.0:  # DGKS: one pass, since ‖v⊥‖² > ‖v‖²/2 (r ≥ 1 too)
+            np.testing.assert_array_equal(full.total, full.coef)
+        np.testing.assert_allclose(kept.perp, full.perp, rtol=0, atol=1e-15 * 4)
+        out.append(full)
+    np.testing.assert_allclose(out[0].perp, out[-1].perp, rtol=0, atol=1e-15 * 4)
 
 
 # The collinearity test (LA-3)
@@ -305,11 +318,18 @@ def test_weighted_variances_with_integer_weights_equal_repeated_rows(seed, n):
     )
 
 
-def test_pair_search_threshold_is_one_percent_of_the_variance_product():
-    assert la.pair_search(0.01, [2.0, 0.5]) is True
-    assert la.pair_search(np.nextafter(0.01, 0.0), [2.0, 0.5]) is False
-    assert la.pair_search(0.0101, np.array([1.0])) is True
-    assert la.pair_search(0.0099, [1.0]) is False
+def test_pair_search_threshold_is_earths_for_uniform_covariates():
+    # LA-7 (#173): A_w >= 0.01 * prod(12 * var_v), which is earth's A >= 0.01
+    # where every var_v is 1/12, the variance of a uniform on [0, 1].
+    u = 1.0 / 12.0
+    assert la.pair_search(0.0101, np.array([u])) is True
+    assert la.pair_search(0.0099, [u]) is False
+    assert la.pair_search(0.0101, [u, u]) is True
+    assert la.pair_search(0.0099, [u, u, u]) is False
+    # each covariate counts with its own factor: 12·0.25 = 3 and 12·4 = 48
+    threshold = 0.01 * 144.0
+    assert la.pair_search(threshold, [0.25, 4.0]) is True
+    assert la.pair_search(np.nextafter(threshold, 0.0), [0.25, 4.0]) is False
     assert la.pair_search(1e300, [4.0, 0.0]) is False  # a constant covariate
     with pytest.raises(ValueError, match="at least"):
         la.pair_search(1.0, [])
@@ -589,28 +609,6 @@ def test_drop_costs_do_not_depend_on_the_scale_of_a_column():
     for c in (1e160, 1e-160):
         f2 = la.r_factor(A * np.array([1.0, 1.0, c, 1.0, 1.0]), Y, w)
         np.testing.assert_allclose(la.drop_costs(f2.R, f2.Z, 5), want, rtol=1e-12)
-
-
-def test_pruning_factor_near_the_la4_limit_matches_exact_refits():
-    # kappa above 1e6: a hinge and its copy with noise of relative size 1e-6,
-    # against refits in exact rational arithmetic, within a tenth of the 1e-8
-    # that LA-5 allows (1e-10 was seen with OpenBLAS).
-    rng = np.random.default_rng(17)
-    x1, x2 = rng.standard_normal((2, 24))
-    h = np.maximum(x1 - 0.2, 0.0)
-    near = h + 1e-6 * rng.standard_normal(24)
-    A = np.column_stack([np.ones(24), x1, h, near, x2, np.maximum(x2, 0.0)])
-    y = A @ rng.standard_normal(6) + rng.standard_normal(24)
-    w = rng.uniform(0.5, 2.0, 24)
-    assert np.linalg.cond(np.sqrt(w)[:, None] * A) > 1e6
-    f = la.r_factor(A, y, w)
-    prefix = la.prefix_rss(f.Z, f.rss)
-    want = _exact_rss(A, y, w, [list(range(m)) for m in range(1, 7)])
-    np.testing.assert_allclose(prefix, want, rtol=1e-9)
-    for pos in range(2, 7):
-        got = prefix[pos - 1] + la.drop_costs(f.R, f.Z, pos)
-        rest = [[c for c in range(pos) if c != i] for i in range(pos)]
-        np.testing.assert_allclose(got, _exact_rss(A, y, w, rest), rtol=1e-9)
 
 
 def test_r_factor_edge_cases():

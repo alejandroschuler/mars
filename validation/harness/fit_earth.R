@@ -38,6 +38,7 @@
 #   include_forward_path optional bool (default true); if true and the
 #                        response is not a factor, an extra fit with
 #                        pmethod = "none" gives the forward-pass RSS path
+#                        (NULL when earth's rank fix removed a term)
 #   out                  path to write this job's result JSON to
 #
 # Each result also carries the R and earth versions, so a fixture or a run
@@ -106,11 +107,23 @@ vec_json <- function(x) if (is.null(x)) NULL else I(unname(x))
 # the RSS a weighted earth reports; lm.wfit and the weighted sum of squared
 # residuals is what matches earth's own weighted rss (checked directly: the
 # last path value equals earth's rss on a pmethod = "none" fit).
+#
+# earth's rank fix ("Fixed rank deficient bx by removing k terms") removes
+# terms from the returned bx after the forward pass. A refit of the cumulative
+# columns of that bx is then not earth's forward RSS: the pass kept the removed
+# term's direction in its basis for every later step, and the rows of bx no
+# longer match the steps (bb32, issue #127). A fit whose trace prints the fix
+# therefore has no forward path here, and the result is NULL (the same as
+# include_forward_path = FALSE). The trace is read with trace = 2, which
+# prints the fix line and is cheap; nothing is parsed from it but that line.
 forward_rss_path <- function(fit_args, y, w = NULL) {
   fwd_args <- fit_args
   fwd_args$pmethod <- "none"
-  fwd_args$trace <- 0
-  fwd_fit <- do.call(earth, fwd_args)
+  fwd_args$trace <- 2
+  trace_lines <- capture.output(fwd_fit <- do.call(earth, fwd_args))
+  if (any(grepl("Fixed rank deficient", trace_lines, fixed = TRUE))) {
+    return(NULL)
+  }
   bx <- fwd_fit$bx
   ymat <- as.matrix(y)
   if (is.null(w)) {

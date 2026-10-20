@@ -25,12 +25,21 @@ rows that change (``move_column``); no subset is refit.
 Numerics. float64 throughout; no function writes into its inputs; no absolute
 epsilon; the tie rules are fixed: the term added last when two drops give the
 same RSS (PRUNE-3), the earlier offer when two subsets of one size do, and the
-smaller size when two sizes give the same GCV (PRUNE-5). A response that is
-constant over the cases (Conventions: all its values are equal) lies in the
-span of the intercept, which every subset holds, so it adds 0 exactly to every
-RSS, and it is left out of the sums. Y enters only through products and sums,
-so multiplying Y by a power of 2 (EDGE-6) multiplies every RSS and GCV by its
-square and changes no other bit. Memory is O(n·(M_f + K) + M_f²).
+smaller size when two sizes give the same GCV (PRUNE-5). Every subset holds
+the intercept, so subtracting a constant from a response changes no RSS in
+exact arithmetic. Each response is centered first, so that the rounding of
+the projections is of the size of the spread of Y, not of its mean (LA-5);
+a response that is constant over the cases (Conventions: all its values are
+equal) becomes 0 exactly and adds 0 to every sum. For the same reason
+``pruning_pass`` centers each column of B after the intercept in the same
+way before the QR: a column far from 0 relative to its spread (x near 33 with
+a spread of 0.25, say) would otherwise make the factor ill-conditioned, and
+the RSS of a near-exact fit would lose about 1e-8 of its relative accuracy
+(#84). Each RSS then meets LA-5's tolerance, whose factor grows with the
+condition number of the subset and with n; beyond ordinary data (the spec's
+Limits) it states no bound. Y enters only through differences, products and
+sums, so multiplying Y by a power of 2 (EDGE-6) multiplies every RSS and GCV
+by its square and changes no other bit. Memory is O(n·(M_f + K) + M_f²).
 
 Public functions, for ``_core``:
 
@@ -121,26 +130,38 @@ def _cases(
     return B, Y, w, N, tau
 
 
-def _constant(Y: FloatArray) -> tuple[BoolArray, FloatArray]:
-    """Return which responses are constant over the cases (Conventions: all
-    their values are equal) and Y without them, uncopied when there is none.
-    A constant response adds 0 exactly to the RSS of every subset that holds
-    the intercept. Complexity: O(n·K)."""
-    const = (Y[0] == Y).all(axis=0)
-    return const, Y[:, ~const] if const.any() else Y
+def _centered(Y: FloatArray, w: FloatArray | None) -> tuple[FloatArray, FloatArray]:
+    """Return Y minus one constant per response, and the constants.
+
+    Each response is shifted by its data value nearest its weighted mean μ (the
+    smallest such value on a tie, LA-6), then by the weighted mean of the differences.
+    The shift a is a data value, so the differences are exact for values
+    within a factor of 2 of it, and N·(a - μ)² ≤ TSS, so the rounding of the
+    others is of the size of the spread, whatever the weights and the order
+    of the cases. A constant response becomes 0 exactly, and its constant is
+    its value. Complexity: O(n·K).
+    """
+    dist = np.abs(Y - np.average(Y, axis=0, weights=w))
+    nearest = dist == dist.min(axis=0)
+    anchor = np.where(nearest, Y, np.inf).min(axis=0)  # LA-6: the smallest on a tie
+    D = Y - anchor
+    mean = np.average(D, axis=0, weights=w)
+    return D - mean, anchor + mean
 
 
 def _stages(
     R: FloatArray, Z: FloatArray, rss: float, several: bool
 ) -> tuple[IntArray, FloatArray, BoolArray]:
-    """Run the stages of PRUNE-3 on the factor of the forward order.
+    """Run the stages of PRUNE-3 on the factor R, Z (``_linalg.r_factor``) of
+    the forward order, whose full RSS is ``rss``.
 
     Returns ``removed``, R[m] for m = 1, …, M_f and the rows of T[m]. With
     ``several`` false (K = 1), each new working order is offered: a prefix of
     size m replaces T[m] when its RSS is lower than R[m], so the earlier offer
     wins a tie. With ``several`` true (K ≥ 2), T[m] is the set left after
-    M_f - m removals. Complexity: O(M_f³·(M_f + K)) in all, at most
-    O(M_f²·(M_f + K)) per stage.
+    M_f - m removals. A stage reads the prefix RSS and the drop costs from R
+    and Z and moves the removed term by a downdate (PRUNE-9).
+    Complexity: O(M_f³·(M_f + K)) in all, at most O(M_f²·(M_f + K)) per stage.
     """
     M = R.shape[1]
     order = np.arange(M)
@@ -196,18 +217,23 @@ def pruning_pass(
 
     B (n, M_f), Y and w are as in the module docstring, with M_f ≤ n; the
     penalty d is resolved (GCV-1, GCV-4) and ``nprune`` is None or an integer
-    ≥ 1 (LIMIT-3). Raises ValueError for input outside these ranges.
-    Complexity: O(n·M_f·(M_f + K)) for the factor and O(M_f³·(M_f + K)) for the
-    stages, at most O(n·M_f²) per stage for K ≤ M_f (PRUNE-9);
-    memory O(n·(M_f + K) + M_f²).
+    ≥ 1 (LIMIT-3). The pass works on one Householder QR of the √w-scaled B,
+    its columns after the intercept centered (#84), and its downdates
+    (PRUNE-9). Raises ValueError for input outside these ranges.
+    Complexity: O(n·M_f·(M_f + K)) for the factor and O(M_f³·(M_f + K)) for
+    the stages, at most O(n·M_f²) per stage for K ≤ M_f (PRUNE-9).
     """
     if pmethod not in PMETHODS:
         raise ValueError(f"pmethod must be 'backward' or 'none', not {pmethod!r}")
     B, Y, w, N, tau = _cases(B, Y, w)
     M = B.shape[1]
     m_max = _gcv.nprune_limit(M, nprune)
-    _, varying = _constant(Y)
-    R, Z, rss = _linalg.r_factor(B, varying, w)
+    Yc = _centered(Y, w)[0]
+    Bc = B.copy()
+    if M > 1:
+        Bc[:, 1:] = _centered(B[:, 1:], w)[0]  # the same spans (LA-5, #84)
+    R, Z, rss = _linalg.r_factor(Bc, Yc, w)
+    # fit_mars cannot reach this: FWD-11 drops a column constant over the cases.
     if np.any(np.diag(R) == 0.0):
         raise ValueError("the columns of B must be linearly independent (FWD-11)")
     removed, rss_per_size, subsets = _stages(R, Z, rss, several=Y.shape[1] >= 2)
@@ -237,12 +263,16 @@ def final_fit(
 
     ``coef`` holds the weighted least-squares coefficients of Y on the columns
     ``selected`` of B, in increasing term order, one column per response, with
-    LA-4 for dependent columns (``_linalg.lm_fit``). A constant response gets
-    its value as the intercept's coefficient and 0 for the other terms,
-    exactly. ``rss`` is the weighted RSS of these coefficients; ``gcv``,
-    ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7 with that RSS, M = m*
-    and N = Σw. With ``pmethod="none"`` and m* < M_f the selected terms are
-    not T[m*], so ``rss`` differs from ``rss_per_size[m* - 1]`` (PRUNE-7).
+    LA-4's float64 test for dependent columns, which get 0 (``_linalg.lm_fit``,
+    the test of FWD-11). The fit is of the centered responses (LA-6), and the
+    intercept's coefficient takes back their constants, so a constant response
+    gets its value there and 0 for the other terms, exactly. ``rss`` is the
+    weighted RSS of the projection of the centered responses on the kept
+    selected columns: that of the returned coefficients, up to their rounding.
+    ``gcv``, ``rsq`` and ``grsq`` follow GCV-2 and GCV-5 to GCV-7
+    with that RSS, M = m* and N = Σw. With ``pmethod="none"`` and m* < M_f the
+    selected terms are not T[m*], so ``rss`` differs from
+    ``rss_per_size[m* - 1]`` (PRUNE-7).
 
     B, Y and w are as for ``pruning_pass``; ``selected`` is an increasing
     integer array that starts with the intercept, 0. Raises ValueError
@@ -262,12 +292,10 @@ def final_fit(
             f"selected must be increasing term indices below {B.shape[1]}, from 0"
         )
     m = sel.size
-    const, varying = _constant(Y)
-    coef = np.zeros((m, Y.shape[1]))
-    coef[0, const] = Y[0, const]
-    fit = _linalg.lm_fit(B[:, sel], varying, w)  # rss 0.0 with no column
-    coef[:, ~const] = fit.coef
-    rss = fit.rss
+    Yc, constants = _centered(Y, w)
+    fit = _linalg.lm_fit(B[:, sel], Yc, w)
+    coef, rss = fit.coef, fit.rss
+    coef[0] += constants  # column 0 is the intercept, a column of ones
     gcv = _gcv.gcv(rss, m, penalty, N, tau)
     if _gcv.is_degenerate(Y, N):
         gcv = np.inf

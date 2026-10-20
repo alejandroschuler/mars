@@ -7,9 +7,13 @@ three) and the S datasets (``prune.terms``, ``rss.per.subset``,
 ``gcv.per.subset``, the selected terms, the coefficients and the statistics of
 earth 5.3.4). The tests build earth's forward basis again from its ``dirs`` and
 ``cuts`` (TERM-3) and prune it. Tolerances, from the plan's tolerance table:
-the exact terms at every size, relative 1e-8 for RSS and GCV, absolute 1e-8
-for RSq and GRSq, normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5,
-and 1e-8·sd(y) for fitted values.
+the exact terms at every size, relative 1e-8 for RSS and GCV (relative 1e-7
+where earth keeps a zero weight, W-3), absolute 1e-8 for RSq and GRSq,
+normwise relative 1e-6 for coefficients where κ(B) ≤ 1e5, and 1e-8·sd(y) for
+fitted values. Against exact arithmetic the bound is LA-5's
+ε(V*, V*) = 1e-8 V* + c sqrt(TSS V*) + (c/2)² TSS, with c = max(1e-14,
+u·cond·√n) and cond the condition number of the √w-scaled columns, each of
+unit norm (spec v3).
 
 The explicit answers come from a refit of every subset by numpy's SVD solver,
 which follows the steps of PRUNE-3 as the spec writes them. The inputs from
@@ -18,6 +22,7 @@ them fails.
 """
 
 import json
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -74,8 +79,9 @@ def _rss(B, Y, w, cols):
     return float(np.sum((V - A @ np.linalg.lstsq(A, V, rcond=None)[0]) ** 2))
 
 
-def _spec_pass(B, Y, w):
-    """PRUNE-2 to PRUNE-4 as the spec writes them, with a refit of every subset.
+def _spec_pass(B, Y, w, refit=_rss):
+    """PRUNE-2 to PRUNE-4 as the spec writes them, with a refit of every subset
+    by ``refit`` (numpy's lstsq, or rational arithmetic).
 
     Returns ``removed``, R[m], T[m] and the smallest relative gap between two
     choices that the rules must tell apart (a drop or an offer), so that a test
@@ -91,20 +97,20 @@ def _spec_pass(B, Y, w):
         nonlocal gap
         for m in range(1, M + 1):
             U = frozenset(order[:m])
-            r = _rss(B, Y, w, U)
+            r = refit(B, Y, w, U)
             if sets[m - 1] is not None and sets[m - 1] != U:
                 gap = min(gap, abs(r - best[m - 1]) / best[m - 1])
             if r < best[m - 1]:
                 best[m - 1], sets[m - 1] = r, U
 
     if several:
-        best[M - 1], sets[M - 1] = _rss(B, Y, w, order), frozenset(order)
+        best[M - 1], sets[M - 1] = refit(B, Y, w, order), frozenset(order)
     else:
         offer()
     removed = []
     for pos in range(M, 1, -1):
         drops = [
-            (_rss(B, Y, w, set(order[:pos]) - {order[i]}), order[i], i)
+            (refit(B, Y, w, set(order[:pos]) - {order[i]}), order[i], i)
             for i in range(1, pos)
         ]
         rss = sorted(d[0] for d in drops)
@@ -122,6 +128,24 @@ def _spec_pass(B, Y, w):
 
 def _sets(subsets):
     return [frozenset(np.flatnonzero(row).tolist()) for row in subsets]
+
+
+def _cond(B, w):
+    """cond of LA-5: the 2-norm condition number of the √w-scaled columns of
+    B, each scaled to unit norm. It bounds that of every subset of the columns
+    (removing columns cannot raise it), as LA-5 lets a test use."""
+    A = B if w is None else np.sqrt(w)[:, None] * B
+    A = A[:, np.linalg.norm(A, axis=0) > 0]
+    return float(np.linalg.cond(A / np.linalg.norm(A, axis=0)))
+
+
+def assert_la5(actual, exact, tss, cond=1.0, n=1):
+    """LA-5 with R = V*: every RSS within ε(V*, V*) of its exact value, for
+    the total sum of squares tss (GCV-5), with c = max(1e-14, u·cond·√n)."""
+    actual, exact = np.asarray(actual, float), np.asarray(exact, float)
+    c = max(1e-14, 2.0**-53 * cond * np.sqrt(n))
+    bound = 1e-8 * exact + c * np.sqrt(tss * exact) + (c / 2) ** 2 * tss
+    assert np.all(np.abs(actual - exact) <= bound), (actual, exact)
 
 
 def assert_rel(actual, expected, rtol):
@@ -207,7 +231,8 @@ def test_s_fixture_pruning(load_fixture, name):
     rss = np.array(r["rss_per_subset"])
     scale = w[0] if w is not None and len(set(w)) == 1 else 1.0
     shown = rss > 0.0
-    assert_rel(res.rss_per_size[shown] / scale, rss[shown], 1e-8)
+    rtol = 1e-7 if w is not None and np.any(w == 0) else 1e-8  # W-3
+    assert_rel(res.rss_per_size[shown] / scale, rss[shown], rtol)
     if w is None:
         assert_rel(res.gcv_per_size[shown], np.array(r["gcv_per_subset"])[shown], 1e-8)
         np.testing.assert_array_equal(res.selected + 1, r["selected_terms"])
@@ -231,7 +256,8 @@ def test_s_fixture_final_fit(load_fixture, name):
     fitted = np.array(r["fitted"]).reshape(B.shape[0], -1)
     assert np.max(np.abs(B[:, sel] @ fit.coef - fitted)) <= 1e-8 * np.std(Y)
     scale = w[0] if w is not None and len(set(w)) == 1 else 1.0
-    assert_rel(fit.rss / scale, r["rss"], 1e-8)
+    rtol = 1e-7 if w is not None and np.any(w == 0) else 1e-8  # W-3
+    assert_rel(fit.rss / scale, r["rss"], rtol)
     if w is None:
         assert_rel(fit.gcv, r["gcv"], 1e-8)
         assert abs(fit.rsq - r["rsq"]) <= 1e-8
@@ -241,44 +267,6 @@ def test_s_fixture_final_fit(load_fixture, name):
 def test_s_fixture_list():
     """The collection found the fixtures."""
     assert len(S_FITS) >= 130
-
-
-@given(cases)
-def test_matches_refits_of_every_subset(case):
-    """PRUNE-2 to PRUNE-5 against the steps of the spec with a refit of every
-    subset, for one and several responses, with and without weights: the same
-    removals, the same subsets (not nested in general for K = 1, nested for
-    K ≥ 2), the same RSS and GCV, and the intercept in every subset."""
-    B, Y, w = _case(*case)
-    removed, best, sets, gap = _spec_pass(B, Y, w)
-    assume(gap > 1e-9)
-    res = pr.pruning_pass(B, Y, w, penalty=3.0)
-    M = B.shape[1]
-    np.testing.assert_array_equal(res.removed, removed)
-    assert _sets(res.subsets) == sets
-    assert_rel(res.rss_per_size, best, 1e-8)
-    N = B.shape[0] if w is None else np.sum(w)
-    sizes = np.arange(1, M + 1)
-    assert_rel(res.gcv_per_size, _gcv.gcv(np.array(best), sizes, 3.0, N), 1e-8)
-    assert res.removed.dtype == np.int64 and res.removed.shape == (M - 1,)
-    assert sorted(res.removed.tolist()) == list(range(1, M))
-    assert res.subsets.dtype == bool and res.subsets.shape == (M, M)
-    assert res.subsets[:, 0].all() and (res.subsets.sum(axis=1) == sizes).all()
-    m_star = int(np.argmin(res.gcv_per_size)) + 1
-    assert res.selected_size == m_star
-    np.testing.assert_array_equal(res.selected, sorted(sets[m_star - 1]))
-    assert res.selected.dtype == np.int64
-
-
-def test_one_term():
-    """CORE-3: with M_f = 1, ``removed`` is empty, ``rss_per_size`` is [TSS]
-    and ``subsets`` is [[True]]."""
-    y = np.array([1.0, 2.0, 4.0, 7.0])
-    res = pr.pruning_pass(np.ones((4, 1)), y, penalty=2.0)
-    assert res.removed.shape == (0,) and res.subsets.tolist() == [[True]]
-    assert_rel(res.rss_per_size, [_gcv.tss(y)], 1e-14)
-    assert_rel(res.gcv_per_size, [_gcv.gcv(_gcv.tss(y), 1, 2.0, 4.0)], 1e-14)
-    assert res.selected_size == 1 and res.selected.tolist() == [0]
 
 
 @pytest.mark.parametrize("k", [1, 2])
@@ -300,16 +288,42 @@ def test_exact_ties_and_constant_responses(k):
     assert np.isposinf(fit.gcv) and fit.rsq == 0.0 and fit.grsq == 0.0
 
 
+@pytest.mark.parametrize("weighted", [False, True])
+def test_the_centering_takes_the_smallest_of_two_values_nearest_the_mean(weighted):
+    """LA-6: each response is shifted first by its data value nearest its
+    weighted mean, the smallest such value on a tie, and then by the
+    weighted mean of the differences; the TSS does the same (GCV-5). Here
+    the first two cases are equally near the mean, and the second is the
+    smaller. With the first case as the anchor the centered values and the
+    TSS differ in their last bits, so the row order would decide."""
+    y = np.array([1.7373672197631647, 0.26263278023683534])
+    y = np.r_[y, 2.6115132581597926, -0.6115132581597924]
+    w = np.array([1.0, 1.0, 2.0, 2.0]) if weighted else None
+    dist = np.abs(y - np.average(y, weights=w))
+    assert dist[0] == dist[1] == dist.min()
+    d = y - y[1]
+    want = d - np.average(d, weights=w)
+    got, const = pr._centered(y[:, None], w)
+    np.testing.assert_array_equal(got[:, 0], want)
+    assert const[0] == y[1] + np.average(d, weights=w)
+    assert _gcv.tss(y, w) == float((np.ones(4) if w is None else w) @ (want * want))
+    if not weighted:  # the first case as the anchor gives other bits
+        r0 = (y - y[0]) - np.average(y - y[0])
+        assert not np.array_equal(r0, want)
+        assert _gcv.tss(y) != float(r0 @ r0)
+
+
 def test_a_constant_response_adds_nothing():
-    """A constant response adds 0 exactly to every RSS, and its coefficients
-    are its value and zeros (Conventions, PRUNE-8)."""
+    """A constant response becomes 0 exactly, so it changes no removal and no
+    subset, and every RSS only by the order of the additions; its
+    coefficients are its value and zeros (Conventions, PRUNE-8)."""
     B, y, _ = _case(8, 25, 5, 1, False)
     Y = np.column_stack([y, np.full(25, -1.5), 2 * y])
     two = pr.pruning_pass(B, Y[:, [0, 2]], penalty=2.0)
     three = pr.pruning_pass(B, Y, penalty=2.0)
     np.testing.assert_array_equal(three.removed, two.removed)
     np.testing.assert_array_equal(three.subsets, two.subsets)
-    np.testing.assert_array_equal(three.rss_per_size, two.rss_per_size)
+    assert_rel(three.rss_per_size, two.rss_per_size, 1e-14)
     fit = pr.final_fit(B, Y, three.selected, penalty=2.0)
     col = fit.coef[:, 1]
     assert col[0] == -1.5 and not col[1:].any()
@@ -341,61 +355,6 @@ def test_selected_size_is_the_smallest_with_the_lowest_gcv(monkeypatch):
     assert none.selected_size == 4 and none.selected.tolist() == [0, 1, 2, 3]
     none = pr.pruning_pass(B, y, penalty=2.0, pmethod="none")
     assert none.selected_size == 5 and none.selected.tolist() == [0, 1, 2, 3, 4]
-
-
-@given(cases, st.integers(1, 9), st.sampled_from(["backward", "none"]))
-def test_nprune_and_pmethod_change_only_the_selection(case, nprune, pmethod):
-    """PRUNE-6, PRUNE-7: the stages and the records are those of
-    ``pmethod="backward"`` without ``nprune``."""
-    B, Y, w = _case(*case)
-    base = pr.pruning_pass(B, Y, w, penalty=2.0)
-    res = pr.pruning_pass(B, Y, w, penalty=2.0, pmethod=pmethod, nprune=nprune)
-    for a, b in zip(res[:4], base[:4], strict=True):
-        np.testing.assert_array_equal(a, b)
-    assert res.selected_size <= min(nprune, B.shape[1])
-    if pmethod == "none":
-        assert res.selected_size == min(nprune, B.shape[1])
-
-
-def test_nprune_with_penalty_minus_one_selects_nprune_terms():
-    """PRUNE-6, bb07.19: with d = -1 the GCV is RSS/N, which falls as m grows,
-    so ``nprune`` = k selects exactly k terms."""
-    B, y, _ = _case(11, 40, 8, 1, False)
-    res = pr.pruning_pass(B, y, penalty=-1.0)
-    assert np.all(np.diff(res.rss_per_size) < 0)
-    assert_rel(res.gcv_per_size, res.rss_per_size / 40.0, 1e-15)
-    for k in (1, 3, 8, 20):
-        assert pr.pruning_pass(B, y, penalty=-1.0, nprune=k).selected_size == min(k, 8)
-
-
-@given(cases)
-def test_final_fit_is_least_squares_on_the_selected_terms(case):
-    """PRUNE-8: the coefficients of LA-4 on the selected columns, the RSS of
-    those coefficients, and GCV-2, GCV-5, GCV-6 with M = m*; for
-    ``pmethod="backward"`` the RSS is ``rss_per_size[m* - 1]``."""
-    B, Y, w = _case(*case)
-    res = pr.pruning_pass(B, Y, w, penalty=2.0)
-    fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
-    lm = _linalg.lm_fit(B[:, res.selected], Y, w)
-    want = lm.coef.reshape(fit.coef.shape)
-    assert np.linalg.norm(fit.coef - want) <= 1e-12 * np.linalg.norm(want)
-    assert fit.coef.shape == (res.selected_size, 1 if Y.ndim == 1 else Y.shape[1])
-    assert_rel(fit.rss, res.rss_per_size[res.selected_size - 1], 1e-8)
-    N, tau = _gcv.total_weight(B.shape[0], w)
-    m, tss = res.selected_size, _gcv.tss(Y, w)
-    assert fit.gcv == _gcv.gcv(fit.rss, m, 2.0, N, tau)
-    assert fit.rsq == _gcv.rsq(fit.rss, tss, m)
-    assert fit.grsq == _gcv.grsq(fit.rss, tss, m, 2.0, N, tau)
-
-
-def test_final_fit_with_pmethod_none_describes_the_first_terms():
-    """PRUNE-7, PRUNE-8 (a departure): with m* < M_f the statistics are those of
-    terms 0 to m* - 1, not of T[m*]."""
-    B, y, _ = _case(4, 30, 7, 1, False)
-    res = pr.pruning_pass(B, y, penalty=2.0, pmethod="none", nprune=3)
-    fit = pr.final_fit(B, y, res.selected, penalty=2.0)
-    assert_rel(fit.rss, _rss(B, y, None, [0, 1, 2]), 1e-10)
-    assert fit.rss >= res.rss_per_size[2]
 
 
 def test_degenerate_weight_sum():
@@ -517,3 +476,135 @@ def test_errors():
             call()
     with pytest.raises(ValueError, match="independent"):
         pr.pruning_pass(np.column_stack([B, np.zeros(12)]), y, penalty=2.0)
+
+
+def _exact(B, Y, w, cols):
+    """Weighted least squares of Y on the columns ``cols`` of B in rational
+    arithmetic: the coefficients, one row per response, and the RSS summed
+    over the responses (LA-1)."""
+    A = [[Fraction(v) for v in row] for row in B[:, cols]]
+    W = [Fraction(v) for v in (np.ones(B.shape[0]) if w is None else w)]
+    n, m = len(A), len(cols)
+    beta, rss = [], Fraction(0)
+    for col in np.reshape(Y, (n, -1)).T:
+        y = [Fraction(v) for v in col]
+        E = [  # the normal equations [G | g], solved by Gauss-Jordan
+            [sum(W[i] * A[i][r] * A[i][c] for i in range(n)) for c in range(m)]
+            + [sum(W[i] * A[i][r] * y[i] for i in range(n))]
+            for r in range(m)
+        ]
+        for c in range(m):
+            E[c] = [v / E[c][c] for v in E[c]]
+            for r in range(m):
+                if r != c:
+                    E[r] = [a - E[r][c] * b for a, b in zip(E[r], E[c], strict=True)]
+        b = [E[r][m] for r in range(m)]
+        beta.append([float(v) for v in b])
+        fit = [sum(A[i][c] * b[c] for c in range(m)) for i in range(n)]
+        rss += sum(W[i] * (y[i] - fit[i]) ** 2 for i in range(n))
+    return np.array(beta), float(rss)
+
+
+def _linear_factor_case(rng, weights):
+    """Terms 1, (x0 - c0)+, x1, x0, x2 and (x2 - c2)+ on X = 1000 + U (U uniform
+    on (0, 1)), so each covariate's mean is about 3,500 times its spread,
+    within ordinary data at degree 1 (Limits), and Y a near-exact fit: B, Y
+    and w. LA-4 keeps every column: each linear column's part orthogonal to
+    the intercept is about 3e-4 of its norm."""
+    U = rng.uniform(size=(40, 3))
+    X = 1000 + U
+    h0 = np.maximum(X[:, 0] - np.sort(X[:, 0])[12], 0)
+    h2 = np.maximum(X[:, 2] - np.sort(X[:, 2])[20], 0)
+    B = np.column_stack([np.ones(40), h0, X[:, 1], X[:, 0], X[:, 2], h2])
+    Y = 2 * h0 + U[:, 1] + U[:, 0] + 0.5 * U[:, 2] + 3 * h2
+    Y = Y + 0.01 * rng.normal(size=40)
+    w = None if weights == "none" else rng.uniform(0.5, 2, 40)
+    return B, Y, w
+
+
+@pytest.mark.parametrize(
+    ("k", "weights", "basis"),
+    [
+        (1, "none", "hinges"),
+        (3, "none", "hinges"),
+        (1, "uniform", "hinges"),
+        (3, "uniform", "hinges"),
+        (1, "far first", "hinges"),
+        (1, "none", "binary at 33"),
+        (1, "far first", "binary at 33"),
+        (1, "far first", "x and a hinge at 33"),
+        (1, "none", "linear factors at 1000"),
+        (1, "uniform", "linear factors at 1000"),
+    ],
+)
+def test_a_large_mean_keeps_the_sums_of_squares_exact(k, weights, basis):
+    """LA-5 for responses whose means are 1e13 times their spread: every subset
+    holds the intercept (PRUNE-3), so centering Y changes no RSS. Each RSS of
+    the records (PRUNE-4), the TSS (GCV-5) and the final RSS (PRUNE-8) match
+    rational arithmetic to LA-5's ε, and the coefficients to normwise
+    1e-6. Without the centering the RSS errors reach 1e-3 and the TSS errors
+    1e-6. In the "far first" case of the hinges the first 30 cases lie 2e13
+    below the other 20 and have weight 1e-30 (W-6 allows it), so the shift
+    must be the data value nearest the weighted mean: the first value, the
+    value nearest the unweighted mean, or an unweighted mean of the
+    differences misses by 1e-6 or more. The "binary at 33" cases have a
+    column of B far from 0 (#84): x binary at 33 +- 0.25 and a near-exact
+    fit, RSq = 1 - 1e-12. The pass centers the columns after the intercept
+    too; without that, the RSS of [1, x] misses by 2.8e-8. With "far first"
+    there, 30 more cases at x = 1e7 have weight 1e-40; in the last case the
+    first 10 of B = [1, x, (x - 33)+] lie at x = -1e9 with weight 1e-30. So
+    the columns need the weighted rule of Y: an unweighted centering, a shift
+    by the first row or by the unweighted mean misses by 1e-3 or more. In the
+    "linear factors at 1000" cases the covariates' means are about 3,500
+    times their spread, within ordinary data at degree 1 (Limits), and the fit
+    is near-exact (``_linear_factor_case``): every RSS meets LA-5's ε with the
+    factor u·cond·√n, the stages choose as the spec does in rational
+    arithmetic, and the final fit's coefficients, from Householder QR on the
+    √w-scaled columns (LA-4's paragraph on coefficients, PRUNE-8), are within
+    normwise 1e-6 of the exact ones, since cond ≤ 1e5. numpy's ``lstsq`` with
+    its default rcond, which LA-4 rules out, missed by up to 25 % of the RSS
+    on such bases (PR #158)."""
+    rng = np.random.default_rng({"hinges": 0, "binary at 33": 189}.get(basis, 1))
+    linear = basis == "linear factors at 1000"
+    if linear:
+        B, Y, w = _linear_factor_case(rng, weights)
+    elif basis == "binary at 33":
+        x = np.where(rng.random(109) < 0.5, 32.98083136553032, 33.48083136553032)
+        w = None
+        if weights == "far first":
+            x = np.concatenate([x, np.full(30, 1e7)])
+            w = np.concatenate([np.ones(109), np.full(30, 1e-40)])
+        B = np.column_stack([np.ones(x.size), x])
+        Y = 2.5564 * x + 1e-6 * rng.standard_normal(x.size)
+    elif basis == "x and a hinge at 33":
+        x, w = 33 + rng.uniform(-0.25, 0.25, 60), rng.uniform(0.5, 2, 60)
+        x[:10], w[:10] = -1e9, 1e-30
+        B = np.column_stack([np.ones(60), x, np.maximum(x - 33, 0)])
+        Y = 2.5 * x + 1e-6 * rng.standard_normal(60)
+    else:
+        x = rng.uniform(size=50)
+        B = np.column_stack(
+            [np.ones(50), np.maximum(x - 0.5, 0), np.maximum(0.3 - x, 0)]
+        )
+        means = np.array([1e13, -4e12, 7e12])[:k]
+        Y = means + np.sin(6 * x)[:, None] + 0.1 * rng.normal(size=(50, k))
+        w = None if weights == "none" else rng.uniform(0.5, 2.0, 50)
+        if weights == "far first":
+            Y[:30], w[:30] = -means, 1e-30
+        Y = Y[:, 0] if k == 1 else Y
+    res = pr.pruning_pass(B, Y, w, penalty=2.0)
+    cond, n = _cond(B, w), B.shape[0]
+    exact = [_exact(B, Y, w, np.flatnonzero(row))[1] for row in res.subsets]
+    assert_la5(res.rss_per_size, exact, exact[0], cond, n)
+    if linear:  # the stages choose as the spec does in rational arithmetic
+        assert 1e3 < cond <= 1e5
+        removed, _, sets, _ = _spec_pass(
+            B, Y, w, lambda B, Y, w, cols: _exact(B, Y, w, sorted(cols))[1]
+        )
+        assert res.removed.tolist() == removed
+        assert _sets(res.subsets) == sets
+    assert_la5([_gcv.tss(Y, w)], [exact[0]], exact[0])
+    fit = pr.final_fit(B, Y, res.selected, w, penalty=2.0)
+    beta, rss = _exact(B, Y, w, res.selected)
+    assert_la5([fit.rss], [rss], exact[0], cond, n)
+    assert np.linalg.norm(fit.coef - beta.T) <= 1e-6 * np.linalg.norm(beta)

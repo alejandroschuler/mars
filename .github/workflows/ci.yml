@@ -1,6 +1,6 @@
 # Lean CI for pymars 2.0 (VALIDATION_PLAN.md, "Inherited workflows and CI"):
-# ruff, the fast tests on three operating systems, the slow tests, the lowest
-# direct dependency versions and a wheel build. No secrets and no publishing.
+# ruff, the fast tests on three operating systems, the fast tests without numba,
+# the slow tests, the lowest direct dependency versions and a wheel build. No secrets and no publishing.
 name: CI
 
 on:
@@ -70,6 +70,27 @@ jobs:
           cache-suffix: ${{ github.job }}
       - run: uv run --frozen --group validation pytest -m "not slow and not external"
 
+  nonumba:
+    name: numpy fallback without numba (ubuntu-latest, Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          cache-suffix: ${{ github.job }}
+      # Intel Macs install without numba and run this code path (issue #145).
+      - name: Sync the locked environment without numba and llvmlite
+        run: uv sync --frozen --group validation --no-install-package numba --no-install-package llvmlite
+      - name: Check that numba is absent
+        run: |
+          .venv/bin/python -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("numba") is not None)'
+      - run: uv run --frozen --no-sync pytest -m "not slow and not external"
+
   slow:
     name: slow tests (ubuntu-latest, Python 3.12)
     runs-on: ubuntu-latest
@@ -83,17 +104,9 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
           cache-suffix: ${{ github.job }}
-      # The exit-code-5 exception holds only while no slow test exists. It goes
-      # once slow tests exist: task T15 removes it.
-      - name: Run the slow tests (pytest exit code 5 means that none exist yet)
-        run: |
-          status=0
-          uv run --frozen --group validation pytest -m "slow and not external" || status=$?
-          if [ "$status" -eq 5 ]; then
-            echo "No slow tests are collected yet."
-            status=0
-          fi
-          exit "$status"
+      # Slow tests exist, so pytest's exit code 5 (no tests collected) fails.
+      - name: Run the slow tests
+        run: uv run --frozen --group validation pytest -m "slow and not external"
 
   lowest:
     name: lowest direct dependencies (ubuntu-latest, Python 3.10)
@@ -114,10 +127,15 @@ jobs:
           uv pip install --resolution lowest-direct -r pyproject.toml
           uv pip freeze | tee "$RUNNER_TEMP/lowest.txt"
           uv pip install --no-deps .
-      - name: Install the test tools without changing those versions
+      # The floors of the validation group must work with the runtime floors,
+      # which the constraint file keeps. joblib stays at the release that
+      # scikit-learn brought in.
+      - name: Install the validation group at its lowest allowed versions
         run: |
-          uv pip install --constraint "$RUNNER_TEMP/lowest.txt" \
-            pytest hypothesis pandas joblib matplotlib
+          uv pip install --resolution lowest-direct \
+            --constraint "$RUNNER_TEMP/lowest.txt" --group validation
+      - name: Install the test tools without changing those versions
+        run: uv pip install --constraint "$RUNNER_TEMP/lowest.txt" pytest hypothesis
       - run: .venv/bin/pytest -m "not slow and not external"
 
   wheel:
@@ -145,10 +163,9 @@ jobs:
           import pymars
           assert pymars.__version__ == importlib.metadata.version("mars-earth")
           assert "site-packages" in pymars.__file__, pymars.__file__
-          if hasattr(pymars, "Earth"):
-              import numpy as np
-              X = np.random.default_rng(0).uniform(size=(100, 3))
-              y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
-              assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
+          import numpy as np
+          X = np.random.default_rng(0).uniform(size=(100, 3))
+          y = X[:, 0] + np.maximum(X[:, 1] - 0.5, 0.0)
+          assert np.isfinite(pymars.Earth().fit(X, y).predict(X)).all()
           print("smoke check passed:", pymars.__version__, pymars.__file__)
           '

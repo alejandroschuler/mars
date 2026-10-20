@@ -13,9 +13,10 @@ regression cell, a binary cell, or both (``supports_regression`` /
 
 Every arm sets its MARS degree to 2 (VALIDATION_PLAN.md, "Behavior target":
 "Every simulation arm sets 2"). P-fix needs ``pymars.EarthRegressor`` /
-``pymars.EarthClassifier``, which do not exist yet (T13/T14): it raises
-``NotImplementedError`` until they do; ``run.py`` records that as an ordinary
-per-fit failure, like any other exception from an arm.
+``pymars.EarthClassifier``. ``EarthRegressor`` exists (T13); until
+``EarthClassifier`` does (T14), P-fix on a classification cell raises
+``NotImplementedError``, and ``run.py`` records that as an ordinary per-fit
+failure, like any other exception from an arm.
 """
 
 from __future__ import annotations
@@ -165,7 +166,8 @@ def _p_fix_fit_predict(x_train, y_train, x_test, binary: bool) -> FitOutcome:
         raise NotImplementedError(
             f"P-fix needs pymars.{class_name} (pymars 2.0), which does not exist yet."
         )
-    model = cls(max_degree=MARS_DEGREE)
+    # glm_alpha=0: earth's unpenalized refit, the default at the freeze (#175).
+    model = cls(max_degree=MARS_DEGREE, **({"glm_alpha": 0.0} if binary else {}))
     t0 = time.perf_counter()
     model.fit(x_train, y_train)
     fit_seconds = time.perf_counter() - t0

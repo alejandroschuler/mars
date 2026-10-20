@@ -10,6 +10,10 @@ checked against a known number, so an interval of +/-2 SE, a mean of ratios
 in place of the geometric-mean ratio, a band of log 1.10, a median taken as a
 mean, a missing cell shown as 1.000, and a failed repetition kept in the
 ratio all passed every test that existed before this file changed.
+
+Also the two figures, drawn with the installed matplotlib. Before these
+tests no test drew a figure, so a matplotlib floor that was too old for
+``box_plots`` passed every gate and CI job.
 """
 
 from __future__ import annotations
@@ -184,6 +188,26 @@ def test_ratio_table_missing_when_no_data_at_all():
     assert d7_row["P-cur / E-def"].startswith("n/a")
 
 
+def test_main_writes_every_display_when_no_cell_has_run(tmp_path):
+    """Before any cell has run, the results folder has no cell folders.
+    ``main`` must still write ``captions.md`` and each display that
+    ``CAPTIONS`` names, and no file without a caption. The appendix table
+    then holds only its header. Before the fix, ``appendix_table`` sorted a
+    frame with no columns and raised ``KeyError: 'dgp'``, so the figures and
+    the captions were never written.
+    """
+    results = tmp_path / "results"
+    results.mkdir()
+    out = tmp_path / "report"
+    summ.main(["--results", str(results), "--out", str(out)])
+    assert sorted(path.name for path in out.iterdir()) == sorted(
+        [*summ.CAPTIONS, "captions.md"]
+    )
+    assert (out / "appendix_table.csv").read_text().splitlines() == [
+        "dgp,n,noise,arm,n_ok,n_failed,mean_log_measure,mc_se_log_measure"
+    ]
+
+
 def test_selection_table_median_and_iqr_hand_case(tmp_path):
     """n_terms = [1, 1, 1, 1, 10] (an asymmetric sample, pandas' default
     linear interpolation): median 1, mean 2.8, Q1 1, Q3 1, IQR 0. A mean
@@ -295,3 +319,50 @@ def test_paired_log_ratio_is_sensitive_to_pairing_order(tmp_path):
     # either way: a sum of the same two values in a different order).
     assert stats["se"] != pytest.approx(0.895880, abs=1e-5)
     assert stats["g_bar"] == pytest.approx(1.301345, abs=1e-5)
+
+
+def test_main_draws_both_figures_and_labels_each_box(tmp_path, monkeypatch):
+    """Draws both figures through ``main``. ``box_plots`` passes
+    ``tick_labels``, a keyword that matplotlib added in 3.9, but the
+    validation group first allowed matplotlib 3.8. With 3.8 this test fails
+    with a TypeError. The x tick labels are read back, so a box plot drawn
+    without them (ticks numbered 1 and 2) also fails.
+    """
+    results = tmp_path / "results"
+    risks = {"E-def": [1.0, 1.0], "P-cur": [2.0, 8.0], "P-fix": [1.0, 2.0]}
+    for arm, values in risks.items():
+        for rep, risk in enumerate(values):
+            _write_result(
+                results, "D1_n00200_lo", arm, rep, {"error": None, "excess_risk": risk}
+            )
+    figures = []
+    subplots = summ.plt.subplots
+
+    def recording_subplots(*args, **kwargs):
+        fig, axes = subplots(*args, **kwargs)
+        figures.append(fig)
+        return fig, axes
+
+    monkeypatch.setattr(summ.plt, "subplots", recording_subplots)
+    summ.main(["--results", str(results), "--out", str(tmp_path / "report")])
+
+    for name in ("equivalence_figure.png", "box_plots.png"):
+        assert (tmp_path / "report" / name).read_bytes().startswith(b"\x89PNG")
+    (box_ax,) = [
+        ax
+        for fig in figures
+        for ax in fig.axes
+        if ax.get_title().startswith("Gap and parity claims")
+    ]
+    labels = [text.get_text() for text in box_ax.get_xticklabels()]
+    assert labels == ["D1/P-cur/lo", "D1/P-fix/lo"]
+
+
+def test_both_figures_draw_with_no_results(tmp_path):
+    """Before any cell has run, the box plot shows a note in place of boxes
+    and the equivalence figure has empty panels; both files are written."""
+    empty = summ.load_results(tmp_path)
+    summ.box_plots(empty, tmp_path / "report" / "box_plots.png")
+    summ.equivalence_figure(empty, tmp_path / "report" / "equivalence_figure.png")
+    for name in ("box_plots.png", "equivalence_figure.png"):
+        assert (tmp_path / "report" / name).read_bytes().startswith(b"\x89PNG")

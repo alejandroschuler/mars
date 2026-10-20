@@ -32,6 +32,8 @@ Public functions, for ``_scan``, ``_forward``, ``_pruning`` and ``_core``:
 - ``collinearity_tolerance``, ``collinearity_ratio``, ``knot_rejected``: the
   collinearity test of a candidate knot (LA-3).
 - ``weighted_variances``, ``pair_search``: the kind of a search (LA-7).
+- ``dependent``: the float64 dependence test of LA-4, from a distance and a
+  norm that the caller has (LA-2 in the forward pass).
 - ``independent_columns``, ``lm_fit``: least squares with the dependent columns
   of LA-4, the analogue of R's ``lm.fit`` (FWD-11, PRUNE-8).
 - ``r_factor``, ``prefix_rss``, ``drop_costs``, ``move_column``: the R factor of
@@ -56,11 +58,14 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
+from pymars import _kernels
+
 FloatArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]
 
 #: LA-4: a column is dependent when the norm of its part orthogonal to the kept
-#: earlier columns is less than LM_TOL times its norm, not centered.
+#: earlier columns is less than LM_TOL times its norm, not centered (the
+#: tolerance of R's ``lm.fit``, bb09.8).
 LM_TOL = 1e-7
 #: LA-3: the collinearity tolerance tau in forward steps 1 to 7.
 COLLINEARITY_TOL_EARLY = 0.01
@@ -68,8 +73,12 @@ COLLINEARITY_TOL_EARLY = 0.01
 COLLINEARITY_TOL_LATE = 1e-5
 #: LA-3: the last forward step, counted from 1, with COLLINEARITY_TOL_EARLY.
 COLLINEARITY_LAST_EARLY_STEP = 7
-#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π sigma_v².
+#: LA-7: a pair search needs A_w ≥ PAIR_SEARCH_FACTOR·Π(UNIFORM_INV_VARIANCE·sigma²).
 PAIR_SEARCH_FACTOR = 0.01
+#: LA-7: the inverse of 1/12, the variance of a covariate uniform on [0, 1], so
+#: that UNIFORM_INV_VARIANCE·sigma_v² is 1 for such a covariate and the
+#: threshold is earth's 0.01 there (#173).
+UNIFORM_INV_VARIANCE = 12.0
 
 
 class GramSchmidt(NamedTuple):
@@ -81,11 +90,26 @@ class GramSchmidt(NamedTuple):
     norm: float
 
 
+class Orthogonal(NamedTuple):
+    """``cgs2(Q, v)``: ``perp`` = v⊥, the part of v orthogonal to Q;
+    ``coef`` = Qᵀv, the first pass's coefficients, shape (r,), which a later
+    call may pass as ``known``; ``total``, the coefficients of both passes, so
+    that v⊥ = v - Q·total up to rounding; ``vnorm`` = ‖v‖; ``norm`` = ‖v⊥‖."""
+
+    perp: FloatArray
+    coef: FloatArray
+    total: FloatArray
+    vnorm: float
+    norm: float
+
+
 class LmFit(NamedTuple):
     """``lm_fit(A, Y, w)``: ``coef``, shape (M,) or (M, K), 0.0 for a dependent
     column; ``kept``, shape (M,), True for a column that LA-4 keeps;
-    ``residuals`` = Y - A·coef, unscaled, with the shape of Y; ``rss`` =
-    Σ_k Σ_i w_i·residuals_ik² (PRUNE-8)."""
+    ``residuals`` = Y - A·coef, unscaled, with the shape of Y; ``rss``, the
+    weighted RSS of the projection of Y on the kept columns, summed over the
+    responses (PRUNE-8); up to the rounding of ``coef`` it is
+    Σ_k Σ_i w_i·residuals_ik²."""
 
     coef: FloatArray
     kept: BoolArray
@@ -173,6 +197,59 @@ def gram_schmidt(Q: npt.ArrayLike, v: npt.ArrayLike) -> GramSchmidt:
     return GramSchmidt(perp / norm if norm > 0.0 else None, coef, norm)
 
 
+def cgs2(
+    Q: npt.ArrayLike,
+    v: npt.ArrayLike,
+    known: npt.ArrayLike | None = None,
+    *,
+    twice: bool = False,
+) -> Orthogonal:
+    """Classical Gram-Schmidt of v (n,) against the orthonormal columns of Q
+    (n, r), with the second pass of DGKS: it runs when the first pass leaves
+    ‖v⊥‖² < ‖v‖²/2, or always with ``twice=True`` (LA-1; "twice is enough").
+    Either way ‖Qᵀv⊥‖ stays a small multiple of r·u·‖v‖, the precondition of
+    ``_scan.knot_scan``.
+
+    ``known`` holds Qᵀv for the leading columns of Q from an earlier call on
+    the same v (the forward pass appends columns and never changes old ones),
+    so only the new columns' coefficients are computed. The compiled form
+    (``_kernels``) reads each row of Q once per pass: 2 or 3 passes, against 4
+    for ``orthogonalize``; the numpy form takes the same steps with matrix
+    products. Neither writes into its inputs. Complexity: O(n·r) time, O(n)
+    memory.
+    """
+    Q = _matrix(Q, "Q")
+    v = np.asarray(v, dtype=np.float64)
+    r = Q.shape[1]
+    a = 0 if known is None else len(known)
+    coef = np.empty(r)
+    if a:
+        coef[:a] = known
+    if _kernels.ENABLED:
+        return Orthogonal(*_kernels.cgs2(Q, v, coef, a, twice))
+    coef[a:] = Q[:, a:].T @ v
+    perp = v - Q @ coef
+    c2 = Q.T @ perp
+    vnorm, norm = float(scipy.linalg.norm(v)), float(scipy.linalg.norm(perp))
+    total = coef
+    if twice or 2.0 * norm * norm < vnorm * vnorm:
+        perp = perp - Q @ c2
+        total = coef + c2
+        norm = float(scipy.linalg.norm(perp))
+    return Orthogonal(perp, coef, total, vnorm, norm)
+
+
+def remove_direction(q: FloatArray, E: FloatArray) -> tuple[FloatArray, FloatArray]:
+    """Remove from the columns of E (n, K) their part along the unit vector q
+    (n,), twice; return the result and t = qᵀE of the first pass. A pair search
+    appends q to Q this way (E is orthogonal to Q already): O(n·K), in place of
+    ``orthogonalize`` against all of Q. Complexity: O(n·K)."""
+    t = q @ E
+    E1 = E - np.outer(q, t)
+    E1 -= np.outer(q, q @ E1)
+    return E1, t
+
+
 def collinearity_tolerance(step: int) -> float:
     """Return tau of LA-3 for forward step ``step``, counted from 1.
 
@@ -256,20 +333,34 @@ def pair_search(resid_ss: float, variances: npt.ArrayLike) -> bool:
     """Return True for a pair search, False for a single-hinge search (LA-7).
 
     pymars runs a pair search for a parent b and a covariate x when
-    A_w ≥ 0.01·Π_{v∈V} sigma_v², and a single-hinge search otherwise, and
+    A_w ≥ 0.01·Π_{v∈V}(12·sigma_v²), and a single-hinge search otherwise, and
     always when some v ∈ V is constant (a pymars departure: the rule does not
-    depend on the units of x). ``resid_ss`` is A_w, the weighted RSS of b·x on
-    the current columns (``gram_schmidt(Q, √w·b·x).norm ** 2``); ``variances``
-    holds sigma_v² from ``weighted_variances`` for the covariates V of b·x, the
-    parent's and x, where 0.0 marks a constant covariate.
-    Complexity: O(len(variances)).
+    depend on the units of x, and it is earth's A ≥ 0.01 for covariates of the
+    variance 1/12 of a uniform on [0, 1], #173). ``resid_ss`` is A_w, the
+    weighted RSS of b·x on the current columns
+    (``gram_schmidt(Q, √w·b·x).norm ** 2``); ``variances`` holds sigma_v² from
+    ``weighted_variances`` for the covariates V of b·x, the parent's and x,
+    where 0.0 marks a constant covariate. Each factor 12·sigma_v² scales with
+    the units of v as A_w does, so a scaling of X by powers of 2 (EDGE-7)
+    scales both sides exactly. Complexity: O(len(variances)).
     """
     v = np.asarray(variances, dtype=np.float64).ravel()
     if v.size == 0:
         raise ValueError("variances must hold sigma² of at least the covariate x")
     if np.any(v == 0.0):
         return False
-    return bool(resid_ss >= PAIR_SEARCH_FACTOR * math.prod(v.tolist()))
+    threshold = PAIR_SEARCH_FACTOR * math.prod((UNIFORM_INV_VARIANCE * v).tolist())
+    return bool(resid_ss >= threshold)
+
+
+def dependent(dist: float, norm: float) -> bool:
+    """LA-4: whether a column is dependent on a set S of kept columns, given
+    ``dist`` = ‖c - P_S c‖_w and ``norm`` = ‖c‖_w, not centered. It is when
+    dist < LM_TOL·norm, or when norm is 0 (c is 0 at every case, or its values
+    underflow after the √w scaling, LIM-3, LIM-4), so that no solve divides
+    by 0. A computed ratio within a factor 2 of LM_TOL is a near-dependence
+    (STOP-7), where the reference may decide otherwise. Complexity: O(1)."""
+    return norm == 0.0 or dist < LM_TOL * norm
 
 
 def _independent(As: FloatArray) -> BoolArray:
@@ -284,11 +375,11 @@ def _independent(As: FloatArray) -> BoolArray:
     r = 0
     for j in range(M):
         a = As[:, j]
-        if r == n or not np.any(a):
-            continue
+        if r == n:
+            break
         perp, _ = orthogonalize(Q[:, :r], a)
         norm = scipy.linalg.norm(perp)
-        if norm < LM_TOL * scipy.linalg.norm(a):
+        if dependent(norm, scipy.linalg.norm(a)):
             continue
         Q[:, r] = perp / norm
         r += 1
@@ -303,8 +394,9 @@ def independent_columns(A: npt.ArrayLike, w: npt.ArrayLike | None = None) -> Boo
     of its part orthogonal to the kept earlier columns is less than 1e-7 times
     its w-norm, not centered. A column that is 0 on every case is dependent
     too, as in R's ``lm.fit`` (the strict test alone would keep it, since 0 is
-    not less than 0). FWD-11 applies this rule to the forward terms when the
-    pass stops. Complexity: O(n·M·r) time for rank r, O(n·M) memory.
+    not less than 0). FWD-11 applies this rule to the √w-scaled columns of the
+    forward terms when the pass stops, and PRUNE-8 to the selected columns.
+    Complexity: O(n·M·r) time for rank r, O(n·M) memory.
     """
     A = _matrix(A, "A")
     return _independent(np.sqrt(_weights(w, A.shape[0]))[:, None] * A)
@@ -316,10 +408,13 @@ def lm_fit(A: npt.ArrayLike, Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -
     The analogue of R's ``lm.fit`` and ``lm.wfit`` at their default tolerance,
     whose NA is 0.0 here (LA-4, PRUNE-8). ``independent_columns`` picks the
     kept columns; a Householder QR of their √w-scaled values and a triangular
-    solve give the coefficients. A is (n, M), Y (n,) or (n, K), and ``coef``
-    has shape (M,) or (M, K) to match. ``rss`` is the weighted RSS of the
-    returned coefficients, as PRUNE-8 defines the final rss.
-    Complexity: O(n·M·(M + K)) time, O(n·(M + K)) memory.
+    solve give the coefficients, a backward-stable method (LA-4's paragraph on
+    coefficients). A is (n, M), Y (n,) or (n, K), and ``coef`` has shape (M,)
+    or (M, K) to match. ``rss`` comes from the residual of the projection of
+    √w·Y on the kept columns (Gram-Schmidt twice on the Q factor), not from
+    the coefficients, whose own rounding can matter (PRUNE-8); the caller
+    centers Y first (LA-6). Complexity: O(n·M·(M + K)) time, O(n·(M + K))
+    memory.
     """
     A = _matrix(A, "A")
     n, M = A.shape
@@ -329,12 +424,12 @@ def lm_fit(A: npt.ArrayLike, Y: npt.ArrayLike, w: npt.ArrayLike | None = None) -
     As = sw * A
     kept = _independent(As)
     coef = np.zeros((M, Y2.shape[1]))
+    Qk, Rk = np.linalg.qr(As[:, kept])
+    E, Z = orthogonalize(Qk, sw * Y2)  # a row with zero weight adds 0 (W-3)
     if kept.any():
-        Qk, Rk = np.linalg.qr(As[:, kept])
-        coef[kept] = scipy.linalg.solve_triangular(Rk, Qk.T @ (sw * Y2))
+        coef[kept] = scipy.linalg.solve_triangular(Rk, Z)
     residuals = Y2 - A @ coef
-    pos = wv > 0.0  # W-3: a row with zero weight adds nothing to the RSS
-    rss = float(np.sum(wv[pos, None] * np.square(residuals[pos])))
+    rss = float(np.sum(np.square(E)))
     if one_d:
         return LmFit(coef[:, 0], kept, residuals[:, 0], rss)
     return LmFit(coef, kept, residuals, rss)

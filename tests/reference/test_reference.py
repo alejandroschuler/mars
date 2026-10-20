@@ -455,11 +455,25 @@ class TestLinearAlgebra:
         assert ref.rss(cols, y, w) == pytest.approx(lstsq_rss(cols, y, w), rel=rel)
         assert ref.rss(cols, y, w) < 0.01 * ref.rss(cols[:, :2], y, w)
 
-    def test_a_large_shift_of_a_linear_column_keeps_the_rss(self, design):
+    def test_a_shift_of_a_linear_column_keeps_the_rss(self, design):
+        # a mean of 300 spreads (R_D for degree 2), inside ordinary data
         B, Y, w = design
         shifted = B.copy()
-        shifted[:, 1] += 1e8
+        shifted[:, 1] += 300 * float(np.std(B[:, 1]))
         assert ref.rss(shifted, Y, w) == pytest.approx(ref.rss(B, Y, w), rel=1e-9)
+
+    def test_centering_takes_the_nearest_data_value_then_the_mean(self):
+        # [LA-6] weights 1, 1, 2: the mean of (10, 12, 13) is 12; the nearest
+        # data value is 12, so the second shift is 0. For (1, 2, 6, 7) with
+        # weights 1 the mean 4 is 2 away from both 2 and 6: the smaller, 2,
+        # is taken first, and the remaining mean is 2.
+        first, second = ref.centering(
+            np.array([10.0, 12.0, 13.0]), np.array([1.0, 1.0, 2.0])
+        )
+        assert (first, second) == (12.0, 0.0)
+        V = np.array([1.0, 2.0, 6.0, 7.0])
+        assert ref.centering(V, np.ones(4)) == (2.0, 2.0)
+        assert ref.center(V, np.ones(4)).tolist() == [-3.0, -2.0, 2.0, 3.0]
 
     def test_collinearity_ratio_is_one_minus_r_squared(self, design):
         B, _, w = design
@@ -545,6 +559,136 @@ class TestLinearAlgebra:
 
 
 # ---------------------------------------------------------------------------
+# Dependence and accuracy in float64 [LA-2, LA-4, LA-5, PRUNE-8]
+
+
+def la5(V, R, tss, cond, n):
+    """epsilon(V*, R, cond) of LA-5 (v3), with c = max(1e-14, u cond sqrt(n))."""
+    c = max(1e-14, 2.0**-53 * cond * math.sqrt(n))
+    return 1e-8 * R + c * math.sqrt(tss * V) + (c / 2) ** 2 * tss
+
+
+def condition(B, w):
+    """cond of LA-5: the 2-norm condition number of the sqrt(w)-scaled
+    columns of B, each scaled to unit w-norm."""
+    A = np.asarray(B, dtype=float) * np.sqrt(w)[:, None]
+    return float(np.linalg.cond(A / np.linalg.norm(A, axis=0)))
+
+
+class TestDependence:
+    @pytest.mark.parametrize(("mean", "linear"), [(1e5, True), (1e7, False)])
+    def test_a_linear_column_counts_from_1e_7_of_its_uncentered_norm(
+        self, mean, linear
+    ):
+        # LA-2 and LA-4 (v3), LIM-1: x0 = mean + k / 20 has sd 0.3, so its
+        # part orthogonal to the intercept is about 3e-6 or 3e-8 of its
+        # uncentered norm. At 1e5 the linear candidate of step 1 counts; at
+        # 1e7 LA-4 finds b x dependent, so the candidate has the RSS of F and
+        # is not legal, while the hinges of the same pair search count (x - t
+        # loses no digits). The pass then follows the line with hinges.
+        x0 = mean + np.arange(21.0) / 20
+        X, y, w = x0[:, None], 1 + 2 * (x0 - mean), np.ones(21)
+        F = np.ones((21, 1))
+        P = ref.Projector(F, w)
+        rss_s = P.rss(y)
+        cands, _ = ref._parent_candidates(
+            0,
+            np.zeros(1, np.int8),
+            X,
+            y[:, None],
+            w,
+            F,
+            P,
+            P.residual(y[:, None]),
+            ref.covariate_variances(X, w, 21.0),
+            21.0,
+            ref.weight_tol(21.0),
+            ref.Params(),
+            0.01,
+        )
+        (lin,) = [c for c in cands if c.kind == ref.LINEAR]
+        assert lin.counted == (linear,)
+        assert (lin.rss < 1e-6 * rss_s) if linear else (lin.rss == rss_s)
+        pairs = [c for c in cands if c.kind == ref.PAIR]
+        assert pairs and all(c.counted == (linear, True) for c in pairs)
+        assert all(ref.reduction(c, rss_s) > 0.5 * rss_s for c in pairs)
+        rec = run_forward(X, y)
+        assert (rec["dirs"][1, 0] == 2) == linear
+        assert rec["rss"][-1] < (1e-6 if linear else 0.1) * rec["rss"][0]
+
+    def test_an_ordinary_fit_meets_la_5_and_the_exact_coefficients(self):
+        # LA-5 and PRUNE-8 (v3) on ordinary data at degree 3 (Limits): x0 at a
+        # mean of 8 times its spread (r about 28 < 30), an exact copy x1 (bit
+        # for bit), and a hinge of z. Every RSS of the forward pass, of the
+        # pruning pass and the final rss are within epsilon(V*, R, cond) of
+        # exact arithmetic, and the coefficients within a normwise 1e-6 of
+        # exact least squares, where cond <= 1e5
+        rng = np.random.default_rng(3)
+        n = 20
+        u, z = rng.uniform(size=n), rng.uniform(size=n)
+        X = np.column_stack([8 + u, 8 + u, z])
+        h = np.maximum(z - 0.4, 0)
+        y = 10 * h + 6 * h * u + 4 * h * u**2 + 0.01 * rng.normal(size=n)
+        result = assert_fit_meets_la5(X, y, max_degree=3, fast_k=0, thresh=0.0)
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        assert condition(B, np.ones(n)) <= 1e5
+        exact = exact_coef(exact_basis(X, result["dirs"], result["cuts"]), y)
+        got = result["coef"][:, 0]
+        assert np.linalg.norm(got - exact) <= 1e-6 * np.linalg.norm(exact)
+
+
+def assert_fit_meets_la5(X, y, **opts):
+    """Fit with the reference, on unit weights; every RSS of its forward pass
+    (each step, on the terms added so far, which span F_s when no term is
+    dropped), of its pruning pass (each size, on its subset) and its final
+    rss meet LA-5 against exact arithmetic, with cond of the float64 columns
+    whenever it is at most 1e6. Returns the result."""
+    result = fit(X, y, **opts)
+    fwd, w, n = result["forward"], np.ones(len(y)), len(y)
+    assert fwd["dropped"].size == 0
+    tss = fwd["rss"][0]
+    checked = 0
+
+    def check(got, dirs, cuts, R):
+        nonlocal checked
+        k = condition(ref.basis_matrix(X, dirs, cuts), w)
+        if k <= 1e6:
+            exact = exact_rss(exact_basis(X, dirs, cuts), y, w)
+            assert abs(got - exact) <= la5(exact, R, tss, k, n)
+            checked += 1
+
+    for s in range(1, len(fwd["rss"])):
+        terms = np.flatnonzero(fwd["step"] <= s)
+        check(fwd["rss"][s], fwd["dirs"][terms], fwd["cuts"][terms], fwd["rss"][s - 1])
+    kept, pruning = fwd["kept"], result["pruning"]
+    for m, got in enumerate(pruning["rss_per_size"], start=1):
+        terms = kept[pruning["subsets"][m - 1]]
+        check(got, fwd["dirs"][terms], fwd["cuts"][terms], got)
+    check(result["rss"], result["dirs"], result["cuts"], result["rss"])
+    assert checked > len(fwd["rss"])
+    assert result["rss"] == pruning["rss_per_size"][pruning["selected_size"] - 1]
+    return result
+
+
+def exact_coef(B, y):
+    """Least-squares coefficients in exact arithmetic (normal equations), for
+    a basis B of fractions with independent columns, unit weights."""
+    m = len(B[0])
+    A = [
+        [sum(r[a] * r[b] for r in B) for b in range(m)] + [Fraction(0)]
+        for a in range(m)
+    ]
+    for a in range(m):
+        A[a][m] = sum(r[a] * Fraction(float(v)) for r, v in zip(B, y, strict=True))
+    for c in range(m):  # Gauss-Jordan; A is positive definite, so no pivoting
+        for i in range(m):
+            if i != c and A[i][c]:
+                f = A[i][c] / A[c][c]
+                A[i] = [x - f * v for x, v in zip(A[i], A[c], strict=True)]
+    return np.array([float(A[i][m] / A[i][i]) for i in range(m)])
+
+
+# ---------------------------------------------------------------------------
 # The pruning pass [PRUNE-1 to PRUNE-8]
 
 
@@ -605,19 +749,6 @@ def offered_sets(B, Y, w):
     return best
 
 
-def expected_statistics(B, Y, w, selected, penalty):
-    """rss, gcv, rsq, grsq and tss of the model on the selected columns, from
-    numpy's least squares and the formulas of GCV-2, GCV-5 and GCV-6."""
-    N = ref.weight_sum(w)
-    tau = ref.weight_tol(N)
-    Y2 = Y.reshape(len(Y), -1)
-    rss = lstsq_rss(B[:, selected], Y2, w)
-    tss = float(np.sum(w[:, None] * (Y2 - np.average(Y2, axis=0, weights=w)) ** 2))
-    gcv = ref.gcv(rss, len(selected), penalty, N, tau)
-    grsq = 1 - gcv / ref.gcv(tss, 1, penalty, N, tau)
-    return {"rss": rss, "gcv": gcv, "rsq": 1 - rss / tss, "grsq": grsq, "tss": tss}
-
-
 class TestPruning:
     def test_selects_the_true_terms(self):
         rng = np.random.default_rng(11)
@@ -633,16 +764,6 @@ class TestPruning:
         np.testing.assert_allclose(expected, [1.0, 3.0], atol=0.1)
         expected_rss = lstsq_rss(B[:, [0, 2]], y, np.ones(n))
         assert result["rss"] == pytest.approx(expected_rss, rel=1e-8)
-
-    @pytest.mark.parametrize("seed", range(5))
-    def test_one_response_removes_as_backward_elimination_and_does_no_worse(self, seed):
-        B, Y, w = random_basis(seed)
-        result = prune(B, Y, w)
-        removed, path = backward_elimination(B, Y, w)
-        np.testing.assert_array_equal(result["removed"], removed)
-        for m, value in path.items():
-            assert result["rss_per_size"][m - 1] <= value
-        np.testing.assert_array_equal(result["subsets"][0], [True] + [False] * 5)
 
     def test_one_response_offers_the_forward_order_and_several_do_not(self):
         # y = x1 + x2 and term 1 is x3 = x1 + x2 + noise. Backward elimination
@@ -665,25 +786,6 @@ class TestPruning:
         two = prune(B, np.column_stack([y, 2 * y]), np.ones(n))
         assert not two["subsets"][1][1]
 
-    @pytest.mark.parametrize("seed", range(3))
-    def test_several_responses_are_plain_backward_elimination(self, seed):
-        B, Y, w = random_basis(seed, K=2)
-        result = prune(B, Y, w)
-        removed, path = backward_elimination(B, Y, w)
-        np.testing.assert_array_equal(result["removed"], removed)
-        for m, value in path.items():
-            assert result["rss_per_size"][m - 1] == value
-        subsets = result["subsets"]
-        for m in range(1, len(subsets)):
-            assert np.all(subsets[m] >= subsets[m - 1])  # nested
-
-    def test_two_terms_give_the_same_record_for_both_rules(self):
-        B, Y, w = random_basis(2, M=2, K=2)
-        one = prune(B, Y[:, :1], w)
-        two = prune(B, np.column_stack([Y[:, 0], 0 * Y[:, 0]]), w)
-        np.testing.assert_array_equal(one["removed"], two["removed"])
-        np.testing.assert_array_equal(one["subsets"], two["subsets"])
-
     def test_the_intercept_alone(self):
         y = np.array([1.0, 2.0, 4.0])
         result = prune(np.ones((3, 1)), y, np.ones(3))
@@ -693,16 +795,6 @@ class TestPruning:
         assert result["selected_size"] == 1
         assert result["rsq"] == 0.0 and result["grsq"] == 0.0
         np.testing.assert_allclose(result["coef"], [[7 / 3]], rtol=1e-14)
-
-    def test_one_response_follows_prune_3_step_by_step(self):
-        for seed in range(20):
-            B, Y, w = random_basis(seed, n=10, M=5)
-            result = prune(B, Y, w)
-            for m, (value, terms) in offered_sets(B, Y, w).items():
-                assert result["rss_per_size"][m - 1] == value
-                np.testing.assert_array_equal(
-                    np.flatnonzero(result["subsets"][m - 1]), terms
-                )
 
     def test_one_response_follows_prune_3_on_a_dependent_basis(self):
         # term 3 = term 1 + term 2, so some sets tie with their subsets up to
@@ -760,14 +852,6 @@ class TestPruning:
         Y2 = np.column_stack([y, x + rng.normal(size=8)])
         np.testing.assert_array_equal(prune(B2, Y2, np.ones(8))["removed"], [2, 3, 1])
 
-    def test_nprune_caps_the_selected_size_only(self):
-        B, Y, w = random_basis(4)
-        free = prune(B, Y, w, penalty=0.0)
-        capped = prune(B, Y, w, penalty=0.0, nprune=2)
-        assert capped["selected_size"] <= 2
-        for key in ("removed", "rss_per_size", "gcv_per_size", "subsets"):
-            np.testing.assert_array_equal(free[key], capped[key])
-
     @pytest.mark.parametrize("K", [1, 2])
     def test_nprune_three_selects_three_terms_where_four_are_best(self, K):
         rng = np.random.default_rng(3)
@@ -790,36 +874,9 @@ class TestPruning:
             with pytest.raises(ValueError, match="nprune"):
                 prune(B, Y, w, nprune=value)
 
-    def test_the_final_statistics_with_weights(self):
-        B, Y, _ = random_basis(12, n=40)
-        w = np.random.default_rng(12).uniform(0.5, 2.0, size=40)
-        result = prune(B, Y, w, penalty=3.0)
-        assert result["selected_size"] > 1
-        expected = expected_statistics(B, Y, w, result["selected"], 3.0)
-        for key in ("rss", "gcv", "tss"):
-            assert result[key] == pytest.approx(expected[key], rel=1e-10), key
-        for key in ("rsq", "grsq"):
-            assert result[key] == pytest.approx(expected[key], abs=1e-12), key
-        N = ref.weight_sum(w)
-        for m in range(1, 7):  # [PRUNE-4]
-            value = ref.gcv(result["rss_per_size"][m - 1], m, 3.0, N, ref.weight_tol(N))
-            assert result["gcv_per_size"][m - 1] == value
-
-    def test_pmethod_none_reports_the_statistics_of_its_terms(self):
-        # T[3] = {0, 2, 5}, so the statistics of terms 0 to 2 differ from R[3]
-        # and GCV(R[3], 3) [PRUNE-7, PRUNE-8]
-        B, Y, w = random_basis(6)
-        result = prune(B, Y, w, pmethod="none", nprune=3)
-        np.testing.assert_array_equal(np.flatnonzero(result["subsets"][2]), [0, 2, 5])
-        expected = expected_statistics(B, Y, w, [0, 1, 2], 2.0)
-        for key in ("rss", "gcv", "tss"):
-            assert result[key] == pytest.approx(expected[key], rel=1e-10), key
-        for key in ("rsq", "grsq"):
-            assert result[key] == pytest.approx(expected[key], abs=1e-12), key
-        assert result["gcv"] > 1.05 * result["gcv_per_size"][2]
-
     def test_a_large_penalty_selects_the_intercept_with_rsq_and_grsq_zero(self):
-        # GCV-7: 0 by definition, where 1 - RSS / TSS computes as -2.2e-16
+        # GCV-7: 0 by definition. The final rss of the intercept model is its
+        # TSS, from the same centered projection, so RSS / TSS is 1 exactly
         rng = np.random.default_rng(1)
         n = int(rng.integers(5, 40))
         B = np.column_stack([np.ones(n), rng.normal(size=(n, 3))])
@@ -827,18 +884,23 @@ class TestPruning:
         result = prune(B, y, np.ones(n), penalty=1000.0)
         assert result["selected_size"] == 1
         assert result["rsq"] == 0.0 and result["grsq"] == 0.0
-        # This only checks that the case still needs the GCV-7 rule: if it
-        # fails after a change of rounding elsewhere, pick a new case; the
-        # code of prune need not change.
-        assert 1 - result["rss"] / result["tss"] != 0.0
+        assert result["rss"] == result["tss"]
 
-    def test_two_equal_selected_columns(self):
-        # LA-4 gives the later of two equal columns the coefficient 0, and the
-        # final rss describes the returned model [PRUNE-8]
+    @pytest.mark.parametrize("offset", [0.0, 0.5e-7])
+    def test_two_equal_selected_columns(self, offset):
+        # LA-4 gives the later of two equal columns, or of two whose LA-4
+        # ratio is 0.5e-7, the coefficient 0, and the final rss describes the
+        # returned model [PRUNE-8]; y has a component along the difference, so
+        # the projection on all three columns would have a smaller RSS
         rng = np.random.default_rng(6)
         x = rng.normal(size=30)
-        B = np.column_stack([np.ones(30), x, x, rng.normal(size=30)])
-        y = 1 + 2 * x + rng.normal(size=30)
+        u = ref.Projector(np.column_stack([np.ones(30), x]), np.ones(30)).residual(
+            rng.normal(size=30)
+        )
+        u = u / np.linalg.norm(u)
+        column = x + offset * np.linalg.norm(x) * u
+        B = np.column_stack([np.ones(30), x, column, rng.normal(size=30)])
+        y = 1 + 2 * x + rng.normal(size=30) + 10 * u
         result = prune(B, y, np.ones(30), pmethod="none", nprune=3)
         coef = result["coef"][:, 0]
         assert coef[2] == 0.0
@@ -848,15 +910,6 @@ class TestPruning:
         assert result["rss"] == pytest.approx(
             lstsq_rss(B[:, :2], y, np.ones(30)), rel=1e-10
         )
-
-    def test_pmethod_none_keeps_the_first_terms(self):
-        B, Y, w = random_basis(6)
-        result = prune(B, Y, w, pmethod="none", nprune=3)
-        np.testing.assert_array_equal(result["selected"], [0, 1, 2])
-        assert result["rss"] == pytest.approx(ref.rss(B[:, :3], Y, w), rel=1e-12)
-        full = prune(B, Y, w, pmethod="none")
-        assert full["selected_size"] == 6
-        assert full["rss"] == pytest.approx(full["rss_per_size"][-1], rel=1e-12)
 
     def test_tied_gcv_minima_go_to_the_smaller_size(self):
         assert ref.select_size([3.0, 2.0, 2.0, 1.0], 3) == 2
@@ -1028,27 +1081,46 @@ class TestLegality:
 
 
 def exact_rss(A, y, w):
-    """The weighted RSS of y on the independent columns of A, in exact
-    rational arithmetic: the normal equations solved with fractions."""
-    n, m = A.shape
-    a = [[Fraction(float(v)) for v in row] for row in A]
-    yy = [Fraction(float(v)) for v in y]
+    """The weighted RSS of y on the columns of A, in exact rational
+    arithmetic: Gram-Schmidt with fractions, which leaves out a column in the
+    span of the earlier ones."""
     ww = [Fraction(float(v)) for v in w]
-    rows = [
-        [sum(ww[i] * a[i][r] * a[i][q] for i in range(n)) for q in range(m)]
-        + [sum(ww[i] * a[i][r] * yy[i] for i in range(n))]
-        for r in range(m)
-    ]
-    for col in range(m):
-        pivot = next(r for r in range(col, m) if rows[r][col] != 0)
-        rows[col], rows[pivot] = rows[pivot], rows[col]
-        for r in range(m):
-            if r != col and rows[r][col] != 0:
-                f = rows[r][col] / rows[col][col]
-                rows[r] = [u - f * v for u, v in zip(rows[r], rows[col], strict=True)]
-    beta = [rows[r][m] / rows[r][r] for r in range(m)]
-    fitted = [sum(a[i][q] * beta[q] for q in range(m)) for i in range(n)]
-    return float(sum(ww[i] * (yy[i] - fitted[i]) ** 2 for i in range(n)))
+
+    def dot(u, v):
+        return sum(c * a * b for c, a, b in zip(ww, u, v, strict=True))
+
+    basis = []
+
+    def residual(v):
+        for q, qq in basis:
+            f = dot(v, q) / qq
+            if f:
+                v = [vi - f * qi for vi, qi in zip(v, q, strict=True)]
+        return v
+
+    for k in range(len(A[0])):
+        column = [
+            v if isinstance(v, Fraction) else Fraction(float(v))
+            for v in (row[k] for row in A)
+        ]
+        u = residual(column)
+        uu = dot(u, u)
+        if uu:
+            basis.append((u, uu))
+    r = residual([Fraction(float(v)) for v in y])
+    return float(dot(r, r))
+
+
+def exact_basis(X, dirs, cuts):
+    """The columns of the terms [TERM-3] as rows of fractions: every factor and
+    product is exact."""
+    B = [[Fraction(1)] * len(dirs) for _ in range(len(X))]
+    for k, (row, cut) in enumerate(zip(dirs, cuts, strict=True)):
+        for j in np.flatnonzero(row):
+            c = Fraction(float(cut[j]))
+            for i, v in enumerate(Fraction(float(v)) for v in X[:, j]):
+                B[i][k] *= {1: max(v - c, 0), -1: max(c - v, 0), 2: v}[int(row[j])]
+    return B
 
 
 def check_best_and_second(log, index, cands, rss_s, limit):
@@ -1149,19 +1221,33 @@ class TestForwardPass:
         np.testing.assert_array_equal(hinge["dirs"], [[0], [1]])
         np.testing.assert_array_equal(hinge["cuts"], [[0.0], [0.0]])  # min x
 
-    def test_at_an_exact_fit_the_second_best_may_round_below_the_best(self):
-        # y = 1 + 2x: the linear candidate and many knots reduce the RSS to
-        # rounding noise, with equal reductions in float64; FWD-5 takes the
-        # linear candidate, and the logged second best (a knot) may have an
-        # RSS a few 1e-31 below it, far inside 1e-12 of the RSS before the step
+    def test_exact_fits_tie_exactly_in_the_band(self):
+        # FWD-5 (v2): y = 1 + 2x, so the linear candidate and many pairs fit
+        # exactly, with computed RSS values that are rounding noise. In the
+        # band every such reduction is RSS_s exactly, so the linear candidate
+        # (first in FWD-5's order) wins in every row order, its lambda is
+        # RSS_0 (FAST-5), and the logged second best has the RSS 0, below the
+        # computed best_rss of the new basis (CORE-3)
         x = np.arange(32.0) / 32
-        rec = run_forward(x[:, None], 1 + 2 * x, minspan=1, endspan=1)
-        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
-        log = rec["candidates"]
-        assert log["second_kind"][0] == ref.PAIR
-        assert log["second_rss"][0] >= log["best_rss"][0] - 1e-12 * rec["rss"][0]
+        perms = [
+            np.arange(32),
+            *(np.random.default_rng(s).permutation(32) for s in range(4)),
+        ]
+        for perm in perms:
+            trace = []
+            rec = run_forward(
+                x[perm, None], 1 + 2 * x[perm], trace=trace, minspan=1, endspan=1
+            )
+            np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
+            log = rec["candidates"]
+            assert log["second_kind"][0] == ref.PAIR
+            assert log["second_rss"][0] == 0.0
+            assert log["best_rss"][0] == rec["rss"][1] <= 1e-14 * rec["rss"][0]
+            assert trace[0]["entries"][0][0] == rec["rss"][0]
+        # the band's edge: 1e-14 of RSS_s
+        assert ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 1e-14), 1.0) == 1.0
         assert (
-            rec["rss"][0] - log["second_rss"][0] == rec["rss"][0] - log["best_rss"][0]
+            ref.reduction(ref.Candidate(0, 0, ref.PAIR, 0.5, 2e-14), 1.0) == 1 - 2e-14
         )
 
     def test_a_binary_covariate_offers_only_its_linear_term(self):
@@ -1306,9 +1392,41 @@ class TestForwardPass:
                 == ref.term_degree(rec["dirs"][rec["parent"][k]]) + 1
             )
 
+    @pytest.mark.parametrize("degree", [2, 3])
+    def test_an_exact_shift_of_a_covariate_in_hinges_keeps_the_pass(self, degree):
+        # Conventions: with auto_linpreds=False every term is a product of
+        # hinges, so a shift of x1 by 2^10 that is exact at every value (a
+        # grid of multiples of 2^-10) gives the same hinge columns bit for
+        # bit. LA-2 still tests b x1, whose part orthogonal to F_s is about
+        # 3e-4 of its uncentered norm here, far from 1e-7; at a shift of
+        # 2^36 it would be dependent (LIM-1), so v3 asks a moderate shift.
+        # The pass must give the same terms with the cuts shifted.
+        rng = np.random.default_rng(4)
+        n = 40
+        grid = [rng.integers(0, k, size=n) / k for k in (64, 1024, 64)]
+        X = np.column_stack(grid)[:, :degree]
+        shift = np.array([0.0, 2.0**10, 0.0][:degree])
+        hinge = np.maximum(X[:, 0] - 0.3, 0)
+        y = 2 * hinge + 3 * hinge * X[:, 1]
+        if degree == 3:
+            y = y + 2 * hinge * X[:, 1] * X[:, 2]
+        y = y + 0.05 * rng.normal(size=n)
+        opts = {"max_degree": degree, "auto_linpreds": False, "max_terms": 11}
+        shifted_X = X + shift
+        np.testing.assert_array_equal(shifted_X - shift, X)
+        shifted = run_forward(shifted_X, y, None, **opts)
+        base = run_forward(X, y, None, **opts)
+        for key in ("dirs", "parent", "step", "termination", "dropped"):
+            np.testing.assert_array_equal(shifted[key], base[key])
+        cuts = base["cuts"].copy()
+        cuts[:, 1] += np.where(np.abs(base["dirs"][:, 1]) == 1, shift[1], 0.0)
+        np.testing.assert_array_equal(shifted["cuts"], cuts)
+        change = np.abs(shifted["rss"][1:] - base["rss"][1:])
+        assert np.all(change <= 1e-8 * base["rss"][:-1])
+
     def test_a_power_of_two_scale_of_a_covariate_keeps_the_pass(self):
-        # [LA-7] the threshold is 0.01 times the product of sigma_v^2 over the
-        # covariates of the parent and x; with a power of 2 every value scales
+        # [LA-7] the threshold is 0.01 times the product of 12 sigma_v^2 over
+        # the covariates of the parent and x; with a power of 2 every value scales
         # exactly, so the pass is the same bit for bit and the cuts scale
         X, y = noisy_data(23, n=80, p=3)
         base = run_forward(X, y, max_degree=3)
@@ -1325,7 +1443,9 @@ class TestForwardPass:
     @pytest.mark.parametrize(("ratio", "pair"), [(1.02, True), (0.98, False)])
     def test_the_kind_of_a_search_near_the_la_7_threshold(self, ratio, pair):
         # B = [1, x0] and x1 = x0 + eta z, with eta such that
-        # A_w / (0.01 sigma^2(x1)) = ratio; a pair search has a linear candidate
+        # A_w / (0.01 12 sigma^2(x1)) = ratio; a pair search has a linear
+        # candidate. At 0.98 the search is a single hinge: the first form of
+        # the rule, 0.01 sigma^2(x1), would have run a pair search [#173]
         rng = np.random.default_rng(24)
         n, N, w = 20, 20.0, np.ones(20)
         x0, z = rng.uniform(size=n), rng.normal(size=n)
@@ -1334,13 +1454,14 @@ class TestForwardPass:
         rest = float(np.sum(P_B.residual(z) ** 2))
         s0, sz = np.var(x0), np.var(z)
         c = float(np.mean((x0 - x0.mean()) * (z - z.mean())))
+        thr = 0.01 * 12
         roots = np.roots(
-            [rest - 0.01 * ratio * sz, -0.02 * ratio * c, -0.01 * ratio * s0]
+            [rest - thr * ratio * sz, -2 * thr * ratio * c, -thr * ratio * s0]
         )
         eta = float(max(roots.real))
         X = np.column_stack([x0, x0 + eta * z])
         sigma2 = ref.covariate_variances(X, w, N)
-        assert P_B.rss(X[:, 1]) / (0.01 * sigma2[1]) == pytest.approx(ratio, rel=1e-9)
+        assert P_B.rss(X[:, 1]) / (thr * sigma2[1]) == pytest.approx(ratio, rel=1e-9)
         y = X[:, 1] + 0.1 * rng.normal(size=n)
         cands, _ = ref._parent_candidates(
             0,
@@ -1426,12 +1547,22 @@ class TestForwardPass:
 
     @pytest.mark.parametrize(
         ("penalty", "thresh", "code", "steps"),
-        [(2.899495, 0.001, 2, 1), (2.992898, 0.001, 3, 0), (4.0, 0.5, 3, 0)],
+        [
+            (2.899495, 0.001, 2, 1),
+            (2.992898, 0.001, 3, 0),
+            (4.0, 0.5, 3, 0),
+            (4.7846, 0.001, 3, 0),
+            (4.7851, 0.001, 2, 0),
+        ],
     )
-    def test_the_grsq_stop_at_minus_ten(self, penalty, thresh, code, steps):
+    def test_the_grsq_stops_at_minus_ten_and_minus_1000(
+        self, penalty, thresh, code, steps
+    ):
         # STOP-3 on the 8 alternating cases: GRSq' is -9.5 at step 1 with
         # penalty 2.899495 (the step is taken), and -10.5 with 2.992898 (no
         # step). It comes before STOP-4: with thresh 0.5 the code is 3, not 4.
+        # (v2) The code is 2 below -1000, also where GRSq' is finite: about
+        # -997.5 with penalty 4.7846 (code 3) and -1002.1 with 4.7851 (code 2).
         x = np.arange(8.0)[:, None]
         rec = run_forward(x, [1.0, -1.0] * 4, penalty=penalty, thresh=thresh)
         assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
@@ -1465,68 +1596,70 @@ class TestForwardPass:
         )
         assert rec["termination"] == code and len(rec["rss"]) - 1 == steps
 
-    def test_a_term_that_depends_on_the_earlier_ones_is_dropped(self):
-        # FWD-11: x0 = 1e7 + k / 20 is added as a linear term; its part
-        # outside the intercept is 3e-8 of its norm, so LA-4 drops it
-        x0 = 1e7 + np.arange(21.0) / 20
-        rec = run_forward(x0[:, None], 1 + 2 * (x0 - 1e7))
-        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
-        np.testing.assert_array_equal(rec["kept"], [0])
-        np.testing.assert_array_equal(rec["dropped"], [1])
-        # with weights 50 on the three rows where x0 moves, the w-norm ratio
-        # is 1.7e-7 and the term is kept; without the weights it would be 6.9e-8
-        u = np.zeros(21)
-        u[:3] = [-2.0, 2.0, 1.5]
-        w = np.ones(21)
-        w[:3] = 50.0
-        rec = run_forward((1e7 + u)[:, None], 1 + 2 * u, w=w)
-        np.testing.assert_array_equal(rec["dirs"], [[0], [2]])
-        assert rec["dropped"].size == 0
-
-    def test_candidate_rss_on_a_badly_conditioned_basis(self):
-        # LA-5: two knots 1e-6 apart and a linear term with offset 1e4 give a
-        # condition number above 1e10; each candidate RSS stays within 1e-8 of
-        # the RSS before the step, against exact rational least squares
-        rng = np.random.default_rng(29)
-        n = 20
-        x = np.sort(rng.uniform(size=n))
-        x[11] = x[10] + 1e-6
-        X = np.column_stack([x, rng.uniform(size=n)])
-        B = np.column_stack(
-            [np.ones(n), np.maximum(x - x[10], 0), np.maximum(x - x[11], 0), x + 1e4]
-        )
-        w = rng.uniform(0.5, 2.0, size=n)
-        y = np.abs(X[:, 1] - 0.5) + x + 0.1 * rng.normal(size=n)
-        assert np.linalg.cond(B * np.sqrt(w)[:, None]) > 1e10
-        N0 = ref.weight_sum(w)
-        tau_N = ref.weight_tol(N0)
-        N = ref.snap(N0, tau_N)
-        P_B = ref.Projector(B, w)
-        before = exact_rss(B, y, w)
-        cands, _ = ref._parent_candidates(
-            0,
-            np.zeros(2, np.int8),
-            X,
-            y[:, None],
-            w,
-            B,
-            P_B,
-            P_B.residual(y[:, None]),
-            ref.covariate_variances(X, w, N),
-            N,
-            tau_N,
-            ref.Params(minspan=3),
-            0.01,
-        )
-        assert len(cands) > 4
-        for c in cands:
-            cols = [B]
-            if c.kind in (ref.PAIR, ref.LINEAR):
-                cols.append(X[:, c.variable])
-            if c.kind != ref.LINEAR:
-                cols.append(np.maximum(X[:, c.variable] - c.knot, 0))
-            exact = exact_rss(np.column_stack(cols), y, w)
-            assert abs(c.rss - exact) <= 1e-8 * before
+    def test_candidates_of_one_kind_that_add_the_same_rows_merge(self):
+        # FWD-12, FAST-5: two searches of one step that add the same rows.
+        # Linear candidates on the linear parents x0 and x1 both add x0 x1;
+        # with the products h0 x1 and h1 x0 in B, the searches of h0 = h(x0 -
+        # t) on x1 and of h1 = h(x1 - u) on x0 are single-hinge searches
+        # (A_w = 0, LA-7), and the knots u and t both add h0 h1. The later
+        # search meets the first occurrence: the same Candidate, with its
+        # parent and RSS, so its lambda counts that reduction.
+        rng = np.random.default_rng(30)
+        n, w = 40, np.ones(40)
+        X = rng.uniform(size=(n, 2))
+        y = X[:, 0] * X[:, 1] + 0.1 * rng.normal(size=n)
+        t, u = float(np.sort(X[:, 0])[19]), float(np.sort(X[:, 1])[15])
+        h0, h1 = np.maximum(X[:, 0] - t, 0), np.maximum(X[:, 1] - u, 0)
+        cases = [
+            (
+                np.column_stack([np.ones(n), X]),
+                [[0, 0], [2, 0], [0, 2]],
+                [[0, 0], [0, 0], [0, 0]],
+                ref.LINEAR,
+                math.nan,
+            ),
+            (
+                np.column_stack([np.ones(n), h0, h1, h0 * X[:, 1], h1 * X[:, 0]]),
+                [[0, 0], [1, 0], [0, 1], [1, 2], [2, 1]],
+                [[0, 0], [t, 0], [0, u], [t, 0], [0, u]],
+                ref.SINGLE,
+                u,
+            ),
+        ]
+        sigma2 = ref.covariate_variances(X, w, 40.0)
+        for B, rows, cut_rows, kind, knot in cases:
+            P_B = ref.Projector(B, w)
+            met, found = {}, []
+            for k in (1, 2):
+                cands, _ = ref._parent_candidates(
+                    k,
+                    np.array(rows[k], np.int8),
+                    X,
+                    y[:, None],
+                    w,
+                    B,
+                    P_B,
+                    P_B.residual(y[:, None]),
+                    sigma2,
+                    40.0,
+                    ref.weight_tol(40.0),
+                    ref.Params(max_degree=2, minspan=1, endspan=1),
+                    0.01,
+                    parent_cut=np.array(cut_rows[k], float),
+                    met=met,
+                )
+                found.append(cands)
+            if kind == ref.SINGLE:
+                assert all(c.kind == ref.SINGLE for c in found[0] + found[1])
+            first = [
+                c
+                for c in found[0]
+                if c.kind == kind and (kind == ref.LINEAR or c.knot == knot)
+            ]
+            assert len(first) == 1 and first[0].parent == 1
+            assert sum(c is first[0] for c in found[1]) == 1
+            lam = ref.queue_value(found[1], True, P_B.rss(y), math.inf)
+            assert lam >= P_B.rss(y) - first[0].rss
 
     def test_the_second_best_candidate_of_the_first_step(self):
         # CORE-3 against every legal candidate of the intercept at step 1
@@ -1770,19 +1903,33 @@ class TestFit:
         assert scaled["rss"] == pytest.approx(scale**2 * base["rss"], rel=1e-9)
         assert scaled["grsq"] == pytest.approx(base["grsq"], rel=1e-9)
 
-    def test_a_dropped_term_before_kept_ones(self):
-        # FWD-11 in the fit: x0 = 1e7 + (k mod 2) makes the linear term of x0
-        # dependent by LA-4 (5e-8 of its norm outside the intercept), so the
-        # pruning pass gets the terms of kept, and pruning index m is forward
-        # index kept[m] [CORE-3]
+    def test_a_dropped_term_before_kept_ones(self, monkeypatch):
+        # FWD-11 in the fit: the pruning pass gets the terms of kept, and
+        # pruning index m is forward index kept[m] [CORE-3]. A dropped term
+        # is rare on such data, so FWD-11's test (dependent_columns on all
+        # M_a forward terms, its only call with that many columns) is made
+        # to find the second hinge of step 1, h(t - x1), dependent
         rng = np.random.default_rng(5)
         n = 60
-        X = np.column_stack([1e7 + (np.arange(n) % 2), rng.uniform(size=n)])
-        noise = rng.normal(scale=0.05, size=n)
-        y = 2 * (X[:, 0] - 1e7) + 3 * np.maximum(X[:, 1] - 0.5, 0) + noise
+        X = rng.uniform(size=(n, 2))
+        y = 2 * X[:, 0] + 3 * np.abs(X[:, 1] - 0.5) + rng.normal(scale=0.05, size=n)
+        base = fit(X, y)
+        assert base["forward"]["dropped"].size == 0
+        assert -1 in base["forward"]["dirs"][2].tolist()
+        M_a = len(base["forward"]["dirs"])
+        real = ref.dependent_columns
+
+        def dependent_columns(B, w):
+            out = real(B, w)
+            if B.shape[1] == M_a:
+                out[2] = True
+            return out
+
+        monkeypatch.setattr(ref, "dependent_columns", dependent_columns)
         result = fit(X, y)
         fwd, pr = result["forward"], result["pruning"]
-        assert fwd["dropped"].size and fwd["dropped"].min() < fwd["kept"].max()
+        np.testing.assert_array_equal(fwd["dropped"], [2])
+        assert fwd["kept"].max() > 2
         check_fields(result, 2, 1)
         size = pr["selected_size"]
         np.testing.assert_array_equal(
@@ -1791,6 +1938,36 @@ class TestFit:
         B = ref.basis_matrix(X, result["dirs"], result["cuts"])
         np.testing.assert_allclose(
             result["coef"], ref.lstsq_coef(B, y[:, None], np.ones(n)), rtol=1e-10
+        )
+
+    @pytest.mark.parametrize(
+        ("K", "weights"),
+        [(1, "none"), (1, "real"), (2, "none"), (2, "real"), (1, "sum 0.9")],
+    )
+    def test_the_final_rss_at_a_large_mean(self, K, weights):
+        # PRUNE-8 and LA-5: with a mean of 1e13 and a spread of about 1, the
+        # final rss is the RSS of the returned model to 1e-8 of the exact
+        # rational value, and so are RSq and the degenerate fit's rss, its TSS
+        # (weights that sum to 0.9, EDGE-1)
+        rng = np.random.default_rng(31)
+        X = rng.uniform(size=(30, 2))
+        y = [np.abs(X[:, 0] - 0.5) + rng.normal(scale=0.1, size=30) for _ in range(K)]
+        Y = 1e13 + np.column_stack(y)
+        w = {
+            "none": np.ones(30),
+            "real": rng.uniform(0.5, 2.0, 30),
+            "sum 0.9": np.full(30, 0.03),
+        }
+        result = fit(X, Y, w[weights])
+        B = ref.basis_matrix(X, result["dirs"], result["cuts"])
+        exact = sum(exact_rss(B, Y[:, k], w[weights]) for k in range(K))
+        tss = sum(exact_rss(np.ones((30, 1)), Y[:, k], w[weights]) for k in range(K))
+        assert result["rss"] == pytest.approx(exact, rel=1e-8)
+        assert result["rsq"] == pytest.approx(
+            0.0 if len(B[0]) == 1 else 1 - exact / tss, abs=1e-8
+        )
+        assert (weights == "sum 0.9") == (
+            result["forward"]["termination"] == ref.DEGENERATE
         )
 
     def test_the_bound_of_edge_1_and_the_degenerate_record(self):
@@ -1861,6 +2038,61 @@ class TestFit:
             2.0**-80 * base["forward"]["candidates"]["second_rss"],
         )
 
+    def test_a_power_of_two_scale_of_x_changes_no_bit(self):
+        # EDGE-7 (v2): X is scaled column by column to a largest |x| in [1, 2),
+        # so X and X with each column times its own power of 2 give the same
+        # fit bit for bit; the knots (cuts, the forward cuts, second_knot)
+        # come back on the original scale, and row k of coef by 2 to the sum
+        # of the exponents of its covariates
+        X, y = noisy_data(32, n=50, p=3)
+        powers = np.array([10, -20, 3])
+        base = fit(X, y, max_degree=3)
+        got = fit(np.ldexp(X, powers), y, max_degree=3)
+        assert (base["forward"]["dirs"][:, :2] != 0).any(axis=1).sum() > 2
+
+        def knots(dirs, cuts):
+            return np.where(np.abs(dirs) == 1, np.ldexp(cuts, powers), 0.0)
+
+        for a, b in ((got, base), (got["forward"], base["forward"])):
+            np.testing.assert_array_equal(a["dirs"], b["dirs"])
+            np.testing.assert_array_equal(a["cuts"], knots(b["dirs"], b["cuts"]))
+        exponents = (base["dirs"] != 0) @ powers
+        np.testing.assert_array_equal(
+            got["coef"], np.ldexp(base["coef"], -exponents[:, None])
+        )
+        for key in ("rss", "gcv", "rsq", "grsq"):
+            assert got[key] == base[key]
+        np.testing.assert_array_equal(got["forward"]["rss"], base["forward"]["rss"])
+        a, b = got["forward"]["candidates"], base["forward"]["candidates"]
+        hinge = np.isin(b["second_kind"], [ref.PAIR, ref.SINGLE])
+        assert hinge.any()
+        np.testing.assert_array_equal(
+            a["second_knot"][hinge],
+            np.ldexp(b["second_knot"], powers[b["second_variable"]])[hinge],
+        )
+
+    @pytest.mark.parametrize("scale", [1e200, 1e-300])
+    def test_an_extreme_scale_of_x(self, scale):
+        # EDGE-7: at degree 1, X 1e200 and X 1e-300 give the model of X; at
+        # degree 2 the coefficient of a product of the two columns is about
+        # y / scale^2, which underflows or overflows: ValueError
+        X, y = noisy_data(33, n=50)
+        base = fit(X, y)
+        got = fit(X * scale, y)
+        np.testing.assert_array_equal(got["dirs"], base["dirs"])
+        np.testing.assert_allclose(got["cuts"], base["cuts"] * scale, rtol=1e-15)
+        np.testing.assert_allclose(got["coef"][1:], base["coef"][1:] / scale, rtol=1e-9)
+        assert got["rss"] == pytest.approx(base["rss"], rel=1e-12)
+        product = X[:, 0] * X[:, 1] + 0.01 * np.random.default_rng(33).normal(size=50)
+        assert (fit(X, product, max_degree=2)["dirs"] != 0).sum(axis=1).max() == 2
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(X * scale, product, max_degree=2)
+        # a coefficient that the scale of y alone makes subnormal raises too
+        Z = np.random.default_rng(34).normal(size=(30, 2))
+        tiny_y = (Z[:, 0] + 0.1 * np.random.default_rng(35).normal(size=30)) * 1e-310
+        with pytest.raises(ValueError, match="scale of X is out of range"):
+            fit(Z, tiny_y)
+
     def test_a_tiny_response_has_a_positive_tss(self):
         # seven 0s and one 1e-170: the fit is not degenerate, although its TSS
         # (about 1e-340) underflows to 0 when it is reported [EDGE-6]
@@ -1877,10 +2109,37 @@ class TestFit:
         X = np.arange(4.0)[:, None]
         with pytest.raises(ValueError, match="scale of y or of the weights"):
             fit(X, [0.0, 1.0, 0.0, 1.0], np.full(4, 1e-310))
-        # weights 8e307 keep N finite, but the scaled TSS overflows; under the
-        # repository's filterwarnings = error a warning would fail this test
-        with pytest.raises(ValueError, match="scale of y or of the weights"):
-            fit(np.array([[0.0], [1.0]]), np.array([-1.9, 1.9]), np.full(2, 8e307))
+
+    @pytest.mark.parametrize("w", [2, 2.0, np.int64(2), np.float64(2.0), np.float32(2)])
+    def test_a_scalar_weight_is_given_to_every_row(self, w):
+        # W-6 (v2): an int or float scalar, Python or numpy
+        X, y = noisy_data(31, n=30)
+        expected = fit(X, y, np.full(30, 2.0))
+        got = fit(X, y, w)
+        for key in ("dirs", "cuts", "coef", "rss", "n_eff"):
+            np.testing.assert_array_equal(got[key], expected[key])
+
+    @pytest.mark.parametrize(
+        ("w", "message"),
+        [
+            (True, "bool"),
+            (np.bool_(True), "bool"),
+            (np.array(2.0), "0-d"),
+            # W-6 before EDGE-6: N = 1.6e308 is finite, so the scaled TSS
+            # would overflow; and 2^52, the bound of W-4
+            (np.full(2, 8e307), "total weight is out of range"),
+            (np.array([1e308, 1e308]), "total weight is out of range"),
+            (np.array([2.0**52, 0.0]), "total weight is out of range"),
+        ],
+    )
+    def test_weights_that_w_6_rejects(self, w, message):
+        X = np.array([[0.0], [1.0]])
+        with pytest.raises(ValueError, match=message):
+            fit(X, np.array([-1.9, 1.9]), w)
+        # just below the bound is a weight sum like any other
+        assert fit(X, np.array([-1.9, 1.9]), np.array([2.0**52 - 2, 1.0]))["n_eff"] == (
+            2.0**52 - 1
+        )
 
     def test_several_responses_share_one_basis(self):
         X, y = noisy_data(19, p=3)
@@ -1935,9 +2194,10 @@ class TestFit:
 
 @pytest.mark.parametrize("name", ["S01_matched_d1", "S01_defaults_d1"])
 def test_the_fit_matches_earth_on_s01(name, load_fixture):
-    # The harness divides the fixture's x by its standard deviation, so
-    # earth's rule for the kind of a search and the pymars rule agree
-    # [LA-7]. Tolerances from the plan's table.
+    # The harness divides the fixture's x by its standard deviation, so every
+    # sigma_v^2 is 1 and the threshold of the pymars rule is 12^|V| times
+    # earth's [LA-7, E1]; the pass is the same on S01. Tolerances from the
+    # plan's table.
     fixture = load_fixture(name)
     earth = fixture["result"]
     X = np.array(fixture["inputs"]["X"])
@@ -2409,9 +2669,11 @@ class TestForwardPassRules:
         assert expected == [] and found == []
 
     def test_the_pair_rule_uses_weighted_variances(self):
-        # LA-7: A_w is 0.95 of the weighted threshold, so the search on the
-        # parent x0 and x1 is a single hinge, as on the repeated rows
-        eta = 0.0520134012737919
+        # LA-7: A_w is 0.95 of the weighted threshold 0.01 (12 sigma^2(x0))
+        # (12 sigma^2(x1)), so the search on the parent x0 and x1 is a single
+        # hinge, as on the repeated rows; with sigma_v^2 of the unweighted
+        # cases it would be 1.06 of it, a pair search
+        eta = 0.6261577649583902
         x0 = np.r_[np.zeros(10), np.ones(10)]
         x1 = np.r_[np.arange(10.0), 4.5 + eta * np.linspace(-1, 1, 10)]
         X = np.column_stack([x0, x1])
@@ -2431,12 +2693,12 @@ class TestForwardPassRules:
         same_pass(weighted, repeated)
 
     @pytest.mark.parametrize(
-        ("eta", "code"), [(0.01622815768436774, 2), (0.015905943651091013, 1)]
+        ("eta", "code"), [(0.05667399955458973, 2), (0.05553666869049212, 1)]
     )
     def test_the_kind_of_a_search_at_the_la_7_threshold_in_the_pass(self, eta, code):
         # LA-7 through the pass, which divides sigma_v^2 by N: with x0 binary,
-        # step 1 adds x0, and at step 2 A_w / (0.01 sigma^2(x1)) is 1.02 (a
-        # pair search, the linear x1) or 0.98 (a hinge)
+        # step 1 adds x0, and at step 2 A_w / (0.01 12 sigma^2(x1)) is 1.02
+        # (a pair search, the linear x1) or 0.98 (a hinge)
         n = 20
         x0 = (np.arange(n) % 2).astype(float)
         X = np.column_stack([x0, x0 + eta * np.sin(np.arange(n) * 1.7)])
@@ -2564,10 +2826,19 @@ def test_the_forward_pass_matches_earth_step_by_step(load_fixture, name):
 
 
 @pytest.mark.slow
-def test_the_forward_pass_matches_earth_on_every_small_fixture(load_fixture):
+def test_the_forward_pass_matches_earth_on_every_small_fixture(
+    load_fixture, monkeypatch
+):
     # every unweighted matched and defaults fixture with n <= 400, raw x left
-    # out (the LA-7 departure); factor responses have no least-squares pass
-    compared = 0
+    # out (the LA-7 departure); factor responses have no least-squares pass.
+    # On the harness's matrix every sigma_v^2 is 1, so the pair threshold
+    # 0.01 times the product of 12 sigma_v^2 is 12^|V| times earth's, and a
+    # search with A_w between the two is a pair search in earth and a single
+    # hinge here. A fixture on which the pass differs from earth's must then
+    # match earth when the rule uses earth's threshold (sigma_v^2 / 12 in
+    # the rule): the departure is the only difference [LA-7, E1]
+    covariate_variances = ref.covariate_variances
+    compared = by_rule = 0
     for path in sorted((HARNESS.parent / "fixtures").glob("S*.json")):
         name = path.stem
         if ("matched" not in name and "defaults" not in name) or "raw" in name:
@@ -2582,9 +2853,20 @@ def test_the_forward_pass_matches_earth_on_every_small_fixture(load_fixture):
         if any(isinstance(v, str) for v in y) or all(v == y[0] for v in y):
             continue  # a factor response, or a constant one (EDGE-1)
         record, _ = forward_on_fixture(fixture)
-        check_forward_steps(record, fixture["result"])
-        compared += 1
-    assert compared >= 60
+        try:
+            check_forward_steps(record, fixture["result"])
+            compared += 1
+        except AssertionError:
+            with monkeypatch.context() as m:
+                m.setattr(
+                    ref,
+                    "covariate_variances",
+                    lambda X, w, N: [v / 12 for v in covariate_variances(X, w, N)],
+                )
+                record, _ = forward_on_fixture(fixture)
+            check_forward_steps(record, fixture["result"])
+            by_rule += 1
+    assert compared >= 60 and by_rule >= 1
 
 
 def test_the_second_best_candidate_where_the_limit_binds(load_fixture):

@@ -1,0 +1,16 @@
+=== 2026-10-10T02:10:41Z START diagnostics ===
+recomputed equals committed: True
+=== 2026-10-10T02:10:48Z DONE  diagnostics ===
+=== 2026-10-10T02:10:48Z START step1 all cells reps 0:2 ===
+486 (cell, arm, repetition) units to run, out of 510 requested
+done
+=== 2026-10-10T02:13:18Z DONE  step1 all cells reps 0:2 ===
+=== 2026-10-10T02:13:18Z START E-def D7 n200 reps 0:300 ===
+596 (cell, arm, repetition) units to run, out of 600 requested
+done
+=== 2026-10-10T02:13:44Z DONE  E-def D7 n200 reps 0:300 ===
+=== 2026-10-10T02:13:44Z START step3 parity D3,D4,D5,D7 n1000 P-fix,E-def reps 0:100 ===
+1568 (cell, arm, repetition) units to run, out of 1600 requested
+done
+=== 2026-10-10T02:19:07Z DONE  step3 parity D3,D4,D5,D7 n1000 P-fix,E-def reps 0:100 ===
+=== 2026-10-10T02:19:07Z ALL BLOCKS DONE ===

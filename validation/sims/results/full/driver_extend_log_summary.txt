@@ -1,0 +1,50 @@
+=== 2026-10-18T14:51:07Z START D1 n1000 hi 300:900 ===
+1200 (cell, arm, repetition) units to run, out of 1200 requested
+=== 2026-10-18T14:51:33Z DONE  D1 n1000 hi 300:900 ===
+=== 2026-10-18T14:51:33Z START D1 n1000 lo 300:750 ===
+900 (cell, arm, repetition) units to run, out of 900 requested
+=== 2026-10-18T14:51:53Z DONE  D1 n1000 lo 300:750 ===
+=== 2026-10-18T14:51:53Z START D1 n5000 hi 300:400 ===
+200 (cell, arm, repetition) units to run, out of 200 requested
+=== 2026-10-18T14:52:09Z DONE  D1 n5000 hi 300:400 ===
+=== 2026-10-18T14:52:09Z START D5 n200 lo 600:900 ===
+600 (cell, arm, repetition) units to run, out of 600 requested
+=== 2026-10-18T14:52:22Z DONE  D5 n200 lo 600:900 ===
+=== 2026-10-18T14:52:22Z START D6 n200 3000:7500 ===
+9000 (cell, arm, repetition) units to run, out of 9000 requested
+=== 2026-10-18T14:53:53Z DONE  D6 n200 3000:7500 ===
+=== 2026-10-18T14:53:53Z START D6 n1000 3000:3300 ===
+600 (cell, arm, repetition) units to run, out of 600 requested
+=== 2026-10-18T14:54:12Z DONE  D6 n1000 3000:3300 ===
+=== 2026-10-18T14:54:12Z START D6 n5000 1300:12400 ===
+22200 (cell, arm, repetition) units to run, out of 22200 requested
+=== 2026-10-18T15:22:31Z START D1 n1000 hi 300:900 ===
+0 (cell, arm, repetition) units to run, out of 1200 requested
+=== 2026-10-18T15:22:36Z DONE  D1 n1000 hi 300:900 ===
+=== 2026-10-18T15:22:36Z START D1 n1000 lo 300:750 ===
+0 (cell, arm, repetition) units to run, out of 900 requested
+=== 2026-10-18T15:22:39Z DONE  D1 n1000 lo 300:750 ===
+=== 2026-10-18T15:22:39Z START D1 n5000 hi 300:400 ===
+0 (cell, arm, repetition) units to run, out of 200 requested
+=== 2026-10-18T15:22:42Z DONE  D1 n5000 hi 300:400 ===
+=== 2026-10-18T15:22:42Z START D5 n200 lo 600:900 ===
+0 (cell, arm, repetition) units to run, out of 600 requested
+=== 2026-10-18T15:22:45Z DONE  D5 n200 lo 600:900 ===
+=== 2026-10-18T15:22:45Z START D6 n200 3000:7500 ===
+0 (cell, arm, repetition) units to run, out of 9000 requested
+=== 2026-10-18T15:22:50Z DONE  D6 n200 3000:7500 ===
+=== 2026-10-18T15:22:50Z START D6 n1000 3000:3300 ===
+0 (cell, arm, repetition) units to run, out of 600 requested
+=== 2026-10-18T15:22:53Z DONE  D6 n1000 3000:3300 ===
+=== 2026-10-18T15:22:53Z START D6 n5000 1300:12400 ===
+13029 (cell, arm, repetition) units to run, out of 22200 requested
+=== 2026-10-18T15:30:35Z DONE  D6 n5000 1300:12400 ===
+=== 2026-10-18T15:30:35Z ALL BLOCKS DONE ===
+--- round 2
+=== 2026-10-18T15:31:47Z START D1 n5000 hi 400:600 ===
+400 (cell, arm, repetition) units to run, out of 400 requested
+=== 2026-10-18T15:32:11Z DONE  D1 n5000 hi 400:600 ===
+=== 2026-10-18T15:32:11Z START D6 n1000 3300:3800 ===
+1000 (cell, arm, repetition) units to run, out of 1000 requested
+=== 2026-10-18T15:32:31Z DONE  D6 n1000 3300:3800 ===
+=== 2026-10-18T15:32:31Z ALL BLOCKS DONE ===

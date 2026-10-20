@@ -442,6 +442,34 @@ class TestRunEarth:
         r = run_earth([job], workdir=tmp_path)["s01"]
         assert r["fwd_rss"] is None
 
+    @pytest.mark.parametrize("offset, has_path", [(3e6, True), (1e8, False)])
+    def test_forward_path_is_absent_after_earth_rank_fix(
+        self, tmp_path, offset, has_path
+    ):
+        # bb32 (issue #127): when earth's rank fix removes a term, a refit of
+        # the returned bx is not earth's forward RSS, so fwd_rss is None. The
+        # data are bb32's: x2 = offset + z, y = h(0.5 - x1) (2 + 4 z) + noise.
+        # At offset 1e8 earth's trace prints the fix; at 3e6 it prints none.
+        rng = np.random.default_rng(1)
+        n = 60
+        x1, z = rng.uniform(size=n), rng.uniform(size=n)
+        y = (
+            2 * np.maximum(0.5 - x1, 0)
+            + 4 * z * np.maximum(0.5 - x1, 0)
+            + 0.01 * rng.normal(size=n)
+        )
+        job = EarthJob(
+            id="s01",
+            X=np.column_stack([x1, offset + z]),
+            y=y,
+            earth_args={"degree": 2, "nk": 11, "thresh": 0, "pmethod": "none"},
+            trace=2,
+        )
+        r = run_earth([job], workdir=tmp_path)["s01"]
+        fixed = "Fixed rank deficient" in (tmp_path / "s01_trace.txt").read_text()
+        assert fixed is (not has_path)
+        assert (r["fwd_rss"] is not None) is has_path
+
     def test_glm_family_adds_glm_coef(self, tmp_path):
         rng = np.random.default_rng(6)
         n = 80

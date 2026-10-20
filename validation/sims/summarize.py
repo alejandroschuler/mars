@@ -507,8 +507,20 @@ def appendix_table(df: pd.DataFrame) -> pd.DataFrame:
                 ),
             }
         )
+    # The columns also head the table when no cell has run yet and rows is
+    # empty; without them sort_values raises KeyError.
+    columns = [
+        "dgp",
+        "n",
+        "noise",
+        "arm",
+        "n_ok",
+        "n_failed",
+        "mean_log_measure",
+        "mc_se_log_measure",
+    ]
     return (
-        pd.DataFrame(rows)
+        pd.DataFrame(rows, columns=columns)
         .sort_values(["dgp", "n", "noise", "arm"])
         .reset_index(drop=True)
     )

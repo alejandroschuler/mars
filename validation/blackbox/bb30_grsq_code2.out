@@ -1,0 +1,42 @@
+R version 4.4.3 (2025-02-28) | earth 5.3.4 
+Part A
+  step-1 model at thresh 0: 3 terms, RSS' 7.563636364
+  penalty 4       C(M') 7        GRSq' -45.3273     termcond 3
+  penalty 4.7     C(M') 7.7      GRSq' -513.747     termcond 3
+  penalty 4.75    C(M') 7.75     GRSq' -740.236     termcond 3
+  penalty 4.78    C(M') 7.78     GRSq' -956.175     termcond 3
+  penalty 4.7805  C(M') 7.7805   GRSq' -960.541     termcond 3
+  penalty 4.781   C(M') 7.781    GRSq' -964.936     termcond 3
+  penalty 4.7815  C(M') 7.7815   GRSq' -969.362     termcond 3
+  penalty 4.782   C(M') 7.782    GRSq' -973.818     termcond 3
+  penalty 4.7825  C(M') 7.7825   GRSq' -978.306     termcond 3
+  penalty 4.783   C(M') 7.783    GRSq' -982.824     termcond 3
+  penalty 4.7835  C(M') 7.7835   GRSq' -987.373     termcond 3
+  penalty 4.784   C(M') 7.784    GRSq' -991.954     termcond 3
+  penalty 4.7845  C(M') 7.7845   GRSq' -996.567     termcond 3
+  penalty 4.785   C(M') 7.785    GRSq' -1001.21     termcond 2
+  penalty 4.7855  C(M') 7.7855   GRSq' -1005.89     termcond 2
+  penalty 4.786   C(M') 7.786    GRSq' -1010.6      termcond 2
+  penalty 4.7865  C(M') 7.7865   GRSq' -1015.34     termcond 2
+  penalty 4.787   C(M') 7.787    GRSq' -1020.12     termcond 2
+  penalty 4.7875  C(M') 7.7875   GRSq' -1024.93     termcond 2
+  penalty 4.788   C(M') 7.788    GRSq' -1029.78     termcond 2
+  penalty 4.7885  C(M') 7.7885   GRSq' -1034.66     termcond 2
+  penalty 4.789   C(M') 7.789    GRSq' -1039.57     termcond 2
+  penalty 4.7895  C(M') 7.7895   GRSq' -1044.52     termcond 2
+  penalty 4.79    C(M') 7.79     GRSq' -1049.51     termcond 2
+  penalty 4.8     C(M') 7.8      GRSq' -1157.18     termcond 2
+  penalty 4.9     C(M') 7.9      GRSq' -4631.73     termcond 2
+Part B
+  penalty 10      C(M') 7        GRSq' -8           termcond 4
+  penalty 14      C(M') 9        GRSq' -80          termcond 3
+  penalty 15      C(M') 9.5      GRSq' -323         termcond 3
+  penalty 15.4    C(M') 9.7      GRSq' -899         termcond 3
+  penalty 15.5    C(M') 9.75     GRSq' -1295        termcond 2
+  penalty 15.6    C(M') 9.8      GRSq' -2024        termcond 2
+  penalty 16      C(M') 10       GRSq' -Inf         termcond 2
+CHECK bb30.1 TRUE with a finite GRSq' below -10, earth gives code 2 exactly when GRSq' < -1000 and code 3 otherwise (32 runs)
+CHECK bb30.2 TRUE code 2 occurs with a finite GRSq' (so -Inf is not the condition)
+CHECK bb30.3 TRUE the same switch applies to a step without a legal candidate (Part B)
+CHECK bb30.5 TRUE the switch is bracketed by GRSq' = -996.6 (code 3) and -1001.2 (code 2)
+CHECK bb30.4 FALSE HYPOTHESIS code 2 only when GRSq' = -Inf

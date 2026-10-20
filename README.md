@@ -1,8 +1,8 @@
 # pymars
 
-pymars fits multivariate adaptive regression splines (MARS, Friedman 1991) in pure Python, with a scikit-learn API. The distribution name is `mars-earth` and the import name is `pymars`.
+pymars fits multivariate adaptive regression splines (MARS, Friedman 1991) in Python, with a scikit-learn API. The distribution name is `mars-earth` and the import name is `pymars`.
 
-Version 2 is a rewrite, and it is not usable yet. The new fitting code follows a written specification and is checked against the R package [earth](https://CRAN.R-project.org/package=earth). [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made so far. Until the estimators arrive, the package holds only its version number.
+Version 2 is a rewrite. The fitting code follows a written specification, [docs/algorithm.md](docs/algorithm.md), and is validated against the R package [earth](https://CRAN.R-project.org/package=earth) as described under Status and validation below. It has no release on PyPI yet.
 
 ## Install
 
@@ -10,15 +10,85 @@ Version 2 is a rewrite, and it is not usable yet. The new fitting code follows a
 pip install git+https://github.com/alejandroschuler/mars
 ```
 
-The package is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends only on numpy, scipy and scikit-learn 1.6 or later. Version 2 has no PyPI release.
+The wheel is pure Python and needs no compiler. It supports Python 3.10 to 3.14 and depends on numpy, scipy and scikit-learn 1.6 or later, and on numba 0.63 or later, which compiles the knot scan on first use and speeds up the fit. numba has no wheels for Intel Macs (macOS x86_64), PyPy, or Windows ARM64 with Python 3.10, 3.11 or 3.15, nor for a Python version newer than its latest release supports (3.15 now), so pymars does not install numba there and runs the numpy code, which takes up to about 3 times as long as the numba code (see Status and validation). The first fit of each process then issues one `NumbaUnavailableWarning`; `pip install numba` removes the cause where numba has wheels, and `warnings.filterwarnings("ignore", category=pymars.NumbaUnavailableWarning)` silences it. The two give the same models except at near-ties (STOP-7 of [docs/algorithm.md](docs/algorithm.md)), where two candidates are equal up to rounding and the two can choose different terms.
 
-When the estimators are in place, the usage will follow py-earth:
+numba also has no wheels for musllinux (for example Alpine Linux), for 32-bit Python, or for CPU architectures other than x86-64 and ARM64. The install markers of pip cannot name those, so `pip install` fails there while it builds numba. Install without numba instead, and pymars runs the numpy code:
+
+```bash
+pip install --no-deps git+https://github.com/alejandroschuler/mars
+pip install numpy scipy scikit-learn
+```
+
+## Regression
 
 ```python
+import numpy as np
+import pymars as earth
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(0)
+X = rng.uniform(size=(500, 5))
+y = (10 * np.sin(np.pi * X[:, 0] * X[:, 1]) + 20 * (X[:, 2] - 0.5) ** 2
+     + 10 * X[:, 3] + 5 * X[:, 4] + rng.normal(size=500))
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
+
+model = earth.Earth(max_degree=2).fit(X_train, y_train)
+print(model.summary())            # the selected terms, their coefficients and the fit statistics
+print(model.score(X_test, y_test))
+print(model.predict(X_test[:3]))
+```
+
+`Earth` is the same class as `EarthRegressor`, so `import pymars as earth` gives py-earth's spelling. The parameters carry earth's rules and defaults. [docs/usage.md](docs/usage.md) lists them with their earth names.
+
+## Classification
+
+`EarthClassifier` fits the terms by least squares on 0/1 (or indicator) responses and then refits the selected terms with a logistic model. The refit has an L2 penalty, `glm_alpha=1` by default, the strength of scikit-learn's `LogisticRegression` at `C=1`. earth's refit has no penalty, so use `glm_alpha=0` to match earth.
+
+```python
+import numpy as np
+from pymars import EarthClassifier
+
+rng = np.random.default_rng(1)
+X = rng.uniform(size=(600, 4))
+p = 1 / (1 + np.exp(-6 * (np.abs(X[:, 0] - 0.5) + X[:, 1] - 0.8)))
+y = rng.uniform(size=600) < p
+
+clf = EarthClassifier(max_degree=2).fit(X[:400], y[:400])
+print(clf.classes_)                      # [False  True]
+print(clf.predict_proba(X[400:403]))     # one row per case, each row sums to 1
+print(clf.score(X[400:], y[400:]))
+```
+
+## scikit-learn
+
+Both estimators follow the scikit-learn API (`fit`, `predict`, `score`, `get_params`, `clone`, pickle, `sample_weight`), pass `parametrize_with_checks`, and work in pipelines and searches.
+
+```python
+import numpy as np
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 import pymars as earth
 
-model = earth.Earth(max_degree=2).fit(X, y)
+rng = np.random.default_rng(0)
+X = rng.uniform(size=(300, 4))
+y = np.maximum(X[:, 0] - 0.5, 0) * 8 + X[:, 1] + rng.normal(scale=0.1, size=300)
+
+pipe = Pipeline([("scale", StandardScaler()), ("earth", earth.Earth())])
+search = GridSearchCV(pipe, {"earth__max_degree": [1, 2], "earth__penalty": [2, 3, 4]}, cv=3)
+search.fit(X, y)
+print(search.best_params_)
 ```
+
+Columns of strings or categories raise an error that names `OneHotEncoder`; [docs/usage.md](docs/usage.md) shows the pipeline. Missing values are not supported yet (issue #27).
+
+## Status and validation
+
+Two implementations of the specification exist: the fast code in `pymars/`, and a slow reference in `tests/reference/` that an agent wrote from the specification alone. Both compute in float64; the specification's "Limits" section names the rare inputs where rounding can change the model (see [docs/differences.md](docs/differences.md)). Both are compared with earth 5.3.4 on 133 dataset fixtures and 200 random draws: 119 fixtures and 181 draws agree with earth step by step, and the other 33 comparisons show 4 differences, each a documented rule, none a bug. The fast code shows exactly the same differences as the reference. [docs/differences.md](docs/differences.md) lists the differences that a user can meet, and [validation/DIFFERENCES.md](validation/DIFFERENCES.md) has the full triage. [VALIDATION_PLAN.md](VALIDATION_PLAN.md) describes the work, and [dev/DECISIONS.md](dev/DECISIONS.md) lists the choices made.
+
+Accuracy: in a simulation of 51 settings (8 regression and 2 binary data-generating processes, 200 to 5,000 cases, two noise levels), `EarthRegressor(max_degree=2)` and `EarthClassifier(max_degree=2, glm_alpha=0)` match earth's excess risk within 5 percent in all 51 settings, in a rerun after the pair rule of #185 (the study ran before the default of `glm_alpha` became 1). The first study, before that change, showed 48 settings: on pure noise pymars was up to 7.6 percent worse than earth and kept more noise terms, and the cause was the pair threshold of LA-7. With lognormal covariates the new rule costs up to 1.9 percent of excess risk against the rule before it, a known limit. [validation/REPORT.md](validation/REPORT.md) has the study, claim by claim.
+
+Speed: in the benchmark of [validation/bench/REPORT.md](validation/bench/REPORT.md), a fit with 10,000 cases, 10 covariates, degree 2 and 21 terms takes 1.7 times as long as earth at its defaults for `EarthRegressor` in a fresh process (0.81 s against 0.46 s), and about the same time (0.92 times, within the noise of the two measurements) for later fits in the same process. The numpy code that Intel Macs run takes 2.6 to 2.7 times earth's time there. At 100,000 cases pymars with numba is faster than earth (5.8 s against 7.6 s, a factor of 0.76 fresh and 0.67 warm), and the numpy code takes 2.0 times. At 250 cases earth is faster, by a factor of 21 in a fresh process and 3.5 in a warm one, since pymars has a fixed cost of about 0.06 s per fit and about 0.3 s more for the first fit in a process. Weights: `sample_weight` means case counts; see [docs/weights.md](docs/weights.md).
 
 ## Legacy code
 

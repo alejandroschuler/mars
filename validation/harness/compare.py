@@ -78,6 +78,93 @@ GRSQ_ABS = 1e-8
 FITTED_ABS_SD_MULT = 1e-8
 GLM_COEF_REL = 1e-5
 GLM_PROB_ABS = 1e-7
+# W-3: earth keeps a zero weight as a tiny one, so its sums of squares differ
+# from the fit without those rows by up to 5.8e-9 relative; a comparison with
+# earth of a fit that has zero weights uses 1e-7 for rss, gcv, rss_per_subset
+# and gcv_per_subset.
+ZERO_WEIGHT_REL = 1e-7
+# LA-5 (spec v3): |V - V*| <= eps(V*, R, cond) = 1e-8 R + c sqrt(TSS V*) +
+# (c/2)^2 TSS, with c = max(1e-14, u cond sqrt(n)), u = 2^-53 and cond the
+# condition number of the unit-norm sqrt(w)-scaled kept columns; LA-5 states
+# no bound above cond = 1e6, where a value is a near-dependence (STOP-7).
+LA5_C = 1e-14
+UNIT_ROUNDOFF = 2.0**-53
+COND_LIMIT = 1e6
+# LA-4: a column is dependent when its part orthogonal to the kept columns is
+# below 1e-7 of its own uncentered sqrt(w)-norm; a computed ratio within a
+# factor 2 of 1e-7 is a near-dependence (STOP-7).
+LA4_TOL = 1e-7
+# PRUNE-10: two subsets of one size are a near-tie when their RSS values
+# differ by at most 1e-7 of the lower one plus 2 eps(V, V, cond).
+PRUNE_NEAR_TIE_REL = 1e-7
+
+
+def la5_c(cond: float, n: int) -> float:
+    """LA-5's factor c = max(1e-14, u cond sqrt(n)) for n cases."""
+    return max(LA5_C, UNIT_ROUNDOFF * cond * float(np.sqrt(n)))
+
+
+def la5_eps(v: float, r: float, tss: float, cond: float, n: int) -> float:
+    """LA-5's bound on the error of an RSS value v at the scale r, for the
+    total sum of squares tss (GCV-5), the condition number cond of the
+    columns that v projects onto, and n cases."""
+    c = la5_c(cond, n)
+    return 1e-8 * r + c * float(np.sqrt(tss * v)) + (c / 2) ** 2 * tss
+
+
+def is_prune_near_tie(
+    rss_a: float, rss_b: float, tss: float, cond: float, n: int
+) -> bool:
+    """PRUNE-10: whether two RSS values of subsets of one size are a
+    near-tie; cond is the larger of the two subsets' condition numbers
+    (``basis_cond``), and above 1e6 the pair is a near-dependence."""
+    if not cond <= COND_LIMIT:
+        return True
+    low = min(rss_a, rss_b)
+    return abs(rss_a - rss_b) <= PRUNE_NEAR_TIE_REL * low + 2 * la5_eps(
+        low, low, tss, cond, n
+    )
+
+
+def la4_ratios(B: Any, w: Any) -> np.ndarray:
+    """LA-4's computed ratio of each column of B: the sqrt(w)-norm of its part
+    orthogonal to the earlier kept columns over its own uncentered
+    sqrt(w)-norm, by Gram-Schmidt with one reorthogonalization (LA-4 allows
+    it); 0 for a column whose computed norm is 0. A column is kept when its
+    ratio is at least 1e-7. O(n m^2) for m columns."""
+    A = np.asarray(B, dtype=float) * np.sqrt(np.asarray(w, dtype=float))[:, None]
+    Q = np.zeros((A.shape[0], 0))
+    ratios = np.zeros(A.shape[1])
+    for j in range(A.shape[1]):
+        size = float(np.linalg.norm(A[:, j]))
+        if not size > 0 or not np.isfinite(size):
+            continue
+        c = A[:, j] / size
+        rest = c - Q @ (Q.T @ c)
+        rest = rest - Q @ (Q.T @ rest)
+        ratios[j] = float(np.linalg.norm(rest))
+        if ratios[j] >= LA4_TOL:
+            Q = np.column_stack([Q, rest / ratios[j]])
+    return ratios
+
+
+def is_near_dependence(ratios: Any) -> bool:
+    """STOP-7: some LA-4 ratio is within a factor 2 of 1e-7."""
+    r = np.asarray(ratios, dtype=float)
+    return bool(np.any((r >= LA4_TOL / 2) & (r <= 2 * LA4_TOL)))
+
+
+def basis_cond(B: Any, w: Any) -> float:
+    """LA-5's cond: the 2-norm condition number of the columns of B that
+    LA-4 keeps (``la4_ratios``), each scaled by sqrt(w) to unit norm; 1 for
+    no column."""
+    B = np.asarray(B, dtype=float)
+    kept = la4_ratios(B, w) >= LA4_TOL
+    if not kept.any():
+        return 1.0
+    A = B[:, kept] * np.sqrt(np.asarray(w, dtype=float))[:, None]
+    A = A / np.linalg.norm(A, axis=0)
+    return float(np.linalg.cond(A))
 
 
 def condition_number(basis: Any) -> float:
@@ -307,6 +394,7 @@ def compare_fit(
     kappa: float | None = None,
     sd_y: float | None = None,
     glm: bool = False,
+    zero_weights: bool = False,
     dataset: str | None = None,
     skipped: list[Skip] | None = None,
 ) -> list[Difference]:
@@ -324,7 +412,10 @@ def compare_fit(
     difference ``numeric`` there, rather than skipping the comparison;
     without ``kappa``, every comparison runs at its base tolerance. ``sd_y``
     is required for the fitted-value/prediction comparison, which has no
-    other way to know the response's scale.
+    other way to know the response's scale. ``zero_weights`` says that the
+    fit has rows of weight 0, which earth keeps as tiny weights (W-3): the
+    relative tolerance of ``rss_per_subset``, ``gcv_per_subset`` and ``gcv``
+    is then ``ZERO_WEIGHT_REL``.
     """
     diffs: list[Difference] = []
 
@@ -342,9 +433,10 @@ def compare_fit(
             )
         )
 
+    sums = ZERO_WEIGHT_REL if zero_weights else None
     for name, tol in (
-        ("rss_per_subset", RSS_PER_SUBSET_REL),
-        ("gcv_per_subset", GCV_PER_SUBSET_REL),
+        ("rss_per_subset", sums or RSS_PER_SUBSET_REL),
+        ("gcv_per_subset", sums or GCV_PER_SUBSET_REL),
     ):
         av, bv = a.get(name), b.get(name)
         if av is None or bv is None:
@@ -496,7 +588,7 @@ def compare_fit(
             )
 
     for name, base_tol, relative in (
-        ("gcv", GCV_REL, True),
+        ("gcv", sums or GCV_REL, True),
         ("rsq", RSQ_ABS, False),
         ("grsq", GRSQ_ABS, False),
     ):
@@ -823,15 +915,21 @@ def compare_forward_steps(
 
 def _is_mirror_pair(dirs: np.ndarray, cuts: np.ndarray, i: int, j: int) -> bool:
     """Whether ``dirs``/``cuts`` rows ``i`` and ``j`` are a mirrored hinge
-    pair earth's forward pass adds in one step: identical at every
+    pair earth's forward pass adds in one step: the same codes at every
     predictor column except one, where the codes are ``+1`` and ``-1``
-    (either order) and the cut is the same."""
+    (either order), and the same cut at every column whose code is ``+1``
+    or ``-1``, so the same parent. Two single hinges on different parents
+    whose rows differ only in that code are not a pair (spec review of #48,
+    item 7)."""
     di, dj = dirs[i], dirs[j]
     diff = np.flatnonzero(di != dj)
     if diff.size != 1:
         return False
     (k,) = diff
-    return {int(di[k]), int(dj[k])} == {1, -1} and cuts[i, k] == cuts[j, k]
+    hinge = np.abs(di) == 1
+    return {int(di[k]), int(dj[k])} == {1, -1} and bool(
+        np.all(cuts[i][hinge] == cuts[j][hinge])
+    )
 
 
 def _dirs_row_groups(dirs: np.ndarray, cuts: np.ndarray) -> list[list[int]]:

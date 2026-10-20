@@ -1,0 +1,33 @@
+{
+ "calibration_s": 0.06238979194313288,
+ "commit": "a0ddca9caecbfaf6c40ae90ba2e362b838e930af",
+ "fits": [
+  {
+   "degree": 1,
+   "max_terms": 21,
+   "n": 2000,
+   "p": 10,
+   "seconds": 0.06384762469679117,
+   "weights": false
+  },
+  {
+   "degree": 2,
+   "max_terms": 21,
+   "n": 1000,
+   "p": 10,
+   "seconds": 0.41135770734399557,
+   "weights": false
+  },
+  {
+   "degree": 2,
+   "max_terms": 21,
+   "n": 1000,
+   "p": 10,
+   "seconds": 0.4326282925903797,
+   "weights": true
+  }
+ ],
+ "machine": "macOS-15.7.4-arm64-arm-64bit",
+ "ratio": 14.550996186341505,
+ "total_s": 0.9078336246311665
+}
